@@ -1,7 +1,7 @@
 // build.gradle (app level)
 plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    id 'com.android.application' version '8.1.0'
+    id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
 android {
@@ -59,45 +59,5 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 }
 
-// 自动下载WeNet模型（编译时）
-task downloadWenetModel {
-    def modelDir = file("src/main/assets")
-    def modelFile = file("src/main/assets/wenet_model.bin")
-    def unitFile = file("src/main/assets/wenet_units.txt")
-    
-    // 从GitHub Releases下载
-    def modelUrl = "https://github.com/wenet-e2e/wenet/releases/download/v2.0.1/wenet_model.bin"
-    def unitUrl = "https://github.com/wenet-e2e/wenet/releases/download/v2.0.1/wenet_units.txt"
-    
-    doLast {
-        modelDir.mkdirs()
-        
-        if (!modelFile.exists()) {
-            println "📥 下载WeNet模型..."
-            ant.get(src: modelUrl, dest: modelFile, verbose: true)
-            println "✅ 模型下载完成: ${modelFile.size()} bytes"
-        } else {
-            println "✅ 模型已存在: ${modelFile.size()} bytes"
-        }
-        
-        if (!unitFile.exists()) {
-            println "📥 下载WeNet Units..."
-            ant.get(src: unitUrl, dest: unitFile, verbose: true)
-            println "✅ Units下载完成"
-        }
-    }
-}
-
-// 在preBuild之前执行下载
-tasks.matching { it.name.startsWith("preBuild") }.configureEach {
-    dependsOn downloadWenetModel
-}
-
-// 清理模型文件（可选）
-task cleanWenetModel {
-    doLast {
-        delete "src/main/assets/wenet_model.bin"
-        delete "src/main/assets/wenet_units.txt"
-        println "🗑️ 已清理WeNet模型文件"
-    }
-}
+// 注释掉编译时下载，改为运行时下载（已在WenetManager.kt中实现）
+// WeNet模型将在应用首次运行时自动下载
