@@ -27,15 +27,18 @@ jobs:
         accept-android-sdk-licenses: true
         log-accept-android-sdk-licenses: true
     
-    - name: Accept Android SDK licenses manually
+    - name: Accept Android SDK licenses
       run: |
         mkdir -p $ANDROID_HOME/licenses
+        # 创建主要许可证
         echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c7" > $ANDROID_HOME/licenses/android-sdk-license
         echo -e "\nd56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_HOME/licenses/android-sdk-license
         echo -e "\n84831b9409646a918e305ecf71c9" >> $ANDROID_HOME/licenses/android-sdk-license
         echo -e "\n791207223" > $ANDROID_HOME/licenses/intel-android-extra-license
-        cat $ANDROID_HOME/licenses/android-sdk-license
-        echo "✅ Licenses created"
+        # 使用sdkmanager接受所有许可证
+        (yes | sdkmanager --licenses) || true
+        echo "✅ Licenses accepted"
+        cat $ANDROID_HOME/licenses/*
     
     - name: Verify SDK
       run: |
