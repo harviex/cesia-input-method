@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,32 +24,13 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
-        android-sdkroot: ${{ env.ANDROID_HOME }}
-    
-    - name: Accept Android SDK licenses
-      run: yes | sdkmanager --licenses || true
-    
-    - name: Download WeNet Model
-      run: |
-        mkdir -p app/src/main/assets
-        if [ ! -f app/src/main/assets/wenet_model.bin ]; then
-          echo "📥 Downloading WeNet model..."
-          wget -O app/src/main/assets/wenet_model.bin \
-            https://github.com/wenet-e2e/wenet/releases/download/v2.0.1/wenet_model.bin \
-            --timeout=30 --tries=3 || echo "⚠️ Model download failed, will download at runtime"
-        fi
-        if [ ! -f app/src/main/assets/wenet_units.txt ]; then
-          echo "📥 Downloading WeNet units..."
-          wget -O app/src/main/assets/wenet_units.txt \
-            https://github.com/wenet-e2e/wenet/releases/download/v2.0.1/wenet_units.txt \
-            --timeout=30 --tries=3 || echo "⚠️ Units download failed"
-        fi
+        accept-android-sdk-licenses: true
     
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
     
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
@@ -73,8 +54,8 @@ jobs:
           4. 首次使用会自动下载WeNet模型（~90MB）
           
           ## 更新内容
-          - 自动构建版本
           - 基于最新main分支代码
+          - 自动构建版本
         files: app/build/outputs/apk/debug/*.apk
         draft: false
         prerelease: false
