@@ -29,17 +29,7 @@
             android:layout_weight="1"
             android:text="🎤 说话"
             android:textSize="16sp"
-            android:background="@drawable/button_background"
-            android:layout_marginEnd="4dp" />
-        
-        <Button
-            android:id="@+id/btn_settings"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="⚙️"
-            android:textSize="18sp"
-            android:background="@drawable/button_background"
-            android:layout_marginStart="4dp" />
+            android:background="@drawable/button_background" />
         
     </LinearLayout>
     

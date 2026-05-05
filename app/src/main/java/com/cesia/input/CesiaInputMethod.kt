@@ -25,12 +25,6 @@ class CesiaInputMethod: InputMethodService(), KeyboardView.OnKeyboardActionListe
             Toast.makeText(this, "语音功能开发中...", Toast.LENGTH_SHORT).show()
         }
         
-        // 设置按钮
-        val settingsButton = view.findViewById<View>(R.id.btn_settings)
-        settingsButton?.setOnClickListener {
-            startActivity(android.content.Intent(this, SettingsActivity::class.java))
-        }
-        
         return view
     }
     

@@ -25,13 +25,6 @@
                 android:resource="@xml/method" />
         </service>
         
-        <!-- 设置界面 -->
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="true"
-            android:parentActivityName=".CesiaInputMethod">
-        </activity>
-        
     </application>
     
 </manifest>
