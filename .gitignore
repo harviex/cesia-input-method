@@ -1,0 +1,32 @@
+# Gradle
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.sar
+*.apk
+*.ap_
+*.dex
+
+# Android
+build/
+captures/
+.gradle/
+local.properties
+*.iml
+.idea/
+
+# JNI
+*.o
+*.so
+*.dylib
+*.dll
+
+# Assets (large files)
+wenet_model.bin
+wenet_units.txt
+
+# OS
+.DS_Store
+Thumbs.db

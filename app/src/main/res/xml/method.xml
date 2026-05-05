@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.cesia.input.SettingsActivity"
+    android:isDefault="false">
+    
+    <sub-type
+        android:imeSubtypeLocale="zh_CN"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=wenet"
+        android:isAsciiCapable="false"
+        android:imeSubtypeId="1" />
+    
+</input-method>

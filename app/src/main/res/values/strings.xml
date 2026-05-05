@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cesia输入法</string>
+    <string name="settings">设置</string>
+    <string name="api_url_hint">https://typeless-ai-service.vercel.app/api/polish</string>
+    <string name="save">保存</string>
+    <string name="reset">重置默认</string>
+    <string name="save_success">保存成功</string>
+    <string name="please_input">请输入API地址</string>
+</resources>
