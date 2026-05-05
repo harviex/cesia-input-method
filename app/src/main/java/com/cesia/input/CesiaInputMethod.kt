@@ -34,13 +34,11 @@ class CesiaInputMethod: InputMethodService(), KeyboardView.OnKeyboardActionListe
         }
         
         // 初始化API客户端
-        apiClient = ApiClient(getSharedPreferences("cesia", MODE_PRIVATE))
-            .apply {
-                setApiUrl(
-                    getSharedPreferences("cesia", MODE_PRIVATE)
-                        .getString("api_url", "https://typeless-ai-service.vercel.app/api/polish") ?: ""
-                )
-            }
+        apiClient = ApiClient(this)
+        apiClient.setApiUrl(
+            getSharedPreferences("cesia", MODE_PRIVATE)
+                .getString("api_url", "https://typeless-ai-service.vercel.app/api/polish") ?: ""
+        )
         
         // 麦克风按钮
         val micButton = view.findViewById<Button>(R.id.btn_mic)
