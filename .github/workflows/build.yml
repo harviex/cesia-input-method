@@ -42,14 +42,18 @@ jobs:
         ls -la $ANDROID_HOME/
         sdkmanager --list || echo "⚠️ sdkmanager not found, will install"
     
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Install Gradle
+      run: |
+        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle.zip
+        unzip -q /tmp/gradle.zip -d /opt/
+        echo "PATH=/opt/gradle-8.5/bin:$PATH" >> $GITHUB_ENV
+        gradle --version
     
     - name: Clean build
-      run: ./gradlew clean --no-daemon || true
+      run: gradle clean --no-daemon || true
     
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon --stacktrace --info
+      run: gradle assembleDebug --no-daemon --stacktrace --info
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
     
