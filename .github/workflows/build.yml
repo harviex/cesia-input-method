@@ -1,4 +1,4 @@
-name: Build Cesia APK
+name: Build Cesia APK with Docker
 
 on:
   push:
@@ -15,50 +15,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-    
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        accept-android-sdk-licenses: true
-        log-accept-android-sdk-licenses: true
-    
-    - name: Accept Android SDK licenses
+    - name: Build with Docker (android-build-box)
       run: |
-        mkdir -p $ANDROID_HOME/licenses
-        # 创建主要许可证
-        echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c7" > $ANDROID_HOME/licenses/android-sdk-license
-        echo -e "\nd56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_HOME/licenses/android-sdk-license
-        echo -e "\n84831b9409646a918e305ecf71c9" >> $ANDROID_HOME/licenses/android-sdk-license
-        echo -e "\n791207223" > $ANDROID_HOME/licenses/intel-android-extra-license
-        # 使用sdkmanager接受所有许可证
-        (yes | sdkmanager --licenses) || true
-        echo "✅ Licenses accepted"
-        cat $ANDROID_HOME/licenses/*
-    
-    - name: Verify SDK
-      run: |
-        ls -la $ANDROID_HOME/
-        sdkmanager --list || echo "⚠️ sdkmanager not found, will install"
-    
-    - name: Install Gradle
-      run: |
-        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle.zip
-        unzip -q /tmp/gradle.zip -d /opt/
-        echo "PATH=/opt/gradle-8.5/bin:$PATH" >> $GITHUB_ENV
-        gradle --version
-    
-    - name: Clean build
-      run: gradle clean --no-daemon || true
-    
-    - name: Build Debug APK
-      run: gradle assembleDebug --no-daemon --stacktrace --info
-      env:
-        ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        # 使用预配置的Android构建镜像
+        docker run --rm \
+          -v ${{ github.workspace }}:/project \
+          -w /project \
+          mingc/android-build-box:latest \
+          bash -c "
+            echo '=== 环境检查 ===' && \
+            java -version && \
+            echo '=== 构建APK ===' && \
+            gradle assembleDebug --no-daemon --stacktrace && \
+            echo '=== 构建完成 ===' && \
+            ls -lh app/build/outputs/apk/debug/
+          "
     
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
@@ -80,11 +51,11 @@ jobs:
           1. 下载 cesia-input-method.apk
           2. 安装到手机（允许未知来源）
           3. 设置 → 语言和输入法 → 启用"Cesia输入法"
-          4. 首次使用会自动下载WeNet模型（~90MB）
+          4. 后续将添加WeNet语音识别和API润色功能
           
           ## 更新内容
           - 自动构建版本 v${{ github.run_number }}
-          - 基于最新main分支代码
+          - 基本输入法框架（暂未包含语音功能）
         files: app/build/outputs/apk/debug/*.apk
         draft: false
         prerelease: false
