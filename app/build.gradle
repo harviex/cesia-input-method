@@ -47,12 +47,17 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-    
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
     // OkHttp for HTTP
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    
+
     // Gson for JSON
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Coroutines for async
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
 }
 
 // 注释掉编译时下载，改为运行时下载（已在WenetManager.kt中实现）

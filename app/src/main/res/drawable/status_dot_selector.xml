@@ -1,0 +1,5 @@
+<!-- 录音状态 - 红色闪烁 -->
+<animated-selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true" android:drawable="@drawable/status_dot_recording" />
+    <item android:drawable="@drawable/status_dot_idle" />
+</animated-selector>

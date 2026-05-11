@@ -1,36 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
-    
+    android:orientation="vertical"
+    android:background="#FFFFFF">
+
+    <!-- 状态栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="4dp 8dp"
+        android:background="#F5F5F5"
+        android:gravity="center_vertical">
+
+        <View
+            android:id="@+id/v_status_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/status_dot_idle"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="就绪"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="设置"
+            android:scaleType="centerInside"
+            android:padding="4dp" />
+    </LinearLayout>
+
     <!-- 键盘区域 -->
     <android.inputmethodservice.KeyboardView
         android:id="@+id/keyboard_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:keyPreviewLayout="@layout/key_preview"
-        android:background="#f0f0f0"
+        android:background="#FAFAFA"
         android:keyTextColor="#333333"
-        android:keyBackground="@drawable/key_background" />
-    
+        android:keyBackground="@drawable/key_background"
+        android:keyTextColorHighlighted="#FFFFFF"
+        android:popupLayout="@layout/key_preview" />
+
     <!-- 底部按钮栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="8dp"
-        android:background="#e0e0e0">
-        
-        <Button
+        android:padding="6dp"
+        android:background="#F0F0F0"
+        android:gravity="center_vertical">
+
+        <!-- 切换输入法按钮 -->
+        <ImageButton
+            android:id="@+id/btn_switch_ime"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="0.5"
+            android:src="@android:drawable/ic_input_get"
+            android:background="@drawable/button_background"
+            android:scaleType="centerInside"
+            android:contentDescription="切换输入法"
+            android:layout_marginEnd="4dp" />
+
+        <!-- 麦克风按钮（核心：Typeless 触发点） -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_mic"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_height="56dp"
+            android:layout_weight="3"
             android:text="🎤 说话"
-            android:textSize="16sp"
-            android:background="@drawable/button_background" />
-        
+            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#6200EE"
+            android:cornerRadius="28dp"
+            android:elevation="2dp"
+            android:stateListAnimator="@null" />
+
+        <!-- 删除按钮 -->
+        <ImageButton
+            android:id="@+id/btn_delete"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="0.5"
+            android:src="@android:drawable/ic_menu_delete"
+            android:background="@drawable/button_background"
+            android:scaleType="centerInside"
+            android:contentDescription="删除"
+            android:layout_marginStart="4dp" />
+
     </LinearLayout>
-    
+
 </LinearLayout>
