@@ -4,7 +4,6 @@ import android.content.Context
 import android.inputmethodservice.InputMethodService
 import android.view.inputmethod.InputConnection
 import android.widget.Toast
-import com.cesia.input.audio.AudioRecorder
 import com.cesia.input.polish.PolishService
 import com.cesia.input.recognizer.FallbackRecognizer
 import kotlinx.coroutines.*
@@ -14,15 +13,17 @@ import android.util.Log
 /**
  * Typeless 引擎 —— 核心编排层
  *
- * 工作流程:
- * 1. 用户按麦克风 → AudioRecorder 开始录音 + VAD
- * 2. VAD 检测到语音结束 → 收集 PCM
- * 3. (可选) WeNet 本地识别 → 中文文本
- * 4. 回退使用 Android SpeechRecognizer
- * 5. 文本发送到润色 API
- * 6. 润色结果自动上屏 (commitText)
+ * 工作流程 (纯 SpeechRecognizer 方案):
+ * 1. 用户按麦克风 → SpeechRecognizer.startListening()
+ * 2. Android 系统自带 VAD，自动检测静音结束
+ * 3. onResults 回调 → 获取识别文本
+ * 4. 文本发送到润色 API
+ * 5. 润色结果自动上屏 (commitText)
  *
  * 设计目标: 3 步完成输入 —— 按麦克风 → 说话 → 自动上屏
+ *
+ * 未来扩展: 集成 WeNet 离线识别后，AudioRecorder 将接管录音和 VAD，
+ *           替代 SpeechRecognizer，实现完全离线的 Typeless 输入。
  */
 class TypelessEngine(
     private val context: Context,
@@ -30,12 +31,11 @@ class TypelessEngine(
 ) {
     private val engineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private val audioRecorder = AudioRecorder(engineScope)
     private var polishService: PolishService? = null
     private var fallbackRecognizer: FallbackRecognizer? = null
 
-    // WeNet 是否可用
-    private var wenetAvailable = false
+    // 识别器是否可用
+    private var recognizerAvailable = false
 
     // 引擎状态
     private var _state = MutableStateFlow(State.IDLE)
@@ -43,8 +43,8 @@ class TypelessEngine(
 
     enum class State {
         IDLE,          // 空闲，等待用户操作
-        LISTENING,     // 正在录音
-        PROCESSING,    // 正在识别 + 润色
+        LISTENING,     // 正在录音/识别
+        PROCESSING,    // 正在润色
         COMMITTING,    // 正在上屏
         ERROR          // 出错
     }
@@ -53,30 +53,42 @@ class TypelessEngine(
     var onLogMessage: ((String) -> Unit)? = null
 
     init {
-        // 监听录音器事件
+        // 启动识别结果监听协程（长生命周期，随引擎销毁而取消）
         engineScope.launch {
-            audioRecorder.events.collect { event ->
-                when (event) {
-                    is AudioRecorder.RecorderEvent.RmsChanged -> {
-                        // 可以在这里更新 UI 音量指示
+            // 等待 fallbackRecognizer 初始化完成
+            while (fallbackRecognizer == null) {
+                delay(50)
+            }
+
+            fallbackRecognizer?.results?.collect { result ->
+                when (result) {
+                    is FallbackRecognizer.Result.Success -> {
+                        log("📝 识别成功: ${result.text.take(50)}...")
+                        polishAndCommit(result.text)
                     }
-                    is AudioRecorder.RecorderEvent.Started -> {
-                        _state.value = State.LISTENING
-                        log("🎤 开始录音...")
+                    is FallbackRecognizer.Result.Partial -> {
+                        log("📝 部分识别: ${result.text}")
+                        // 可以在这里显示部分结果给预览
                     }
-                    is AudioRecorder.RecorderEvent.VadSilence -> {
-                        log("🔇 检测到静音，结束录音")
-                        processAudio()
-                    }
-                    is AudioRecorder.RecorderEvent.Stopped -> {
-                        _state.value = State.IDLE
-                    }
-                    is AudioRecorder.RecorderEvent.Error -> {
+                    is FallbackRecognizer.Result.Error -> {
+                        log("❌ 识别错误: ${result.message}")
                         _state.value = State.ERROR
-                        log("❌ 录音错误: ${event.message}")
+                        // 识别失败时给用户反馈
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(
+                                context,
+                                "语音识别失败: ${result.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
-                    is AudioRecorder.RecorderEvent.AudioData -> {
-                        // 实时音频数据，暂不处理
+                    is FallbackRecognizer.Result.NoMatch -> {
+                        log("❓ 未识别到语音")
+                        _state.value = State.IDLE
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "未识别到语音，请重试", Toast.LENGTH_SHORT)
+                                .show()
+                        }
                     }
                 }
             }
@@ -88,100 +100,62 @@ class TypelessEngine(
      */
     fun initialize() {
         // 初始化润色服务
-        polishService = PolishService(engineScope).also { service ->
-            // TODO: 从 SharedPreferences 加载 API URL
-            // service.updateApiUrl(savedUrl)
-        }
+        polishService = PolishService(engineScope)
 
-        // 初始化 Android 备用识别
+        // 初始化 Android 系统语音识别
         fallbackRecognizer = FallbackRecognizer(context).also { recognizer ->
-            wenetAvailable = recognizer.init()
-            if (wenetAvailable) {
-                log("✅ Android 语音识别已就绪")
+            recognizerAvailable = recognizer.init()
+            if (recognizerAvailable) {
+                log("✅ 系统语音识别已就绪")
             } else {
-                log("⚠️ Android 语音识别不可用")
-            }
-
-            // 监听识别结果
-            engineScope.launch {
-                recognizer.results.collect { result ->
-                    when (result) {
-                        is FallbackRecognizer.Result.Success -> {
-                            log("📝 识别成功: ${result.text.take(50)}...")
-                            polishAndCommit(result.text, result.originalText)
-                        }
-                        is FallbackRecognizer.Result.Partial -> {
-                            log("📝 部分识别: ${result.text}")
-                        }
-                        is FallbackRecognizer.Result.Error -> {
-                            log("❌ 识别错误: ${result.message}")
-                            _state.value = State.ERROR
-                        }
-                        is FallbackRecognizer.Result.NoMatch -> {
-                            log("❓ 未识别到语音")
-                            _state.value = State.IDLE
-                        }
-                    }
-                }
+                log("⚠️ 系统语音识别不可用，将无法使用语音输入")
             }
         }
     }
 
     /**
-     * 开始录音 (由麦克风按钮触发)
+     * 开始语音识别 (由麦克风按钮触发)
+     *
+     * SpeechRecognizer.startListening() 会自动:
+     * - 打开麦克风
+     * - 进行 VAD (语音活动检测)
+     * - 检测到静音后自动停止并返回结果
      */
     fun startListening() {
         if (_state.value == State.LISTENING) return
 
-        log("🎙️ Typeless 引擎启动")
-        engineScope.launch {
-            // 开始录音并收集 VAD 分片
-            audioRecorder.startRecordingWithVad().collect { chunks ->
-                log("📦 采集到 ${chunks.size} 个音频分片")
-
-                // 合并 PCM 数据
-                val totalSize = chunks.sumOf { it.size }
-                val mergedPcm = ByteArray(totalSize)
-                var offset = 0
-                chunks.forEach { chunk ->
-                    System.arraycopy(chunk, 0, mergedPcm, offset, chunk.size)
-                    offset += chunk.size
-                }
-
-                // 使用 Android 语音识别
-                fallbackRecognizer?.startListening()
+        val recognizer = fallbackRecognizer
+        if (recognizer == null || !recognizerAvailable) {
+            log("❌ 语音识别未初始化或不可用")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    "语音识别不可用，请检查设备是否支持",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+            return
         }
-    }
 
-    /**
-     * 处理录音完成后的音频
-     */
-    private fun processAudio() {
-        engineScope.launch {
-            _state.value = State.PROCESSING
-            log("⚙️ 正在处理音频...")
+        _state.value = State.LISTENING
+        log("🎤 开始语音识别...")
 
-            // 停止识别（FallbackRecognizer 是事件驱动的，这里只需要停止录音器）
-            audioRecorder.stop()
-
-            // FallbackRecognizer 会在 onResults 回调中自动触发 polishAndCommit
-            // 所以这里不需要额外操作
-        }
+        // SpeechRecognizer 内部自带 VAD，调用 startListening 即开始录音+识别
+        // 识别完成（检测到静音）后会自动通过 results Flow 发射结果
+        recognizer.startListening()
     }
 
     /**
      * 润色文本并上屏 —— Typeless 核心流程
      */
-    private fun polishAndCommit(rawText: String, originalText: String = "") {
+    private fun polishAndCommit(rawText: String) {
         engineScope.launch {
             _state.value = State.PROCESSING
-            log("🔄 正在润色文本...")
+            log("🔄 正在润色: ${rawText.take(30)}...")
 
             val polishService = polishService
             if (polishService == null) {
-                // 没有润色服务，直接上屏原始文本
-                log("⚠️ 润色服务未初始化，直接上屏")
+                log("⚠️ 润色服务未初始化，直接上屏原始文本")
                 commitTextToEditor(rawText)
                 return@launch
             }
@@ -190,7 +164,8 @@ class TypelessEngine(
             when (result) {
                 is PolishService.PolishResult.Success -> {
                     _state.value = State.COMMITTING
-                    val polished = if (result.polishedText.isBlank()) result.originalText else result.polishedText
+                    val polished =
+                        if (result.polishedText.isBlank()) result.originalText else result.polishedText
                     log("✅ 润色完成: $polished")
                     commitTextToEditor(polished)
                 }
@@ -200,7 +175,8 @@ class TypelessEngine(
                     commitTextToEditor(rawText)
                 }
                 PolishService.PolishResult.EmptyInput -> {
-                    log("⚠️ 空输入，跳过")
+                    log("⚠️ 空识别结果，跳过")
+                    _state.value = State.IDLE
                 }
             }
         }
@@ -214,7 +190,6 @@ class TypelessEngine(
         engineScope.launch {
             _state.value = State.COMMITTING
 
-            // 清除可能存在的 composing text
             val conn = service.currentInputConnection ?: run {
                 log("❌ 无法获取 InputConnection")
                 _state.value = State.IDLE
@@ -229,13 +204,12 @@ class TypelessEngine(
             if (text.length <= maxChunk) {
                 conn.commitText(text, 1)
             } else {
-                // 分块提交
                 var remaining = text
                 while (remaining.isNotEmpty()) {
                     val chunk = remaining.substring(0, kotlin.math.min(maxChunk, remaining.length))
                     conn.commitText(chunk, 1)
                     remaining = remaining.substring(chunk.length)
-                    delay(50) // 小延迟避免太快
+                    delay(50)
                 }
             }
 
@@ -250,12 +224,11 @@ class TypelessEngine(
     }
 
     /**
-     * 停止录音
+     * 停止录音/识别
      */
     fun stopListening() {
-        audioRecorder.stop()
         fallbackRecognizer?.stopListening()
-        log("⏹️ 录音已停止")
+        log("⏹️ 语音识别已停止")
     }
 
     /**
@@ -265,7 +238,7 @@ class TypelessEngine(
         engineScope.cancel()
         fallbackRecognizer?.destroy()
         polishService?.shutdown()
-        audioRecorder.stop()
+        log("引擎已销毁")
     }
 
     /**
@@ -273,6 +246,20 @@ class TypelessEngine(
      */
     fun updateApiUrl(url: String) {
         polishService?.updateApiUrl(url)
+        log("API URL 已更新")
+    }
+
+    /**
+     * 获取引擎状态信息
+     */
+    fun getStateInfo(): String {
+        return when (_state.value) {
+            State.IDLE -> "就绪"
+            State.LISTENING -> "🎤 识别中..."
+            State.PROCESSING -> "🔄 润色中..."
+            State.COMMITTING -> "⬆️ 上屏中..."
+            State.ERROR -> "❌ 出错"
+        }
     }
 
     private fun log(msg: String) {
