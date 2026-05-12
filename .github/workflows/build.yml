@@ -10,56 +10,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      - name: Fix gradlew (unescape bug)
+        run: |
+          # 修复 gradlew 中不兼容的 unescape 命令
+          sed -i 's/case ".*unescape.*/case "$(uname -s)"/' gradlew
 
-    - name: Install Build Tools
-      run: |
-        sdkmanager "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "platform-tools"
-
-    - name: Generate Wrapper
-      run: |
-        # 确保 ANDROID_HOME 被感知
-        echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-        # 使用 github 上的 gradle-build-action 来生成 wrapper
-        chmod +x gradlew
-
-    - name: Download Wrapper JAR (Fallback)
-      run: |
-        if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+      - name: Download Gradle Wrapper JAR
+        run: |
           mkdir -p gradle/wrapper
-          # Try various known working URLs
-          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-        fi
+          curl -sL -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+          ls -la gradle/wrapper/
 
-    - name: System Gradle Build
-      run: |
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        export JAVA_OPTS="-Xmx2048m"
-        ./gradlew assembleDebug --no-daemon --stacktrace --info
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Check Results
-      run: |
-        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-          echo "Build Success!"
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-        else
-          echo "No APK found"
-          exit 1
-        fi
+      - name: Install Build Tools 34
+        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
 
-    - name: Upload Artifact
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: cesia-input-method-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Build APK
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: |
+          chmod +x gradlew
+          # 先尝试运行，看看能否成功
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Check Result
+        run: |
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "SUCCESS: APK generated!"
+            ls -lh app/build/outputs/apk/debug/
+          else
+            echo "FAILURE: APK not found"
+            exit 1
+          fi
+
+      - name: Upload Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cesia-input-method
+          path: app/build/outputs/apk/debug/app-debug.apk
