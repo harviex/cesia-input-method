@@ -1,6 +1,7 @@
 # Gradle
 *.class
-*.jar
+# ⚠️ 不要忽略 gradle-wrapper.jar，它是构建必须的
+# *.jar
 *.war
 *.ear
 *.nar
