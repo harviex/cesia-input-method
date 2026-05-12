@@ -15,9 +15,8 @@ android {
         versionCode 1
         versionName "1.0.0"
         
-        ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a'
-        }
+    // NDK support will be added in future versions for offline speech recognition
+    // Currently using pure Kotlin/Java implementation
     }
     
     buildTypes {

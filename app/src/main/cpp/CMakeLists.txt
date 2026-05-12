@@ -1,21 +1,11 @@
+# CMakeLists.txt — placeholder
+# WeNet/Whisper JNI 支持将在后续版本通过运行时动态加载方式添加
+# 当前版本专注于基础输入法功能
+
 cmake_minimum_required(VERSION 3.18.1)
-
-project("wenet-jni" VERSION 1.0)
-
-# 设置C++标准
+project("cesia-jni" VERSION 1.0)
 set(CMAKE_CXX_STANDARD 14)
 
-# 包含目录
-include_directories(${CMAKE_SOURCE_DIR}/wenet/include)
-include_directories(${CMAKE_SOURCE_DIR}/wenet)
-
-# 源文件
-add_library(wenet-jni SHARED
-    whisper-jni.cpp
-    wenet/models/wenet_model.cc
-    wenet/utils/wenet_utils.cc
-)
-
-# 链接库
+add_library(cesia-jni SHARED whisper-jni.cpp)
 find_library(log-lib log)
-target_link_libraries(wenet-jni ${log-lib})
+target_link_libraries(cesia-jni ${log-lib})
