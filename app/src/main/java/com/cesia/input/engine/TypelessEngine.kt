@@ -95,7 +95,7 @@ class TypelessEngine(
                     is FallbackRecognizer.Result.Error -> {
                         log("❌ 识别错误: ${result.message}")
                         _state.value = State.ERROR
-                        withContext(Dispatchers.Main) {
+                        engineScope.launch(Dispatchers.Main) {
                             Toast.makeText(
                                 context,
                                 "语音识别失败: ${result.message}",
@@ -104,229 +104,183 @@ class TypelessEngine(
                         }
                     }
                     is FallbackRecognizer.Result.NoMatch -> {
-                        log("❓ 未识别到语音")
-                        _state.value = State.IDLE
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "未识别到语音，请重试", Toast.LENGTH_SHORT)
-                                .show()
-                        }
+                        log("🔇 未识别到语音")
+                        _state.value = State.ERROR
                     }
                 }
             }
         }
     }
 
-    // =====================
-    // 初始化
-    // =====================
-
+    /**
+     * 初始化引擎（创建子服务）
+     */
     fun initialize() {
         polishService = PolishService(engineScope)
+        fallbackRecognizer = FallbackRecognizer(context)
+        wakeWordDetector = WakeWordDetector(context, engineScope)
 
-        fallbackRecognizer = FallbackRecognizer(context).also { recognizer ->
-            recognizerAvailable = recognizer.init()
-            if (recognizerAvailable) {
-                log("✅ 系统语音识别已就绪")
-            } else {
-                log("⚠️ 系统语音识别不可用")
-            }
+        // 初始化识别器
+        if (fallbackRecognizer?.init() == true) {
+            recognizerAvailable = true
+            log("✅ FallbackRecognizer 已就绪")
+        } else {
+            log("❌ FallbackRecognizer 初始化失败")
         }
 
-        // 初始化唤醒词检测器
-        wakeWordDetector = WakeWordDetector(context, engineScope).also { detector ->
-            detector.voiceActivationEnabled = false // 默认关闭，由用户设置
-
-            engineScope.launch {
-                detector.events.collect { event ->
-                    when (event) {
-                        is WakeWordDetector.Event.Ready -> {
-                            log("🎙️ 唤醒词检测器已就绪")
-                        }
-                        is WakeWordDetector.Event.WakeWordDetected -> {
-                            log("🔔 唤醒词检测到！开始录音...")
-                            _state.value = State.LISTENING
-
-                            // 停止监控 recognizer，启动 active recognizer
-                            if (recognizerAvailable) {
-                                fallbackRecognizer?.startListening()
-                            }
-                        }
-                        is WakeWordDetector.Event.EndWordDetected -> {
-                            log("🏁 结束词检测到: ${event.text.take(30)}...")
-                            polishAndCommit(event.text)
-                            _state.value = State.PROCESSING
-                        }
-                        is WakeWordDetector.Event.PartialText -> {
-                            log("📝 实时识别: ${event.text}")
-                        }
-                        is WakeWordDetector.Event.Error -> {
-                            log("❌ 唤醒词检测错误: ${event.message}")
-                            _state.value = State.ERROR
-                        }
-                    }
-                }
-            }
+        // 绑定唤醒词事件
+        wakeWordDetector?.onWakeWord = { word ->
+            log("🔥 检测到唤醒词: \"$word\"")
+            _state.value = State.LISTENING
+            service.commitText(word, 1)
+        }
+        wakeWordDetector?.onEndWord = { word ->
+            log("🏁 检测到结束词: \"$word\"")
+            // 结束词触发后应自动处理
         }
     }
 
-    // =====================
-    // 语音识别 (手动按钮触发)
-    // =====================
-
+    /**
+     * 开始监听（手动/自动模式通用入口）
+     */
     fun startListening() {
-        if (_state.value == State.LISTENING) return
-
-        if (!recognizerAvailable) {
-            log("❌ 语音识别不可用")
-            withContext(Dispatchers.Main) {
-                Toast.makeText(
-                    context,
-                    "语音识别不可用，请检查设备",
-                    Toast.LENGTH_SHORT
-                ).show()
+        if (voiceActivationEnabled) {
+            startWakeWordMonitoring()
+        } else {
+            if (fallbackRecognizer?.startListening() == true) {
+                _state.value = State.LISTENING
+                log("🎤 开始录音（手动模式）")
+            } else {
+                _state.value = State.ERROR
+                log("❌ 无法启动录音")
+                showError("录音启动失败")
             }
-            return
         }
-
-        _state.value = State.LISTENING
-        log("🎤 开始语音识别...")
-        fallbackRecognizer?.startListening()
     }
 
-    // =====================
-    // 唤醒词监控 (语音激活)
-    // =====================
+    /**
+     * 停止监听
+     */
+    fun stopListening() {
+        if (voiceActivationEnabled) {
+            wakeWordDetector?.stopActiveSession()
+        } else {
+            fallbackRecognizer?.stopListening()
+        }
+        _state.value = State.IDLE
+        log("⏹ 已停止")
+    }
 
+    /**
+     * 开启唤醒词监听
+     */
     private fun startWakeWordMonitoring() {
         if (!voiceActivationEnabled) return
-
+        wakeWordDetector?.startMonitoring()
         _state.value = State.MONITORING
-        log("🔇 进入唤醒词监听模式: \"${wakeWordDetector?.wakeWord}\"")
-        wakeWordDetector?.start()
+        log("📡 开启唤醒词监听")
     }
 
-    // =====================
-    // 文本润色 + 上屏
-    // =====================
-
-    private fun polishAndCommit(rawText: String) {
+    /**
+     * 发送文本润色并提交
+     */
+    private fun polishAndCommit(text: String) {
         engineScope.launch {
             _state.value = State.PROCESSING
-            log("🔄 正在润色: ${rawText.take(30)}...")
+            log("🔄 正在润色... (${text.length}字)")
 
-            val polishService = polishService
-            if (polishService == null) {
-                log("⚠️ 润色服务未初始化，直接上屏")
-                commitTextToEditor(rawText)
+            val result = polishService?.polishText(text) ?: run {
+                log("❌ 润色服务不可用，直接上屏原始文本")
+                commitTextDirect(text)
                 return@launch
             }
 
-            val result = polishService.polishText(rawText)
             when (result) {
                 is PolishService.PolishResult.Success -> {
-                    _state.value = State.COMMITTING
-                    val polished =
-                        if (result.polishedText.isBlank()) result.originalText else result.polishedText
-                    log("✅ 润色完成: $polished")
-                    commitTextToEditor(polished)
+                    log("✨ 润色完成: ${result.polishedText.take(50)}")
+                    commitTextDirect(result.polishedText)
+                    _state.value = State.IDLE
                 }
                 is PolishService.PolishResult.Error -> {
                     log("❌ 润色失败: ${result.message}")
-                    commitTextToEditor(rawText)
+                    commitTextDirect(text)
+                    _state.value = State.ERROR
+                    showToast("润色失败，已上屏原文")
                 }
-                PolishService.PolishResult.EmptyInput -> {
-                    log("⚠️ 空识别结果，跳过")
+                is PolishService.PolishResult.EmptyInput -> {
+                    log("📭 输入为空，跳过")
                     _state.value = State.IDLE
                 }
             }
         }
     }
 
-    private fun commitTextToEditor(text: String) {
+    /**
+     * 直接提交文本到当前输入框
+     */
+    private fun commitTextDirect(text: String) {
+        val ic = service.currentInputConnection ?: run {
+            log("❌ 无输入框连接")
+            return
+        }
+        _state.value = State.COMMITTING
+        ic.commitText(text, 1)
+        log("📝 已上屏: $text")
+
         engineScope.launch {
-            _state.value = State.COMMITTING
-
-            val conn = service.currentInputConnection ?: run {
-                log("❌ 无法获取 InputConnection")
-                _state.value = State.IDLE
-                return@launch
-            }
-
-            conn.finishComposingText()
-
-            val maxChunk = 200
-            if (text.length <= maxChunk) {
-                conn.commitText(text, 1)
-            } else {
-                var remaining = text
-                while (remaining.isNotEmpty()) {
-                    val chunk = remaining.substring(0, kotlin.math.min(maxChunk, remaining.length))
-                    conn.commitText(chunk, 1)
-                    remaining = remaining.substring(chunk.length)
-                    delay(50)
-                }
-            }
-
-            log("✅ 已上屏: ${text.take(50)}...")
+            delay(200)
             _state.value = State.IDLE
-
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "✓ ${text.take(30)}", Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
-    // =====================
-    // 控制方法
-    // =====================
-
-    fun stopListening() {
-        fallbackRecognizer?.stopListening()
-        log("⏹️ 语音识别已停止")
-    }
-
-    fun destroy() {
-        engineScope.cancel()
-        fallbackRecognizer?.destroy()
-        polishService?.shutdown()
-        wakeWordDetector?.stop()
-        log("引擎已销毁")
-    }
-
-    fun updateApiUrl(url: String) {
-        polishService?.updateApiUrl(url)
-        log("API URL 已更新")
-    }
-
-    /**
-     * 设置唤醒词和结束词
-     */
-    fun setWakeWord(word: String) {
-        wakeWordDetector?.wakeWord = word
-        log("唤醒词: $word")
-    }
-
-    fun setEndWord(word: String) {
-        wakeWordDetector?.endWord = word
-        log("结束词: $word")
-    }
-
-    /**
-     * 获取当前状态文本
-     */
-    fun getStateInfo(): String {
-        return when (_state.value) {
-            State.IDLE -> "就绪"
-            State.MONITORING -> "🔇 监听唤醒词..."
-            State.LISTENING -> "🎤 识别中..."
-            State.PROCESSING -> "🔄 润色中..."
-            State.COMMITTING -> "⬆️ 上屏中..."
-            State.ERROR -> "❌ 出错"
+    private fun showToast(msg: String) {
+        engineScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showError(msg: String) {
+        log("❌ $msg")
+        showToast(msg)
     }
 
     private fun log(msg: String) {
         Log.d("TypelessEngine", msg)
         onLogMessage?.invoke(msg)
+    }
+
+    /**
+     * 更新 API URL
+     */
+    fun updateApiUrl(url: String) {
+        polishService?.updateApiUrl(url)
+    }
+
+    /**
+     * 设置唤醒词
+     */
+    fun setWakeWord(word: String) {
+        wakeWordDetector?.wakeWord = word
+    }
+
+    /**
+     * 设置结束词
+     */
+    fun setEndWord(word: String) {
+        wakeWordDetector?.endWord = word
+    }
+
+    /**
+     * 销毁引擎
+     */
+    fun destroy() {
+        wakeWordDetector?.stop()
+        wakeWordDetector = null
+        fallbackRecognizer?.destroy()
+        fallbackRecognizer = null
+        polishService?.shutdown()
+        polishService = null
+        engineScope.cancel()
+        log("🔻 引擎已销毁")
     }
 }

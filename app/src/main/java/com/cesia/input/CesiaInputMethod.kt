@@ -6,8 +6,9 @@ import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import android.os.Build
-import android.os.Bundle
-import android.preference.PreferenceManager
+import android.os.Handler
+import android.os.Looper
+import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.ImageButton
@@ -57,8 +58,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val DEFAULT_END_WORD = "Typeless Over"
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onCreate() {
+        super.onCreate()
         setTheme(R.style.Theme_Cesia)
     }
 
@@ -82,7 +83,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化 Typeless 引擎
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
-                runOnUiThread { updateStatus(msg) }
+                Handler(Looper.getMainLooper()).post { updateStatus(msg) }
             }
             engine.initialize()
         }
@@ -144,11 +145,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             switchToPreviousInputMethod()
         } else {
-            @Suppress("DEPRECATION")
-            currentInputBinding?.let { binding ->
-                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 @Suppress("DEPRECATION")
-                imm.switchToNextInputMethod(binding.token, false)
+                imm.switchToNextInputMethod(null, false)
             }
         }
     }
@@ -279,19 +279,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Keyboard.KEYCODE_MODE_CHANGE -> {
                 showSettings()
             }
-            Keyboard.KEYCODE_DONE, Keyboard.KEYCODE_ENTER -> {
+            Keyboard.KEYCODE_DONE -> {
                 val ic = currentInputConnection ?: return
                 ic.sendKeyEvent(
-                    android.view.KeyEvent(
-                        android.view.KeyEvent.ACTION_DOWN,
-                        android.view.KeyEvent.KEYCODE_ENTER
-                    )
+                    KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)
                 )
                 ic.sendKeyEvent(
-                    android.view.KeyEvent(
-                        android.view.KeyEvent.ACTION_UP,
-                        android.view.KeyEvent.KEYCODE_ENTER
-                    )
+                    KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER)
                 )
             }
             // 中文切换键 -> 触发语音

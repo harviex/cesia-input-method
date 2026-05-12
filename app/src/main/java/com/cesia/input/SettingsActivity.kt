@@ -9,6 +9,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /**
@@ -107,15 +109,6 @@ class SettingsActivity : AppCompatActivity() {
                 .putBoolean(CesiaInputMethod.PREF_VOICE_ACTIVATION, voiceActivation)
                 .apply()
 
-            // 同时保存到全局 SharedPreferences
-            PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
-                .putString(CesiaInputMethod.PREF_API_URL, url)
-                .putString(CesiaInputMethod.PREF_WAKE_WORD, wakeWord)
-                .putString(CesiaInputMethod.PREF_END_WORD, endWord)
-                .putBoolean(CesiaInputMethod.PREF_VOICE_ACTIVATION, voiceActivation)
-                .apply()
-
             tvStatus.text = "✓ 设置已保存"
             appendLog("""
                 💾 设置已保存:
@@ -135,14 +128,6 @@ class SettingsActivity : AppCompatActivity() {
             switchVoiceActivation.isChecked = false
 
             prefs.edit()
-                .putString(CesiaInputMethod.PREF_API_URL, DEFAULT_API_URL)
-                .putString(CesiaInputMethod.PREF_WAKE_WORD, DEFAULT_WAKE_WORD)
-                .putString(CesiaInputMethod.PREF_END_WORD, DEFAULT_END_WORD)
-                .putBoolean(CesiaInputMethod.PREF_VOICE_ACTIVATION, false)
-                .apply()
-
-            PreferenceManager.getDefaultSharedPreferences(this)
-                .edit()
                 .putString(CesiaInputMethod.PREF_API_URL, DEFAULT_API_URL)
                 .putString(CesiaInputMethod.PREF_WAKE_WORD, DEFAULT_WAKE_WORD)
                 .putString(CesiaInputMethod.PREF_END_WORD, DEFAULT_END_WORD)

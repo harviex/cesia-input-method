@@ -214,6 +214,7 @@ class WakeWordDetector(
     // =====================
 
     private val monitoringListener = object : android.speech.RecognitionListener {
+        override fun onEvent(eventType: Int, params: Bundle?) {}
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
@@ -259,11 +260,10 @@ class WakeWordDetector(
                 startMonitoringLoop()
             }
         }
-
-        override fun onLanguageResults(results: Bundle?) {}
     }
 
     private val activeListener = object : android.speech.RecognitionListener {
+        override fun onEvent(eventType: Int, params: Bundle?) {}
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
@@ -307,8 +307,6 @@ class WakeWordDetector(
             // ACTIVE 模式下语音结束
             // recognizer 会在此时自动调用 onResults
         }
-
-        override fun onLanguageResults(results: Bundle?) {}
     }
 
     // =====================
