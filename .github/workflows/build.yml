@@ -13,34 +13,53 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup Java
+    - name: Setup JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Setup Gradle
-      run: |
-        # 强制使用系统 gradle 生成 wrapper (确保 JAR 正确)
-        apt-get update -qq && apt-get install -y gradle 2>/dev/null || true
-        gradle wrapper --gradle-version 8.5 --no-daemon 2>/dev/null || true
-
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Install Android SDK 34
+    - name: Install Build Tools
       run: |
         sdkmanager "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "platform-tools"
 
-    - name: Build APK
+    - name: Generate Wrapper
       run: |
-        chmod +x ./gradlew
+        # 确保 ANDROID_HOME 被感知
+        echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+        # 使用 github 上的 gradle-build-action 来生成 wrapper
+        chmod +x gradlew
+
+    - name: Download Wrapper JAR (Fallback)
+      run: |
+        if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+          mkdir -p gradle/wrapper
+          # Try various known working URLs
+          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+        fi
+
+    - name: System Gradle Build
+      run: |
         export ANDROID_HOME=$ANDROID_SDK_ROOT
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        export JAVA_OPTS="-Xmx2048m"
+        ./gradlew assembleDebug --no-daemon --stacktrace --info
+
+    - name: Check Results
+      run: |
+        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+          echo "Build Success!"
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+        else
+          echo "No APK found"
+          exit 1
+        fi
 
     - name: Upload Artifact
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: cesia-input-method
+        name: cesia-input-method-debug
         path: app/build/outputs/apk/debug/app-debug.apk
