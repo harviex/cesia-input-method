@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -11,7 +12,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="4dp 8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         android:background="#F5F5F5"
         android:gravity="center_vertical">
 
@@ -53,7 +57,6 @@
         android:background="#FAFAFA"
         android:keyTextColor="#333333"
         android:keyBackground="@drawable/key_background"
-        android:keyTextColorHighlighted="#FFFFFF"
         android:popupLayout="@layout/key_preview" />
 
     <!-- 底部按钮栏 -->
@@ -87,7 +90,7 @@
             android:textSize="15sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#6200EE"
-            android:cornerRadius="28dp"
+            app:cornerRadius="28dp"
             android:elevation="2dp"
             android:stateListAnimator="@null" />
 
