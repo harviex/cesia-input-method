@@ -10,24 +10,18 @@ import kotlinx.coroutines.flow.*
 
 /**
  * 语音识别器（Android SpeechRecognizer）
- * 
- * 支持两种模式：
- * - 单次模式 (continuous = false): 识别一次后立即发送结果
- * - 连续模式 (continuous = true): 持续积累识别结果，直到 stopListening 时一次性发送
+ *
+ * 连续监听模式：点击按钮后持续听，直到用户再次点击才停止。
+ * 积累所有识别结果，停止时一次性发送到 API。
  */
 class FallbackRecognizer(private val context: Context) {
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var isListening = false
 
-    /**
-     * 是否启用连续积累模式。
-     * 当连续模式开启时，onResults 会积累文本而不是立即发送，
-     * 直到 stopListening() 被调用时才将所有积累的文本一次性发送。
-     */
-    var continuousMode: Boolean = false
+    /** 当前激活的识别器实例 */
+    private var recognizer: SpeechRecognizer? = null
 
-    /** 连续模式下积累的文本 */
-    private val accumulatedText = StringBuilder()
+    /** 识别结果流 */
+    private val _results = MutableSharedFlow<Result>(replay = 0, extraBufferCapacity = 1)
+    val results = _results.asSharedFlow()
 
     sealed class Result {
         data class Success(val text: String, val confidence: Float = 1.0f) : Result()
@@ -37,231 +31,248 @@ class FallbackRecognizer(private val context: Context) {
         object NoMatch : Result()
     }
 
-    private val _results = MutableSharedFlow<Result>(replay = 0, extraBufferCapacity = 1)
-    val results = _results.asSharedFlow()
+    // ─── 状态 ──────────────────────────────────────────
+    private var _isListening = false              // 用户意图：是否应该持续监听
+    private var activeInstance: SpeechRecognizer? = null  // 当前活跃的识别实例
+    private var restartJob: Job? = null           // 追踪重启协程，避免与 stop 竞态
+    var continuousMode: Boolean = false           // 连续积累模式
+    var suppressNoMatchError: Boolean = true      // 静音时不报错
 
-    /**
-     * 是否在安静（无语音）时保持沉默，而不是报错
-     */
-    var suppressNoMatchError: Boolean = true
+    private val accumulatedText = StringBuilder()  // 连续模式下积累的文本
 
-    fun init(): Boolean {
+    // ─── 创建新实例 + 设置监听器 ─────────────────────
+    fun createInstance(): Boolean {
         return try {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).also { recognizer ->
-                recognizer.setRecognitionListener(object : android.speech.RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        // 准备就绪
-                    }
+            // 旧实例彻底销毁
+            recognizer?.destroy()
+            recognizer = null
 
-                    override fun onBeginningOfSpeech() {}
+            val r = SpeechRecognizer.createSpeechRecognizer(context)
+            r.setRecognitionListener(object : android.speech.RecognitionListener {
+                private val scope = CoroutineScope(Dispatchers.Main + Job())
 
-                    override fun onRmsChanged(rmsdB: Float) {}
+                override fun onReadyForSpeech(params: Bundle?) {
+                    Log.d("FR", "onReadyForSpeech")
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
 
-                    override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    Log.d("FR", "onEndOfSpeech")
+                    scope.launch { _results.emit(Result.Recognizing("正在识别...")) }
+                }
 
-                    override fun onEndOfSpeech() {
-                        // 说话结束，系统正在处理中
-                        CoroutineScope(Dispatchers.Main).launch {
-                            _results.emit(Result.Recognizing("正在识别..."))
-                        }
-                    }
+                override fun onError(error: Int) {
+                    Log.d("FR", "onError code=$error")
+                    handleError(error)
+                }
 
-                    override fun onError(error: Int) {
-                        when (error) {
-                            SpeechRecognizer.ERROR_NO_MATCH,
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                                // 安静/无语音时不报错，保持静默
-                                if (!suppressNoMatchError) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        _results.emit(Result.NoMatch)
-                                    }
-                                }
-                                // 连续模式下自动重启
-                                if (isListening) {
-                                    restartListening()
-                                }
-                            }
-                            SpeechRecognizer.ERROR_CLIENT -> {
-                                // 客户端错误（通常在处理中），不报错
-                                if (!suppressNoMatchError) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        _results.emit(Result.Recognizing("正在识别..."))
-                                    }
-                                }
-                                // 延迟后自动重启
-                                if (isListening) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(500)
-                                        restartListening()
-                                    }
-                                }
-                            }
-                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
-                                // 识别器忙 — 销毁重建期间被调用 startListening，加延迟重试
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    delay(2000)
-                                    if (isListening) restartListening()
-                                }
-                            }
-                            SpeechRecognizer.ERROR_NETWORK -> {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Error("网络错误，请检查网络"))
-                                }
-                                if (isListening) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(1000)
-                                        restartListening()
-                                    }
-                                }
-                            }
-                            SpeechRecognizer.ERROR_AUDIO,
-                            SpeechRecognizer.ERROR_SERVER -> {
-                                // 音频/服务器错误，不报错静默重启
-                                if (isListening) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(500)
-                                        restartListening()
-                                    }
-                                }
-                            }
-                            else -> {
-                                // 其他错误
-                                val msg = "识别错误"
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Error(msg))
-                                }
-                                if (isListening) {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(2000)
-                                        restartListening()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            val best = matches[0]
-                            val scores = results.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
-                            val confidence = scores?.firstOrNull() ?: 1.0f
-                            
-                            if (continuousMode) {
-                                // 连续模式：积累文本，不立即发送
-                                if (accumulatedText.isNotEmpty()) {
-                                    accumulatedText.append(" ")
-                                }
-                                accumulatedText.append(best)
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Partial(accumulatedText.toString()))
-                                }
-                                // 自动重启以保持持续监听
-                                if (isListening) {
-                                    restartListening()
-                                }
-                            } else {
-                                // 单次模式：立即发送结果
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Success(best, confidence))
-                                }
-                            }
+                override fun onResults(bundle: Bundle?) {
+                    val matches = bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    Log.d("FR", "onResults matches=${matches?.size ?: 0}")
+                    if (!matches.isNullOrEmpty()) {
+                        val best = matches[0]
+                        if (continuousMode) {
+                            if (accumulatedText.isNotEmpty()) accumulatedText.append(" ")
+                            accumulatedText.append(best)
+                            scope.launch { _results.emit(Result.Partial(accumulatedText.toString())) }
+                            if (activeInstance === recognizer) scheduleRestart()
                         } else {
-                            if (!suppressNoMatchError) {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.NoMatch)
-                                }
-                            }
-                            if (isListening) {
-                                restartListening()
-                            }
+                            val confidence = bundle.getFloatArray(
+                                SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull() ?: 1.0f
+                            scope.launch { _results.emit(Result.Success(best, confidence)) }
                         }
+                    } else {
+                        // 无结果（静音超时等），自动重启
+                        if (_isListening && activeInstance === recognizer) scheduleRestart()
                     }
+                }
 
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            CoroutineScope(Dispatchers.Main).launch {
-                                _results.emit(Result.Partial(matches[0]))
-                            }
-                        }
+                override fun onPartialResults(bundle: Bundle?) {
+                    val matches = bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty() && continuousMode) {
+                        scope.launch { _results.emit(Result.Partial(matches[0])) }
                     }
-
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
-            }
+                }
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            recognizer = r
+            activeInstance = r
             true
         } catch (e: Exception) {
-            Log.e("FallbackRecognizer", "初始化失败", e)
+            Log.e("FR", "createInstance failed", e)
             false
         }
     }
 
+    // ─── 初始化 ────────────────────────────────────────
+    fun init(): Boolean = createInstance()
+
+    // ─── 开始监听 ──────────────────────────────────────
     fun startListening(): Boolean {
-        val recognizer = speechRecognizer ?: return false
         if (!SpeechRecognizer.isRecognitionAvailable(context)) return false
 
-        // 连续模式下重置积累缓冲区
-        if (continuousMode) {
-            accumulatedText.clear()
+        if (recognizer == null) {
+            if (!createInstance()) return false
         }
 
-        isListening = true
+        if (continuousMode) accumulatedText.clear()
+        _isListening = true
+        restartJob?.cancel()
+
         return try {
-            val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-                putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            }
-            recognizer.startListening(intent)
+            val intent = createIntent()
+            recognizer?.startListening(intent)
+            Log.d("FR", "startListening OK, continuous=$continuousMode")
             true
         } catch (e: Exception) {
-            Log.e("FallbackRecognizer", "启动识别失败", e)
+            Log.e("FR", "startListening exception", e)
+            // 实例不可用，销毁重建再试
+            if (createInstance()) {
+                try {
+                    recognizer?.startListening(createIntent())
+                    return true
+                } catch (e2: Exception) {
+                    Log.e("FR", "recreate startListening also failed", e2)
+                }
+            }
             false
         }
     }
 
-    /**
-     * 重新启动监听（保持 isListening 状态）
-     * SpeechRecognizer 需要销毁重建才能重新开始，加短延迟避免 ERROR_CLIENT
-     */
-    private fun restartListening() {
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-
-        CoroutineScope(Dispatchers.Main).launch {
-            delay(200)  // 给系统释放识别资源的时间，避免 ERROR_CLIENT
-            if (isListening && init()) {
-                startListening()
-            }
-        }
-    }
-
+    // ─── 停止监听（用户主动停止） ──────────────────────
     fun stopListening() {
-        isListening = false
-        speechRecognizer?.stopListening()
+        restartJob?.cancel()
+        restartJob = null
+        _isListening = false
 
-        // 连续模式下：如果有积累的文本，作为成功结果发送
+        try { recognizer?.stopListening() } catch (_: Exception) {}
+
+        // 连续模式：有积累文本就发送
         if (continuousMode && accumulatedText.isNotEmpty()) {
             val text = accumulatedText.toString()
             accumulatedText.clear()
+            Log.d("FR", "stopListening → emit ${text.length} chars")
             CoroutineScope(Dispatchers.Main).launch {
                 _results.emit(Result.Success(text))
             }
         }
     }
 
+    // ─── 销毁 ──────────────────────────────────────────
     fun destroy() {
-        isListening = false
-        speechRecognizer?.destroy()
-        speechRecognizer = null
+        restartJob?.cancel()
+        restartJob = null
+        _isListening = false
+        recognizer?.destroy()
+        recognizer = null
+        activeInstance = null
         accumulatedText.clear()
         continuousMode = false
     }
 
-    fun isAvailable(): Boolean {
-        return SpeechRecognizer.isRecognitionAvailable(context)
+    fun isAvailable() = SpeechRecognizer.isRecognitionAvailable(context)
+
+    // ═══════════════════════════════════════════════════
+    //  内部方法
+    // ═══════════════════════════════════════════════════
+
+    private fun createIntent(): Intent = Intent(
+        android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+    ).apply {
+        putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+        putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        // 静音超时拉到 60 秒：说话中间停顿不会断
+        // 用已知字符串常量名（不依赖反射）
+        putExtra("android.speech.extras.SPEECH_INPUT_COMPLETE_SILENCE_MILLIS", 60000L)
+        putExtra("android.speech.extras.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_MILLIS", 60000L)
+        putExtra("android.speech.extras.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 5000L)
+    }
+
+    /** 静默超时后自动重启监听（销毁 → 创建 → 监听） */
+    private fun scheduleRestart() {
+        if (!_isListening) return
+        restartJob?.cancel()
+        restartJob = CoroutineScope(Dispatchers.Main + Job()).launch {
+            // 销毁旧实例
+            recognizer?.destroy()
+            recognizer = null
+
+            // 等待资源释放
+            delay(500)
+
+            // 检查是否已被 stopListening 取消
+            if (!_isListening) return@launch
+
+            if (createInstance()) {
+                delay(200)
+                if (_isListening) {
+                    try {
+                        recognizer?.startListening(createIntent())
+                    } catch (e: Exception) {
+                        Log.e("FR", "restart startListening failed", e)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleError(error: Int) {
+        when (error) {
+            SpeechRecognizer.ERROR_NO_MATCH,
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                // 静音超时，不算错误
+                Log.d("FR", "No match/timeout → auto restart")
+                if (_isListening && activeInstance === recognizer) scheduleRestart()
+            }
+            SpeechRecognizer.ERROR_CLIENT -> {
+                // 客户端内部错误，延迟后重建
+                Log.d("FR", "ERROR_CLIENT → rebuild")
+                if (_isListening) {
+                    restartJob?.cancel()
+                    restartJob = CoroutineScope(Dispatchers.Main + Job()).launch {
+                        delay(1000)
+                        if (_isListening) {
+                            if (createInstance()) {
+                                delay(300)
+                                if (_isListening) {
+                                    try { recognizer?.startListening(createIntent()) }
+                                    catch (e: Exception) { Log.e("FR", "retry failed", e) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                // 识别器忙，延长延迟
+                if (_isListening) {
+                    restartJob?.cancel()
+                    restartJob = CoroutineScope(Dispatchers.Main + Job()).launch {
+                        delay(2000)
+                        if (_isListening) {
+                            if (createInstance()) {
+                                delay(300)
+                                if (_isListening) {
+                                    try { recognizer?.startListening(createIntent()) }
+                                    catch (e: Exception) { Log.e("FR", "retry failed", e) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {
+                if (!suppressNoMatchError) {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        _results.emit(Result.Error("识别错误"))
+                    }
+                }
+            }
+        }
     }
 }
