@@ -10,11 +10,24 @@ import kotlinx.coroutines.flow.*
 
 /**
  * 语音识别器（Android SpeechRecognizer）
- * 持续监听模式：识别完成后自动重启，保持始终在线
+ * 
+ * 支持两种模式：
+ * - 单次模式 (continuous = false): 识别一次后立即发送结果
+ * - 连续模式 (continuous = true): 持续积累识别结果，直到 stopListening 时一次性发送
  */
 class FallbackRecognizer(private val context: Context) {
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
+
+    /**
+     * 是否启用连续积累模式。
+     * 当连续模式开启时，onResults 会积累文本而不是立即发送，
+     * 直到 stopListening() 被调用时才将所有积累的文本一次性发送。
+     */
+    var continuousMode: Boolean = false
+
+    /** 连续模式下积累的文本 */
+    private val accumulatedText = StringBuilder()
 
     sealed class Result {
         data class Success(val text: String, val confidence: Float = 1.0f) : Result()
@@ -63,13 +76,13 @@ class FallbackRecognizer(private val context: Context) {
                                         _results.emit(Result.NoMatch)
                                     }
                                 }
-                                // 自动重启：保持持续监听
+                                // 连续模式下自动重启
                                 if (isListening) {
                                     restartListening()
                                 }
                             }
                             SpeechRecognizer.ERROR_CLIENT -> {
-                                // 客户端错误（通常是还在处理中），不报错
+                                // 客户端错误（通常在处理中），不报错
                                 if (!suppressNoMatchError) {
                                     CoroutineScope(Dispatchers.Main).launch {
                                         _results.emit(Result.Recognizing("正在识别..."))
@@ -132,12 +145,25 @@ class FallbackRecognizer(private val context: Context) {
                             val best = matches[0]
                             val scores = results.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
                             val confidence = scores?.firstOrNull() ?: 1.0f
-                            CoroutineScope(Dispatchers.Main).launch {
-                                _results.emit(Result.Success(best, confidence))
-                            }
-                            // 识别成功：如果是持续监听模式，自动重启
-                            if (isListening) {
-                                restartListening()
+                            
+                            if (continuousMode) {
+                                // 连续模式：积累文本，不立即发送
+                                if (accumulatedText.isNotEmpty()) {
+                                    accumulatedText.append(" ")
+                                }
+                                accumulatedText.append(best)
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    _results.emit(Result.Partial(accumulatedText.toString()))
+                                }
+                                // 自动重启以保持持续监听
+                                if (isListening) {
+                                    restartListening()
+                                }
+                            } else {
+                                // 单次模式：立即发送结果
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    _results.emit(Result.Success(best, confidence))
+                                }
                             }
                         } else {
                             if (!suppressNoMatchError) {
@@ -174,6 +200,11 @@ class FallbackRecognizer(private val context: Context) {
         val recognizer = speechRecognizer ?: return false
         if (!SpeechRecognizer.isRecognitionAvailable(context)) return false
 
+        // 连续模式下重置积累缓冲区
+        if (continuousMode) {
+            accumulatedText.clear()
+        }
+
         isListening = true
         return try {
             val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -206,12 +237,23 @@ class FallbackRecognizer(private val context: Context) {
     fun stopListening() {
         isListening = false
         speechRecognizer?.stopListening()
+
+        // 连续模式下：如果有积累的文本，作为成功结果发送
+        if (continuousMode && accumulatedText.isNotEmpty()) {
+            val text = accumulatedText.toString()
+            accumulatedText.clear()
+            CoroutineScope(Dispatchers.Main).launch {
+                _results.emit(Result.Success(text))
+            }
+        }
     }
 
     fun destroy() {
         isListening = false
         speechRecognizer?.destroy()
         speechRecognizer = null
+        accumulatedText.clear()
+        continuousMode = false
     }
 
     fun isAvailable(): Boolean {

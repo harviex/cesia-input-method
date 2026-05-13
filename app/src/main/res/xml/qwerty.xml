@@ -40,16 +40,16 @@
         <Key android:codes="98" android:keyLabel="b" />
         <Key android:codes="110" android:keyLabel="n" />
         <Key android:codes="109" android:keyLabel="m" />
-        <Key android:codes="-201" android:keyLabel="重写" android:keyWidth="15%p" android:keyEdgeFlags="right" />
+        <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="15%p" android:keyEdgeFlags="right" />
     </Row>
     
     <!-- 第四行 -->
     <Row>
-        <Key android:codes="44" android:keyLabel="," android:keyEdgeFlags="left" />
+        <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p" android:keyEdgeFlags="left" />
         <Key android:codes="32" android:keyLabel="空格" android:keyWidth="40%p" />
-        <Key android:codes="46" android:keyLabel="。" />
-        <Key android:codes="-200" android:keyLabel="📤" android:keyWidth="10%p" />
-        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" />
+        <Key android:codes="46" android:keyLabel="。" android:keyWidth="10%p" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyWidth="10%p" />
+        <Key android:codes="-200" android:keyLabel="发送" android:keyWidth="10%p" android:keyEdgeFlags="right" />
     </Row>
     
 </Keyboard>

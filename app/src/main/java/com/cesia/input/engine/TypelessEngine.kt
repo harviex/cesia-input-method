@@ -119,16 +119,18 @@ class TypelessEngine(
         // 初始化识别器
         if (fallbackRecognizer?.init() == true) {
             recognizerAvailable = true
-            log("✅ FallbackRecognizer 已就绪")
+            log("✅ Cesia 已就绪")
         } else {
-            log("❌ FallbackRecognizer 初始化失败")
+            log("❌ Cesia 初始化失败")
         }
     }
 
     /**
      * 开始监听（手动/自动模式通用入口）
      */
-    fun startListening() {
+    fun startListening(continuous: Boolean = false) {
+        // Tell the recognizer whether to accumulate or single-shot
+        fallbackRecognizer?.continuousMode = continuous
         if (voiceActivationEnabled) {
             startWakeWordMonitoring()
         } else {
@@ -240,39 +242,12 @@ class TypelessEngine(
         }
         _state.value = State.COMMITTING
 
-        // 自动添加标点符号
-        val finalText = addAutoPunctuation(text)
-
-        ic.commitText(finalText, 1)
-        log("📝 已上屏: $finalText")
+        ic.commitText(text, 1)
+        log("📝 已上屏: $text")
 
         engineScope.launch {
             delay(200)
             _state.value = State.IDLE
-        }
-    }
-
-    /**
-     * 自动添加标点符号
-     * 根据中文语境为语音识别结果添加句号/问号等
-     */
-    private fun addAutoPunctuation(text: String): String {
-        val trimmed = text.trim()
-
-        // 已经以标点结尾的，不处理
-        val hasEnding = trimmed.lastOrNull()?.let { c ->
-            c in setOf('。', '！', '？', '，', '；', '：', '.', '!', '?', ',', ';')
-        } ?: false
-        if (hasEnding) return trimmed
-
-        // 疑问句特征词 → 问号
-        val questionWords = listOf("吗", "呢", "吧", "什么", "多少", "谁", "哪里", "哪儿", "怎么", "为什么")
-        val isQuestion = questionWords.any { trimmed.contains(it) }
-
-        return if (isQuestion) {
-            "$trimmed？"
-        } else {
-            "$trimmed。"
         }
     }
 

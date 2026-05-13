@@ -126,10 +126,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             showSettings()
         }
 
-        // 删除按钮
+        // 删除按钮 —— 清空全部文本
         btnDelete.setOnClickListener {
             val ic = currentInputConnection ?: return@setOnClickListener
-            ic.deleteSurroundingText(1, 0)
+            ic.deleteSurroundingText(Integer.MAX_VALUE, 0)
         }
 
         // 切换输入法按钮
@@ -198,7 +198,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setStatusDot("recording")
         updateStatus("🎤 正在收听，请说话...")
 
-        typelessEngine?.startListening()
+        // 使用连续模式：积累所有语音，停止时一次性发送
+        typelessEngine?.startListening(continuous = true)
     }
 
     private fun stopRecording() {
@@ -268,11 +269,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         when (primaryCode) {
-            // 重写/清屏 —— 删除光标前的所有文本
-            -201 -> {
-                val ic = currentInputConnection ?: return
-                ic.deleteSurroundingText(Integer.MAX_VALUE, 0)
-            }
             // 纸飞机发送 —— 发送回车键
             -200 -> {
                 val ic = currentInputConnection ?: return
@@ -285,6 +281,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             Keyboard.KEYCODE_SHIFT -> {
                 keyboard.isShifted = !keyboard.isShifted
+                keyboardView.invalidateAllKeys()
             }
             Keyboard.KEYCODE_MODE_CHANGE -> {
                 showSettings()
@@ -296,8 +293,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             else -> {
                 try {
-                    val code = primaryCode.toChar()
-                    currentInputConnection?.commitText(code.toString(), 1)
+                    var char = primaryCode.toChar()
+                    if (keyboard.isShifted && char.isLowerCase()) {
+                        char = char.uppercaseChar()
+                        // Shift 自动关闭（标准键盘行为）
+                        keyboard.isShifted = false
+                        keyboardView.invalidateAllKeys()
+                    }
+                    currentInputConnection?.commitText(char.toString(), 1)
                 } catch (_: Exception) {}
             }
         }
