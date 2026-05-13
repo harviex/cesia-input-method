@@ -96,6 +96,13 @@ class FallbackRecognizer(private val context: Context) {
                                     }
                                 }
                             }
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                                // 识别器忙 — 销毁重建期间被调用 startListening，加延迟重试
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(2000)
+                                    if (isListening) restartListening()
+                                }
+                            }
                             SpeechRecognizer.ERROR_NETWORK -> {
                                 CoroutineScope(Dispatchers.Main).launch {
                                     _results.emit(Result.Error("网络错误，请检查网络"))
@@ -107,20 +114,16 @@ class FallbackRecognizer(private val context: Context) {
                                     }
                                 }
                             }
-                            SpeechRecognizer.ERROR_AUDIO -> {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Error("音频错误"))
-                                }
+                            SpeechRecognizer.ERROR_AUDIO,
+                            SpeechRecognizer.ERROR_SERVER,
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT_LIMIT_REACHED -> {
+                                // 音频/服务器/无语音错误，不报错静默重启
                                 if (isListening) {
                                     CoroutineScope(Dispatchers.Main).launch {
                                         delay(500)
                                         restartListening()
                                     }
-                                }
-                            }
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    _results.emit(Result.Error("需要录音权限"))
                                 }
                             }
                             else -> {
@@ -131,7 +134,7 @@ class FallbackRecognizer(private val context: Context) {
                                 }
                                 if (isListening) {
                                     CoroutineScope(Dispatchers.Main).launch {
-                                        delay(500)
+                                        delay(2000)
                                         restartListening()
                                     }
                                 }
@@ -224,13 +227,17 @@ class FallbackRecognizer(private val context: Context) {
 
     /**
      * 重新启动监听（保持 isListening 状态）
+     * SpeechRecognizer 需要销毁重建才能重新开始，加短延迟避免 ERROR_CLIENT
      */
     private fun restartListening() {
         speechRecognizer?.destroy()
         speechRecognizer = null
 
-        if (isListening && init()) {
-            startListening()
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(200)  // 给系统释放识别资源的时间，避免 ERROR_CLIENT
+            if (isListening && init()) {
+                startListening()
+            }
         }
     }
 

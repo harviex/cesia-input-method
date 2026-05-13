@@ -47,6 +47,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 设置
     private var apiUrl = "https://typeless-ai-service.vercel.app/api/polish"
+    private var shiftPressed = false  // Shift 按键状态
 
     companion object {
         const val PREF_API_URL = "api_url"
