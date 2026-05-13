@@ -115,10 +115,8 @@ class FallbackRecognizer(private val context: Context) {
                                 }
                             }
                             SpeechRecognizer.ERROR_AUDIO,
-                            SpeechRecognizer.ERROR_SERVER,
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT_LIMIT_REACHED -> {
-                                // 音频/服务器/无语音错误，不报错静默重启
+                            SpeechRecognizer.ERROR_SERVER -> {
+                                // 音频/服务器错误，不报错静默重启
                                 if (isListening) {
                                     CoroutineScope(Dispatchers.Main).launch {
                                         delay(500)
