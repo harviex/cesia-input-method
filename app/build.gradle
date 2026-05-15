@@ -4,19 +4,48 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
+// === 动态读取版本号 ===
+def getVersionFromGitTag() {
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'describe', '--tags', '--always', '--dirty'
+            standardOutput = stdout
+            workingDir = rootDir
+        }
+        def tag = stdout.toString().trim()
+        tag = tag.startsWith('v') ? tag.substring(1) : tag
+        def clean = tag.split('-')[0]
+        return clean
+    } catch (Exception e) {
+        return "1.0.0"
+    }
+}
+
+def getVersionCodeFromTag() {
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-list', '--count', 'HEAD'
+            standardOutput = stdout
+            workingDir = rootDir
+        }
+        return Integer.parseInt(stdout.toString().trim())
+    } catch (Exception e) {
+        return 1
+    }
+}
+
 android {
     namespace 'com.cesia.input'
     compileSdk 34
-    
+
     defaultConfig {
         applicationId "com.cesia.input"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
-        
-    // NDK support will be added in future versions for offline speech recognition
-    // Currently using pure Kotlin/Java implementation
+        versionCode getVersionCodeFromTag()
+        versionName getVersionFromGitTag()
     }
     
     buildTypes {

@@ -197,8 +197,23 @@ class SettingsActivity : AppCompatActivity() {
                     try {
                         val json = JSONObject(body)
                         val remoteVersion = json.getString("tag_name")
-                        val remoteApk = json.getJSONArray("assets").getJSONObject(0)
-                        val downloadUrl = remoteApk.getString("browser_download_url")
+                        // 按 .apk 后缀找下载链接
+                        val assets = json.getJSONArray("assets")
+                        var downloadUrl = ""
+                        for (i in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(i)
+                            val name = asset.getString("name")
+                            if (name.endsWith(".apk")) {
+                                downloadUrl = asset.getString("browser_download_url")
+                                break
+                            }
+                        }
+                        if (downloadUrl.isEmpty()) {
+                            tvStatus.text = "❌ Release 中未找到 APK 文件"
+                            btnUpdate.isEnabled = true
+                            btnUpdate.text = "🔄 检查更新"
+                            return@runOnUiThread
+                        }
 
                         val pInfo = packageManager.getPackageInfo(packageName, 0)
                         val currentVersion = pInfo.versionName
