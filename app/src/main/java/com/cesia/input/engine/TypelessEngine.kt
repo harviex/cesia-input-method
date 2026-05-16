@@ -41,6 +41,12 @@ class TypelessEngine(
     // 日志回调
     var onLogMessage: ((String) -> Unit)? = null
 
+    // 魔法模式回调（识别到指令后触发）
+    var onMagicResult: ((String) -> Unit)? = null
+
+    // 是否处于魔法模式
+    var magicMode: Boolean = false
+
     init {
         // 启动识别结果监听协程
         engineScope.launch {
@@ -50,7 +56,12 @@ class TypelessEngine(
                 when (result) {
                     is FallbackRecognizer.Result.Success -> {
                         log("📝 识别成功：${result.text.take(50)}")
-                        polishAndCommit(result.text)
+                        if (magicMode) {
+                            // 魔法模式：触发回调，不润色上屏
+                            onMagicResult?.invoke(result.text)
+                        } else {
+                            polishAndCommit(result.text)
+                        }
                     }
                     is FallbackRecognizer.Result.Partial -> {
                         // 实时部分结果，显示在状态栏
@@ -185,6 +196,9 @@ class TypelessEngine(
         Log.d("TypelessEngine", msg)
         onLogMessage?.invoke(msg)
     }
+
+    /** 获取 PolishService（供魔法模式使用） */
+    fun getPolishService(): PolishService? = polishService
 
     /** 更新 API URL */
     fun updateApiUrl(url: String) { polishService?.updateApiUrl(url) }

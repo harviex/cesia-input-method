@@ -176,4 +176,39 @@ class PolishService(
         client.dispatcher.executorService.shutdown()
         client.connectionPool.evictAll()
     }
+
+    /**
+     * 魔法模式：使用自定义 prompt 调用 API
+     * 用于语音指令修改文字
+     */
+    fun polishWithPrompt(prompt: String): String? {
+        return try {
+            val json = JSONObject().apply {
+                put("text", prompt)
+                put("language", "zh")
+            }
+            val requestBody = json.toString()
+                .toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(apiUrl)
+                .post(requestBody)
+                .addHeader("Content-Type", "application/json")
+                .build()
+            Log.d("PolishService", "魔法模式请求: ${prompt.take(100)}")
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e("PolishService", "魔法模式 API 错误: ${response.code}")
+                    return null
+                }
+                val body = response.body?.string() ?: return null
+                val jsonResp = JSONObject(body)
+                val result = jsonResp.optString("polished_text", "")
+                Log.d("PolishService", "魔法模式结果: ${result.take(100)}")
+                result
+            }
+        } catch (e: Exception) {
+            Log.e("PolishService", "魔法模式异常", e)
+            null
+        }
+    }
 }

@@ -5,26 +5,26 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#FFFFFF">
+    android:background="#F5F5F5">
 
     <!-- 状态栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
         android:paddingStart="8dp"
         android:paddingEnd="8dp"
-        android:background="#FAFAFA"
+        android:background="#EEEEEE"
         android:gravity="center_vertical">
 
         <View
             android:id="@+id/v_status_dot"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
             android:background="@drawable/status_dot_idle"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="6dp" />
 
         <TextView
             android:id="@+id/tv_status"
@@ -32,15 +32,15 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="就绪"
-            android:textSize="11sp"
-            android:textColor="#666666"
+            android:textSize="10sp"
+            android:textColor="#888888"
             android:singleLine="true"
             android:ellipsize="end" />
 
         <ImageButton
             android:id="@+id/btn_settings"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:src="@android:drawable/ic_menu_preferences"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="设置"
@@ -54,57 +54,72 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:keyPreviewLayout="@layout/key_preview"
-        android:background="#FAFAFA"
+        android:background="#E8E8E8"
         android:keyTextColor="#333333"
         android:keyBackground="@drawable/key_background"
-        android:popupLayout="@layout/key_preview" />
+        android:popupLayout="@layout/key_preview"
+        android:keyTextSize="18sp"
+        android:verticalGap="2dp"
+        android:horizontalGap="2dp" />
 
     <!-- 底部按钮栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="6dp"
-        android:background="#F0F0F0"
+        android:padding="4dp"
+        android:background="#E0E0E0"
         android:gravity="center_vertical">
+
+        <!-- 魔法按钮（语音修改） -->
+        <ImageButton
+            android:id="@+id/btn_magic"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="0.6"
+            android:text="✨"
+            android:background="@drawable/button_background"
+            android:contentDescription="语音修改"
+            android:scaleType="centerInside"
+            android:layout_marginEnd="3dp" />
 
         <!-- 切换输入法按钮 -->
         <ImageButton
             android:id="@+id/btn_switch_ime"
             android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="0.5"
+            android:layout_height="44dp"
+            android:layout_weight="0.6"
             android:src="@android:drawable/ic_input_get"
             android:background="@drawable/button_background"
             android:scaleType="centerInside"
             android:contentDescription="切换输入法"
-            android:layout_marginEnd="4dp" />
+            android:layout_marginEnd="3dp" />
 
         <!-- 麦克风/语音按钮 -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_mic"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="50dp"
             android:layout_weight="3"
             android:text="🎤 点击开始说话"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textColor="#333333"
-            android:backgroundTint="#E8E8E8"
-            app:cornerRadius="28dp"
-            android:elevation="2dp"
-            android:stateListAnimator="@null" />
+            android:backgroundTint="#D0D0D0"
+            app:cornerRadius="25dp"
+            android:elevation="1dp"
+            android:stateListAnimator="@null"
+            android:layout_marginEnd="3dp" />
 
         <!-- 删除按钮 -->
         <ImageButton
             android:id="@+id/btn_delete"
             android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="0.5"
+            android:layout_height="44dp"
+            android:layout_weight="0.6"
             android:src="@android:drawable/ic_menu_delete"
             android:background="@drawable/button_background"
             android:scaleType="centerInside"
-            android:contentDescription="删除"
-            android:layout_marginStart="4dp" />
+            android:contentDescription="删除" />
     </LinearLayout>
 
 </LinearLayout>
