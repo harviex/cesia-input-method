@@ -47,11 +47,25 @@ android {
         versionCode getVersionCodeFromTag()
         versionName getVersionFromGitTag()
     }
-    
+
+    // 签名配置
+    signingConfigs {
+        release {
+            storeFile file("cesia-release.keystore")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "cesia2026"
+            keyAlias "cesia"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "cesia2026"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     

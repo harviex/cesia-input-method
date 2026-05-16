@@ -31,3 +31,8 @@ wenet_units.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Keystore (injected via GitHub Secrets at build time)
+*.keystore
+*.jks
+*.keystore.old
