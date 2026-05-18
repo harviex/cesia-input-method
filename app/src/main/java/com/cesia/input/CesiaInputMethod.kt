@@ -113,11 +113,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBar = view.findViewById(R.id.candidate_bar)
         tvComposing = view.findViewById(R.id.tv_composing)
         tvCandidates = arrayOf(
-            view.findViewById(R.id.tv_candidate_1),
-            view.findViewById(R.id.tv_candidate_2),
-            view.findViewById(R.id.tv_candidate_3),
-            view.findViewById(R.id.tv_candidate_4),
-            view.findViewById(R.id.tv_candidate_5")
+            view.findViewById<TextView>(R.id.tv_candidate_1),
+            view.findViewById<TextView>(R.id.tv_candidate_2),
+            view.findViewById<TextView>(R.id.tv_candidate_3),
+            view.findViewById<TextView>(R.id.tv_candidate_4),
+            view.findViewById<TextView>(R.id.tv_candidate_5)
         )
         btnCandidatePrev = view.findViewById(R.id.btn_candidate_prev)
         btnCandidateNext = view.findViewById(R.id.btn_candidate_next)
@@ -569,7 +569,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Keyboard.KEYCODE_DONE -> {
                 currentInputConnection?.apply {
                     sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-                    sendKeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+                    sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
                 }
             }
             Keyboard.KEYCODE_MODE_CHANGE -> {

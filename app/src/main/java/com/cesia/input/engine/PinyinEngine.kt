@@ -133,7 +133,7 @@ class PinyinEngine(context: Context) {
      * 直接输入标点符号（当拼音串为空时）
      */
     fun isPunctuation(c: Char): Boolean {
-        return c in "，。！？、；：""''（）【】《》…—～"
+        return c in "\uFF0C\u3002\uFF01\uFF1F\u3001\uFF1B\uFF1A\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011\u300A\u300B\u2026\u2014\uFF5E"
     }
 
     private fun updateCandidates() {
