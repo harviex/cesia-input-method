@@ -57,6 +57,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var longPressHandler = Handler(Looper.getMainLooper())
     private var longPressRunnable: Runnable? = null
     private var currentLongPressKey: Keyboard.Key? = null
+    private var longPressTriggered = false
 
     // 魔法模式
     private var magicMode = false
@@ -306,6 +307,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 Log.d("Cesia", "Fn 长按输出: $symbol")
                 // 震动反馈
                 keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                longPressTriggered = true
             }
             currentLongPressKey = null
         }.also {
@@ -317,12 +319,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
         longPressRunnable = null
         currentLongPressKey = null
+        longPressTriggered = false
     }
 
     // ======================== KeyboardView 回调 ========================
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         cancelLongPress()
+
+        if (longPressTriggered) {
+            longPressTriggered = false
+            return
+        }
 
         when (primaryCode) {
             KEYCODE_SWITCH_SYMBOL -> {
