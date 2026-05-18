@@ -1,5 +1,6 @@
 package com.cesia.input
 
+import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
@@ -356,7 +357,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 updateCandidateBar()
             }
             // 输出字符（中文模式下自动转换标点）
-            val charStr = if (isChineseMode) {
+            val charStr: String = if (isChineseMode) {
                 when (c) {
                     ',' -> "，"
                     '.' -> "。"
@@ -658,7 +659,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     if (isCapsLock && char.isLowerCase()) {
                         char = char.uppercaseChar()
                     }
-                    val charStr = if (isChineseMode) {
+                    val charStr: String = if (isChineseMode) {
                         when (char) {
                             ',' -> "，"
                             '.' -> "。"
@@ -675,7 +676,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             '<' -> "《"
                             '>' -> "》"
                             '"' -> "「"
-                            ''' -> "『"
+                            '\'' -> "『"
                             '\' -> "、"
                             '|' -> "｜"
                             '~' -> "～"
