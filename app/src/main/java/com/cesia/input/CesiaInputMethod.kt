@@ -3,6 +3,7 @@ package com.cesia.input
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
+import com.cesia.input.ui.CustomKeyboardView
 import android.inputmethodservice.KeyboardView
 import android.os.Build
 import android.os.Handler
@@ -31,7 +32,7 @@ import com.cesia.input.engine.TypelessEngine
 class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
     // 视图
-    private lateinit var keyboardView: KeyboardView
+    private lateinit var keyboardView: CustomKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
     private lateinit var symbolKeyboard: Keyboard
     private var currentKeyboard: Keyboard? = null
