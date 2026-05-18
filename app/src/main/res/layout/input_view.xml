@@ -58,8 +58,8 @@
         android:keyTextColor="#333333"
         android:keyBackground="@drawable/key_background"
         android:popupLayout="@layout/key_preview"
-        android:keyTextSize="18sp"
-        android:verticalGap="2dp"
+        android:keyTextSize="17sp"
+        android:verticalGap="3dp"
         android:horizontalGap="2dp" />
 
     <!-- 底部按钮栏 -->

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="10%p"
-    android:keyHeight="48dp">
+    android:keyHeight="43dp"
+    android:verticalGap="0dp">
 
     <!-- 第一行：数字 -->
     <Row>
