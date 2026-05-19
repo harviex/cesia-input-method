@@ -389,59 +389,45 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
 
-        // 读取上下文：获取输入框前后文字
+        // 第一步：读取输入框中的文字作为上下文
         val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
         val textAfter = ic.getTextAfterCursor(2000, 0)?.toString() ?: ""
+        val inputText = textBefore + textAfter
 
-        // 构建上下文
-        val context = buildContext(textBefore, textAfter)
+        // 第二步：清空输入框
+        if (inputText.isNotEmpty()) {
+            // 选中全部文字后删除
+            ic.performContextMenuAction(android.R.id.selectAll)
+            ic.deleteSurroundingText(Integer.MAX_VALUE, Integer.MAX_VALUE)
+        }
 
-        // 如果输入框为空，尝试从EditorInfo获取更多上下文
-        if (textBefore.isEmpty() && textAfter.isEmpty()) {
+        // 第三步：根据上下文生成AI回复
+        if (inputText.isEmpty()) {
+            // 输入框为空，尝试从EditorInfo获取应用信息
             val editorInfo = currentInputEditorInfo
-            val hints = mutableListOf<String>()
-
-            // 尝试读取hint
-            editorInfo?.hintText?.toString()?.takeIf { it.isNotEmpty() }?.let {
-                hints.add("输入框提示：$it")
-            }
-
-            // 尝试读取label（有些App会设置）
-            editorInfo?.label?.toString()?.takeIf { it.isNotEmpty() }?.let {
-                hints.add("应用标签：$it")
-            }
-
-            // 尝试读取packageName来判断当前App
-            editorInfo?.packageName?.let { pkg ->
-                val appName = when {
+            val appName = editorInfo?.packageName?.let { pkg ->
+                when {
                     pkg.contains("wechat") -> "微信"
                     pkg.contains("qq") -> "QQ"
                     pkg.contains("whatsapp") -> "WhatsApp"
                     pkg.contains("telegram") -> "Telegram"
                     pkg.contains("line") -> "LINE"
-                    else -> pkg
+                    else -> null
                 }
-                hints.add("当前应用：$appName")
             }
-
-            if (hints.isNotEmpty()) {
-                // 有hint信息，用它作为上下文
-                val hintContext = hints.joinToString("\n")
-                isAiProcessing = true
-                updateStatus("🤖 AI正在根据应用信息生成建议...")
-                setStatusDot("processing")
-                val prompt = buildAiReplyPrompt("【应用信息】\n$hintContext", aiReplyStyle)
-                executeAiPrompt(prompt, ic)
-                return
-            }
-
-            // 完全无法获取上下文
-            updateStatus("💡 输入框为空且无法获取聊天上下文。\n提示：在微信等聊天App中，先点击输入框让光标出现，再点击AI写作按钮。\n或长按切换写作风格后重试。")
-            return
+            val context = if (appName != null) "【当前应用：$appName】\n输入框为空，请根据应用类型生成一条合适的开场白或问候语。"
+                       else "输入框为空，请生成一条通用的问候或开场白。"
+            generateAiReply(context, ic)
+        } else {
+            // 用输入框原文作为上下文，生成回复
+            val context = "【原文】\n$inputText\n\n请根据以上内容的语气和主题，生成一条合适的回复。"
+            generateAiReply(context, ic)
         }
+    }
 
+    private fun generateAiReply(context: String, ic: android.view.inputmethod.InputConnection) {
         isAiProcessing = true
-        updateStatus("🤖 AI正在分析上下文并生成建议...")
+        updateStatus("🤖 AI正在生成回复（$aiReplyStyle 风格）...")
         setStatusDot("processing")
         val prompt = buildAiReplyPrompt(context, aiReplyStyle)
         executeAiPrompt(prompt, ic)

@@ -146,14 +146,26 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showVersion() {
         try {
-            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-            } else {
+            // 兼容所有Android版本读取版本号
+            val pInfo = try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, 0)
+                }
+            } catch (_: Exception) {
                 @Suppress("DEPRECATION")
                 packageManager.getPackageInfo(packageName, 0)
             }
-            val versionName = pInfo.versionName ?: "未知"
-            tvVersion.text = "版本: $versionName"
+            val versionName = pInfo.versionName
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode.toLong()
+            }
+            tvVersion.text = if (versionName != null) "版本: $versionName ($versionCode)" else "版本: $versionCode"
         } catch (_: Exception) {
             tvVersion.text = "版本: 未知"
         }
