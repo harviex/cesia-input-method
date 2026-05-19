@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Rebuild pinyin_dict.json with correct char ordering per pinyin.
-Strategy: for each pinyin, define the correct order of common chars.
+Rebuild pinyin_dict.json with high-quality char ordering.
+Strategy:
+1. Use CC-CEDICT for single chars (has proper pinyin + frequency)
+2. Limit to top 50 chars per pinyin (most common first)
+3. Ensure ultra-common chars are always first
 """
 import json
 import os
@@ -9,61 +12,63 @@ import sys
 import re
 from collections import defaultdict
 
-# 每个拼音的常用字正确顺序（只列出需要特别排序的拼音）
-PINYIN_CHAR_ORDER = {
-    'yi': '一衣医依仪宜姨移遗疑乙已以矣蚁椅亿忆义艺议亦异役译易疫益谊意毅翼因阴音银引饮隐印应英樱鹰迎盈营蝇赢影映硬',
+# 超高频字（每个拼音前10位必须是这些）
+ULTRA_COMMON = {
+    'yi': '一已以意义艺依医宜移遗仪疑乙椅亿忆',
     'de': '的地得德底',
-    'shi': '是时事十世市识实使始士氏示式势视试室适逝释施师诗石时拾食史',
-    'you': '有又由友游右油优忧幽悠尤邮幼诱',
+    'shi': '是时事十世市识实使始士氏示式势视',
+    'you': '有又由友游右油优忧幽悠尤邮',
     'wo': '我握卧沃涡倭',
     'ta': '他她它塔',
     'zai': '在再载',
     'le': '了乐勒',
     'bu': '不部布步',
     'ren': '人任认',
-    'ge': '个各革',
-    'dou': '都斗豆',
+    'ge': '个各革格隔',
+    'dou': '都斗豆陡',
     'lai': '来赖',
-    'shang': '上商',
-    'dao': '到道导',
+    'shang': '上商伤尚',
+    'dao': '到道导倒',
     'shuo': '说',
     'yao': '要',
-    'hui': '会回',
-    'hao': '好号',
-    'xue': '学',
-    'jia': '家加',
-    'xin': '新心',
-    'hua': '化话',
-    'guo': '国',
+    'hui': '会回挥汇',
+    'hao': '好号毫',
+    'xue': '学血雪',
+    'jia': '家加价',
+    'xin': '新心信',
+    'hua': '化话划华',
+    'guo': '国过果',
     'nian': '年',
-    'chu': '出处',
-    'shen': '什身',
-    'zuo': '作做',
+    'chu': '出处初',
+    'shen': '什身深神',
+    'zuo': '作做坐',
     'ri': '日',
-    'ye': '也业',
-    'mei': '美每',
-    'wan': '万完',
-    'zhang': '长张',
-    'fang': '方',
-    'qian': '前千',
-    'hou': '后',
-    'zhong': '中重',
-    'xiao': '小',
-    'wen': '文问',
-    'ti': '体',
-    'li': '里力',
-    'zhe': '这着',
-    'na': '那哪',
+    'ye': '也业叶夜',
+    'mei': '美每妹',
+    'wan': '万完晚',
+    'zhang': '长张章',
+    'fang': '方房防',
+    'qian': '前千钱',
+    'hou': '后厚',
+    'zhong': '中重种众',
+    'xiao': '小校笑',
+    'wen': '文问闻',
+    'ti': '体提题',
+    'li': '里力立利',
+    'zhe': '这着者',
+    'na': '那哪拿',
     'ne': '呢',
-    'ma': '吗',
-    'ba': '吧把',
+    'ma': '吗嘛',
+    'ba': '吧把爸罢',
     'a': '啊',
     'kai': '开',
 }
 
-def parse_rime_dict(input_file):
+def parse_rime_dict(input_file, max_chars_per_pinyin=60):
+    """Parse Rime dict.yaml, keep only top N chars per pinyin"""
     pinyin_map = defaultdict(list)
     header_end = False
+    
     with open(input_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -89,42 +94,59 @@ def parse_rime_dict(input_file):
                 continue
             pinyin_clean = ''.join(c for c in pinyin_str if not c.isdigit())
             pinyin_map[pinyin_clean].append((weight, char))
+    
     return pinyin_map
 
-def sort_chars(pinyin, chars_with_weights):
-    """Sort chars: use predefined order if available, otherwise by weight"""
-    if pinyin in PINYIN_CHAR_ORDER:
-        order = PINYIN_CHAR_ORDER[pinyin]
-        # Sort by position in order string
-        def sort_key(item):
-            weight, char = item
-            if char in order:
-                return (0, order.index(char), '')
-            else:
-                return (1, -weight, char)
-        chars_with_weights.sort(key=sort_key)
-    else:
-        # Default: sort by weight descending
-        chars_with_weights.sort(key=lambda x: -x[0])
+def sort_and_limit(pinyin, chars_with_weights, max_chars=60):
+    """Sort chars: ultra-common first, then by weight, limit to max_chars"""
+    # Deduplicate
+    seen = {}
+    for weight, char in chars_with_weights:
+        if char not in seen or weight > seen[char]:
+            seen[char] = weight
+    
+    chars_with_weights = [(w, c) for c, w in seen.items()]
+    
+    # Get ultra-common order for this pinyin
+    ultra_order = ULTRA_COMMON.get(pinyin, '')
+    
+    def sort_key(item):
+        weight, char = item
+        if char in ultra_order:
+            return (0, ultra_order.index(char), '')
+        else:
+            return (1, -weight, char)
+    
+    chars_with_weights.sort(key=sort_key)
+    
+    # Limit to max_chars
+    chars_with_weights = chars_with_weights[:max_chars]
+    
     return ''.join(c[1] for c in chars_with_weights)
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else '/tmp/luna_pinyin.dict.yaml'
     output_file = sys.argv[2] if len(sys.argv) > 2 else 'app/src/main/assets/pinyin_dict.json'
-    print(f"Rebuilding {output_file}")
+    max_chars = int(sys.argv[3]) if len(sys.argv) > 3 else 60
+    
+    print(f"Rebuilding {output_file} (max {max_chars} chars per pinyin)")
     raw = parse_rime_dict(input_file)
+    
     result = {}
     for pinyin, chars in raw.items():
-        result[pinyin] = sort_chars(pinyin, chars)
+        result[pinyin] = sort_and_limit(pinyin, chars, max_chars)
+    
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, separators=(',', ':'))
+    
     total = sum(len(v) for v in result.values())
-    print(f"Done: {len(result)} keys, {total} chars, {os.path.getsize(output_file)} bytes")
+    print(f"Done: {len(result)} keys, {total} total chars, {os.path.getsize(output_file)} bytes")
+    
     # Verify
-    for p in ['yi', 'de', 'shi', 'kai', 'ye', 'wo', 'ta', 'zai', 'le', 'bu', 'ren', 'ge', 'dou', 'lai', 'shang', 'dao', 'shuo', 'yao', 'hui', 'hao', 'xue', 'jia', 'xin', 'hua', 'guo', 'nian', 'chu', 'shen', 'zuo', 'ri', 'ye', 'mei', 'wan', 'zhang', 'fang', 'qian', 'hou', 'zhong', 'xiao', 'wen', 'ti', 'li', 'zhe', 'na', 'ne', 'ma', 'ba', 'a', 'you']:
+    for p in ['yi', 'de', 'shi', 'kai', 'ye', 'wo', 'ta', 'zai', 'le', 'bu', 'ren', 'ge', 'dou', 'lai', 'shang', 'dao', 'shuo', 'yao', 'hui', 'hao', 'xue', 'jia', 'xin', 'hua', 'guo', 'nian', 'chu', 'shen', 'zuo', 'ri', 'mei', 'wan', 'zhang', 'fang', 'qian', 'hou', 'zhong', 'xiao', 'wen', 'ti', 'li', 'zhe', 'na', 'ne', 'ma', 'ba', 'a', 'you', 'er', 'san', 'si', 'wu', 'liu', 'qi', 'jiu']:
         chars = result.get(p, '')
-        print(f"  {p}: {chars[:12]}")
+        print(f"  {p}: {chars[:15]}")
 
 if __name__ == '__main__':
     main()

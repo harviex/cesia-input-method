@@ -19,14 +19,56 @@ class PinyinEngine(context: Context) {
     private var currentPage = 0
     private var dictManager: PinyinDictManager? = null
 
+    // 用户词频记录：pinyin -> {char -> count}
+    private val userFreq = mutableMapOf<String, MutableMap<String, Int>>()
+    private val prefs = context.getSharedPreferences("cesia_user_freq", Context.MODE_PRIVATE)
+
     init {
-        // 先尝试从外部文件加载（用户导入或下载的词库）
+        loadUserFreq()
         val externalLoaded = tryLoadExternalDict(context)
         if (!externalLoaded) {
-            // 回退到内置词库
             loadDictionary(context)
             loadPhrases(context)
         }
+    }
+
+    /**
+     * 记录用户选择的字/词，用于自动靠前
+     */
+    fun recordSelection(pinyin: String, selected: String) {
+        val freq = userFreq.getOrPut(pinyin) { mutableMapOf() }
+        freq[selected] = (freq[selected] ?: 0) + 1
+        // 保存到持久化
+        saveUserFreq()
+    }
+
+    private fun loadUserFreq() {
+        try {
+            val jsonStr = prefs.getString("freq_data", "{}") ?: "{}"
+            val json = JSONObject(jsonStr)
+            for (key in json.keys()) {
+                val inner = json.getJSONObject(key)
+                val freqMap = mutableMapOf<String, Int>()
+                for (innerKey in inner.keys()) {
+                    freqMap[innerKey] = inner.getInt(innerKey)
+                }
+                userFreq[key] = freqMap
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun saveUserFreq() {
+        try {
+            val json = JSONObject()
+            for (key in userFreq.keys) {
+                val inner = JSONObject()
+                for ((char, count) in userFreq[key]!!) {
+                    inner.put(char, count)
+                }
+                json.put(key, inner)
+            }
+            prefs.edit().putString("freq_data", json.toString()).apply()
+        } catch (_: Exception) {}
     }
 
     /**
@@ -211,6 +253,11 @@ class PinyinEngine(context: Context) {
     fun selectCandidate(index: Int): String {
         if (index < 0 || index >= candidates.size) return ""
         val selected = candidates[index]
+        val pinyin = currentPinyin.toString()
+        // 记录用户选择
+        if (pinyin.isNotEmpty()) {
+            recordSelection(pinyin, selected)
+        }
         clear()
         return selected
     }
@@ -226,13 +273,13 @@ class PinyinEngine(context: Context) {
 
         val allCandidates = mutableListOf<String>()
 
-        // 1. 单字精确匹配（最高优先级，确保单字始终可见）
+        // 1. 单字精确匹配
         val exactChars = pinyinMap[pinyin]
         if (exactChars != null) {
             exactChars.forEach { allCandidates.add(it.toString()) }
         }
 
-        // 2. 词组精确匹配（支持逗号分隔的多个词组）
+        // 2. 词组精确匹配
         val exactPhrase = phraseMap[pinyin]
         if (exactPhrase != null) {
             exactPhrase.split(",").forEach { phrase ->
@@ -240,7 +287,7 @@ class PinyinEngine(context: Context) {
             }
         }
 
-        // 3. 前缀匹配词组（补充）
+        // 3. 前缀匹配词组
         for ((key, value) in phraseMap) {
             if (key.startsWith(pinyin) && key != pinyin) {
                 value.split(",").forEach { phrase ->
@@ -249,17 +296,24 @@ class PinyinEngine(context: Context) {
             }
         }
 
-        // 4. 前缀匹配单字（补充）
+        // 4. 前缀匹配单字
         for ((key, value) in pinyinMap) {
             if (key.startsWith(pinyin) && key != pinyin) {
                 value.forEach { allCandidates.add(it.toString()) }
             }
         }
 
-        // 去重并限制数量（单字优先，所以单字在前面）
-        candidates = allCandidates.distinct().take(40)
+        // 去重
+        candidates = allCandidates.distinct()
 
-        // 分页，每页5个
+        // 按用户词频排序（高频靠前）
+        val freq = userFreq[pinyin]
+        if (freq != null && freq.isNotEmpty()) {
+            candidates = candidates.sortedWith(compareByDescending<String> { freq[it] ?: 0 }.thenBy { it })
+        }
+
+        // 限制数量并分页
+        candidates = candidates.take(40)
         if (candidates.isEmpty()) {
             candidatePages = emptyList()
         } else {

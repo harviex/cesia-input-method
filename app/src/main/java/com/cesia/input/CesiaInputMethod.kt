@@ -394,11 +394,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val textAfter = ic.getTextAfterCursor(2000, 0)?.toString() ?: ""
         val inputText = textBefore + textAfter
 
-        // 第二步：清空输入框
+        // 第二步：清空输入框（安全方式，避免performContextMenuAction崩溃）
         if (inputText.isNotEmpty()) {
-            // 选中全部文字后删除
-            ic.performContextMenuAction(android.R.id.selectAll)
-            ic.deleteSurroundingText(Integer.MAX_VALUE, Integer.MAX_VALUE)
+            try {
+                // 先尝试全选
+                ic.performContextMenuAction(android.R.id.selectAll)
+                // 再删除选中的内容
+                ic.deleteSurroundingText(Integer.MAX_VALUE, Integer.MAX_VALUE)
+            } catch (e: Exception) {
+                // 降级方案：直接删除前后文字
+                try {
+                    ic.deleteSurroundingText(textBefore.length, textAfter.length)
+                } catch (e2: Exception) {
+                    // 最后手段：直接提交空文本替换
+                    ic.commitText("", 1)
+                }
+            }
         }
 
         // 第三步：根据上下文生成AI回复
