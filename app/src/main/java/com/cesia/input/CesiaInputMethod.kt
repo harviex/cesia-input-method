@@ -963,7 +963,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val symbol = popup[0].toString()
                 currentInputConnection?.commitText(symbol, 1)
                 Log.d("Cesia", "Fn 长按输出: $symbol")
-                keyboardView.performHapticFeedback(android.view.inputmethod.HapticFeedbackConstants.LONG_PRESS)
+                keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                 longPressTriggered = true
                 longPressConsumed = false  // 重置消费标志
             }
