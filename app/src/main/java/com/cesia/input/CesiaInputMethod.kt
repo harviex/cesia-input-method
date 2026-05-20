@@ -760,7 +760,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     private fun polishRecognizedText(text: String) {
         val polishService = typelessEngine?.getPolishService()
-        Thread {
+        // polishText 是 suspend 函数，需要在协程中调用
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val result = polishService?.polishText(text)
                 Handler(Looper.getMainLooper()).post {
@@ -789,7 +790,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     resetToIdle()
                 }
             }
-        }.start()
+        }
     }
 
     /**
