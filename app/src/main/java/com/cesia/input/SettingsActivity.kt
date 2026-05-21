@@ -176,18 +176,51 @@ class SettingsActivity : AppCompatActivity() {
             pInfo.versionName
         } catch (_: Exception) { null }
 
+        val cachedVersion = prefs.getString("github_version_name", null)
+
         val displayVersion = when {
             // 本地版本号有效且不是 "1.0.0"（构建失败默认值）
             !localVersionName.isNullOrEmpty() && localVersionName != "null" && localVersionName != "1.0.0" -> localVersionName
             // 尝试从缓存读取GitHub版本号
-            else -> {
-                val cachedVersion = prefs.getString("github_version_name", null)
-                if (!cachedVersion.isNullOrEmpty()) cachedVersion else "开发版"
-            }
+            !cachedVersion.isNullOrEmpty() -> cachedVersion
+            else -> "开发版"
         }
 
         tvVersion.text = "版本: $displayVersion"
-        Log.d("SettingsActivity", "显示版本: $displayVersion (本地: $localVersionName)")
+        Log.d("SettingsActivity", "显示版本: $displayVersion (本地: $localVersionName, 缓存: $cachedVersion)")
+
+        // 如果没有缓存的版本号，异步从GitHub获取
+        if (cachedVersion.isNullOrEmpty() && localVersionName.let { it.isNullOrEmpty() || it == "null" || it == "1.0.0" }) {
+            fetchGitHubVersion()
+        }
+    }
+
+    private fun fetchGitHubVersion() {
+        Thread {
+            try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val request = Request.Builder()
+                    .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
+                    .addHeader("User-Agent", "CesiaIME/1.0")
+                    .get()
+                    .build()
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val tagName = json.optString("tag_name", "").removePrefix("v")
+                    if (tagName.isNotEmpty()) {
+                        prefs.edit().putString("github_version_name", tagName).apply()
+                        runOnUiThread {
+                            tvVersion.text = "版本: $tagName"
+                            Log.d("SettingsActivity", "从GitHub获取版本号: $tagName")
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }.start()
     }
 
     private fun checkAndRequestPermission() {
