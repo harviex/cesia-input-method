@@ -66,7 +66,7 @@ class PolishService(
         return url.contains("openrouter.ai")
     }
 
-    /** 调用 OpenRouter API */
+    /** 调用 OpenRouter API，支持429重试和备用模型 */
     private fun polishWithOpenRouter(text: String): PolishResult {
         val apiKey = getOpenRouterApiKey()
         if (apiKey.isNullOrEmpty()) {
@@ -75,6 +75,27 @@ class PolishService(
 
         val systemPrompt = "你是一个中文文本润色助手。请将用户输入的口语化文字润色为通顺、简洁的书面语。只输出润色后的文字，不要解释，不要添加任何前缀或后缀。"
 
+        val models = listOf(OPENROUTER_MODEL, OPENROUTER_MODEL_FALLBACK, "minimax/minimax-m2.5:free", "mistralai/mistral-7b-instruct:free")
+        var lastError = ""
+
+        for (model in models.distinct()) {
+            val result = tryOpenRouterModel(text, systemPrompt, model, apiKey)
+            if (result is PolishResult.Success) return result
+            if (result is PolishResult.Error) {
+                lastError = result.message
+                // 429 限流时换下一个模型
+                if (result.message.contains("429") || result.message.contains("rate limit")) {
+                    Log.w("PolishService", "模型 $model 被限流，切换下一个")
+                    continue
+                }
+                // 其他错误也尝试下一个模型
+                continue
+            }
+        }
+        return PolishResult.Error("所有模型均失败: $lastError")
+    }
+
+    private fun tryOpenRouterModel(text: String, systemPrompt: String, model: String, apiKey: String): PolishResult {
         val messages = JSONArray().apply {
             put(JSONObject().apply {
                 put("role", "system")
@@ -87,7 +108,7 @@ class PolishService(
         }
 
         val json = JSONObject().apply {
-            put("model", OPENROUTER_MODEL)
+            put("model", model)
             put("messages", messages)
             put("temperature", 0.3)
             put("max_tokens", 512)
@@ -103,40 +124,45 @@ class PolishService(
             .addHeader("X-Title", "Cesia Input Method")
             .build()
 
-        Log.d("PolishService", "OpenRouter 请求: ${text.take(50)}...")
+        Log.d("PolishService", "OpenRouter 请求 [$model]: ${text.take(50)}...")
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: "未知错误"
-                Log.e("PolishService", "OpenRouter 错误: ${response.code} - $errorBody")
-                return PolishResult.Error("API 错误(${response.code}): ${errorBody.take(200)}")
-            }
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: "未知错误"
+                    Log.e("PolishService", "OpenRouter 错误 [$model]: ${response.code} - $errorBody")
+                    return PolishResult.Error("API 错误(${response.code}): ${errorBody.take(200)}")
+                }
 
-            val respBody = response.body?.string()
-                ?: return PolishResult.Error("响应为空")
+                val respBody = response.body?.string()
+                    ?: return PolishResult.Error("响应为空")
 
-            Log.d("PolishService", "OpenRouter 响应: ${respBody.take(200)}")
+                Log.d("PolishService", "OpenRouter 响应 [$model]: ${respBody.take(200)}")
 
-            val respJson = JSONObject(respBody)
-            val choices = respJson.optJSONArray("choices")
-            if (choices != null && choices.length() > 0) {
-                val content = choices.getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content")
-                    .trim()
+                val respJson = JSONObject(respBody)
+                val choices = respJson.optJSONArray("choices")
+                if (choices != null && choices.length() > 0) {
+                    val content = choices.getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                        .trim()
 
+                    if (content.isNotEmpty()) {
+                        return PolishResult.Success(text, content)
+                    }
+                }
+
+                // 尝试其他格式
+                val content = respJson.optString("content", "")
                 if (content.isNotEmpty()) {
                     return PolishResult.Success(text, content)
                 }
-            }
 
-            // 尝试其他格式
-            val content = respJson.optString("content", "")
-            if (content.isNotEmpty()) {
-                return PolishResult.Success(text, content)
+                PolishResult.Error("OpenRouter 返回格式异常: ${respBody.take(200)}")
             }
-
-            return PolishResult.Error("OpenRouter 返回格式异常: ${respBody.take(200)}")
+        } catch (e: Exception) {
+            Log.e("PolishService", "OpenRouter 异常 [$model]", e)
+            PolishResult.Error("网络错误: ${e.message ?: "未知"}", isNetworkError = true)
         }
     }
 
@@ -281,33 +307,40 @@ class PolishService(
             })
         }
 
-        val json = JSONObject().apply {
-            put("model", OPENROUTER_MODEL)
-            put("messages", messages)
-            put("temperature", 0.3)
-            put("max_tokens", 512)
-        }
-
-        val body = json.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url(apiUrl)
-            .post(body)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("HTTP-Referer", "https://github.com/harviex/cesia-input-method")
-            .addHeader("X-Title", "Cesia Input Method")
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val respBody = response.body?.string() ?: return null
-            val respJson = JSONObject(respBody)
-            val choices = respJson.optJSONArray("choices") ?: return null
-            if (choices.length() > 0) {
-                return choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+        // 魔法模式也支持多模型重试
+        val models = listOf(OPENROUTER_MODEL, OPENROUTER_MODEL_FALLBACK, "minimax/minimax-m2.5:free", "mistralai/mistral-7b-instruct:free")
+        for (model in models.distinct()) {
+            val json = JSONObject().apply {
+                put("model", model)
+                put("messages", messages)
+                put("temperature", 0.3)
+                put("max_tokens", 512)
             }
-            return null
+
+            val body = json.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(apiUrl)
+                .post(body)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("HTTP-Referer", "https://github.com/harviex/cesia-input-method")
+                .addHeader("X-Title", "Cesia Input Method")
+                .build()
+
+            try {
+                val result = client.newCall(request).execute()
+                if (result.isSuccessful) {
+                    val respBody = result.body?.string() ?: continue
+                    val respJson = JSONObject(respBody)
+                    val choices = respJson.optJSONArray("choices")
+                    if (choices != null && choices.length() > 0) {
+                        return choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+                    }
+                }
+                // 429 或其他错误，尝试下一个模型
+            } catch (_: Exception) { continue }
         }
+        return null
     }
 
     private fun polishWithPromptCustom(prompt: String): String? {

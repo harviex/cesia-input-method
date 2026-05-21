@@ -865,33 +865,48 @@ class SettingsActivity : AppCompatActivity() {
                     pInfo.versionName ?: "开发版"
                 } catch (_: Exception) { "开发版" }
 
-                // 版本比较：综合使用 versionCode 和缓存的版本号
-                // 如果本地 versionName 与缓存的 GitHub 版本号一致，直接认为最新
-                val cachedVersionName = prefs.getString("github_version_name", null)
-                val isUpToDate = try {
-                    val pInfo = packageManager.getPackageInfo(packageName, 0)
-                    val localName = pInfo.versionName
-                    // 本地版本号有效且与GitHub最新版本一致
-                    !localName.isNullOrEmpty() && localName != "null" && localName == latestVersionName
-                } catch (_: Exception) { false }
+                // 版本比较：完全基于 GitHub tag
+                // 缓存的 GitHub 版本号 = 已安装的版本号（因为安装后 checkForUpdates 会缓存）
+                // 如果最新 tag <= 缓存版本，说明已是最新
+                val cachedInstalledVersion = prefs.getString("installed_version_name", null)
+                val isUpToDate = if (!cachedInstalledVersion.isNullOrEmpty()) {
+                    // 有缓存：比较 tag 的 versionCode
+                    val cachedCode = try {
+                        val parts = cachedInstalledVersion.split(".")
+                        if (parts.size >= 3) parts[2].toLong() else 0L
+                    } catch (_: Exception) { 0L }
+                    latestVersionCode <= cachedCode
+                } else {
+                    // 无缓存：尝试用本地 PackageInfo（可能不可靠）
+                    try {
+                        val pInfo = packageManager.getPackageInfo(packageName, 0)
+                        val localName = pInfo.versionName
+                        if (!localName.isNullOrEmpty() && localName != "null") {
+                            localName == latestVersionName
+                        } else {
+                            false
+                        }
+                    } catch (_: Exception) { false }
+                }
 
-                // 缓存GitHub版本号到prefs，供showVersion()显示
+                // 缓存最新GitHub版本号供showVersion()显示
                 if (latestVersionName.isNotEmpty()) {
                     prefs.edit().putString("github_version_name", latestVersionName).apply()
                 }
 
-                appendLog("当前版本: $currentVersionName($currentVersionCode), 最新版本: $latestVersionName($latestVersionCode)")
+                appendLog("当前缓存: ${cachedInstalledVersion ?: "无"}, 最新版本: $latestVersionName($latestVersionCode), 最新=$isUpToDate")
 
                 runOnUiThread {
-                    // 刷新版本号显示
                     showVersion()
-                    if (!isUpToDate && latestVersionCode > 0 && latestVersionCode > currentVersionCode) {
+                    if (!isUpToDate && latestVersionCode > 0) {
                         vUpdateDot?.visibility = View.VISIBLE
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
                         vUpdateDot?.visibility = View.GONE
                         tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
                         appendLog("✅ 已是最新版本")
+                        // 同步缓存已安装版本号
+                        prefs.edit().putString("installed_version_name", latestVersionName).apply()
                     }
                 }
             } catch (e: Exception) {
@@ -959,6 +974,8 @@ class SettingsActivity : AppCompatActivity() {
 
                 // 触发安装
                 try {
+                    // 安装前先缓存版本号，确保安装后 checkForUpdates 能正确识别
+                    prefs.edit().putString("installed_version_name", version).apply()
                     val intent = Intent(Intent.ACTION_VIEW).apply {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                             // Android 7+ 使用 FileProvider
