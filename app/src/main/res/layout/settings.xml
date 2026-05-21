@@ -473,6 +473,7 @@
             android:textSize="11sp"
             android:maxLines="12"
             android:scrollbars="vertical"
+            android:textIsSelectable="true"
             android:text="等待操作..." />
 
     </LinearLayout>
