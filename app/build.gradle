@@ -38,6 +38,9 @@ android {
         targetSdk 34
         versionCode getVersionCode()
         versionName getVersionName()
+        // 确保 BuildConfig 中有版本号
+        buildConfigField "String", "VERSION_NAME", "\"${getVersionName()}\""
+        buildConfigField "int", "VERSION_CODE", "${getVersionCode()}"
     }
 
     // 签名配置
@@ -71,6 +74,7 @@ android {
     
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
     
     compileOptions {

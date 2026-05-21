@@ -865,28 +865,21 @@ class SettingsActivity : AppCompatActivity() {
                     pInfo.versionName ?: "开发版"
                 } catch (_: Exception) { "开发版" }
 
-                // 版本比较：完全基于 GitHub tag
-                // 缓存的 GitHub 版本号 = 已安装的版本号（因为安装后 checkForUpdates 会缓存）
-                // 如果最新 tag <= 缓存版本，说明已是最新
-                val cachedInstalledVersion = prefs.getString("installed_version_name", null)
-                val isUpToDate = if (!cachedInstalledVersion.isNullOrEmpty()) {
-                    // 有缓存：比较 tag 的 versionCode
-                    val cachedCode = try {
-                        val parts = cachedInstalledVersion.split(".")
-                        if (parts.size >= 3) parts[2].toLong() else 0L
-                    } catch (_: Exception) { 0L }
-                    latestVersionCode <= cachedCode
-                } else {
-                    // 无缓存：尝试用本地 PackageInfo（可能不可靠）
-                    try {
-                        val pInfo = packageManager.getPackageInfo(packageName, 0)
-                        val localName = pInfo.versionName
-                        if (!localName.isNullOrEmpty() && localName != "null") {
-                            localName == latestVersionName
-                        } else {
-                            false
-                        }
-                    } catch (_: Exception) { false }
+                // 版本比较：优先用 BuildConfig.VERSION_NAME，兜底用缓存
+                var isUpToDate = false
+                try {
+                    val localName = com.cesia.input.BuildConfig.VERSION_NAME
+                    if (localName.isNotEmpty() && localName != "null") {
+                        isUpToDate = localName == latestVersionName
+                    }
+                } catch (_: Exception) {}
+
+                // BuildConfig 无效时，用缓存的版本号比较
+                if (!isUpToDate) {
+                    val cachedInstalledVersion = prefs.getString("installed_version_name", null)
+                    if (!cachedInstalledVersion.isNullOrEmpty()) {
+                        isUpToDate = cachedInstalledVersion == latestVersionName
+                    }
                 }
 
                 // 缓存最新GitHub版本号供showVersion()显示
@@ -894,7 +887,7 @@ class SettingsActivity : AppCompatActivity() {
                     prefs.edit().putString("github_version_name", latestVersionName).apply()
                 }
 
-                appendLog("当前缓存: ${cachedInstalledVersion ?: "无"}, 最新版本: $latestVersionName($latestVersionCode), 最新=$isUpToDate")
+                appendLog("本地版本: ${currentVersionName}, 最新版本: $latestVersionName, 最新=$isUpToDate")
 
                 runOnUiThread {
                     showVersion()
