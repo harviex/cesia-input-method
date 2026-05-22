@@ -94,8 +94,11 @@ class TypelessEngine(
                         _state.value = State.ERROR
                     }
                     is FallbackRecognizer.Result.NoMatch -> {
-                        // 无匹配时，如果用户已选择模式（pendingAiMode != null），通知 UI
-                        if (!magicMode) {
+                        if (magicMode) {
+                            // 魔法模式：无匹配也要触发回调，避免 UI 卡住
+                            onMagicResult?.invoke("")
+                        } else {
+                            // 普通模式：通知 UI 识别结束（即使是空结果）
                             withContext(Dispatchers.Main) {
                                 onRecognitionComplete?.invoke("")
                             }
