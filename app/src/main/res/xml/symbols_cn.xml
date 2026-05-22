@@ -26,8 +26,8 @@
         <Key android:codes="33" android:keyLabel="！" />
         <Key android:codes="59" android:keyLabel="；" />
         <Key android:codes="58" android:keyLabel="：" />
-        <Key android:codes="34" android:keyLabel=""" />
-        <Key android:codes="39" android:keyLabel="'" />
+        <Key android:codes="44" android:keyLabel="，" />
+        <Key android:codes="46" android:keyLabel="。" />
         <Key android:codes="91" android:keyLabel="【" />
         <Key android:codes="93" android:keyLabel="】" android:keyEdgeFlags="right" />
     </Row>
@@ -40,13 +40,13 @@
         <Key android:codes="62" android:keyLabel="》" />
         <Key android:codes="45" android:keyLabel="—" />
         <Key android:codes="183" android:keyLabel="·" />
-        <Key android:codes="96" android:keyLabel="…" />
+        <Key android:codes="45" android:keyLabel="—" />
         <Key android:codes="126" android:keyLabel="～" />
         <Key android:codes="92" android:keyLabel="、" />
         <Key android:codes="64" android:keyLabel="@" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第四行：英文/功能符号 -->
+    <!-- 第四行：更多中文符号 + 英文符号 -->
     <Row>
         <Key android:codes="35" android:keyLabel="#" android:keyEdgeFlags="left" />
         <Key android:codes="36" android:keyLabel="$" />
@@ -62,7 +62,7 @@
 
     <!-- 第五行：← + ABC + 空格 + ，+ 。+ ⌫ + ↵ -->
     <Row>
-        <Key android:codes="-999" android:keyLabel="←" android:keyWidth="12%p" android:keyEdgeFlags="left" />
+        <Key android:codes="-999" android:keyLabel="◀" android:keyWidth="12%p" android:keyEdgeFlags="left" />
         <Key android:codes="-100" android:keyLabel="ABC" android:keyWidth="14%p" />
         <Key android:codes="32" android:keyLabel="空格" android:keyWidth="34%p" />
         <Key android:codes="44" android:keyLabel="，" android:keyWidth="10%p" />
