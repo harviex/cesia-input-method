@@ -20,6 +20,7 @@ import androidx.appcompat.app.AlertDialog
 import com.cesia.input.engine.PinyinEngine
 import com.cesia.input.engine.TypelessEngine
 import com.cesia.input.stats.PolishStatsManager
+import com.cesia.input.stats.MagicHistoryManager
 import com.google.android.material.button.MaterialButton
 import android.widget.Toast
 
@@ -100,6 +101,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var aiReplyStyle = "自然" // 自然, 幽默, 圆滑, 官方, 简洁
     private var isAiProcessing = false
 
+    // 魔法修改历史
+    private var magicHistoryManager: MagicHistoryManager? = null
+    private var currentMagicPrompt: String? = null // 当前选中的魔法指令
+
     // 主题
     private var isDarkTheme = false
 
@@ -168,6 +173,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 初始化引擎
         statsManager = PolishStatsManager(this)
+        magicHistoryManager = MagicHistoryManager(this)
+        currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
         pinyinEngine = PinyinEngine(this)
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
@@ -407,9 +414,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // AI自动回复按钮：短按=读取上下文并生成回复，长按=切换语言风格
-        btnClipboard.setOnClickListener { triggerAiReply() }
-        btnClipboard.setOnLongClickListener { showAiStylePicker(); true }
+        // AI自动回复按钮：有选中魔法指令时执行魔法，否则AI自动回复
+        btnClipboard.setOnClickListener { executeMagicOrAiReply() }
+        btnClipboard.setOnLongClickListener { showMagicHistoryPopup(); true }
 
         btnMagic.setOnClickListener { startMagicMode() }
     }
@@ -958,6 +965,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         if (result == magicOriginalText) {
                             updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
                         } else {
+                            // 保存成功的指令到历史
+                            magicHistoryManager?.addRecord(instruction)
                             replaceInputText(result)
                             updateStatus("✅ 修改完成")
                         }
@@ -981,6 +990,158 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val ic = currentInputConnection ?: return
         ic.performContextMenuAction(android.R.id.selectAll)
         ic.commitText(newText, 1)
+    }
+
+    // ======================== 魔法修改历史 ========================
+
+    /** 短按自动写作：有选中魔法指令则执行，否则AI自动回复 */
+    private fun executeMagicOrAiReply() {
+        if (currentMagicPrompt != null) {
+            // 执行选中的魔法修改
+            executeSelectedMagic(currentMagicPrompt!!)
+        } else {
+            triggerAiReply()
+        }
+    }
+
+    /** 执行选中的魔法指令 */
+    private fun executeSelectedMagic(instruction: String) {
+        if (isAiProcessing) {
+            updateStatus("⏳ AI正在处理中，请稍候...")
+            return
+        }
+        val ic = currentInputConnection ?: run {
+            updateStatus("❌ 无输入框连接")
+            return
+        }
+        val textBefore = ic.getTextBeforeCursor(10000, 0)?.toString() ?: ""
+        val textAfter = ic.getTextAfterCursor(10000, 0)?.toString() ?: ""
+        val fullText = textBefore + textAfter
+
+        if (fullText.isEmpty()) {
+            updateStatus("⚠️ 输入框无文字，无法修改")
+            return
+        }
+
+        isAiProcessing = true
+        val prompt = buildMagicPrompt(fullText, instruction)
+        val polishService = typelessEngine?.getPolishService()
+
+        Thread {
+            try {
+                val result = polishService?.polishWithPrompt(prompt)
+                Handler(Looper.getMainLooper()).post {
+                    isAiProcessing = false
+                    if (result != null && result.isNotEmpty()) {
+                        if (result == fullText) {
+                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
+                        } else {
+                            // 保存指令到历史
+                            magicHistoryManager?.addRecord(instruction)
+                            replaceInputText(result)
+                            updateStatus("✅ 魔法修改完成")
+                        }
+                    } else {
+                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                    }
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    isAiProcessing = false
+                    updateStatus("❌ 修改失败: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    /** 长按自动写作：显示魔法修改历史弹窗 */
+    private fun showMagicHistoryPopup() {
+        val mgr = magicHistoryManager ?: return
+        val records = mgr.getRecords()
+
+        val items = mutableListOf<String>()
+        val ids = mutableListOf<Long>()
+
+        // 添加默认选项
+        items.add("📝 AI自动回复 (无魔法)")
+        ids.add(-1L)
+
+        if (records.isEmpty()) {
+            items.add("(暂无魔法修改记录)")
+            ids.add(-2L)
+        }
+        for (r in records) {
+            val pin = if (r.isPinned) "📌 " else ""
+            val label = "${pin}${r.instruction.take(30)}${if (r.instruction.length > 30) "..." else ""}"
+            items.add(label)
+            ids.add(r.id)
+        }
+
+        try {
+            val builder = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+            builder.setTitle("🎯 选择魔法指令")
+            builder.setItems(items.toTypedArray()) { _, which ->
+                val id = ids[which]
+                when {
+                    id == -1L -> {
+                        // 清除选中，回到AI自动回复
+                        currentMagicPrompt = null
+                        updateStatus("✅ 已切换为AI自动回复")
+                    }
+                    id == -2L -> { /* 占位项，无操作 */ }
+                    else -> {
+                        val record = records.find { it.id == id }
+                        if (record != null) {
+                            currentMagicPrompt = record.instruction
+                            updateStatus("✅ 已加载：${record.instruction.take(20)}...")
+                        }
+                    }
+                }
+            }
+            builder.setNeutralButton("置顶/取消置顶") { dialog, _ ->
+                // 显示子弹窗让用户选择要置顶的记录
+                showPinSubMenu(mgr, records)
+                dialog.dismiss()
+            }
+            builder.setNegativeButton("取消", null)
+            builder.show()
+        } catch (e: Exception) {
+            updateStatus("❌ 无法显示菜单")
+        }
+    }
+
+    /** 置顶管理子菜单 */
+    private fun showPinSubMenu(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
+        if (records.isEmpty()) {
+            updateStatus("暂无魔法修改记录")
+            return
+        }
+        val names = records.map { r ->
+            val pinMark = if (r.isPinned) "📌 " else "  "
+            "${pinMark}${r.instruction.take(25)}"
+        }.toTypedArray()
+        val ids = records.map { it.id }.toLongArray()
+
+        try {
+            AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("📌 点击切换置顶")
+                .setItems(names) { _, which ->
+                    mgr.togglePin(ids[which])
+                    // 更新当前选中
+                    val updated = mgr.getRecords()
+                    currentMagicPrompt = mgr.getActiveInstruction()
+                    val status = updated.find { it.id == ids[which] }
+                    if (status?.isPinned == true) {
+                        updateStatus("📌 已置顶")
+                    } else {
+                        updateStatus("取消置顶")
+                    }
+                }
+                .setPositiveButton("完成", null)
+                .show()
+        } catch (e: Exception) {
+            updateStatus("❌ 无法显示菜单")
+        }
     }
 
     // ======================== 键盘切换 ========================

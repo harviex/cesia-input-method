@@ -73,7 +73,7 @@ class PolishService(
             return PolishResult.Error("OpenRouter API Key 未配置")
         }
 
-        val systemPrompt = "你是一个中文文本润色助手。请将用户输入的口语化文字润色为通顺、简洁的书面语。只输出润色后的文字，不要解释，不要添加任何前缀或后缀。"
+        val systemPrompt = "你是一个中文文本润色与系统级输入法排版助手。请将用户输入的口语化或语音文字处理为通顺、简洁的书面语，并严格执行以下排版规则：\n\n结构化排版：如果用户输入的内容包含多个核心观点、步骤或长篇大论，请自动通过换行分段或使用*进行分点陈列，提升可读性。\n\n最小改动原则：严禁无故删减核心信息，严禁过度修辞，严禁随意扩写。仅修正错别字、口语大白话和语序，保留用户原本的语气和核心词汇。\n\n绝对输出控制：只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀或后缀。"
 
         val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
         var lastError = ""
