@@ -967,8 +967,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         } else {
                             // 保存成功的指令到历史
                             magicHistoryManager?.addRecord(instruction)
-                            replaceInputText(result)
-                            updateStatus("✅ 修改完成")
+                            try {
+                                val ic2 = currentInputConnection
+                                ic2?.performContextMenuAction(android.R.id.selectAll)
+                                ic2?.commitText(result, 1)
+                                updateStatus("✅ 修改完成")
+                            } catch (e2: Exception) {
+                                Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
+                                updateStatus("❌ 上屏失败: ${e2.message}")
+                            }
                         }
                     } else {
                         updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
@@ -986,21 +993,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return "原文：$original\n\n用户指令：$instruction\n\n请根据用户指令修改原文，输出修改后的完整文本。只输出修改后的文本，不要输出任何解释。"
     }
 
-    private fun replaceInputText(newText: String) {
-        val ic = currentInputConnection ?: return
-        ic.performContextMenuAction(android.R.id.selectAll)
-        ic.commitText(newText, 1)
-    }
-
     // ======================== 魔法修改历史 ========================
 
     /** 短按自动写作：有选中魔法指令则执行，否则AI自动回复 */
     private fun executeMagicOrAiReply() {
-        if (currentMagicPrompt != null) {
-            // 执行选中的魔法修改
-            executeSelectedMagic(currentMagicPrompt!!)
-        } else {
-            triggerAiReply()
+        try {
+            if (currentMagicPrompt != null) {
+                executeSelectedMagic(currentMagicPrompt!!)
+            } else {
+                triggerAiReply()
+            }
+        } catch (e: Exception) {
+            Log.e("Cesia", "executeMagicOrAiReply 异常", e)
+            updateStatus("❌ 操作失败: ${e.message}")
         }
     }
 
@@ -1014,8 +1019,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateStatus("❌ 无输入框连接")
             return
         }
-        val textBefore = ic.getTextBeforeCursor(10000, 0)?.toString() ?: ""
-        val textAfter = ic.getTextAfterCursor(10000, 0)?.toString() ?: ""
+        val textBefore = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
+        val textAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
         val fullText = textBefore + textAfter
 
         if (fullText.isEmpty()) {
@@ -1036,9 +1041,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         if (result == fullText) {
                             updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
                         } else {
-                            // 保存指令到历史
                             magicHistoryManager?.addRecord(instruction)
-                            replaceInputText(result)
+                            try {
+                                val ic2 = currentInputConnection
+                                ic2?.performContextMenuAction(android.R.id.selectAll)
+                                ic2?.commitText(result, 1)
+                            } catch (e2: Exception) {
+                                Log.e("Cesia", "replaceInputText 异常", e2)
+                                updateStatus("❌ 上屏失败: ${e2.message}")
+                                return@post
+                            }
                             updateStatus("✅ 魔法修改完成")
                         }
                     } else {
@@ -1054,93 +1066,81 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }.start()
     }
 
-    /** 长按自动写作：显示魔法修改历史弹窗 */
+    /** 长按自动写作：显示魔法修改历史弹窗（使用与showAiStylePicker相同的对话框模式） */
     private fun showMagicHistoryPopup() {
         val mgr = magicHistoryManager ?: return
         val records = mgr.getRecords()
 
-        val items = mutableListOf<String>()
-        val ids = mutableListOf<Long>()
-
-        // 添加默认选项
-        items.add("📝 AI自动回复 (无魔法)")
-        ids.add(-1L)
-
-        if (records.isEmpty()) {
-            items.add("(暂无魔法修改记录)")
-            ids.add(-2L)
-        }
-        for (r in records) {
-            val pin = if (r.isPinned) "📌 " else ""
-            val label = "${pin}${r.instruction.take(30)}${if (r.instruction.length > 30) "..." else ""}"
-            items.add(label)
-            ids.add(r.id)
-        }
+        val inflater = android.view.LayoutInflater.from(this)
 
         try {
-            val builder = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-            builder.setTitle("🎯 选择魔法指令")
-            builder.setItems(items.toTypedArray()) { _, which ->
-                val id = ids[which]
-                when {
-                    id == -1L -> {
-                        // 清除选中，回到AI自动回复
-                        currentMagicPrompt = null
-                        updateStatus("✅ 已切换为AI自动回复")
-                    }
-                    id == -2L -> { /* 占位项，无操作 */ }
-                    else -> {
-                        val record = records.find { it.id == id }
-                        if (record != null) {
-                            currentMagicPrompt = record.instruction
-                            updateStatus("✅ 已加载：${record.instruction.take(20)}...")
-                        }
-                    }
-                }
-            }
-            builder.setNeutralButton("置顶/取消置顶") { dialog, _ ->
-                // 显示子弹窗让用户选择要置顶的记录
-                showPinSubMenu(mgr, records)
+            // 创建弹窗布局
+            val dialogView = inflater.inflate(R.layout.dialog_ai_style_picker, null)
+            val container = dialogView.findViewById<LinearLayout>(R.id.style_container)
+            container.removeAllViews()
+
+            val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setView(dialogView)
+                .setTitle("🎯 选择魔法指令")
+                .setNegativeButton("取消", null)
+                .create()
+
+            // 添加"AI自动回复"选项（清除魔法）
+            val clearItem = inflater.inflate(R.layout.item_ai_style, container, false)
+            clearItem.findViewById<TextView>(R.id.tv_style_icon).text = "📝"
+            clearItem.findViewById<TextView>(R.id.tv_style_name).text = "AI自动回复（无魔法）"
+            clearItem.findViewById<TextView>(R.id.tv_style_desc).text = "取消选中的魔法指令"
+            clearItem.setOnClickListener {
+                currentMagicPrompt = null
+                updateStatus("✅ 已切换为AI自动回复")
                 dialog.dismiss()
             }
-            builder.setNegativeButton("取消", null)
-            builder.show()
-        } catch (e: Exception) {
-            updateStatus("❌ 无法显示菜单")
-        }
-    }
+            container.addView(clearItem)
 
-    /** 置顶管理子菜单 */
-    private fun showPinSubMenu(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
-        if (records.isEmpty()) {
-            updateStatus("暂无魔法修改记录")
-            return
-        }
-        val names = records.map { r ->
-            val pinMark = if (r.isPinned) "📌 " else "  "
-            "${pinMark}${r.instruction.take(25)}"
-        }.toTypedArray()
-        val ids = records.map { it.id }.toLongArray()
+            if (records.isEmpty()) {
+                val emptyItem = inflater.inflate(R.layout.item_ai_style, container, false)
+                emptyItem.findViewById<TextView>(R.id.tv_style_icon).visibility = View.GONE
+                emptyItem.findViewById<TextView>(R.id.tv_style_name).text = "暂无魔法修改记录"
+                emptyItem.findViewById<TextView>(R.id.tv_style_desc).text = "在✨魔法修改中使用语音指令后会自动保存"
+                container.addView(emptyItem)
+            } else {
+                for (r in records) {
+                    val item = inflater.inflate(R.layout.item_ai_style, container, false)
+                    val icon = item.findViewById<TextView>(R.id.tv_style_icon)
+                    val name = item.findViewById<TextView>(R.id.tv_style_name)
+                    val desc = item.findViewById<TextView>(R.id.tv_style_desc)
 
-        try {
-            AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setTitle("📌 点击切换置顶")
-                .setItems(names) { _, which ->
-                    mgr.togglePin(ids[which])
-                    // 更新当前选中
-                    val updated = mgr.getRecords()
-                    currentMagicPrompt = mgr.getActiveInstruction()
-                    val status = updated.find { it.id == ids[which] }
-                    if (status?.isPinned == true) {
-                        updateStatus("📌 已置顶")
-                    } else {
-                        updateStatus("取消置顶")
+                    icon.text = if (r.isPinned) "📌" else "✨"
+                    name.text = r.instruction.take(30) + if (r.instruction.length > 30) "..." else ""
+                    desc.text = if (r.isPinned) "已置顶 · 点击切换" else "点击选择 · 长按置顶"
+
+                    item.setOnClickListener {
+                        currentMagicPrompt = r.instruction
+                        updateStatus("✅ 已加载：${r.instruction.take(20)}...")
+                        dialog.dismiss()
                     }
+
+                    item.setOnLongClickListener {
+                        mgr.togglePin(r.id)
+                        currentMagicPrompt = mgr.getActiveInstruction()
+                        updateStatus(if (!r.isPinned) "📌 已置顶" else "取消置顶")
+                        dialog.dismiss()
+                        true
+                    }
+
+                    // 高亮当前选中的
+                    if (r.instruction == currentMagicPrompt) {
+                        item.setBackgroundColor(0xFFE8F5E9.toInt())
+                    }
+
+                    container.addView(item)
                 }
-                .setPositiveButton("完成", null)
-                .show()
+            }
+
+            dialog.show()
         } catch (e: Exception) {
-            updateStatus("❌ 无法显示菜单")
+            Log.e("Cesia", "showMagicHistoryPopup 异常", e)
+            updateStatus("❌ 无法显示菜单: ${e.message}")
         }
     }
 
