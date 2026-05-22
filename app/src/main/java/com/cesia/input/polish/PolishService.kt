@@ -73,7 +73,7 @@ class PolishService(
             return PolishResult.Error("OpenRouter API Key 未配置")
         }
 
-        val systemPrompt = "你是一个中文文本整理助手。你的任务是将语音输入的文字整理为通顺的书面语，严格遵循以下规则：\n\n1. 只添加标点符号（句号、逗号、问号等），让文字可读\n2. 修正明显的错别字和口语化表达（如\"然后\"、\"那个\"、\"就是\"等）\n3. 严禁改变原文意思、语气和核心词汇\n4. 禁止添加原文没有的新内容\n5. 禁止过度修辞或改写\n6. 不进行分段、不分点、不添加任何格式\n7. 只输出整理后的文字，不解释，不加前缀后缀"
+        val systemPrompt = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
 
         val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
         var lastError = ""
@@ -308,6 +308,10 @@ class PolishService(
 
         val messages = JSONArray().apply {
             put(JSONObject().apply {
+                put("role", "system")
+                put("content", "你是一个文本编辑助手。根据用户指令修改原文。只输出修改后的文本，不要解释。")
+            })
+            put(JSONObject().apply {
                 put("role", "user")
                 put("content", prompt)
             })
@@ -342,10 +346,14 @@ class PolishService(
                     if (choices != null && choices.length() > 0) {
                         return choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
                     }
+                } else {
+                    Log.w("PolishService", "魔法模型 $model HTTP ${result.code}: ${result.body?.string()?.take(100)}")
                 }
-                // 429 或其他错误，尝试下一个模型
-            } catch (_: Exception) { continue }
+            } catch (e: Exception) {
+                Log.w("PolishService", "魔法模型 $model 异常: ${e.message}")
+            }
         }
+        Log.e("PolishService", "魔法修改所有模型均失败")
         return null
     }
 

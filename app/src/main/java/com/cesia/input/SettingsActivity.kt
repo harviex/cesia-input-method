@@ -164,39 +164,34 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showVersion() {
-        // 优先显示本地编译版本号，如果本地版本号无效则显示缓存的GitHub版本号
-        val localVersionName = try {
-            val pInfo = try {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-                } else {
+        // 始终显示本地安装的版本号（BuildConfig.VERSION_NAME），不依赖任何缓存
+        val displayVersion = try {
+            com.cesia.input.BuildConfig.VERSION_NAME
+        } catch (_: Exception) {
+            try {
+                val pInfo = try {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        packageManager.getPackageInfo(packageName, 0)
+                    }
+                } catch (_: Exception) {
                     @Suppress("DEPRECATION")
                     packageManager.getPackageInfo(packageName, 0)
                 }
-            } catch (_: Exception) {
-                @Suppress("DEPRECATION")
-                packageManager.getPackageInfo(packageName, 0)
-            }
-            pInfo.versionName
-        } catch (_: Exception) { null }
-
-        val cachedVersion = prefs.getString("github_version_name", null)
-
-        val displayVersion = when {
-            // 本地版本号有效且不是 "1.0.0"（构建失败默认值）
-            !localVersionName.isNullOrEmpty() && localVersionName != "null" && localVersionName != "1.0.0" -> localVersionName
-            // 尝试从缓存读取GitHub版本号
-            !cachedVersion.isNullOrEmpty() -> cachedVersion
-            else -> "开发版"
+                pInfo.versionName ?: "开发版"
+            } catch (_: Exception) { "开发版" }
         }
 
-        tvVersion.text = "版本: $displayVersion"
-        Log.d("SettingsActivity", "显示版本: $displayVersion (本地: $localVersionName, 缓存: $cachedVersion)")
-
-        // 如果没有缓存的版本号，异步从GitHub获取
-        if (cachedVersion.isNullOrEmpty() && localVersionName.let { it.isNullOrEmpty() || it == "null" || it == "1.0.0" }) {
-            fetchGitHubVersion()
+        val versionText = if (displayVersion.isNotEmpty() && displayVersion != "null" && displayVersion != "1.0.0") {
+            "版本: $displayVersion"
+        } else {
+            "版本: 开发版"
         }
+        tvVersion.text = versionText
+        Log.d("SettingsActivity", "显示版本: $displayVersion")
+        fetchGitHubVersion()
     }
 
     private fun fetchGitHubVersion() {
@@ -890,11 +885,6 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
 
-                // 缓存最新GitHub版本号供showVersion()显示
-                if (latestVersionName.isNotEmpty()) {
-                    prefs.edit().putString("github_version_name", latestVersionName).apply()
-                }
-
                 appendLog("本地版本: ${currentVersionName}, 最新版本: $latestVersionName, 最新=$isUpToDate")
 
                 runOnUiThread {
@@ -906,8 +896,6 @@ class SettingsActivity : AppCompatActivity() {
                         vUpdateDot?.visibility = View.GONE
                         tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
                         appendLog("✅ 已是最新版本")
-                        // 同步缓存已安装版本号
-                        prefs.edit().putString("installed_version_name", latestVersionName).apply()
                     }
                 }
             } catch (e: Exception) {
@@ -975,8 +963,6 @@ class SettingsActivity : AppCompatActivity() {
 
                 // 触发安装
                 try {
-                    // 安装前先缓存版本号，确保安装后 checkForUpdates 能正确识别
-                    prefs.edit().putString("installed_version_name", version).apply()
                     val intent = Intent(Intent.ACTION_VIEW).apply {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                             // Android 7+ 使用 FileProvider

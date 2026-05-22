@@ -87,7 +87,7 @@ class TypelessEngine(
                         log("🎤 ${result.text}")
                     }
                     is FallbackRecognizer.Result.Recognizing -> {
-                        log("🔄 ${result.text}")
+                        // 静默，不显示正在识别状态
                     }
                     is FallbackRecognizer.Result.Error -> {
                         log("❌ ${result.message}")
