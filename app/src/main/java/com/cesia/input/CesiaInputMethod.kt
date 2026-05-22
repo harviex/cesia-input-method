@@ -13,17 +13,14 @@ import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.animation.AnimationUtils
 import android.view.animation.ScaleAnimation
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.widget.FrameLayout
 import android.widget.GridView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.cesia.input.engine.PinyinEngine
 import com.cesia.input.engine.TypelessEngine
@@ -54,7 +51,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var currentKeyboard: Keyboard? = null
 
     private lateinit var micButton: MaterialButton
-    private lateinit var micButtonContainer: FrameLayout
+    private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var btnSettings: ImageButton
@@ -121,6 +118,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 菜单动作模式
     private var menuActionMode: String? = null  // null=正常, "pin"=置顶模式, "delete"=删除模式
+
+    // 初始化完成标志
+    private var isViewInitialized = false
 
     // 主题
     private var isDarkTheme = false
@@ -312,6 +312,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         updateStatus("Cesia 已就绪")
         setStatusDot("idle")
+
+        isViewInitialized = true
 
         return view
     }
@@ -1604,13 +1606,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        loadSettings()
-        val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-            .getInt(PREF_THEME_MODE, THEME_LIGHT)
-        isDarkTheme = themeMode == THEME_DARK
-        applyKeyboardTheme()
-        aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-            .getString(PREF_AI_STYLE, "自然") ?: "自然"
+        try {
+            if (!isViewInitialized) return
+            loadSettings()
+            val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+                .getInt(PREF_THEME_MODE, THEME_LIGHT)
+            isDarkTheme = themeMode == THEME_DARK
+            applyKeyboardTheme()
+            aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+                .getString(PREF_AI_STYLE, "自然") ?: "自然"
+        } catch (e: Exception) {
+            Log.e("Cesia", "onStartInputView 异常(已忽略)", e)
+        }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
