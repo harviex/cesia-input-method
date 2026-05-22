@@ -39,6 +39,7 @@ class FallbackRecognizer(private val context: Context) {
     var suppressNoMatchError: Boolean = true      // 静音时不报错
 
     private val accumulatedText = StringBuilder()  // 连续模式下积累的文本
+    private var lastPartialText: String = ""        // 最近一次部分结果（fallback when accumulatedText is empty）
 
     // ─── 创建新实例 + 设置监听器 ─────────────────────
     fun createInstance(): Boolean {
@@ -92,6 +93,7 @@ class FallbackRecognizer(private val context: Context) {
                 override fun onPartialResults(bundle: Bundle?) {
                     val matches = bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty() && continuousMode) {
+                        lastPartialText = matches[0]
                         scope.launch { _results.emit(Result.Partial(matches[0])) }
                     }
                 }
@@ -151,8 +153,9 @@ class FallbackRecognizer(private val context: Context) {
 
         // 连续模式：发送积累的文本（即使为空也要发送，避免 UI 卡住）
         if (continuousMode) {
-            val text = accumulatedText.toString()
+            val text = if (accumulatedText.isNotEmpty()) accumulatedText.toString() else lastPartialText
             accumulatedText.clear()
+            lastPartialText = ""
             Log.d("FR", "stopListening → emit '${text.length}' chars")
             CoroutineScope(Dispatchers.Main).launch {
                 if (text.isNotEmpty()) {

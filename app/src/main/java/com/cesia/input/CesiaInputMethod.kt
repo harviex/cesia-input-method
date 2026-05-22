@@ -814,7 +814,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 录音中点击 AI+ → 停止录音，等待识别结果
             stopRecordingAndWait()
             pendingAiMode = true
-            updateStatus("⏳ 识别完成，正在润色...")
+            updateStatus("⏳ 正在识别，识别后自动润色")
         }
     }
 
@@ -835,18 +835,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 录音中点击 AI× → 停止录音，等待识别结果后直接上屏
             stopRecordingAndWait()
             pendingAiMode = false
-            updateStatus("⏳ 识别完成，直接上屏...")
+            updateStatus("⏳ 正在识别，识别后自动上屏")
         }
     }
 
     /**
-     * 停止录音，等待识别结果
+     * 停止录音，等待识别结果（不显示完成前状态，避免误导）
      */
     private fun stopRecordingAndWait() {
         isRecording = false
         typelessEngine?.stopListening()
         setStatusDot("processing")
-        updateStatus("⏳ 正在识别...")
     }
 
     /**
