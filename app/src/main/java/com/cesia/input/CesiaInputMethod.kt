@@ -150,6 +150,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     override fun onCreateInputView(): View {
+        try {
+            return createInputViewSafe()
+        } catch (e: Exception) {
+            Log.e("Cesia", "onCreateInputView 严重崩溃", e)
+            // 返回TextView避免输入法Service完全崩溃
+            return android.widget.TextView(this).apply {
+                text = "Cesia 加载失败，请重启输入法"
+                setTextColor(android.graphics.Color.RED)
+                textSize = 14f
+                gravity = android.view.Gravity.CENTER
+                setPadding(16, 16, 16, 16)
+            }
+        }
+    }
+
+    private fun createInputViewSafe(): View {
+        Log.d("Cesia", "createInputViewSafe: 开始加载布局")
         val view = layoutInflater.inflate(R.layout.input_view, null)
 
         keyboardView = view.findViewById(R.id.keyboard_view)
@@ -177,10 +194,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnCandidatePrev = view.findViewById(R.id.btn_candidate_prev)
         btnCandidateNext = view.findViewById(R.id.btn_candidate_next)
 
-        // 初始化键盘
+        // 初始化键盘（try-catch防止xml解析异常）
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
-        symbolKeyboardEn = Keyboard(this, R.xml.symbols)
-        symbolKeyboardCn = Keyboard(this, R.xml.symbols_cn)
+        try {
+            symbolKeyboardEn = Keyboard(this, R.xml.symbols)
+        } catch (e: Exception) {
+            Log.e("Cesia", "加载英文符号键盘失败", e)
+            symbolKeyboardEn = qwertyKeyboard // fallback
+        }
+        try {
+            symbolKeyboardCn = Keyboard(this, R.xml.symbols_cn)
+        } catch (e: Exception) {
+            Log.e("Cesia", "加载中文符号键盘失败", e)
+            symbolKeyboardCn = symbolKeyboardEn // fallback
+        }
         currentKeyboard = qwertyKeyboard
 
         keyboardView.keyboard = currentKeyboard
@@ -1519,8 +1546,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Keyboard.KEYCODE_MODE_CHANGE -> toggleKeyboard()
             else -> {
                 if (isSymbolMode) {
-                    // 符号键盘：直接输出字符（包含Unicode中文标点）
-                    currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                    // 符号键盘：中文模式下转换标点，英文模式直接输出
+                    if (isChineseMode) {
+                        handleChineseInput(primaryCode)
+                    } else {
+                        currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                    }
                 } else if (isChineseMode) {
                     handleChineseInput(primaryCode)
                 } else {

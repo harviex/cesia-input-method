@@ -215,11 +215,12 @@
                 android:insetBottom="0dp"
                 android:visibility="gone" />
 
-            <!-- 主麦克风按钮（默认显示，覆盖前三个按钮） -->
+            <!-- 主麦克风按钮（默认显示） -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_mic"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="44dp"
+                android:layout_weight="1"
                 android:text="🎤 说话"
                 android:textSize="14sp"
                 android:textColor="#FFFFFF"
