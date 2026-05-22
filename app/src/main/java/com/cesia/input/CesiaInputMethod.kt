@@ -237,7 +237,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             updateStatus("⚠️ 未识别到文字")
                             resetToIdle()
                         } else {
-                            updateStatus("🔄 正在润色...")
+                            updateStatus("✨ 正在施展魔法...")
                             setStatusDot("processing")
                             isProcessingResult = true
                             polishRecognizedText(text)
@@ -487,7 +487,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun triggerAiReply() {
         if (isAiProcessing) {
-            updateStatus("⏳ AI正在处理中，请稍候...")
+            updateStatus("✨ 正在施展魔法...")
             return
         }
 
@@ -545,7 +545,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun generateAiReply(context: String, ic: android.view.inputmethod.InputConnection) {
         isAiProcessing = true
-        updateStatus("🤖 AI正在生成回复（$aiReplyStyle 风格）...")
+        updateStatus("✨ 正在施展魔法...")
         setStatusDot("processing")
         val prompt = buildAiReplyPrompt(context, aiReplyStyle)
         executeAiPrompt(prompt, ic)
@@ -807,16 +807,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isWaitingForChoice = false
             pendingAiMode = true
             hideAiChoiceButtons()
-            updateStatus("🔄 正在润色...")
+            updateStatus("✨ 正在施展魔法...")
             setStatusDot("processing")
             isProcessingResult = true
-            // 调用润色
             polishRecognizedText(recognizedText)
         } else if (isRecording) {
             // 录音中点击 AI+ → 停止录音，等待识别结果
             stopRecordingAndWait()
             pendingAiMode = true
-            updateStatus("⏳ 正在识别，识别后自动润色")
+            updateStatus("⏳ 正在识别，识别后自动施展魔法")
         }
     }
 
@@ -887,7 +886,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         lastMicClickTime = now
         if (isRecording || isWaitingForChoice) {
             if (isProcessingResult) {
-                updateStatus("⏳ 正在处理中，请稍候...")
+                updateStatus("✨ 正在施展魔法...")
                 return
             }
             // 录音中或等待选择时，点击主按钮无作用（应该点 AI+/AI×）
@@ -953,7 +952,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         Log.d("CesiaMagic", "原文: $magicOriginalText")
         Log.d("CesiaMagic", "指令: $instruction")
-        updateStatus("🔄 正在处理修改指令...")
+        updateStatus("✨ 正在施展魔法...")
 
         val prompt = buildMagicPrompt(magicOriginalText, instruction)
         val polishService = typelessEngine?.getPolishService()
@@ -1032,6 +1031,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         isAiProcessing = true
+        updateStatus("✨ 正在施展魔法...")
+        setStatusDot("processing")
         val prompt = buildMagicPrompt(fullText, instruction)
         val polishService = typelessEngine?.getPolishService()
 
@@ -1169,8 +1170,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 performUndo()
             }
 
-            // 显示在按钮下方
-            popup.showAsDropDown(btnClipboard, 0, 0)
+            // 全屏宽度，覆盖键盘
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP, 0, 0)
         } catch (e: Exception) {
             Log.e("Cesia", "showMagicHistoryPopup 异常", e)
             updateStatus("长按可管理魔法指令")
