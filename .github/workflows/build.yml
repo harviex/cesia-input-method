@@ -39,10 +39,12 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          VERSION="1.1.1"
+          # 自动版本号：1.1.{commit_count}
+          COUNT=$(git rev-list --count HEAD)
+          VERSION="1.1.$COUNT"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "✅ Version: $VERSION"
+          echo "✅ Version: $VERSION (commit #$COUNT)"
 
       - name: Build APK with Gradle
         run: ./gradlew assembleDebug --no-daemon
