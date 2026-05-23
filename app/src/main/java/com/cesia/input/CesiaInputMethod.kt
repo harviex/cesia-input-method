@@ -526,12 +526,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         btnDelete.setOnLongClickListener {
-            if (isChineseMode && pinyinEngine.isComposing()) {
-                handleChineseBackspace()
-            } else {
-                // 长按：清空光标之后的文字
-                currentInputConnection?.deleteSurroundingText(0, Integer.MAX_VALUE)
-            }
+            try {
+                if (isChineseMode && pinyinEngine.isComposing()) {
+                    handleChineseBackspace()
+                } else {
+                    // 长按：清空光标之后的文字，限制最大长度避免崩溃
+                    currentInputConnection?.deleteSurroundingText(0, 10000)
+                }
+            } catch (_: Exception) {}
             true
         }
 

@@ -245,7 +245,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="API URL"
+            android:hint="API URL（完整路径，如 https://openrouter.ai/api/v1/chat/completions）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
