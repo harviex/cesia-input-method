@@ -75,6 +75,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var typelessEngine: TypelessEngine? = null
     private lateinit var statsManager: PolishStatsManager
     private lateinit var pinyinEngine: PinyinEngine
+    private lateinit var t9Engine: com.cesia.input.engine.T9Engine
 
     // 状态
     private var isRecording = false
@@ -232,6 +233,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
         pinyinEngine = PinyinEngine(this)
+        t9Engine = com.cesia.input.engine.T9Engine(this)
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
                 Handler(Looper.getMainLooper()).post { updateStatus(msg) }
@@ -441,13 +443,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun setupCandidateBar() {
+        // 候选词点击
         for (i in tvCandidates.indices) {
             val index = i
             tvCandidates[i].setOnClickListener {
-                if (isChineseMode && pinyinEngine.hasCandidates()) {
-                    val selected = pinyinEngine.selectCandidate(
-                        pinyinEngine.getCurrentPage() * 5 + index
-                    )
+                if (isT9Mode && t9Engine.hasCandidates()) {
+                    val selected = t9Engine.selectCandidate(t9Engine.getCurrentPage() * 5 + index)
+                    if (selected.isNotEmpty()) {
+                        currentInputConnection?.commitText(selected, 1)
+                        updateT9CandidateBar()
+                    }
+                } else if (isChineseMode && pinyinEngine.hasCandidates()) {
+                    val selected = pinyinEngine.selectCandidate(pinyinEngine.getCurrentPage() * 5 + index)
                     if (selected.isNotEmpty()) {
                         currentInputConnection?.commitText(selected, 1)
                         updateCandidateBar()
@@ -456,13 +463,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         btnCandidatePrev.setOnClickListener {
-            if (isChineseMode && pinyinEngine.hasCandidates()) {
+            if (isT9Mode && t9Engine.hasCandidates()) {
+                t9Engine.prevPage()
+                updateT9CandidateBar()
+            } else if (isChineseMode && pinyinEngine.hasCandidates()) {
                 pinyinEngine.prevPage()
                 updateCandidateBar()
             }
         }
         btnCandidateNext.setOnClickListener {
-            if (isChineseMode && pinyinEngine.hasCandidates()) {
+            if (isT9Mode && t9Engine.hasCandidates()) {
+                t9Engine.nextPage()
+                updateT9CandidateBar()
+            } else if (isChineseMode && pinyinEngine.hasCandidates()) {
                 pinyinEngine.nextPage()
                 updateCandidateBar()
             }
@@ -800,22 +813,77 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
     }
 
+    // ═══════════════════════════════════════════════════════════
+    //  T9 数字拼音辅助函数
+    // ═══════════════════════════════════════════════════════════
+
+    /** T9 模式：空格/确认键 → 选择第一个候选词 */
+    private fun handleT9Space() {
+        if (t9Engine.hasCandidates()) {
+            val selected = t9Engine.selectCandidate(0)
+            currentInputConnection?.commitText(selected, 1)
+        } else {
+            // 无候选词时直接输出数字
+            val digits = t9Engine.getCurrentDigits()
+            if (digits.isNotEmpty()) {
+                currentInputConnection?.commitText(digits, 1)
+            }
+            t9Engine.clear()
+        }
+        updateT9CandidateBar()
+    }
+
+    /** 更新 T9 候选词栏 */
+    private fun updateT9CandidateBar() {
+        if (!t9Engine.isComposing() || !t9Engine.hasCandidates()) {
+            candidateBar.visibility = View.GONE
+            return
+        }
+        val candidates = t9Engine.getCandidates()
+        if (candidates.isEmpty()) {
+            candidateBar.visibility = View.GONE
+            return
+        }
+        candidateBar.visibility = View.VISIBLE
+        // 显示当前数字序列 + 拼音提示
+        val digits = t9Engine.getCurrentDigits()
+        val pinyins = t9Engine.getCurrentPinyins()
+        tvComposing.text = if (pinyins.isNotEmpty()) "$digits ${pinyins.joinToString("/")}" else digits
+        tvComposing.setTextColor(0xFF4488FF.toInt())
+        for (i in tvCandidates.indices) {
+            if (i < candidates.size) {
+                tvCandidates[i].text = candidates[i]
+                tvCandidates[i].visibility = View.VISIBLE
+            } else {
+                tvCandidates[i].visibility = View.INVISIBLE
+            }
+        }
+        btnCandidatePrev.isEnabled = t9Engine.getCurrentPage() > 0
+        btnCandidateNext.isEnabled = t9Engine.getCurrentPage() < t9Engine.getPageCount() - 1
+    }
+
+    /** T9 模式：清空当前数字输入 */
+    private fun clearT9Input() {
+        t9Engine.clear()
+        candidateBar.visibility = View.GONE
+    }
+
     // ======================== 中/英切换 ========================
 
     private fun toggleChineseMode() {
         isChineseMode = !isChineseMode
-        isT9Mode = false  // 语言切换后重置为全键盘
+        isT9Mode = false
+        pinyinEngine.clear()
+        clearT9Input()
         if (isChineseMode) {
             isSymbolMode = false
             currentKeyboard = qwertyKeyboard
             keyboardView.keyboard = qwertyKeyboard
             keyboardView.invalidateAllKeys()
-            pinyinEngine.clear()
             candidateBar.visibility = View.GONE
             updateStatus("中文拼音模式")
             updateLangSwitchKeyLabel("英")
         } else {
-            pinyinEngine.clear()
             candidateBar.visibility = View.GONE
             updateStatus("英文模式")
             updateLangSwitchKeyLabel("中")
@@ -837,12 +905,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun handleChineseInput(primaryCode: Int) {
         val c = primaryCode.toChar()
+
+        // ═══ T9 模式：数字键输入 ═══
+        if (isT9Mode && c in '2'..'9') {
+            val digits = t9Engine.inputDigit(c)
+            updateT9CandidateBar()
+            val pinyins = t9Engine.getCurrentPinyins()
+            val pinyinHint = if (pinyins.isNotEmpty()) pinyins.joinToString("/") else ""
+            updateStatus("$digits $pinyinHint")
+            return
+        }
+
+        // ═══ 全拼模式：字母输入 ═══
         if (c in 'a'..'z') {
             val pinyin = pinyinEngine.inputLetter(c)
             updateCandidateBar()
             updateStatus("拼音: $pinyin")
         } else if (c == ' ') {
-            if (pinyinEngine.isComposing()) {
+            if (isT9Mode && t9Engine.isComposing()) {
+                // T9 模式空格：选择第一个候选词
+                handleT9Space()
+            } else if (pinyinEngine.isComposing()) {
                 if (pinyinEngine.hasCandidates()) {
                     val selected = pinyinEngine.selectCandidate(0)
                     currentInputConnection?.commitText(selected, 1)
@@ -856,7 +939,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 currentInputConnection?.commitText(" ", 1)
             }
         } else {
-            if (pinyinEngine.isComposing()) {
+            // 非字母非空格：先提交当前拼音/数字输入
+            if (isT9Mode && t9Engine.isComposing()) {
+                handleT9Space()
+            } else if (pinyinEngine.isComposing()) {
                 val selected = if (pinyinEngine.hasCandidates()) {
                     pinyinEngine.selectCandidate(0)
                 } else {
@@ -899,7 +985,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun handleChineseBackspace() {
-        if (pinyinEngine.isComposing()) {
+        if (isT9Mode && t9Engine.isComposing()) {
+            // T9 模式：退格一个数字
+            val digits = t9Engine.backspace()
+            if (digits.isEmpty()) {
+                clearT9Input()
+                updateStatus("T9 键盘")
+            } else {
+                updateT9CandidateBar()
+                val pinyins = t9Engine.getCurrentPinyins()
+                val pinyinHint = if (pinyins.isNotEmpty()) pinyins.joinToString("/") else ""
+                updateStatus("$digits $pinyinHint")
+            }
+        } else if (pinyinEngine.isComposing()) {
             val pinyin = pinyinEngine.backspace()
             if (pinyin.isEmpty()) {
                 pinyinEngine.clear()
@@ -1001,6 +1099,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setStatusDot("idle")
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
+        clearT9Input()
+        pinyinEngine.clear()
+        candidateBar.visibility = View.GONE
         updateStatus("Cesia 已就绪")
     }
 
@@ -1694,9 +1795,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun toggleKbdMode() {
-        if (isSymbolMode) return  // 符号模式下不切换
+        if (isSymbolMode) return
         isT9Mode = !isT9Mode
         pinyinEngine.clear()
+        t9Engine.clear()
         candidateBar.visibility = View.GONE
         currentKeyboard = if (isT9Mode) t9Keyboard else qwertyKeyboard
         keyboardView.keyboard = currentKeyboard
