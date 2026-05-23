@@ -31,7 +31,7 @@ import com.google.android.material.button.MaterialButton
 /**
  * Cesia 输入法
  *
- * v1.0.126 — UI重设计版
+ * v1.1.1 — 大版本更新
  * 主要变化:
  * - 默认中文键盘+中文符号
  * - 重设计麦克风按钮（蓝底圆角）
@@ -56,7 +56,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
-    private lateinit var btnClipboard: ImageButton
+    private lateinit var btnClipboardAction: ImageButton
+    private lateinit var btnKeyboardSwitch: ImageButton
+    private lateinit var btnRewrite: MaterialButton
     private lateinit var btnMagic: MaterialButton
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
@@ -116,6 +118,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private val sentMessages = mutableListOf<String>()
     private val maxSentMessages = 10
 
+    // 语言切换长按检测
+    private var langSwitchLongPressTriggered = false
+    private var langSwitchHandler = Handler(Looper.getMainLooper())
+    private var langSwitchRunnable: Runnable? = null
+
     // 菜单动作模式
     private var menuActionMode: String? = null  // null=正常, "pin"=置顶模式, "delete"=删除模式
 
@@ -125,6 +132,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 主题
     private var isDarkTheme = false
     private var apiUrl = "https://openrouter.ai/api/v1/chat/completions"
+
+    // 多语言切换系统
+    // currentLangPair: "中英"=中/英, "日中"=日/中, "日英"=日/英
+    private var currentLangPair = "中英"
+    private var isFirstLangActive = true  // true=第一个语言(中/日), false=第二个语言(英/中)
+    private val langPairFirstLang = mapOf("中英" to "cn", "日中" to "jp", "日英" to "jp")
+    private val langPairSecondLang = mapOf("中英" to "en", "日中" to "cn", "日英" to "en")
+    private val langPairFirstName = mapOf("中英" to "中", "日中" to "日", "日英" to "日")
+    private val langPairSecondName = mapOf("中英" to "英", "日中" to "中", "日英" to "英")
 
     companion object {
         const val PREF_API_URL = "api_url"
@@ -137,6 +153,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val KEYCODE_SWITCH_SYMBOL = -100
         const val KEYCODE_SWITCH_LANG = -101
         const val KEYCODE_BACK_KEY = -999
+        const val KEYCODE_REWRITE_KEY = -300
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
     }
@@ -176,7 +193,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
         btnSettings = view.findViewById(R.id.btn_settings)
         btnDelete = view.findViewById(R.id.btn_delete)
-        btnClipboard = view.findViewById(R.id.btn_clipboard)
+        btnClipboardAction = view.findViewById(R.id.btn_clipboard_action)
+        btnKeyboardSwitch = view.findViewById(R.id.btn_keyboard_switch)
+        btnRewrite = view.findViewById(R.id.btn_rewrite)
         btnMagic = view.findViewById(R.id.btn_magic)
         statusDot = view.findViewById(R.id.v_status_dot)
         statusText = view.findViewById(R.id.tv_status)
@@ -304,7 +323,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 默认中文模式
         isChineseMode = true
-        updateLangSwitchKeyLabel("英")
+        currentLangPair = "中英"
+        isFirstLangActive = true
+        updateLangSwitchKeyLabel()
 
         setupButtonListeners()
         setupCandidateBar()
@@ -413,7 +434,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             for (tv in tvCandidates) {
                 tv.setTextColor(0xFFE0E0E0.toInt())
             }
-            (btnClipboard.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
+            (btnClipboardAction.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
+            // 黑暗模式按键样式
+            keyboardView.keyBackground = resources.getDrawable(R.drawable.key_background_dark, null)
+            keyboardView.keyTextColor = 0xFFE0E0E0.toInt()
+            // 底部按钮栏
+            (btnRewrite.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
             keyboardView.setBackgroundColor(0xFFE8E8E8.toInt())
             (statusText.parent as? View)?.setBackgroundColor(0xFFEEEEEE.toInt())
@@ -423,7 +449,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             for (tv in tvCandidates) {
                 tv.setTextColor(0xFF333333.toInt())
             }
-            (btnClipboard.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
+            (btnClipboardAction.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
+            // 明亮模式按键样式
+            keyboardView.keyBackground = resources.getDrawable(R.drawable.key_background, null)
+            keyboardView.keyTextColor = 0xFF333333.toInt()
+            // 底部按钮栏
+            (btnRewrite.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
         }
     }
 
@@ -498,11 +529,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
         }
+        // 长按发送键→显示最近10条历史记录
         micButton.setOnLongClickListener {
-            if (isRecording || isWaitingForChoice) {
-                resetToIdle()
-                true
-            } else false
+            showSentMessagesPopup()
+            true
         }
 
         // AI+ 按钮
@@ -516,17 +546,42 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (isChineseMode && pinyinEngine.isComposing()) {
                 handleChineseBackspace()
             } else {
-                currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
+                currentInputConnection?.deleteSurroundingText(1, 0)
             }
         }
 
-        // 自动写作按钮：短按→有魔法指令则执行魔法，否则AI自动回复；长按→弹出魔法菜单
-        btnClipboard.setOnClickListener { executeMagicOrAiReply() }
-        btnClipboard.setOnLongClickListener { showMagicHistoryPopup(); true }
+        // 剪贴板按钮（状态栏）：点击显示系统剪贴板内容
+        btnClipboardAction.setOnClickListener { showClipboardCards() }
 
-        // 魔法修改按钮：单击→高亮→再单击→录音并应用
+        // 魔法修改按钮：单击→高亮→再单击→录音并应用；长按→自动写作/AI回复
         btnMagic.setOnClickListener { toggleMagicMode() }
-        btnMagic.setOnLongClickListener { showSentMessagesPopup(); true }
+        btnMagic.setOnLongClickListener {
+            executeMagicOrAiReply()
+            true
+        }
+
+        // 键盘切换按钮：点击显示键盘选择卡片
+        btnKeyboardSwitch.setOnClickListener { showKeyboardSwitchCards() }
+
+        // 重写按钮：点击清除光标前，长按清除光标后
+        btnRewrite.setOnClickListener {
+            val ic = currentInputConnection ?: return@setOnClickListener
+            val textBefore = ic.getTextBeforeCursor(Integer.MAX_VALUE, 0)?.toString() ?: ""
+            if (textBefore.isNotEmpty()) {
+                ic.deleteSurroundingText(textBefore.length, 0)
+            }
+        }
+        btnRewrite.setOnLongClickListener {
+            val ic = currentInputConnection ?: return@setOnLongClickListener true
+            val textAfter = ic.getTextAfterCursor(Integer.MAX_VALUE, 0)?.toString() ?: ""
+            if (textAfter.isNotEmpty()) {
+                ic.deleteSurroundingText(0, textAfter.length)
+            }
+            true
+        }
+
+        // 长按语言切换键→多语言选择菜单
+        // 通过 onKey 中的 KEYCODE_SWITCH_LANG 长按检测来实现
     }
 
     // ======================== 魔法修改（单键切换） ========================
@@ -778,26 +833,70 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 中/英切换 ========================
 
     private fun toggleChineseMode() {
-        isChineseMode = !isChineseMode
-        if (isChineseMode) {
-            isSymbolMode = false
-            currentKeyboard = qwertyKeyboard
-            keyboardView.keyboard = qwertyKeyboard
-            keyboardView.invalidateAllKeys()
-            pinyinEngine.clear()
-            candidateBar.visibility = View.GONE
-            updateStatus("中文拼音模式")
-            updateLangSwitchKeyLabel("英")
-        } else {
-            pinyinEngine.clear()
-            candidateBar.visibility = View.GONE
-            updateStatus("英文模式")
-            updateLangSwitchKeyLabel("中")
+        isFirstLangActive = !isFirstLangActive
+        val currentLang = if (isFirstLangActive) langPairFirstLang[currentLangPair]
+            else langPairSecondLang[currentLangPair]
+        isChineseMode = (currentLang == "cn" || currentLang == "jp")
+        isSymbolMode = false
+        currentKeyboard = qwertyKeyboard
+        keyboardView.keyboard = qwertyKeyboard
+        keyboardView.invalidateAllKeys()
+        pinyinEngine.clear()
+        candidateBar.visibility = View.GONE
+        val langName = when (currentLang) {
+            "cn" -> "中文拼音模式"
+            "jp" -> "日文模式"
+            else -> "英文模式"
+        }
+        updateStatus(langName)
+        updateLangSwitchKeyLabel()
+    }
+
+    private fun showLangPairPicker() {
+        val options = listOf(
+            Triple("中英", "中文 ⇄ 英文", "cn"),
+            Triple("日中", "日文 ⇄ 中文", "jp"),
+            Triple("日英", "日文 ⇄ 英文", "jp")
+        )
+        val items = options.map { "${it.first} — ${it.second}" }.toTypedArray()
+        try {
+            AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("🌐 选择语言对")
+                .setItems(items) { _, which ->
+                    val selected = options[which]
+                    currentLangPair = selected.first
+                    isFirstLangActive = true
+                    isChineseMode = (selected.third == "cn" || selected.third == "jp")
+                    isSymbolMode = false
+                    currentKeyboard = qwertyKeyboard
+                    keyboardView.keyboard = qwertyKeyboard
+                    keyboardView.invalidateAllKeys()
+                    pinyinEngine.clear()
+                    candidateBar.visibility = View.GONE
+                    val firstName = langPairFirstName[currentLangPair] ?: "中"
+                    updateStatus("$firstName 模式")
+                    updateLangSwitchKeyLabel()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        } catch (e: Exception) {
+            val pairs = listOf("中英", "日中", "日英")
+            val idx = pairs.indexOf(currentLangPair)
+            currentLangPair = pairs[(idx + 1) % pairs.size]
+            isFirstLangActive = true
+            isChineseMode = currentLangPair != "日英"
+            updateLangSwitchKeyLabel()
+            updateStatus("已切换语言对: $currentLangPair")
         }
     }
 
-    private fun updateLangSwitchKeyLabel(label: String) {
+    private fun updateLangSwitchKeyLabel() {
         val keyboard = currentKeyboard ?: return
+        val label = if (isFirstLangActive) {
+            langPairFirstName[currentLangPair] ?: "中"
+        } else {
+            langPairSecondName[currentLangPair] ?: "英"
+        }
         for (key in keyboard.keys) {
             if (key.codes.isNotEmpty() && key.codes[0] == KEYCODE_SWITCH_LANG) {
                 key.label = label
@@ -805,7 +904,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         keyboardView.invalidateAllKeys()
+        // 同步更新副字符语言模式
+        syncSubsidiaryLangMode()
     }
+
+    private fun syncSubsidiaryLangMode() {
+        val currentLang = if (isFirstLangActive) langPairFirstLang[currentLangPair]
+            else langPairSecondLang[currentLangPair]
+        keyboardView.subsidiaryLangMode = currentLang ?: "cn"
+    }
+
+    private val isJapaneseMode: Boolean
+        get() {
+            val currentLang = if (isFirstLangActive) langPairFirstLang[currentLangPair]
+            else langPairSecondLang[currentLangPair]
+            return currentLang == "jp"
+        }
 
     // ======================== 中文拼音输入 ========================
 
@@ -1477,6 +1591,199 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isSymbolMode) switchToQwertyKeyboard() else switchToSymbolKeyboard()
     }
 
+    // ======================== 键盘切换卡片 ========================
+
+    /**
+     * 显示键盘切换卡片：中文全键盘、中文3×4键盘、中文五笔键盘
+     */
+    private fun showKeyboardSwitchCards() {
+        try {
+            val inflater = android.view.LayoutInflater.from(this)
+            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
+
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+            popup.isOutsideTouchable = true
+            popup.elevation = 8f
+
+            // 隐藏管理栏
+            popupView.findViewById<android.view.View>(R.id.btn_pin_manage)?.visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_delete_manage)?.visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_undo_manage)?.visibility = View.GONE
+
+            data class KeyboardOption(val name: String, val icon: String, val desc: String)
+            val options = listOf(
+                KeyboardOption("中文全键盘", "⌨️", "标准QWERTY布局，支持拼音输入"),
+                KeyboardOption("中文3×4键盘", "📱", "数字键盘布局，T9拼音输入"),
+                KeyboardOption("中文五笔键盘", "✍️", "五笔字型输入布局")
+            )
+
+            gridView.numColumns = 1
+            gridView.adapter = object : android.widget.BaseAdapter() {
+                override fun getCount() = options.size
+                override fun getItem(p: Int) = options[p]
+                override fun getItemId(p: Int) = p.toLong()
+                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
+                    val opt = options[p]
+                    tv.text = "${opt.icon} ${opt.name}"
+                    tvFull.text = opt.desc
+                    tvFull.visibility = View.GONE
+                    v.setOnLongClickListener {
+                        tv.visibility = View.GONE
+                        tvFull.visibility = View.VISIBLE
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            try { tvFull.visibility = View.GONE; tv.visibility = View.VISIBLE } catch (_: Exception) {}
+                        }, 2000)
+                        true
+                    }
+                    return v
+                }
+            }
+
+            gridView.setOnItemClickListener { _, _, position, _ ->
+                popup.dismiss()
+                when (position) {
+                    0 -> {
+                        // 中文全键盘（默认）
+                        isChineseMode = true
+                        isSymbolMode = false
+                        currentKeyboard = qwertyKeyboard
+                        keyboardView.keyboard = qwertyKeyboard
+                        keyboardView.invalidateAllKeys()
+                        updateStatus("已切换：中文全键盘")
+                    }
+                    1 -> {
+                        // 中文3×4键盘（T9）
+                        isChineseMode = true
+                        isSymbolMode = false
+                        currentKeyboard = qwertyKeyboard
+                        keyboardView.keyboard = qwertyKeyboard
+                        keyboardView.invalidateAllKeys()
+                        updateStatus("已切换：中文3×4键盘")
+                    }
+                    2 -> {
+                        // 中文五笔键盘
+                        isChineseMode = true
+                        isSymbolMode = false
+                        currentKeyboard = qwertyKeyboard
+                        keyboardView.keyboard = qwertyKeyboard
+                        keyboardView.invalidateAllKeys()
+                        updateStatus("已切换：中文五笔键盘")
+                    }
+                }
+            }
+
+            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
+        } catch (e: Exception) {
+            Log.e("Cesia", "showKeyboardSwitchCards 异常", e)
+            updateStatus("键盘切换失败")
+        }
+    }
+
+    // ======================== 剪贴板卡片 ========================
+
+    /**
+     * 显示系统剪贴板内容（卡片式）
+     */
+    private fun showClipboardCards() {
+        try {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            if (clipboard == null || !clipboard.hasPrimaryClip()) {
+                updateStatus("剪贴板为空")
+                return
+            }
+
+            val clipData = clipboard.primaryClip
+            if (clipData == null || clipData.itemCount == 0) {
+                updateStatus("剪贴板为空")
+                return
+            }
+
+            val items = mutableListOf<String>()
+            for (i in 0 until clipData.itemCount) {
+                val item = clipData.getItemAt(i)
+                val text = item.text?.toString() ?: item.coerceToText(this)?.toString() ?: ""
+                if (text.isNotEmpty()) items.add(text)
+            }
+
+            if (items.isEmpty()) {
+                updateStatus("剪贴板为空")
+                return
+            }
+
+            val inflater = android.view.LayoutInflater.from(this)
+            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
+
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+            popup.isOutsideTouchable = true
+            popup.elevation = 8f
+
+            // 隐藏管理栏
+            popupView.findViewById<android.view.View>(R.id.btn_pin_manage)?.visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_delete_manage)?.visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_undo_manage)?.visibility = View.GONE
+
+            // 添加标题
+            val titleView = TextView(this).apply {
+                text = "📋 剪贴板内容（点击插入）"
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(12, 10, 12, 6)
+                setTextColor(0xFF666666.toInt())
+            }
+            (popupView as? LinearLayout)?.addView(titleView, 0)
+
+            gridView.numColumns = 1
+            gridView.adapter = object : android.widget.BaseAdapter() {
+                override fun getCount() = items.size
+                override fun getItem(p: Int) = items[p]
+                override fun getItemId(p: Int) = p.toLong()
+                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
+                    val text = items[p]
+                    tv.text = "📋 $text"
+                    tv.setSingleLine(true)
+                    tv.ellipsize = android.text.TextUtils.TruncateAt.END
+                    tvFull.text = text
+                    tvFull.visibility = View.GONE
+                    v.setOnLongClickListener {
+                        tv.visibility = View.GONE
+                        tvFull.visibility = View.VISIBLE
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            try { tvFull.visibility = View.GONE; tv.visibility = View.VISIBLE } catch (_: Exception) {}
+                        }, 3000)
+                        true
+                    }
+                    return v
+                }
+            }
+
+            gridView.setOnItemClickListener { _, _, position, _ ->
+                val text = items[position]
+                currentInputConnection?.commitText(text, 1)
+                updateStatus("📋 已插入剪贴板内容")
+                popup.dismiss()
+            }
+
+            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
+        } catch (e: Exception) {
+            Log.e("Cesia", "showClipboardCards 异常", e)
+            updateStatus("读取剪贴板失败")
+        }
+    }
+
     // ======================== 长按 Fn 效果 ========================
 
     private fun startLongPressDetection(key: Keyboard.Key) {
@@ -1502,6 +1809,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
         longPressRunnable = null
         currentLongPressKey = null
+    }
+
+    private fun startLangSwitchLongPress() {
+        cancelLangSwitchLongPress()
+        langSwitchRunnable = Runnable {
+            langSwitchLongPressTriggered = true
+            showLangPairPicker()
+            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }.also {
+            langSwitchHandler.postDelayed(it, 500)
+        }
+    }
+
+    private fun cancelLangSwitchLongPress() {
+        langSwitchRunnable?.let { langSwitchHandler.removeCallbacks(it) }
+        langSwitchRunnable = null
     }
 
     // ======================== KeyboardView 回调 ========================
@@ -1605,6 +1928,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 startLongPressDetection(key)
             }
         }
+        // 长按语言切换键→弹出多语言菜单
+        if (primaryCode == KEYCODE_SWITCH_LANG) {
+            startLangSwitchLongPress()
+        }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
                 override fun run() {
@@ -1619,6 +1946,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
+        cancelLangSwitchLongPress()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
     }

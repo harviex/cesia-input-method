@@ -40,6 +40,31 @@
             android:ellipsize="end"
             android:lineSpacingMultiplier="1.2" />
 
+        <!-- 键盘切换按钮 -->
+        <ImageButton
+            android:id="@+id/btn_keyboard_switch"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="键盘切换"
+            android:scaleType="centerInside"
+            android:padding="4dp"
+            android:layout_marginEnd="2dp" />
+
+        <!-- 剪贴板按钮 -->
+        <ImageButton
+            android:id="@+id/btn_clipboard_action"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_edit"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="剪贴板"
+            android:scaleType="centerInside"
+            android:padding="4dp"
+            android:layout_marginEnd="2dp" />
+
+        <!-- 设置按钮（齿轮图标） -->
         <ImageButton
             android:id="@+id/btn_settings"
             android:layout_width="28dp"
@@ -131,7 +156,24 @@
         android:background="#E0E0E0"
         android:gravity="center_vertical">
 
-        <!-- 魔法按钮（语音修改）- ✨ AI魔法 -->
+        <!-- 重写按钮（点击清除光标前，长按清除光标后） -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_rewrite"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="0.6"
+            android:text="重写"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:backgroundTint="#E0E0E0"
+            android:contentDescription="重写"
+            android:stateListAnimator="@null"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="3dp"
+            app:cornerRadius="8dp" />
+
+        <!-- 魔法按钮（语音修改） -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_magic"
             android:layout_width="0dp"
@@ -147,19 +189,6 @@
             android:insetBottom="0dp"
             android:layout_marginEnd="3dp"
             app:cornerRadius="8dp" />
-
-        <!-- 自动写作按钮（AI写作） -->
-        <ImageButton
-            android:id="@+id/btn_clipboard"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="0.6"
-            android:src="@android:drawable/ic_menu_edit"
-            android:background="@drawable/button_background_gray"
-            android:scaleType="centerInside"
-            android:padding="10dp"
-            android:contentDescription="AI自动写作"
-            android:layout_marginEnd="3dp" />
 
         <!-- 麦克风/语音按钮区域 -->
         <LinearLayout
@@ -189,7 +218,7 @@
                 android:layout_marginEnd="4dp"
                 android:visibility="gone" />
 
-            <!-- 声波动画指示器（录音时在两个按钮之间显示） -->
+            <!-- 声波动画指示器 -->
             <View
                 android:id="@+id/v_voice_wave"
                 android:layout_width="10dp"
