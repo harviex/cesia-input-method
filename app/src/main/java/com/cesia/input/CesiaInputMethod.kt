@@ -494,8 +494,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvCandidates[i].visibility = View.INVISIBLE
             }
         }
-        btnCandidatePrev.isEnabled = pinyinEngine.getCurrentPage() > 0
-        btnCandidateNext.isEnabled = pinyinEngine.getCurrentPage() < pinyinEngine.getPageCount() - 1
+        // btnCandidatePrev.isEnabled = pinyinEngine.getCurrentPage() > 0
+        // btnCandidateNext.isEnabled = pinyinEngine.getCurrentPage() < pinyinEngine.getPageCount() - 1
     }
 
     // ======================== 按钮监听 ========================
@@ -850,8 +850,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvCandidates[i].visibility = View.INVISIBLE
             }
         }
-        btnCandidatePrev.isEnabled = t9Engine.getCurrentPage() > 0
-        btnCandidateNext.isEnabled = t9Engine.getCurrentPage() < t9Engine.getPageCount() - 1
+        // btnCandidatePrev.isEnabled = t9Engine.getCurrentPage() > 0
+        // btnCandidateNext.isEnabled = t9Engine.getCurrentPage() < t9Engine.getPageCount() - 1
     }
 
     /** T9 模式：清空当前数字输入 */
