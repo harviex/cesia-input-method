@@ -95,6 +95,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var backspaceHandler = Handler(Looper.getMainLooper())
     private var backspaceRunnable: Runnable? = null
 
+    // 发送键长按检测
+    private var sendKeyLongPressTriggered = false
+    private var sendKeyHandler = Handler(Looper.getMainLooper())
+    private var sendKeyRunnable: Runnable? = null
+
     // 魔法模式（改进版：单键切换）
     private var magicMode = false
     private var magicOriginalText = ""
@@ -534,9 +539,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnClipboard.setOnClickListener { executeMagicOrAiReply() }
         btnClipboard.setOnLongClickListener { showMagicHistoryPopup(); true }
 
-        // 魔法修改按钮：单击→高亮→再单击→录音并应用
+        // 魔法修改按钮：单击→高亮→再单击→录音并应用；长按无功能
         btnMagic.setOnClickListener { toggleMagicMode() }
-        btnMagic.setOnLongClickListener { showSentMessagesPopup(); true }
+        btnMagic.setOnLongClickListener { true }
     }
 
     // ======================== 魔法修改（单键切换） ========================
@@ -1514,6 +1519,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentLongPressKey = null
     }
 
+    private fun startSendKeyLongPress() {
+        cancelSendKeyLongPress()
+        sendKeyRunnable = Runnable {
+            sendKeyLongPressTriggered = true
+            showSentMessagesPopup()
+            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }.also {
+            sendKeyHandler.postDelayed(it, 500)
+        }
+    }
+
+    private fun cancelSendKeyLongPress() {
+        sendKeyRunnable?.let { sendKeyHandler.removeCallbacks(it) }
+        sendKeyRunnable = null
+    }
+
     // ======================== KeyboardView 回调 ========================
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
@@ -1542,7 +1563,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 else currentInputConnection?.deleteSurroundingText(1, 0)
             }
             -200 -> {
-                // 发送（纸飞机）：先取当前文本保存到发送历史
+                if (sendKeyLongPressTriggered) {
+                    sendKeyLongPressTriggered = false
+                    return
+                }
                 val ic = currentInputConnection
                 if (isChineseMode && pinyinEngine.isComposing()) {
                     val text = if (pinyinEngine.hasCandidates()) {
@@ -1555,7 +1579,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     updateCandidateBar()
                     addSentMessage(text)
                 } else {
-                    // 取当前文本框内容作为发送
                     val textBefore = ic?.getTextBeforeCursor(200, 0)?.toString().orEmpty()
                     if (textBefore.isNotEmpty()) addSentMessage(textBefore)
                 }
@@ -1625,10 +1648,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             backspaceHandler.postDelayed(backspaceRunnable!!, 400)
         }
+        // 发送键长按检测
+        if (primaryCode == -200) {
+            startSendKeyLongPress()
+        }
     }
 
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
+        cancelSendKeyLongPress()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
     }
