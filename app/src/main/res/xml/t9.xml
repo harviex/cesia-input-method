@@ -8,6 +8,7 @@
     <!-- 第一行：， abc(2) def(3) ⌫ -->
     <Row>
         <Key android:codes="65292" android:keyLabel="，" android:keyEdgeFlags="left" />
+        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="*" />
         <Key android:codes="50" android:keyLabel="abc" android:popupCharacters="2" />
         <Key android:codes="51" android:keyLabel="def" android:popupCharacters="3" />
         <Key android:codes="-108" android:keyLabel="⌫" android:keyEdgeFlags="right" />

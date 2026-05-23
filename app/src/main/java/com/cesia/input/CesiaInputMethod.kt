@@ -1246,30 +1246,78 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         
         try {
-            val items = candidates.take(50)
-            val displayItems = items.mapIndexed { index, word -> 
-                "${index + 1}. $word" 
-            }.toTypedArray()
+            // 使用 PopupWindow 显示候选词列表，类似魔法菜单
+            val inflater = android.view.LayoutInflater.from(this)
+            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+            val gridView = popupView.findViewById<android.widget.GridView>(R.id.gv_magic_items)
             
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("候选词（共${items.size}个）")
-                .setItems(displayItems) { dialog, which ->
-                    val selected = items[which]
-                    currentInputConnection?.commitText(selected, 1)
+            gridView.numColumns = 1
+            
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+            
+            val popup = android.widget.PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+            popup.isOutsideTouchable = true
+            popup.elevation = 4f
+            
+            val items = candidates.take(50)
+            val displayItems = items.map { word -> "📝 $word" }
+            
+            // 隐藏管理栏
+            popupView.findViewById<android.view.View>(R.id.btn_pin_manage).visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_delete_manage).visibility = View.GONE
+            popupView.findViewById<android.view.View>(R.id.btn_undo_manage).visibility = View.GONE
+            
+            // 添加标题
+            val titleView = android.widget.TextView(this).apply {
+                text = "候选词（共${items.size}个）"
+                textSize = 13f
+                gravity = android.view.Gravity.CENTER
+                setPadding(12, 10, 12, 6)
+                setTextColor(0xFF666666.toInt())
+            }
+            (popupView as? android.widget.LinearLayout)?.addView(titleView, 0)
+            
+            gridView.adapter = object : android.widget.BaseAdapter() {
+                override fun getCount() = displayItems.size
+                override fun getItem(p: Int) = displayItems[p]
+                override fun getItemId(p: Int) = p.toLong()
+                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                    val tv = v.findViewById<android.widget.TextView>(R.id.tv_magic_text)
+                    val tvFull = v.findViewById<android.widget.TextView>(R.id.tv_magic_full)
+                    tv.text = displayItems[p]
+                    tv.setSingleLine(true)
+                    tv.ellipsize = android.text.TextUtils.TruncateAt.END
                     
-                    if (isT9Mode) {
-                        t9Engine.selectCandidate(which)
-                        updateT9CandidateBar()
-                    } else {
-                        pinyinEngine.selectCandidate(which)
-                        updateCandidateBar()
+                    tvFull.text = items[p]
+                    tvFull.visibility = View.GONE
+                    
+                    v.setOnClickListener {
+                        val selected = items[p]
+                        currentInputConnection?.commitText(selected, 1)
+                        
+                        if (isT9Mode) {
+                            t9Engine.selectCandidate(p)
+                            updateT9CandidateBar()
+                        } else {
+                            pinyinEngine.selectCandidate(p)
+                            updateCandidateBar()
+                        }
+                        popup.dismiss()
                     }
-                    dialog.dismiss()
+                    
+                    return v
                 }
-                .setNegativeButton("取消", null)
-                .show()
+            }
+            
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP, 0, 0)
         } catch (e: Exception) {
             android.util.Log.e("Cesia", "showCandidateDropdown 异常", e)
+            // 降级方案：直接选择第一个
+            if (candidates.isNotEmpty()) {
+                currentInputConnection?.commitText(candidates[0], 1)
+            }
         }
     }
 

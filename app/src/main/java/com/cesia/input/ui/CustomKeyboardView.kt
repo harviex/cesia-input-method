@@ -41,17 +41,37 @@ class CustomKeyboardView @JvmOverloads constructor(
 
         val keys = keyboard?.keys ?: return
         for (key in keys) {
+            // 绘制副字符（popupCharacters）- 右上角小字
             if (!key.popupCharacters.isNullOrEmpty()) {
                 val symbol = key.popupCharacters[0].toString()
-                // 调大符号：0.45f，最大28f
-                val textSize = (key.height * 0.45f).coerceIn(20f, 28f)
+                val textSize = (key.height * 0.38f).coerceIn(14f, 20f)
                 subsidiaryPaint.textSize = textSize
+                subsidiaryPaint.color = 0xFF666666.toInt()
 
-                // 右上角：右边留6px，顶部留4px+文字高度偏移
-                val x = key.x + key.width - 6f
-                val y = key.y + textSize + 4f
+                // 右上角：右边留4px，顶部留2px
+                val x = key.x + key.width - 4f
+                val y = key.y + textSize + 2f
 
                 canvas.drawText(symbol, x, y, subsidiaryPaint)
+            }
+            
+            // 绘制主字符（keyLabel中的字母）- 按键中央大字
+            // T9 键盘：数字键显示字母作为主字符
+            val label = key.label?.toString() ?: ""
+            if (label.isNotEmpty() && label.matches(Regex("[a-z]+"))) {
+                // 这是 T9 键盘的字母主字符，绘制在中央
+                val mainPaint = android.graphics.Paint().apply {
+                    color = 0xFF333333.toInt()
+                    typeface = Typeface.DEFAULT_BOLD
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                    textSize = (key.height * 0.42f).coerceIn(18f, 26f)
+                }
+                
+                val centerX = key.x + key.width / 2f
+                val centerY = key.y + key.height / 2f + mainPaint.textSize / 3f
+                
+                canvas.drawText(label, centerX, centerY, mainPaint)
             }
         }
     }
