@@ -5,30 +5,29 @@
     android:horizontalGap="0dp"
     android:verticalGap="0dp">
 
-    <!-- 第一行：， 1 2 3 重写(短按⌫/长按⌦) -->
+    <!-- 第一行：， abc(2) def(3) ⌫ -->
     <Row>
         <Key android:codes="65292" android:keyLabel="，" android:keyEdgeFlags="left" />
-        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="ABC" />
-        <Key android:codes="50" android:keyLabel="2" android:popupCharacters="DEF" />
-        <Key android:codes="51" android:keyLabel="3" android:popupCharacters="GHI" />
+        <Key android:codes="50" android:keyLabel="abc" android:popupCharacters="2" />
+        <Key android:codes="51" android:keyLabel="def" android:popupCharacters="3" />
         <Key android:codes="-108" android:keyLabel="⌫" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第二行：。 4 5 6 ⌦ -->
+    <!-- 第二行：。 ghi(4) jkl(5) mno(6) ⌦ -->
     <Row>
         <Key android:codes="12290" android:keyLabel="。" android:keyEdgeFlags="left" />
-        <Key android:codes="52" android:keyLabel="4" android:popupCharacters="JKL" />
-        <Key android:codes="53" android:keyLabel="5" android:popupCharacters="MNO" />
-        <Key android:codes="54" android:keyLabel="6" android:popupCharacters="PQRS" />
+        <Key android:codes="52" android:keyLabel="ghi" android:popupCharacters="4" />
+        <Key android:codes="53" android:keyLabel="jkl" android:popupCharacters="5" />
+        <Key android:codes="54" android:keyLabel="mno" android:popupCharacters="6" />
         <Key android:codes="-109" android:keyLabel="⌦" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第三行：？ 7 8 9 0 -->
+    <!-- 第三行：？ pqrs(7) tuv(8) wxyz(9) 0 -->
     <Row>
         <Key android:codes="65311" android:keyLabel="？" android:keyEdgeFlags="left" />
-        <Key android:codes="55" android:keyLabel="7" android:popupCharacters="TUV" />
-        <Key android:codes="56" android:keyLabel="8" android:popupCharacters="WXYZ" />
-        <Key android:codes="57" android:keyLabel="9" />
+        <Key android:codes="55" android:keyLabel="pqrs" android:popupCharacters="7" />
+        <Key android:codes="56" android:keyLabel="tuv" android:popupCharacters="8" />
+        <Key android:codes="57" android:keyLabel="wxyz" android:popupCharacters="9" />
         <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right" />
     </Row>
 

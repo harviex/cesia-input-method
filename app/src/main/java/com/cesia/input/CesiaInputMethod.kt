@@ -68,8 +68,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var candidateBar: LinearLayout
     private lateinit var tvComposing: TextView
     private lateinit var tvCandidates: Array<TextView>
-    private lateinit var btnCandidatePrev: ImageButton
-    private lateinit var btnCandidateNext: ImageButton
+    private lateinit var btnCandidateDropdown: ImageButton
 
     // 核心组件
     private var typelessEngine: TypelessEngine? = null
@@ -208,8 +207,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             view.findViewById<TextView>(R.id.tv_candidate_4),
             view.findViewById<TextView>(R.id.tv_candidate_5)
         )
-        btnCandidatePrev = view.findViewById(R.id.btn_candidate_prev)
-        btnCandidateNext = view.findViewById(R.id.btn_candidate_next)
+        btnCandidateDropdown = view.findViewById(R.id.btn_candidate_dropdown)
 
         // 初始化键盘（try-catch防止xml解析异常）
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
@@ -471,23 +469,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
         }
-        btnCandidatePrev.setOnClickListener {
-            if (isT9Mode && t9Engine.hasCandidates()) {
-                t9Engine.prevPage()
-                updateT9CandidateBar()
-            } else if (isChineseMode && pinyinEngine.hasCandidates()) {
-                pinyinEngine.prevPage()
-                updateCandidateBar()
-            }
-        }
-        btnCandidateNext.setOnClickListener {
-            if (isT9Mode && t9Engine.hasCandidates()) {
-                t9Engine.nextPage()
-                updateT9CandidateBar()
-            } else if (isChineseMode && pinyinEngine.hasCandidates()) {
-                pinyinEngine.nextPage()
-                updateCandidateBar()
-            }
+        btnCandidateDropdown.setOnClickListener {
+            showCandidateDropdown()
         }
     }
 
@@ -1243,6 +1226,50 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         } catch (e: Exception) {
             Log.e("Cesia", "showSentMessagesPopup 异常", e)
         }
+
+    private fun showCandidateDropdown() {
+        val candidates = if (isT9Mode && t9Engine.hasCandidates()) {
+            t9Engine.getCandidates()
+        } else if (isChineseMode && pinyinEngine.hasCandidates()) {
+            pinyinEngine.getCandidates()
+        } else {
+            emptyList()
+        }
+        
+        if (candidates.isEmpty()) {
+            updateStatus("暂无候选词")
+            return
+        }
+        
+        try {
+            val items = candidates.take(50) // 最多显示50个
+            val displayItems = items.mapIndexed { index, word -> 
+                "${index + 1}. $word" 
+            }.toTypedArray()
+            
+            AlertDialog.Builder(this)
+                .setTitle("候选词（共${items.size}个）")
+                .setItems(displayItems) { dialog, which ->
+                    val selected = items[which]
+                    currentInputConnection?.commitText(selected, 1)
+                    
+                    // 更新引擎状态
+                    if (isT9Mode) {
+                        t9Engine.selectCandidate(which)
+                        updateT9CandidateBar()
+                    } else {
+                        pinyinEngine.selectCandidate(which)
+                        updateCandidateBar()
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        } catch (e: Exception) {
+            Log.e("Cesia", "showCandidateDropdown 异常", e)
+        }
+    }
+
     }
 
     // ======================== 魔法模式（语音修改） ========================
