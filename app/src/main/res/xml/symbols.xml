@@ -4,21 +4,7 @@
     android:keyHeight="42dp"
     android:verticalGap="4dp">
 
-    <!-- 第一行：数字 -->
-    <Row>
-        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" />
-        <Key android:codes="50" android:keyLabel="2" />
-        <Key android:codes="51" android:keyLabel="3" />
-        <Key android:codes="52" android:keyLabel="4" />
-        <Key android:codes="53" android:keyLabel="5" />
-        <Key android:codes="54" android:keyLabel="6" />
-        <Key android:codes="55" android:keyLabel="7" />
-        <Key android:codes="56" android:keyLabel="8" />
-        <Key android:codes="57" android:keyLabel="9" />
-        <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right" />
-    </Row>
-
-    <!-- 第二行：常用符号 -->
+    <!-- 第一行：常用英文标点 -->
     <Row>
         <Key android:codes="64" android:keyLabel="@" android:keyEdgeFlags="left" />
         <Key android:codes="35" android:keyLabel="#" />
@@ -32,7 +18,7 @@
         <Key android:codes="95" android:keyLabel="_" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第三行：更多符号 -->
+    <!-- 第二行 -->
     <Row>
         <Key android:codes="45" android:keyLabel="-" android:keyEdgeFlags="left" />
         <Key android:codes="43" android:keyLabel="+" />
@@ -46,7 +32,7 @@
         <Key android:codes="47" android:keyLabel="/" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第四行：更多符号 -->
+    <!-- 第三行 -->
     <Row>
         <Key android:codes="60" android:keyLabel="&lt;" android:keyEdgeFlags="left" />
         <Key android:codes="62" android:keyLabel="&gt;" />
@@ -56,19 +42,31 @@
         <Key android:codes="39" android:keyLabel="'" />
         <Key android:codes="96" android:keyLabel="`" />
         <Key android:codes="126" android:keyLabel="~" />
-        <Key android:codes="63" android:keyLabel="?" />
-        <Key android:codes="44" android:keyLabel="，" android:keyEdgeFlags="right" />
+        <Key android:codes="44" android:keyLabel="," />
+        <Key android:codes="46" android:keyLabel="." android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第五行：← 返回 + ABC + 空格 + ，+ 。+ ⌫ + ↵ → 总宽度 14+14+34+10+10+12+12=106% -->
-    <!-- 调整: 12+14+34+10+10+12+12=104% -->
-    <!-- 调整: 12+14+34+10+10+10+10=100% -->
+    <!-- 第四行：数字 -->
+    <Row>
+        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" />
+        <Key android:codes="50" android:keyLabel="2" />
+        <Key android:codes="51" android:keyLabel="3" />
+        <Key android:codes="52" android:keyLabel="4" />
+        <Key android:codes="53" android:keyLabel="5" />
+        <Key android:codes="54" android:keyLabel="6" />
+        <Key android:codes="55" android:keyLabel="7" />
+        <Key android:codes="56" android:keyLabel="8" />
+        <Key android:codes="57" android:keyLabel="9" />
+        <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- 第五行：返回 + 中文键盘 + 空格 + 逗号 + 句号 + 退格 + 回车 -->
     <Row>
         <Key android:codes="-999" android:keyLabel="←" android:keyWidth="12%p" android:keyEdgeFlags="left" />
-        <Key android:codes="-100" android:keyLabel="ABC" android:keyWidth="14%p" />
+        <Key android:codes="-105" android:keyLabel="中" android:keyWidth="14%p" />
         <Key android:codes="32" android:keyLabel="空格" android:keyWidth="34%p" />
-        <Key android:codes="44" android:keyLabel="，" android:keyWidth="10%p" />
-        <Key android:codes="46" android:keyLabel="。" android:keyWidth="10%p" />
+        <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p" />
+        <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p" />
         <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="10%p" />
         <Key android:codes="10" android:keyLabel="↵" android:keyWidth="10%p" android:keyEdgeFlags="right" />
     </Row>

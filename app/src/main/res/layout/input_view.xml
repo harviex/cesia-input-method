@@ -40,15 +40,23 @@
             android:ellipsize="end"
             android:lineSpacingMultiplier="1.2" />
 
-        <ImageButton
+        <!-- 设置按钮：齿轮图标 -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_settings"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:text="⚙"
+            android:textSize="16sp"
+            android:textColor="#555555"
+            android:backgroundTint="#EEEEEE"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="4dp"
             android:contentDescription="设置"
-            android:scaleType="centerInside"
-            android:padding="4dp" />
+            android:stateListAnimator="@null"
+            app:cornerRadius="6dp" />
     </LinearLayout>
 
     <!-- 候选词栏（中文模式显示） -->
@@ -131,7 +139,7 @@
         android:background="#E0E0E0"
         android:gravity="center_vertical">
 
-        <!-- 魔法按钮（语音修改）- ✨ AI魔法 -->
+        <!-- 魔法按钮（语音修改）-->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_magic"
             android:layout_width="0dp"
@@ -148,7 +156,21 @@
             android:layout_marginEnd="3dp"
             app:cornerRadius="8dp" />
 
-        <!-- 自动写作按钮（AI写作） -->
+        <!-- 键盘切换按钮 -->
+        <ImageButton
+            android:id="@+id/btn_keyboard_switch"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="0.6"
+            android:text="⌨"
+            android:textSize="18sp"
+            android:background="@drawable/button_background_gray"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:contentDescription="键盘切换"
+            android:layout_marginEnd="3dp" />
+
+        <!-- 剪贴板按钮 -->
         <ImageButton
             android:id="@+id/btn_clipboard"
             android:layout_width="0dp"
@@ -158,7 +180,7 @@
             android:background="@drawable/button_background_gray"
             android:scaleType="centerInside"
             android:padding="10dp"
-            android:contentDescription="AI自动写作"
+            android:contentDescription="剪贴板"
             android:layout_marginEnd="3dp" />
 
         <!-- 麦克风/语音按钮区域 -->
@@ -189,7 +211,7 @@
                 android:layout_marginEnd="4dp"
                 android:visibility="gone" />
 
-            <!-- 声波动画指示器（录音时在两个按钮之间显示） -->
+            <!-- 声波动画指示器 -->
             <View
                 android:id="@+id/v_voice_wave"
                 android:layout_width="10dp"

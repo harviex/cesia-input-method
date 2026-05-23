@@ -5,13 +5,13 @@
     android:horizontalGap="0dp"
     android:verticalGap="0dp">
 
-    <!-- 第一行：， 1 2 3 ⌫ -->
+    <!-- 第一行：， 1 2 3 重写(短按⌫/长按⌦) -->
     <Row>
         <Key android:codes="65292" android:keyLabel="，" android:keyEdgeFlags="left" />
         <Key android:codes="49" android:keyLabel="1" android:popupCharacters="ABC" />
         <Key android:codes="50" android:keyLabel="2" android:popupCharacters="DEF" />
         <Key android:codes="51" android:keyLabel="3" android:popupCharacters="GHI" />
-        <Key android:codes="-5" android:keyLabel="⌫" android:isRepeatable="true" android:keyEdgeFlags="right" />
+        <Key android:codes="-108" android:keyLabel="⌫" android:keyEdgeFlags="right" />
     </Row>
 
     <!-- 第二行：。 4 5 6 ⌦ -->
@@ -20,7 +20,7 @@
         <Key android:codes="52" android:keyLabel="4" android:popupCharacters="JKL" />
         <Key android:codes="53" android:keyLabel="5" android:popupCharacters="MNO" />
         <Key android:codes="54" android:keyLabel="6" android:popupCharacters="PQRS" />
-        <Key android:codes="-999" android:keyLabel="⌦" android:keyEdgeFlags="right" />
+        <Key android:codes="-109" android:keyLabel="⌦" android:keyEdgeFlags="right" />
     </Row>
 
     <!-- 第三行：？ 7 8 9 0 -->

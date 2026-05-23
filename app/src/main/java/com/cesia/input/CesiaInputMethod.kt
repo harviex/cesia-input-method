@@ -56,7 +56,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
-    private lateinit var btnSettings: ImageButton
+    private lateinit var btnSettings: MaterialButton
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: ImageButton
     private lateinit var btnMagic: MaterialButton
@@ -103,6 +103,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var sendKeyHandler = Handler(Looper.getMainLooper())
     private var sendKeyRunnable: Runnable? = null
 
+    // 重写按键长按检测
+    private var clearKeyLongPressTriggered = false
+    private var clearKeyHandler = Handler(Looper.getMainLooper())
+    private var clearKeyRunnable: Runnable? = null
+
     // 魔法模式（改进版：单键切换）
     private var magicMode = false
     private var magicOriginalText = ""
@@ -145,6 +150,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val KEYCODE_SWITCH_SYMBOL = -100
         const val KEYCODE_SWITCH_LANG = -101
         const val KEYCODE_BACK_KEY = -999
+        const val KEYCODE_KEYBOARD_SWITCH = -106
+        const val KEYCODE_CLIPBOARD = -107
+        const val KEYCODE_CLEAR_BEFORE = -108
+        const val KEYCODE_CLEAR_AFTER = -109
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
     }
@@ -1610,6 +1619,80 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isSymbolMode) switchToQwertyKeyboard() else switchToSymbolKeyboard()
     }
 
+    /** 键盘切换菜单（全键盘/T9/五笔） */
+    private fun showKeyboardSwitchMenu() {
+        val items = arrayOf("全键盘 (QWERTY)", "九宫格 (T9)", "中文五笔")
+        AlertDialog.Builder(this)
+            .setTitle("⌨ 键盘切换")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        // 全键盘
+                        isT9Mode = false
+                        switchToQwertyKeyboard()
+                    }
+                    1 -> {
+                        // T9 九宫格
+                        isT9Mode = true
+                        switchToT9Keyboard()
+                    }
+                    2 -> {
+                        // 五笔（暂用 T9 代替，后续可扩展）
+                        isT9Mode = true
+                        switchToT9Keyboard()
+                        updateStatus("五笔模式（T9布局）")
+                    }
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /** 切换到 T9 键盘 */
+    private fun switchToT9Keyboard() {
+        currentKeyboard = t9Keyboard
+        keyboardView.keyboard = t9Keyboard
+        isSymbolMode = false
+        isChineseMode = true
+        pinyinEngine.clear()
+        t9Engine.clear()
+        updateCandidateBar()
+        keyboardView.invalidateAllKeys()
+    }
+
+    /** 剪贴板功能 */
+    private fun handleClipboard() {
+        val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clipData = clipboardManager.primaryClip
+        if (clipData == null || clipData.itemCount == 0) {
+            updateStatus("⚠️ 剪贴板为空")
+            return
+        }
+        val items = mutableListOf<String>()
+        for (i in 0 until clipData.itemCount) {
+            val text = clipData.getItemAt(i).coerceToText(this)?.toString() ?: continue
+            if (text.isNotBlank()) items.add(text)
+        }
+        if (items.isEmpty()) {
+            updateStatus("⚠️ 剪贴板为空")
+            return
+        }
+        if (items.size == 1) {
+            // 只有一条，直接插入
+            currentInputConnection?.commitText(items[0], 1)
+            updateStatus("✅ 已粘贴")
+        } else {
+            // 多条，显示选择
+            AlertDialog.Builder(this)
+                .setTitle("📋 剪贴板")
+                .setItems(items.toTypedArray()) { _, which ->
+                    currentInputConnection?.commitText(items[which], 1)
+                }
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
+
     // ======================== 长按 Fn 效果 ========================
 
     private fun startLongPressDetection(key: Keyboard.Key) {
@@ -1653,6 +1736,31 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         sendKeyRunnable = null
     }
 
+    /** 重写按键长按检测：短按清光标前，长按清光标后 */
+    private fun startClearKeyLongPress() {
+        cancelClearKeyLongPress()
+        clearKeyRunnable = Runnable {
+            clearKeyLongPressTriggered = true
+            // 长按：清除光标后文字
+            val ic = currentInputConnection
+            if (ic != null) {
+                val textAfter = ic.getTextAfterCursor(1000, 0)
+                if (!textAfter.isNullOrEmpty()) {
+                    ic.deleteSurroundingText(0, textAfter.length)
+                    updateStatus("⌦ 已清除光标后文字")
+                }
+            }
+            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }.also {
+            clearKeyHandler.postDelayed(it, 500)
+        }
+    }
+
+    private fun cancelClearKeyLongPress() {
+        clearKeyRunnable?.let { clearKeyHandler.removeCallbacks(it) }
+        clearKeyRunnable = null
+    }
+
     // ======================== KeyboardView 回调 ========================
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
@@ -1670,6 +1778,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             KEYCODE_BACK_KEY -> {
                 // ← 返回键：切换回字母键盘
                 switchToQwertyKeyboard()
+            }
+            KEYCODE_KEYBOARD_SWITCH -> showKeyboardSwitchMenu()
+            KEYCODE_CLIPBOARD -> handleClipboard()
+            KEYCODE_CLEAR_BEFORE -> {
+                // 重写按键：短按清除光标前文字（长按在 startClearKeyLongPress 中处理）
+                if (clearKeyLongPressTriggered) {
+                    clearKeyLongPressTriggered = false
+                    return
+                }
+                val ic = currentInputConnection
+                if (ic != null) {
+                    val textBefore = ic.getTextBeforeCursor(1000, 0)
+                    if (!textBefore.isNullOrEmpty()) {
+                        ic.deleteSurroundingText(textBefore.length, 0)
+                    }
+                }
+            }
+            KEYCODE_CLEAR_AFTER -> {
+                // 重写按键（长按）：清除光标后文字
+                val ic = currentInputConnection
+                if (ic != null) {
+                    val textAfter = ic.getTextAfterCursor(1000, 0)
+                    if (!textAfter.isNullOrEmpty()) {
+                        ic.deleteSurroundingText(0, textAfter.length)
+                    }
+                }
             }
             -1 -> {
                 isCapsLock = !isCapsLock
@@ -1756,6 +1890,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 startLongPressDetection(key)
             }
         }
+        // 重写按键长按检测（短按清光标前，长按清光标后）
+        if (primaryCode == KEYCODE_CLEAR_BEFORE) {
+            startClearKeyLongPress()
+        }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
                 override fun run() {
@@ -1775,12 +1913,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
         cancelSendKeyLongPress()
+        cancelClearKeyLongPress()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
     }
 
     override fun onText(text: CharSequence?) {
         cancelLongPress()
+        cancelClearKeyLongPress()
         currentInputConnection?.commitText(text, 1)
     }
 

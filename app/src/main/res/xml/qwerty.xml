@@ -58,16 +58,15 @@
         <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="15%p" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第五行：符号切换 + 中/英切换 + 逗号 + 空格 + 句号 + 回车 + 发送(纸飞机) -->
-    <!-- 总宽度: 10+8+8+28+8+10+28=100%，完全填满不留空隙 -->
+    <!-- 第五行：键盘切换 + 符号切换 + 中/英 + 剪贴板 + 空格 + 发送 -->
     <Row>
-        <Key android:codes="-100" android:keyLabel="符" android:keyWidth="10%p" android:keyEdgeFlags="left" />
+        <Key android:codes="-106" android:keyLabel="⌨" android:keyWidth="8%p" android:keyEdgeFlags="left" />
+        <Key android:codes="-100" android:keyLabel="符" android:keyWidth="8%p" />
         <Key android:codes="-101" android:keyLabel="中" android:keyWidth="8%p" />
-        <Key android:codes="44" android:keyLabel="，" android:keyWidth="8%p" />
-        <Key android:codes="32" android:keyLabel="空格" android:keyWidth="28%p" />
-        <Key android:codes="46" android:keyLabel="。" android:keyWidth="8%p" />
-        <Key android:codes="10" android:keyLabel="↵" android:keyWidth="10%p" />
-        <Key android:codes="-200" android:keyLabel="✈" android:keyWidth="28%p" android:keyEdgeFlags="right" />
+        <Key android:codes="-107" android:keyLabel="📋" android:keyWidth="8%p" />
+        <Key android:codes="32" android:keyLabel="空格" android:keyWidth="32%p" />
+        <Key android:codes="-200" android:keyLabel="✈" android:keyWidth="20%p" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyWidth="16%p" android:keyEdgeFlags="right" />
     </Row>
 
 </Keyboard>
