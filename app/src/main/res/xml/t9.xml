@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+    android:keyWidth="25%p"
+    android:keyHeight="48dp"
+    android:verticalGap="4dp">
+
+    <!-- 第一行：1-4 -->
+    <Row>
+        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" />
+        <Key android:codes="50" android:keyLabel="2\nabc" />
+        <Key android:codes="51" android:keyLabel="3\ndef" />
+        <Key android:codes="52" android:keyLabel="4\nghi" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- 第二行：5-8 -->
+    <Row>
+        <Key android:codes="53" android:keyLabel="5\njkl" android:keyEdgeFlags="left" />
+        <Key android:codes="54" android:keyLabel="6\nmno" />
+        <Key android:codes="55" android:keyLabel="7\npqrs" />
+        <Key android:codes="56" android:keyLabel="8\ntuv" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- 第三行：9-0 -->
+    <Row>
+        <Key android:codes="57" android:keyLabel="9\nwxyz" android:keyEdgeFlags="left" />
+        <Key android:codes="48" android:keyLabel="0" />
+        <Key android:codes="32" android:keyLabel="空格" />
+        <Key android:codes="-5" android:keyLabel="⌫" android:keyEdgeFlags="right" />
+    </Row>
+
+    <!-- 第四行：符号+语言+逗号+句号+回车+发送 -->
+    <Row>
+        <Key android:codes="-100" android:keyLabel="符" android:keyWidth="15%p" android:keyEdgeFlags="left" />
+        <Key android:codes="-101" android:keyLabel="中" android:keyWidth="15%p" />
+        <Key android:codes="44" android:keyLabel="，" android:keyWidth="15%p" />
+        <Key android:codes="46" android:keyLabel="。" android:keyWidth="15%p" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyWidth="15%p" />
+        <Key android:codes="-200" android:keyLabel="✈" android:keyWidth="25%p" android:keyEdgeFlags="right" />
+    </Row>
+
+</Keyboard>

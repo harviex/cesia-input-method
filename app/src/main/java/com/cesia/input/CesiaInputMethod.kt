@@ -46,9 +46,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 视图
     private lateinit var keyboardView: com.cesia.input.ui.CustomKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
+    private lateinit var t9Keyboard: Keyboard
     private lateinit var symbolKeyboardEn: Keyboard
     private lateinit var symbolKeyboardCn: Keyboard
     private var currentKeyboard: Keyboard? = null
+    private var isT9Mode = false  // 当前是否是 T9 键盘
 
     private lateinit var micButton: MaterialButton
     private lateinit var micButtonContainer: LinearLayout
@@ -211,7 +213,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             symbolKeyboardCn = Keyboard(this, R.xml.symbols_cn)
         } catch (e: Exception) {
             Log.e("Cesia", "加载中文符号键盘失败", e)
-            symbolKeyboardCn = symbolKeyboardEn // fallback
+            symbolKeyboardCn = symbolKeyboardEn
+        }
+        try {
+            t9Keyboard = Keyboard(this, R.xml.t9)
+        } catch (e: Exception) {
+            Log.e("Cesia", "加载T9键盘失败", e)
+            t9Keyboard = qwertyKeyboard
         }
         currentKeyboard = qwertyKeyboard
 
@@ -796,6 +804,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun toggleChineseMode() {
         isChineseMode = !isChineseMode
+        isT9Mode = false  // 语言切换后重置为全键盘
         if (isChineseMode) {
             isSymbolMode = false
             currentKeyboard = qwertyKeyboard
@@ -1108,9 +1117,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             gridView.setOnItemClickListener { _, _, position, _ ->
                 val text = items[position]
-                currentInputConnection?.commitText(text, 1)
-                updateStatus("📨 已引用发送内容")
                 popup.dismiss()
+                // 关闭 popup 后再写入，避免焦点被 popup 抢走
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        currentInputConnection?.commitText(text, 1)
+                        updateStatus("📨 已引用发送内容")
+                    } catch (e: Exception) {
+                        Log.e("Cesia", "插入发送内容失败", e)
+                    }
+                }, 100)
             }
 
             popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
@@ -1470,22 +1486,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ======================== 键盘切换 ========================
 
-    private fun switchToSymbolKeyboard() {
-        if (!isSymbolMode) {
-            isSymbolMode = true
-            // 使用语言对应的符号键盘
-            val symKbd = if (isChineseMode) symbolKeyboardCn else symbolKeyboardEn
-            currentKeyboard = symKbd
-            keyboardView.keyboard = symKbd
+    private fun switchToQwertyKeyboard() {
+        if (isSymbolMode) {
+            isSymbolMode = false
+            currentKeyboard = if (isT9Mode) t9Keyboard else qwertyKeyboard
+            keyboardView.keyboard = currentKeyboard
             keyboardView.invalidateAllKeys()
         }
     }
 
-    private fun switchToQwertyKeyboard() {
-        if (isSymbolMode) {
-            isSymbolMode = false
-            currentKeyboard = qwertyKeyboard
-            keyboardView.keyboard = qwertyKeyboard
+    private fun switchToSymbolKeyboard() {
+        if (!isSymbolMode) {
+            isSymbolMode = true
+            val symKbd = if (isChineseMode) symbolKeyboardCn else symbolKeyboardEn
+            currentKeyboard = symKbd
+            keyboardView.keyboard = symKbd
             keyboardView.invalidateAllKeys()
         }
     }
@@ -1668,8 +1683,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentInputConnection?.commitText(text, 1)
     }
 
-    override fun swipeLeft() {}
-    override fun swipeRight() {}
+    override fun swipeLeft() {
+        // 左滑：T9 → 全屏，或全屏 → T9
+        toggleKbdMode()
+    }
+
+    override fun swipeRight() {
+        // 右滑：全屏 → T9，或 T9 → 全屏
+        toggleKbdMode()
+    }
+
+    private fun toggleKbdMode() {
+        if (isSymbolMode) return  // 符号模式下不切换
+        isT9Mode = !isT9Mode
+        pinyinEngine.clear()
+        candidateBar.visibility = View.GONE
+        currentKeyboard = if (isT9Mode) t9Keyboard else qwertyKeyboard
+        keyboardView.keyboard = currentKeyboard
+        keyboardView.invalidateAllKeys()
+        updateStatus(if (isT9Mode) "T9 键盘" else "全键盘")
+    }
     override fun swipeDown() {}
     override fun swipeUp() {}
 
