@@ -39,20 +39,10 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          # Format: v1.0.{commit_count}
-          # versionName = 1.0.{commit_count} (用户可见版本号)
-          # versionCode = commit_count (内部递增整数)
-          # build.gradle 中的 getVersionCode()/getVersionName() 会自动读取 git commit count
-          # 这里仅用于 Release tag 命名和验证
-          COUNT=$(git rev-list --count HEAD)
-          if [ "$COUNT" -lt 1 ]; then
-            echo "⚠️ git rev-list returned $COUNT, forcing to 1"
-            COUNT=1
-          fi
-          VERSION="1.0.$COUNT"
+          VERSION="1.1.1"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "✅ Version: $VERSION (commit count: $COUNT)"
+          echo "✅ Version: $VERSION"
 
       - name: Build APK with Gradle
         run: ./gradlew assembleDebug --no-daemon

@@ -24,8 +24,7 @@ def getVersionCode() {
 }
 
 def getVersionName() {
-    def count = getVersionCode()
-    return "1.0.$count"
+    return "1.1.1"
 }
 
 android {
