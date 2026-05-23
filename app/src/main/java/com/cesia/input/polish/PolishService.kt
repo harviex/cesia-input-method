@@ -23,7 +23,7 @@ class PolishService(
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
@@ -107,11 +107,14 @@ class PolishService(
             })
         }
 
+        // 根据文本长度动态设置 max_tokens，长文本需要更多 token
+        val maxTokens = (text.length * 2).coerceIn(512, 2048)
+
         val json = JSONObject().apply {
             put("model", model)
             put("messages", messages)
             put("temperature", 0.3)
-            put("max_tokens", 512)
+            put("max_tokens", maxTokens)
         }
 
         val body = json.toString().toRequestBody("application/json".toMediaType())
@@ -317,14 +320,15 @@ class PolishService(
             })
         }
 
-        // 魔法模式也支持多模型重试
+        // 魔法模式也支持多模型重试，prompt 包含原文需要更大 token
+        val maxTokens = (prompt.length * 2).coerceIn(512, 4096)
         val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
         for (model in models.distinct()) {
             val json = JSONObject().apply {
                 put("model", model)
                 put("messages", messages)
                 put("temperature", 0.3)
-                put("max_tokens", 512)
+                put("max_tokens", maxTokens)
             }
 
             val body = json.toString().toRequestBody("application/json".toMediaType())

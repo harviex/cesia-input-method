@@ -254,10 +254,20 @@ class TypelessEngine(
                         val cleaned = cleanPolishedText(result.polishedText)
                         if (cleaned.isNotEmpty()) cleaned else text
                     }
-                    else -> text
+                    is PolishService.PolishResult.Error -> {
+                        log("⚠️ 润色失败: ${result.message}，使用原文")
+                        text
+                    }
+                    is PolishService.PolishResult.EmptyInput -> text
+                    null -> {
+                        log("⚠️ 润色服务不可用，使用原文")
+                        text
+                    }
                 }
+                // 最终保護：如果 finalText 为空，使用原文
+                val safeText = finalText.ifEmpty { text }
                 withContext(Dispatchers.Main) {
-                    callback(finalText)
+                    callback(safeText)
                 }
             } catch (e: Exception) {
                 log("❌ 润色异常: ${e.message}")
