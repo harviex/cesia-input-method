@@ -435,9 +435,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tv.setTextColor(0xFFE0E0E0.toInt())
             }
             (btnClipboardAction.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
-            // 黑暗模式按键样式
-            keyboardView.keyBackground = resources.getDrawable(R.drawable.key_background_dark, null)
-            keyboardView.keyTextColor = 0xFFE0E0E0.toInt()
+            // 黑暗模式按键样式 - 通过重新加载键盘触发重绘
+            keyboardView.invalidateAllKeys()
             // 底部按钮栏
             (btnRewrite.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
@@ -450,9 +449,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tv.setTextColor(0xFF333333.toInt())
             }
             (btnClipboardAction.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
-            // 明亮模式按键样式
-            keyboardView.keyBackground = resources.getDrawable(R.drawable.key_background, null)
-            keyboardView.keyTextColor = 0xFF333333.toInt()
+            keyboardView.invalidateAllKeys()
             // 底部按钮栏
             (btnRewrite.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
         }
