@@ -63,7 +63,7 @@ class PolishService(
 
     /** 判断是否为 OpenRouter URL */
     private fun isOpenRouterUrl(url: String): Boolean {
-        return url.contains("openrouter.ai")
+        return url.contains("openrouter.ai") || url.contains("api.cesia.cc")
     }
 
     /** 调用 OpenRouter API，支持429重试和备用模型 */
