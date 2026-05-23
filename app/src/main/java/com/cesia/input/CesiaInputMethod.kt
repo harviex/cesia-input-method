@@ -1227,6 +1227,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Log.e("Cesia", "showSentMessagesPopup 异常", e)
         }
 
+
+    }
+
+
     private fun showCandidateDropdown() {
         val candidates = if (isT9Mode && t9Engine.hasCandidates()) {
             t9Engine.getCandidates()
@@ -1242,18 +1246,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         
         try {
-            val items = candidates.take(50) // 最多显示50个
+            val items = candidates.take(50)
             val displayItems = items.mapIndexed { index, word -> 
                 "${index + 1}. $word" 
             }.toTypedArray()
             
-            AlertDialog.Builder(this)
+            androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("候选词（共${items.size}个）")
                 .setItems(displayItems) { dialog, which ->
                     val selected = items[which]
                     currentInputConnection?.commitText(selected, 1)
                     
-                    // 更新引擎状态
                     if (isT9Mode) {
                         t9Engine.selectCandidate(which)
                         updateT9CandidateBar()
@@ -1266,11 +1269,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 .setNegativeButton("取消", null)
                 .show()
         } catch (e: Exception) {
-            Log.e("Cesia", "showCandidateDropdown 异常", e)
+            android.util.Log.e("Cesia", "showCandidateDropdown 异常", e)
         }
     }
 
-    }
 
     // ======================== 魔法模式（语音修改） ========================
 

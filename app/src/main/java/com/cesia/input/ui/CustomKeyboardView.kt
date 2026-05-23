@@ -108,11 +108,11 @@ class CustomKeyboardView @JvmOverloads constructor(
     }
 
     // 这些方法由 CesiaInputMethod 实现
-    private fun swipeLeft() {
+    override fun swipeLeft() {
         (context as? com.cesia.input.CesiaInputMethod)?.swipeLeft()
     }
     
-    private fun swipeRight() {
+    override fun swipeRight() {
         (context as? com.cesia.input.CesiaInputMethod)?.swipeRight()
     }
 }
