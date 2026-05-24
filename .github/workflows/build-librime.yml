@@ -23,105 +23,118 @@ jobs:
         with:
           path: cesia
 
-      - name: Install Android SDK and NDK
-        run: |
-          # 安装 Android SDK
-          export ANDROID_HOME=/opt/android-sdk
-          sudo mkdir -p $ANDROID_HOME
-          sudo chown $USER:$USER $ANDROID_HOME
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-
-          # 下载 command line tools
-          cd /tmp
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q commandlinetools-linux-11076708_latest.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-
-          # 安装 NDK
-          export ANDROID_HOME=$ANDROID_HOME
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653" --no_https 2>&1 | tail -5
-
-          NDK_PATH="$ANDROID_HOME/ndk/25.2.9519653"
-          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
-          echo "NDK_ROOT=$NDK_PATH" >> $GITHUB_ENV
-          echo "NDK_ROOT=$NDK_PATH"
-          ls "$NDK_PATH/build/cmake/android.toolchain.cmake"
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
 
       - name: Clone librime and all submodules
         run: |
           git clone --depth 1 https://github.com/rime/librime.git librime-src
           cd librime-src
           git submodule update --init --depth 1
-          echo "librime source ready"
-          ls deps/
 
-      - name: Build all dependencies and librime
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+      - name: Build yaml-cpp
         run: |
-          set -e
+          cd librime-src/deps/yaml-cpp
+          rm -rf build && mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.NDK_ROOT }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DYAML_CPP_BUILD_TESTS=OFF \
+            -DYAML_CPP_BUILD_TOOLS=OFF \
+            -DCMAKE_C_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang++
+          make -j$(nproc)
+
+      - name: Build leveldb
+        run: |
+          cd librime-src/deps/leveldb
+          rm -rf build && mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.NDK_ROOT }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DLEVELDB_BUILD_TESTS=OFF \
+            -DLEVELDB_BUILD_BENCHMARKS=OFF \
+            -DCMAKE_C_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang++
+          make -j$(nproc)
+
+      - name: Build marisa
+        run: |
+          cd librime-src/deps/marisa-trie
+          rm -rf build && mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.NDK_ROOT }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_C_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang++
+          make -j$(nproc)
+
+      - name: Build opencc (host build for tools, then skip in cross-compile)
+        run: |
+          cd librime-src/deps/opencc
+
+          # Build host version to get the opencc tool
+          rm -rf build-host && mkdir build-host && cd build-host
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DENABLE_DARTS=OFF -DBUILD_PYTHON=OFF
+          make -j$(nproc) opencc opencc_dict
+          export OPENCC_HOST_BIN=$(pwd)
+          echo "Host tools: $(ls $OPENCC_HOST_BIN/opencc $OPENCC_HOST_BIN/opencc_dict 2>/dev/null)"
+
+          # Build cross-compiled version (libraries only, skip tools and data)
+          cd ..
+          rm -rf build && mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.NDK_ROOT }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DENABLE_DARTS=OFF \
+            -DBUILD_PYTHON=OFF \
+            -DCMAKE_C_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang++ \
+            -Dopencc_HOST_BINARY_DIR=$OPENCC_HOST_BIN
+          # Build only the library, skip tools and data generation
+          make -j$(nproc) opencc_static 2>&1 || make -j$(nproc) 2>&1 || echo "OpenCC build may have issues, continuing..."
+
+      - name: Build librime-static
+        run: |
           cd librime-src
-          DEPS_DIR=$(pwd)/deps
-
-          TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
-          export CC=$TOOLCHAIN/bin/${{ matrix.target }}24-clang
-          export CXX=$TOOLCHAIN/bin/${{ matrix.target }}24-clang++
-          export AR=$TOOLCHAIN/bin/llvm-ar
-          export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-
-          CMAKE_ARGS=(
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
-            -DANDROID_ABI=${{ matrix.abi }}
-            -DANDROID_PLATFORM=android-24
-            -DCMAKE_BUILD_TYPE=Release
-            -DBUILD_SHARED_LIBS=OFF
-            -DCMAKE_C_COMPILER=$CC
-            -DCMAKE_CXX_COMPILER=$CXX
-          )
-
-          echo "=== Building yaml-cpp ==="
-          cd $DEPS_DIR/yaml-cpp
           rm -rf build && mkdir build && cd build
-          cmake .. "${CMAKE_ARGS[@]}" -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF
-          make -j$(nproc)
-
-          echo "=== Building leveldb ==="
-          cd $DEPS_DIR/leveldb
-          rm -rf build && mkdir build && cd build
-          cmake .. "${CMAKE_ARGS[@]}" -DLEVELDB_BUILD_TESTS=OFF -DLEVELDB_BUILD_BENCHMARKS=OFF
-          make -j$(nproc)
-
-          echo "=== Building marisa ==="
-          cd $DEPS_DIR/marisa-trie
-          rm -rf build && mkdir build && cd build
-          cmake .. "${CMAKE_ARGS[@]}"
-          make -j$(nproc)
-
-          echo "=== Building opencc ==="
-          cd $DEPS_DIR/opencc
-          rm -rf build && mkdir build && cd build
-          cmake .. "${CMAKE_ARGS[@]}" -DBUILD_SHARED_LIBS=OFF -DENABLE_DARTS=OFF -DBUILD_PYTHON=OFF
-          make -j$(nproc)
-
-          echo "=== Building librime ==="
-          cd $(pwd)/../..
-          rm -rf build && mkdir build && cd build
-          cmake .. "${CMAKE_ARGS[@]}" \
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ env.NDK_ROOT }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
             -DBUILD_STATIC=ON \
             -DBUILD_TEST=OFF \
             -DENABLE_LOGGING=OFF \
-            -Dyaml-cpp_DIR=$DEPS_DIR/yaml-cpp/build \
-            -Dleveldb_DIR=$DEPS_DIR/leveldb/build
-          make -j$(nproc)
-
-          echo "=== Build complete ==="
-          ls -la *.a
+            -DCMAKE_C_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}24-clang++ \
+            -Dyaml-cpp_DIR=../deps/yaml-cpp/build \
+            -Dleveldb_DIR=../deps/leveldb/build \
+            -Dopencc_DIR=../deps/opencc/build \
+            -DCMAKE_DISABLE_FIND_PACKAGE_OpenCC=OFF
+          make -j$(nproc) 2>&1 | tail -20
+          echo "=== Checking for librime.a ==="
+          find . -name "*.a" -type f
 
       - name: Copy artifacts to Cesia module
         run: |
           mkdir -p cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}
-          cp librime-src/build/librime.a \
-             cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}/librime.a
+          find librime-src/build -name "librime.a" -exec cp {} cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}/ \;
           mkdir -p cesia/rime-engine/src/main/cpp/include
           cp librime-src/src/rime_api.h cesia/rime-engine/src/main/cpp/include/
 

@@ -16,5 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CesiaInputMethod"
 include ':app'
-// rime-engine 模块暂时排除，等 librime 编译问题解决后再启用
-// include ':rime-engine'
+include ':rime-engine'

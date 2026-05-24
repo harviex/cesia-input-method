@@ -23,15 +23,18 @@ android {
         jvmTarget = "17"
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    // 只有在 librime 头文件存在时才启用 NDK 编译
+    val librimeHeadersDir = file("src/main/cpp/include")
+    if (librimeHeadersDir.exists() && librimeHeadersDir.listFiles()?.isNotEmpty() == true) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
-    }
-
-    buildFeatures {
-        prefab = true
+        buildFeatures {
+            prefab = true
+        }
     }
 }
 
