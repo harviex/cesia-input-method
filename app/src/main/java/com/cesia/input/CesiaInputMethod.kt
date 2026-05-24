@@ -833,7 +833,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun handleChineseInput(primaryCode: Int) {
         val c = primaryCode.toChar()
         if (c in 'a'..'z') {
+            Log.d("Cesia", "handleChineseInput: key=$c, rimeInit=${rimeEngine.isInitialized}, rimeAvail=${rimeEngine.isAvailable}")
             val pinyin = rimeEngine.inputLetter(c)
+            Log.d("Cesia", "handleChineseInput: pinyin=$pinyin, composing=${rimeEngine.isComposing}, candidates=${rimeEngine.candidates.size}")
             updateCandidateBar()
             updateStatus("拼音: $pinyin")
         } else if (c == ' ') {

@@ -21,23 +21,30 @@ object RimeJni {
     fun initialize(context: Context): Boolean {
         if (initialized) return true
         try {
-            // 加载 native 库（动态链接 C++ 运行时）
+            // 加载 native 库
             System.loadLibrary("rime_jni")
-            System.loadLibrary("c++_shared")  // 确保 C++ 运行时
-            Log.i(TAG, "native 库加载成功")
+            Log.i(TAG, "librime_jni.so 加载成功")
 
             val sharedDir = context.filesDir.absolutePath + "/rime"
             val userDir = context.filesDir.absolutePath + "/rime"
             // 确保目录存在
             java.io.File(sharedDir).mkdirs()
             java.io.File(userDir).mkdirs()
+            
+            // 验证词库文件是否存在
+            val dictFile = java.io.File(sharedDir, "pinyin.dict.yaml")
+            val schemaFile = java.io.File(sharedDir, "pinyin.schema.yaml")
+            val defaultFile = java.io.File(sharedDir, "default.yaml")
+            Log.i(TAG, "dict存在=${dictFile.exists()} size=${dictFile.length()}")
+            Log.i(TAG, "schema存在=${schemaFile.exists()} size=${schemaFile.length()}")
+            Log.i(TAG, "default存在=${defaultFile.exists()} size=${defaultFile.length()}")
+            
             nativeStartup(sharedDir, userDir)
             initialized = true
             Log.i(TAG, "Rime native 引擎初始化成功, shared=$sharedDir")
             return true
         } catch (e: Throwable) {
             Log.e(TAG, "Rime native 引擎初始化失败", e)
-            // 绝不重新抛出，避免崩溃进程
             initialized = false
             return false
         }
@@ -78,6 +85,7 @@ object RimeJni {
             val preedit = nativeGetPreedit()
             if (preedit.isNullOrEmpty()) "" else preedit
         } catch (e: Throwable) {
+            Log.e(TAG, "getComposingText failed", e)
             ""
         }
     }
@@ -87,10 +95,12 @@ object RimeJni {
         return try {
             val arr = nativeGetCandidates()
             val count = nativeGetCandidateCount()
+            Log.d(TAG, "getCandidates: count=$count, initialized=$initialized")
             (0 until count).map { i ->
                 arr?.get(i)?.toString() ?: ""
             }.filter { it.isNotEmpty() }
         } catch (e: Throwable) {
+            Log.e(TAG, "getCandidates failed", e)
             emptyList()
         }
     }
