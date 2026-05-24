@@ -24,6 +24,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.cesia.input.engine.PinyinEngine
 import com.cesia.input.engine.TypelessEngine
+import com.cesia.input.engine.rime.RimeEngine
+import com.cesia.input.engine.rime.RimeJni
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
 import com.google.android.material.button.MaterialButton
@@ -73,6 +75,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var typelessEngine: TypelessEngine? = null
     private lateinit var statsManager: PolishStatsManager
     private lateinit var pinyinEngine: PinyinEngine
+    private var rimeEngine: RimeEngine? = null
+    private var rimeEngineAvailable = false
 
     // 状态
     private var isRecording = false
@@ -224,6 +228,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
         pinyinEngine = PinyinEngine(this)
+
+        // 初始化 Rime 引擎（stub 实现，后续替换为真实 librime）
+        try {
+            rimeEngine = RimeEngine(this)
+            rimeEngineAvailable = rimeEngine?.initialize() ?: false
+            if (rimeEngineAvailable) {
+                Log.i("Cesia", "Rime 引擎初始化成功")
+            } else {
+                Log.w("Cesia", "Rime 引擎初始化失败，回退到内置拼音引擎")
+                rimeEngine = null
+            }
+        } catch (e: Exception) {
+            Log.w("Cesia", "Rime 引擎初始化异常: ${e.message}")
+            rimeEngine = null
+            rimeEngineAvailable = false
+        }
+
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
                 Handler(Looper.getMainLooper()).post { updateStatus(msg) }
@@ -1698,6 +1719,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
         typelessEngine?.destroy()
         typelessEngine = null
+        rimeEngine?.shutdown()
+        rimeEngine = null
         super.onDestroy()
     }
 
