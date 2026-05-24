@@ -328,18 +328,19 @@ class SettingsActivity : AppCompatActivity() {
         val syncTime = if (info.lastSync > 0) {
             SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(info.lastSync))
         } else {
-            "从未同步"
+            "从未下载"
         }
-        tvDictInfo?.text = "字典: ${info.dictCount} 条 | 词组: ${info.phraseCount} 条\n" +
-                "大小: ${formatSize(info.dictSize + info.phrasesSize)} | 来源: ${info.source}\n" +
-                "版本: ${info.version} | 同步: $syncTime"
-    }
-
-    private fun formatSize(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "${bytes}B"
-            bytes < 1024 * 1024 -> "${bytes / 1024}KB"
-            else -> "${bytes / 1024 / 1024}MB"
+        val statusText = if (info.downloaded) {
+            "词库: ${formatSize(info.dictSize)} | 词条: ${info.dictCount} 条\n来源: ${info.source}\n同步: $syncTime"
+        } else {
+            "词库: 使用内置精简版 (~1000字)\n提示: 可下载完整词库获得更好的输入体验\n来源: 内置"
+        }
+        tvDictInfo?.text = statusText
+        // 更新按钮文字
+        if (info.downloaded) {
+            btnDownloadDict?.text = "🔄 更新词库"
+        } else {
+            btnDownloadDict?.text = "📥 下载词库"
         }
     }
 
@@ -347,8 +348,11 @@ class SettingsActivity : AppCompatActivity() {
         btnDownloadDict?.isEnabled = false
         btnDownloadDict?.text = "下载中..."
         tvStatus.text = "⏳ 正在下载词库..."
+        appendLog("📥 开始下载雾凇拼音词库（~16MB）...")
+        appendLog("📋 词库来源：rime-ice (iDvel/rime-ice)")
+        appendLog("⚖️  许可证：GPL-3.0（词库数据，不影响本应用）")
 
-        dictManager.downloadDict(
+        dictManager.downloadRimeDict(
             onProgress = { msg ->
                 runOnUiThread {
                     tvStatus.text = msg
@@ -358,7 +362,7 @@ class SettingsActivity : AppCompatActivity() {
             onComplete = { success, msg ->
                 runOnUiThread {
                     btnDownloadDict?.isEnabled = true
-                    btnDownloadDict?.text = "📥下载"
+                    btnDownloadDict?.text = if (success) "🔄 更新词库" else "📥 重新下载"
                     tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
                     appendLog(msg)
                     refreshDictInfo()

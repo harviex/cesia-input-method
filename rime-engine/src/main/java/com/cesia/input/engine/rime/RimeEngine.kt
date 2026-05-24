@@ -96,6 +96,15 @@ class RimeEngine(private val context: Context) : InputEngine {
         isInitialized = false
     }
 
+    /**
+     * 热重载：关闭并重新初始化（词库下载完后调用）
+     */
+    fun reload(): Boolean {
+        Log.i(TAG, "Rime 引擎热重载...")
+        shutdown()
+        return initialize()
+    }
+
     // --- 会话管理 ---
 
     override fun createSession(): RimeSession {

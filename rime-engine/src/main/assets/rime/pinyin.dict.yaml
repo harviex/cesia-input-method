@@ -5,299 +5,950 @@ version: "1.1.1"
 sort: by_weight
 ...
 
-# 精简字表（完整版请通过设置页下载雾凇拼音词库）
-a	啊 阿
-ai	爱 安
-ba	把 不 吧 八
-bai	白 百
-ban	半 班
-bao	报 保
-bei	被 北 本
-bi	比 必 笔
-bian	边 变
-bie	别
-bo	播 博
-bu	不 部 步
-cai	才 菜
-can	参 残
-cang	藏
-cao	草
-cha	查 差
-chan	产 缠
-chang	长 常 场
-chao	朝 超
-che	车
-chen	陈 沉
-cheng	成 城 程
-chi	吃 持
-chong	重 冲
-chou	抽
-chu	出 处 除
-chuan	传 川
-chun	春
-ci	次 此 词
-cong	从 聪
-cuo	错
-da	大 打
-dai	代 带 待
-dan	但 单 担
-dao	到 道 导
-de	的 得
-deng	等 登
-di	地 第 低
-dian	点 电
-ding	定 顶
-dong	东 动 懂
-dou	都 斗
-du	读 独 度
-duan	段 短
-dui	对
-duo	多 朵
-e	额 恶
-er	而 儿 二
-fa	发 法 反
-fan	饭 反 翻
-fang	方 放 房
-fei	飞 非 费
-fen	分 份
-feng	风 封
-fu	父 夫 服 复 负
-gai	该 改 概
-gan	干 感 敢
-gang	刚 钢
-gao	高 告 稿
-ge	个 各 歌 格
-gei	给
-gong	公 工 功 共
-gu	古 故 顾 股
-gua	挂
-guan	关 观 管
-gui	贵 鬼 规
-guo	国 过 果
-hai	还 海 害
-han	汉 寒 喊 含
-hao	好 号 毫
-he	和 何 合 河
-hen	很 恨 狠
-hong	红 洪
-hou	后 候 厚
-hu	乎 呼 胡 湖
-hua	话 花 化 画
-huan	还 换 欢 环
-huang	黄 皇 荒
-hui	会 回 灰 辉
-huo	或 火 活 货
-ji	几 己 及 即 机 记 计 积 基 激 际
-jia	家 加 价 假
-jian	见 间 件 建
-jiang	将 讲 江
-jiao	叫 教 觉 角
-jie	结 接 节 姐 解 界
-jin	进 今 金 近 仅
-jing	经 京 精 惊 静
-jiu	就 九 久 酒
-ju	举 句 具 局
-jue	决 觉 绝
-jun	军 君
-kan	看 刊 砍
-kao	考 靠
-ke	可 科 克 刻
-kong	空 孔 恐
-kou	口 扣
-ku	苦 库
-kuai	快 块
-kui	亏
-kun	困 昆
-la	拉 啦
-lai	来 赖
-lan	蓝 兰 栏
-lang	浪 郎
-lao	老 劳 牢
-le	了 乐
-lei	类 累 泪
-leng	冷
-li	里 力 立 理 利 离
-lian	连 脸 练 联
-liang	两 亮 量 良
-liao	了 料 列
-lie	列 烈 猎
-lin	林 临 邻
-ling	另 领 零 令
-liu	六 流 留
-long	龙 隆
-lou	楼 漏
-lu	路 陆 录 绿
-luan	乱
-lun	论 轮
-luo	落 罗 络
-lv	绿 率 旅
-ma	吗 马 妈
-mai	买 卖
-man	满 慢 漫
-mang	忙 盲
-mao	毛 猫 冒
-me	么
-mei	没 每 美 妹
-men	们 门
-mi	米 密 迷
-mian	面 免 棉
-min	民 敏
-ming	名 明 命
-mo	么 莫 摸
-mou	某
-mu	母 目 木 牧
-na	那 拿 哪 纳
-nan	男 南 难
-nao	脑 闹
-ne	呢
-nei	内 那
-neng	能
-ni	你 尼 泥
-nian	年 念
-niang	娘
-niao	鸟
-nin	您
-ning	宁 凝
-niu	牛 扭
-nong	农 浓
-nu	努 怒
-nv	女
-ou	欧 偶
-pa	怕 爬
-pai	排 拍 派
-pan	盘 判 叛
-pang	旁 胖
-pao	跑 泡
-pei	配 培 陪
-peng	朋 碰 蓬
-pi	皮 匹 批 疲
-pian	片 便 骗
-ping	平 评 苹 凭
-po	破 婆
-pu	普 铺 葡
-qi	起 其 七 气 汽 器
-qian	前 千 钱 签 浅
-qiang	强 墙 抢
-qiao	桥 巧 敲 瞧
-qin	亲 琴 勤
-qing	请 情 清 晴 轻
-qiu	求 球 秋
-qu	去 取 区 趣 曲
-quan	全 权 泉 拳
-que	却 确 雀
-ran	然 燃
-rang	让 壤
-re	热
-ren	人 任 认 忍
-reng	仍
-ri	日
-rong	容 荣 融
-rou	肉 柔
-ru	如 入 乳
-ruo	若 弱
-sa	撒
-san	三 散
-sang	桑 嗓
-sao	扫 嫂
-se	色 塞
-sen	森
-sha	沙 杀 啥
-shan	山 善 扇 闪
-shang	上 商 伤
-shao	少 烧 绍
-she	社 设 射 蛇
-shen	什 身 深 神
-sheng	生 声 省 升 圣
-shi	是 时 十 事 世 市 师 石 识 始 士 史 式
-shou	手 首 守 受 售
-shu	书 数 术 树 输 熟 属 舒
-shui	水 睡 税
-shun	顺 瞬
-shuo	说 硕
-si	四 死 思 丝 私
-song	送 松 宋
-su	速 素 苏 诉
-sui	虽 随 岁 碎
-sun	孙 损
-suo	所 缩 锁
-ta	他 她 它 踏
-tai	太 台 态 泰
-tan	谈 弹 探 叹
-tang	汤 堂 糖 躺
-tao	讨 套 逃 桃
-te	特
-ti	题 提 体 替
-tian	天 田 甜
-tiao	条 跳 调
-tie	铁 贴
-ting	听 停 庭 厅
-tong	同 通 童 统
-tou	头 投 偷
-tu	图 土 突
-tuan	团
-tui	推 退 腿
-tuo	脱 托 拖
-wa	瓦 挖 娃
-wai	外 歪
-wan	完 万 晚 玩 碗
-wang	王 往 望 忘 网
-wei	为 位 未 味 危 围 伟 委
-wen	文 问 闻 温
-wo	我 握 卧
-wu	无 五 物 务 武 舞 屋 误
-xi	西 希 息 习 喜 细 戏
-xia	下 夏 吓 瞎
-xian	先 现 线 显 鲜 险
-xiang	想 向 相 象 像 香
-xiao	小 笑 校 消 效
-xie	写 谢 些 鞋 血
-xin	新 心 信 辛
-xing	行 形 星 兴 幸
-xiong	雄 兄 熊
-xiu	修 休 秀
-xu	需 许 续 序 虚
-xuan	选 宣 旋
-xue	学 雪 血
-xun	寻 训 迅
-ya	呀 压 牙 亚
-yan	言 眼 研 严 演 验 烟
-yang	样 阳 养 洋 羊
-yao	要 药 摇 咬 腰
-ye	也 夜 业 叶 爷
-yi	一 以 已 意 义 艺 亿 议 医 移 易
-yin	因 音 银 引 印
-ying	应 英 影 营 硬 迎
-yong	用 永 勇 拥 泳
-you	有 又 由 友 右 游 油 优
-yu	与 于 语 雨 育 余 鱼 预 玉 遇
-yuan	元 员 原 远 院 愿
-yue	月 越 乐 约 阅
-yun	运 云 允 韵
-zai	在 再 载
-zan	赞 暂
-zao	早 造 遭 糟
-ze	则 责 择
-zen	怎
-zeng	增 曾
-zha	查 炸 摘
-zhan	站 战 展 占
-zhang	张 长 章 掌
-zhao	找 照 招 着
-zhe	这 着 者 折
-zhen	真 镇 针 阵 震
-zheng	正 整 争 征 证 政
-zhi	只 知 之 制 治 质 致 智 置 中 终 钟
-zhong	中 种 重 众 终
-zhou	周 州 洲 粥
-zhu	主 住 注 祝 猪 珠
-zhua	抓
-zhuan	转 专 传
-zhuang	装 状 壮
-zhui	追
-zhun	准
-zhuo	着 桌 捉
-zi	子 字 自 资 紫
-zong	总 宗 纵
-zu	组 足 族 祖
-zui	最 嘴 醉
-zuo	做 作 坐 座
+啊	a	100
+阿	a	100
+爱	ai	100
+安	ai	100
+把	ba	100
+不	ba	100
+吧	ba	100
+八	ba	100
+白	bai	100
+百	bai	100
+半	ban	100
+班	ban	100
+报	bao	100
+保	bao	100
+被	bei	100
+北	bei	100
+本	bei	100
+比	bi	100
+必	bi	100
+笔	bi	100
+边	bian	100
+变	bian	100
+别	bie	100
+播	bo	100
+博	bo	100
+不	bu	100
+部	bu	100
+步	bu	100
+才	cai	100
+菜	cai	100
+参	can	100
+残	can	100
+藏	cang	100
+草	cao	100
+查	cha	100
+差	cha	100
+产	chan	100
+缠	chan	100
+长	chang	100
+常	chang	100
+场	chang	100
+朝	chao	100
+超	chao	100
+车	che	100
+陈	chen	100
+沉	chen	100
+成	cheng	100
+城	cheng	100
+程	cheng	100
+吃	chi	100
+持	chi	100
+重	chong	100
+冲	chong	100
+抽	chou	100
+出	chu	100
+处	chu	100
+除	chu	100
+传	chuan	100
+川	chuan	100
+春	chun	100
+次	ci	100
+此	ci	100
+词	ci	100
+从	cong	100
+聪	cong	100
+错	cuo	100
+大	da	100
+打	da	100
+代	dai	100
+带	dai	100
+待	dai	100
+但	dan	100
+单	dan	100
+担	dan	100
+到	dao	100
+道	dao	100
+导	dao	100
+的	de	100
+得	de	100
+等	deng	100
+登	deng	100
+地	di	100
+第	di	100
+低	di	100
+点	dian	100
+电	dian	100
+定	ding	100
+顶	ding	100
+东	dong	100
+动	dong	100
+懂	dong	100
+都	dou	100
+斗	dou	100
+读	du	100
+独	du	100
+度	du	100
+段	duan	100
+短	duan	100
+对	dui	100
+多	duo	100
+朵	duo	100
+额	e	100
+恶	e	100
+而	er	100
+儿	er	100
+二	er	100
+发	fa	100
+法	fa	100
+反	fa	100
+饭	fan	100
+反	fan	100
+翻	fan	100
+方	fang	100
+放	fang	100
+房	fang	100
+飞	fei	100
+非	fei	100
+费	fei	100
+分	fen	100
+份	fen	100
+风	feng	100
+封	feng	100
+父	fu	100
+夫	fu	100
+服	fu	100
+复	fu	100
+负	fu	100
+该	gai	100
+改	gai	100
+概	gai	100
+干	gan	100
+感	gan	100
+敢	gan	100
+刚	gang	100
+钢	gang	100
+高	gao	100
+告	gao	100
+稿	gao	100
+个	ge	100
+各	ge	100
+歌	ge	100
+格	ge	100
+给	gei	100
+公	gong	100
+工	gong	100
+功	gong	100
+共	gong	100
+古	gu	100
+故	gu	100
+顾	gu	100
+股	gu	100
+挂	gua	100
+关	guan	100
+观	guan	100
+管	guan	100
+贵	gui	100
+鬼	gui	100
+规	gui	100
+国	guo	100
+过	guo	100
+果	guo	100
+还	hai	100
+海	hai	100
+害	hai	100
+汉	han	100
+寒	han	100
+喊	han	100
+含	han	100
+好	hao	100
+号	hao	100
+毫	hao	100
+和	he	100
+何	he	100
+合	he	100
+河	he	100
+很	hen	100
+恨	hen	100
+狠	hen	100
+红	hong	100
+洪	hong	100
+后	hou	100
+候	hou	100
+厚	hou	100
+乎	hu	100
+呼	hu	100
+胡	hu	100
+湖	hu	100
+话	hua	100
+花	hua	100
+化	hua	100
+画	hua	100
+还	huan	100
+换	huan	100
+欢	huan	100
+环	huan	100
+黄	huang	100
+皇	huang	100
+荒	huang	100
+会	hui	100
+回	hui	100
+灰	hui	100
+辉	hui	100
+或	huo	100
+火	huo	100
+活	huo	100
+货	huo	100
+几	ji	100
+己	ji	100
+及	ji	100
+即	ji	100
+机	ji	100
+记	ji	100
+计	ji	100
+积	ji	100
+基	ji	100
+激	ji	100
+际	ji	100
+家	jia	100
+加	jia	100
+价	jia	100
+假	jia	100
+见	jian	100
+间	jian	100
+件	jian	100
+建	jian	100
+将	jiang	100
+讲	jiang	100
+江	jiang	100
+叫	jiao	100
+教	jiao	100
+觉	jiao	100
+角	jiao	100
+结	jie	100
+接	jie	100
+节	jie	100
+姐	jie	100
+解	jie	100
+界	jie	100
+进	jin	100
+今	jin	100
+金	jin	100
+近	jin	100
+仅	jin	100
+经	jing	100
+京	jing	100
+精	jing	100
+惊	jing	100
+静	jing	100
+就	jiu	100
+九	jiu	100
+久	jiu	100
+酒	jiu	100
+举	ju	100
+句	ju	100
+具	ju	100
+局	ju	100
+决	jue	100
+觉	jue	100
+绝	jue	100
+军	jun	100
+君	jun	100
+看	kan	100
+刊	kan	100
+砍	kan	100
+考	kao	100
+靠	kao	100
+可	ke	100
+科	ke	100
+克	ke	100
+刻	ke	100
+空	kong	100
+孔	kong	100
+恐	kong	100
+口	kou	100
+扣	kou	100
+苦	ku	100
+库	ku	100
+快	kuai	100
+块	kuai	100
+亏	kui	100
+困	kun	100
+昆	kun	100
+拉	la	100
+啦	la	100
+来	lai	100
+赖	lai	100
+蓝	lan	100
+兰	lan	100
+栏	lan	100
+浪	lang	100
+郎	lang	100
+老	lao	100
+劳	lao	100
+牢	lao	100
+了	le	100
+乐	le	100
+类	lei	100
+累	lei	100
+泪	lei	100
+冷	leng	100
+里	li	100
+力	li	100
+立	li	100
+理	li	100
+利	li	100
+离	li	100
+连	lian	100
+脸	lian	100
+练	lian	100
+联	lian	100
+两	liang	100
+亮	liang	100
+量	liang	100
+良	liang	100
+了	liao	100
+料	liao	100
+列	liao	100
+列	lie	100
+烈	lie	100
+猎	lie	100
+林	lin	100
+临	lin	100
+邻	lin	100
+另	ling	100
+领	ling	100
+零	ling	100
+令	ling	100
+六	liu	100
+流	liu	100
+留	liu	100
+龙	long	100
+隆	long	100
+楼	lou	100
+漏	lou	100
+路	lu	100
+陆	lu	100
+录	lu	100
+绿	lu	100
+乱	luan	100
+论	lun	100
+轮	lun	100
+落	luo	100
+罗	luo	100
+络	luo	100
+绿	lv	100
+率	lv	100
+旅	lv	100
+吗	ma	100
+马	ma	100
+妈	ma	100
+买	mai	100
+卖	mai	100
+满	man	100
+慢	man	100
+漫	man	100
+忙	mang	100
+盲	mang	100
+毛	mao	100
+猫	mao	100
+冒	mao	100
+么	me	100
+没	mei	100
+每	mei	100
+美	mei	100
+妹	mei	100
+们	men	100
+门	men	100
+米	mi	100
+密	mi	100
+迷	mi	100
+面	mian	100
+免	mian	100
+棉	mian	100
+民	min	100
+敏	min	100
+名	ming	100
+明	ming	100
+命	ming	100
+么	mo	100
+莫	mo	100
+摸	mo	100
+某	mou	100
+母	mu	100
+目	mu	100
+木	mu	100
+牧	mu	100
+那	na	100
+拿	na	100
+哪	na	100
+纳	na	100
+男	nan	100
+南	nan	100
+难	nan	100
+脑	nao	100
+闹	nao	100
+呢	ne	100
+内	nei	100
+那	nei	100
+能	neng	100
+你	ni	100
+尼	ni	100
+泥	ni	100
+年	nian	100
+念	nian	100
+娘	niang	100
+鸟	niao	100
+您	nin	100
+宁	ning	100
+凝	ning	100
+牛	niu	100
+扭	niu	100
+农	nong	100
+浓	nong	100
+努	nu	100
+怒	nu	100
+女	nv	100
+欧	ou	100
+偶	ou	100
+怕	pa	100
+爬	pa	100
+排	pai	100
+拍	pai	100
+派	pai	100
+盘	pan	100
+判	pan	100
+叛	pan	100
+旁	pang	100
+胖	pang	100
+跑	pao	100
+泡	pao	100
+配	pei	100
+培	pei	100
+陪	pei	100
+朋	peng	100
+碰	peng	100
+蓬	peng	100
+皮	pi	100
+匹	pi	100
+批	pi	100
+疲	pi	100
+片	pian	100
+便	pian	100
+骗	pian	100
+平	ping	100
+评	ping	100
+苹	ping	100
+凭	ping	100
+破	po	100
+婆	po	100
+普	pu	100
+铺	pu	100
+葡	pu	100
+起	qi	100
+其	qi	100
+七	qi	100
+气	qi	100
+汽	qi	100
+器	qi	100
+前	qian	100
+千	qian	100
+钱	qian	100
+签	qian	100
+浅	qian	100
+强	qiang	100
+墙	qiang	100
+抢	qiang	100
+桥	qiao	100
+巧	qiao	100
+敲	qiao	100
+瞧	qiao	100
+亲	qin	100
+琴	qin	100
+勤	qin	100
+请	qing	100
+情	qing	100
+清	qing	100
+晴	qing	100
+轻	qing	100
+求	qiu	100
+球	qiu	100
+秋	qiu	100
+去	qu	100
+取	qu	100
+区	qu	100
+趣	qu	100
+曲	qu	100
+全	quan	100
+权	quan	100
+泉	quan	100
+拳	quan	100
+却	que	100
+确	que	100
+雀	que	100
+然	ran	100
+燃	ran	100
+让	rang	100
+壤	rang	100
+热	re	100
+人	ren	100
+任	ren	100
+认	ren	100
+忍	ren	100
+仍	reng	100
+日	ri	100
+容	rong	100
+荣	rong	100
+融	rong	100
+肉	rou	100
+柔	rou	100
+如	ru	100
+入	ru	100
+乳	ru	100
+若	ruo	100
+弱	ruo	100
+撒	sa	100
+三	san	100
+散	san	100
+桑	sang	100
+嗓	sang	100
+扫	sao	100
+嫂	sao	100
+色	se	100
+塞	se	100
+森	sen	100
+沙	sha	100
+杀	sha	100
+啥	sha	100
+山	shan	100
+善	shan	100
+扇	shan	100
+闪	shan	100
+上	shang	100
+商	shang	100
+伤	shang	100
+少	shao	100
+烧	shao	100
+绍	shao	100
+社	she	100
+设	she	100
+射	she	100
+蛇	she	100
+什	shen	100
+身	shen	100
+深	shen	100
+神	shen	100
+生	sheng	100
+声	sheng	100
+省	sheng	100
+升	sheng	100
+圣	sheng	100
+是	shi	100
+时	shi	100
+十	shi	100
+事	shi	100
+世	shi	100
+市	shi	100
+师	shi	100
+石	shi	100
+识	shi	100
+始	shi	100
+士	shi	100
+史	shi	100
+式	shi	100
+手	shou	100
+首	shou	100
+守	shou	100
+受	shou	100
+售	shou	100
+书	shu	100
+数	shu	100
+术	shu	100
+树	shu	100
+输	shu	100
+熟	shu	100
+属	shu	100
+舒	shu	100
+水	shui	100
+睡	shui	100
+税	shui	100
+顺	shun	100
+瞬	shun	100
+说	shuo	100
+硕	shuo	100
+四	si	100
+死	si	100
+思	si	100
+丝	si	100
+私	si	100
+送	song	100
+松	song	100
+宋	song	100
+速	su	100
+素	su	100
+苏	su	100
+诉	su	100
+虽	sui	100
+随	sui	100
+岁	sui	100
+碎	sui	100
+孙	sun	100
+损	sun	100
+所	suo	100
+缩	suo	100
+锁	suo	100
+他	ta	100
+她	ta	100
+它	ta	100
+踏	ta	100
+太	tai	100
+台	tai	100
+态	tai	100
+泰	tai	100
+谈	tan	100
+弹	tan	100
+探	tan	100
+叹	tan	100
+汤	tang	100
+堂	tang	100
+糖	tang	100
+躺	tang	100
+讨	tao	100
+套	tao	100
+逃	tao	100
+桃	tao	100
+特	te	100
+题	ti	100
+提	ti	100
+体	ti	100
+替	ti	100
+天	tian	100
+田	tian	100
+甜	tian	100
+条	tiao	100
+跳	tiao	100
+调	tiao	100
+铁	tie	100
+贴	tie	100
+听	ting	100
+停	ting	100
+庭	ting	100
+厅	ting	100
+同	tong	100
+通	tong	100
+童	tong	100
+统	tong	100
+头	tou	100
+投	tou	100
+偷	tou	100
+图	tu	100
+土	tu	100
+突	tu	100
+团	tuan	100
+推	tui	100
+退	tui	100
+腿	tui	100
+脱	tuo	100
+托	tuo	100
+拖	tuo	100
+瓦	wa	100
+挖	wa	100
+娃	wa	100
+外	wai	100
+歪	wai	100
+完	wan	100
+万	wan	100
+晚	wan	100
+玩	wan	100
+碗	wan	100
+王	wang	100
+往	wang	100
+望	wang	100
+忘	wang	100
+网	wang	100
+为	wei	100
+位	wei	100
+未	wei	100
+味	wei	100
+危	wei	100
+围	wei	100
+伟	wei	100
+委	wei	100
+文	wen	100
+问	wen	100
+闻	wen	100
+温	wen	100
+我	wo	100
+握	wo	100
+卧	wo	100
+无	wu	100
+五	wu	100
+物	wu	100
+务	wu	100
+武	wu	100
+舞	wu	100
+屋	wu	100
+误	wu	100
+西	xi	100
+希	xi	100
+息	xi	100
+习	xi	100
+喜	xi	100
+细	xi	100
+戏	xi	100
+下	xia	100
+夏	xia	100
+吓	xia	100
+瞎	xia	100
+先	xian	100
+现	xian	100
+线	xian	100
+显	xian	100
+鲜	xian	100
+险	xian	100
+想	xiang	100
+向	xiang	100
+相	xiang	100
+象	xiang	100
+像	xiang	100
+香	xiang	100
+小	xiao	100
+笑	xiao	100
+校	xiao	100
+消	xiao	100
+效	xiao	100
+写	xie	100
+谢	xie	100
+些	xie	100
+鞋	xie	100
+血	xie	100
+新	xin	100
+心	xin	100
+信	xin	100
+辛	xin	100
+行	xing	100
+形	xing	100
+星	xing	100
+兴	xing	100
+幸	xing	100
+雄	xiong	100
+兄	xiong	100
+熊	xiong	100
+修	xiu	100
+休	xiu	100
+秀	xiu	100
+需	xu	100
+许	xu	100
+续	xu	100
+序	xu	100
+虚	xu	100
+选	xuan	100
+宣	xuan	100
+旋	xuan	100
+学	xue	100
+雪	xue	100
+血	xue	100
+寻	xun	100
+训	xun	100
+迅	xun	100
+呀	ya	100
+压	ya	100
+牙	ya	100
+亚	ya	100
+言	yan	100
+眼	yan	100
+研	yan	100
+严	yan	100
+演	yan	100
+验	yan	100
+烟	yan	100
+样	yang	100
+阳	yang	100
+养	yang	100
+洋	yang	100
+羊	yang	100
+要	yao	100
+药	yao	100
+摇	yao	100
+咬	yao	100
+腰	yao	100
+也	ye	100
+夜	ye	100
+业	ye	100
+叶	ye	100
+爷	ye	100
+一	yi	100
+以	yi	100
+已	yi	100
+意	yi	100
+义	yi	100
+艺	yi	100
+亿	yi	100
+议	yi	100
+医	yi	100
+移	yi	100
+易	yi	100
+因	yin	100
+音	yin	100
+银	yin	100
+引	yin	100
+印	yin	100
+应	ying	100
+英	ying	100
+影	ying	100
+营	ying	100
+硬	ying	100
+迎	ying	100
+用	yong	100
+永	yong	100
+勇	yong	100
+拥	yong	100
+泳	yong	100
+有	you	100
+又	you	100
+由	you	100
+友	you	100
+右	you	100
+游	you	100
+油	you	100
+优	you	100
+与	yu	100
+于	yu	100
+语	yu	100
+雨	yu	100
+育	yu	100
+余	yu	100
+鱼	yu	100
+预	yu	100
+玉	yu	100
+遇	yu	100
+元	yuan	100
+员	yuan	100
+原	yuan	100
+远	yuan	100
+院	yuan	100
+愿	yuan	100
+月	yue	100
+越	yue	100
+乐	yue	100
+约	yue	100
+阅	yue	100
+运	yun	100
+云	yun	100
+允	yun	100
+韵	yun	100
+在	zai	100
+再	zai	100
+载	zai	100
+赞	zan	100
+暂	zan	100
+早	zao	100
+造	zao	100
+遭	zao	100
+糟	zao	100
+则	ze	100
+责	ze	100
+择	ze	100
+怎	zen	100
+增	zeng	100
+曾	zeng	100
+查	zha	100
+炸	zha	100
+摘	zha	100
+站	zhan	100
+战	zhan	100
+展	zhan	100
+占	zhan	100
+张	zhang	100
+长	zhang	100
+章	zhang	100
+掌	zhang	100
+找	zhao	100
+照	zhao	100
+招	zhao	100
+着	zhao	100
+这	zhe	100
+着	zhe	100
+者	zhe	100
+折	zhe	100
+真	zhen	100
+镇	zhen	100
+针	zhen	100
+阵	zhen	100
+震	zhen	100
+正	zheng	100
+整	zheng	100
+争	zheng	100
+征	zheng	100
+证	zheng	100
+政	zheng	100
+只	zhi	100
+知	zhi	100
+之	zhi	100
+制	zhi	100
+治	zhi	100
+质	zhi	100
+致	zhi	100
+智	zhi	100
+置	zhi	100
+中	zhi	100
+终	zhi	100
+钟	zhi	100
+中	zhong	100
+种	zhong	100
+重	zhong	100
+众	zhong	100
+终	zhong	100
+周	zhou	100
+州	zhou	100
+洲	zhou	100
+粥	zhou	100
+主	zhu	100
+住	zhu	100
+注	zhu	100
+祝	zhu	100
+猪	zhu	100
+珠	zhu	100
+抓	zhua	100
+转	zhuan	100
+专	zhuan	100
+传	zhuan	100
+装	zhuang	100
+状	zhuang	100
+壮	zhuang	100
+追	zhui	100
+准	zhun	100
+着	zhuo	100
+桌	zhuo	100
+捉	zhuo	100
+子	zi	100
+字	zi	100
+自	zi	100
+资	zi	100
+紫	zi	100
+总	zong	100
+宗	zong	100
+纵	zong	100
+组	zu	100
+足	zu	100
+族	zu	100
+祖	zu	100
+最	zui	100
+嘴	zui	100
+醉	zui	100
+做	zuo	100
+作	zuo	100
+坐	zuo	100
+座	zuo	100
