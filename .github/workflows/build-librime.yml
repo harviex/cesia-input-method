@@ -1,0 +1,256 @@
+# 编译 librime_jni.so for Android
+# 使用 NDK r25c 交叉编译 librime 及其所有依赖
+# 产物: app/src/main/jniLibs/{arch}/librime_jni.so
+
+name: Build librime.so
+
+on:
+  workflow_dispatch:
+
+env:
+  NDK_VERSION: r25c
+  CMAKE_VERSION: 3.22.1
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64-v8a
+            target_triplet: aarch64-linux-android
+            target_api: aarch64-linux-android21
+          - arch: armeabi-v7a
+            target_triplet: armv7a-linux-androideabi
+            target_api: armv7a-linux-androideabi21
+          - arch: x86_64
+            target_triplet: x86_64-linux-android
+            target_api: x86_64-linux-android21
+          - arch: x86
+            target_triplet: i686-linux-android
+            target_api: i686-linux-android21
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: |
+          yes | sdkmanager "ndk;${{ env.NDK_VERSION }}" > /dev/null 2>&1
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $ANDROID_HOME/ndk/${{ env.NDK_VERSION }}
+          ls $ANDROID_HOME/ndk/
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build pkg-config
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        id: cache-deps
+        with:
+          path: |
+            ~/deps-build
+            ~/deps-install
+          key: librime-deps-${{ matrix.arch }}-${{ env.NDK_VERSION }}-${{ hashFiles('.github/workflows/build-librime.yml') }}
+
+      - name: Clone librime source
+        run: |
+          DEPS=~/deps-build
+          mkdir -p $DEPS
+          if [ ! -d "$DEPS/librime" ]; then
+            git clone --depth=1 https://github.com/rime/librime.git $DEPS/librime
+          fi
+          cd $DEPS/librime
+          # 初始化所有子模块
+          git submodule update --init --depth=1 -- \
+            deps/glog deps/leveldb deps/yaml-cpp deps/marisa-trie deps/snappy deps/opencc \
+            2>/dev/null || true
+          # opencc 可能在不同路径
+          if [ ! -d "deps/opencc" ] || [ -z "$(ls -A deps/opencc 2>/dev/null)" ]; then
+            rm -rf deps/opencc
+            git clone --depth=1 https://github.com/BYVoid/OpenCC.git deps/opencc
+          fi
+          echo "DEPS=$DEPS" >> $GITHUB_ENV
+
+      - name: Build Boost (cross-compile)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          NDK="${{ env.NDK_HOME }}"
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          INSTALL=~/deps-install/${{ matrix.arch }}
+          BOOST_SRC=~/deps-build/boost
+          BOOST_VER=1.84.0
+          BOOST_URL="https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VER}/source/boost_${BOOST_VER//./_}.tar.gz"
+
+          mkdir -p $BOOST_SRC && cd $BOOST_SRC
+
+          # 下载 Boost
+          if [ ! -f "boost_${BOOST_VER//./_}/bootstrap.sh" ]; then
+            curl -L -o boost.tar.gz "$BOOST_URL"
+            tar xzf boost.tar.gz
+          fi
+
+          cd boost_${BOOST_VER//./_}
+
+          # 配置交叉编译
+          cat > user-config.jam << EOF
+          using clang : android :
+            $TC/bin/${{ matrix.target_api }}-clang++ :
+            <archiver>$TC/bin/llvm-ar
+            <ranlib>$TC/bin/llvm-ranlib
+            <compileflags>-fPIC
+            <compileflags>-DANDROID
+            <compileflags>-D__ANDROID_API__=21
+          ;
+          EOF
+
+          # 只编译 librime 需要的组件
+          ./bootstrap.sh --with-toolset=clang
+          ./b2 toolset=clang-android \
+            --with-filesystem --with-system --with-regex --with-thread \
+            --with-date_time --with-locale --with-iostreams --with-program_options \
+            --prefix=$INSTALL \
+            variant=release link=static threading=multi \
+            target-os=android abi=aapcs \
+            -j$(nproc) \
+            install
+
+          echo "Boost installed to $INSTALL"
+          ls $INSTALL/lib/libboost_*.a | head -10
+
+      - name: Setup toolchain
+        run: |
+          NDK="${{ env.NDK_HOME }}"
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "TC=$TC" >> $GITHUB_ENV
+          echo "CC=$TC/bin/${{ matrix.target_api }}-clang" >> $GITHUB_ENV
+          echo "CXX=$TC/bin/${{ matrix.target_api }}-clang++" >> $GITHUB_ENV
+          echo "AR=$TC/bin/llvm-ar" >> $GITHUB_ENV
+          echo "RANLIB=$TC/bin/llvm-ranlib" >> $GITHUB_ENV
+          echo "STRIP=$TC/bin/llvm-strip" >> $GITHUB_ENV
+          echo "INSTALL=~/deps-install/${{ matrix.arch }}" >> $GITHUB_ENV
+          echo "CMAKE_FLAGS=-DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=${{ matrix.arch }} -DANDROID_PLATFORM=android-21 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -GNinja" >> $GITHUB_ENV
+
+      - name: Build snappy
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/snappy
+          BLD=~/deps-build/snappy/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DSNAPPY_BUILD_TESTS=OFF -DSNAPPY_BUILD_BENCHMARKS=OFF
+          ninja && ninja install
+
+      - name: Build leveldb
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/leveldb
+          BLD=~/deps-build/leveldb/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DLEVELDB_BUILD_TESTS=OFF -DLEVELDB_BUILD_BENCHMARKS=OFF \
+            -DHAVE_SNAPPY=ON
+          ninja && ninja install
+
+      - name: Build marisa-trie
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/marisa-trie
+          BLD=~/deps-build/marisa/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL
+          ninja && ninja install
+
+      - name: Build glog
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/glog
+          BLD=~/deps-build/glog/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DWITH_GFLAGS=OFF -DWITH_GTEST=OFF -DWITH_UNWIND=OFF \
+            -DCMAKE_C_FLAGS="-ffile-prefix-map=$DEPS=." \
+            -DCMAKE_CXX_FLAGS="-ffile-prefix-map=$DEPS=."
+          ninja && ninja install
+
+      - name: Build yaml-cpp
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/yaml-cpp
+          BLD=~/deps-build/yaml-cpp/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_INSTALL=OFF
+          ninja && ninja install
+
+      - name: Build OpenCC
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime/deps/opencc
+          BLD=~/deps-build/opencc/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DCMAKE_INSTALL_LIBDIR=lib
+          ninja && ninja install
+
+      - name: Build librime (static)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          SRC=$DEPS/librime
+          BLD=~/deps-build/librime/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -DBUILD_TESTING=OFF -DENABLE_LOGGING=OFF \
+            -DCMAKE_C_FLAGS="-I$INSTALL/include -ffile-prefix-map=$DEPS=." \
+            -DCMAKE_CXX_FLAGS="-I$INSTALL/include -ffile-prefix-map=$DEPS=." \
+            -DBOOST_ROOT=$INSTALL \
+            -DBoost_NO_SYSTEM_PATHS=ON \
+            -DOpencc_LIBRARY=$INSTALL/lib/libopencc.a \
+            -DOpencc_INCLUDE_PATH=$INSTALL/include
+          ninja && ninja install
+
+      - name: Build rime_jni (shared .so)
+        run: |
+          JNI_SRC=$GITHUB_WORKSPACE/app/src/main/jni/librime_jni
+          BLD=~/deps-build/rime_jni/${{ matrix.arch }}
+          mkdir -p $BLD && cd $BLD
+          cmake $JNI_SRC $CMAKE_FLAGS \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL \
+            -Drime_DIR=$INSTALL/lib/cmake/rime \
+            -DOpencc_LIBRARY=$INSTALL/lib/libopencc.a \
+            -DOpencc_INCLUDE_PATH=$INSTALL/include \
+            -DCMAKE_C_FLAGS="-I$INSTALL/include -I$DEPS/librime/include" \
+            -DCMAKE_CXX_FLAGS="-I$INSTALL/include -I$DEPS/librime/include" \
+            -DBUILD_SHARED_LIBS=ON
+          ninja VERBOSE=1
+          echo "=== Output .so ==="
+          find $BLD -name "*.so" -exec ls -lh {} \;
+
+      - name: Copy .so to jniLibs
+        run: |
+          JNILIBS=$GITHUB_WORKSPACE/app/src/main/jniLibs/${{ matrix.arch }}
+          mkdir -p $JNILIBS
+          find ~/deps-build/rime_jni/${{ matrix.arch }} -name "*.so" -exec cp {} $JNILIBS/ \;
+          echo "=== jniLibs ==="
+          ls -lh $JNILIBS/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: librime-jni-${{ matrix.arch }}
+          path: app/src/main/jniLibs/${{ matrix.arch }}/*.so
+          if-no-files-found: error
