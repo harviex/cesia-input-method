@@ -2,6 +2,7 @@ package com.cesia.input.engine.rime
 
 import android.content.Context
 import android.util.Log
+import java.io.File
 
 /**
  * Rime 输入引擎实现
@@ -14,6 +15,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     private var session: RimeSession? = null
+    private val prefs = context.getSharedPreferences("cesia_rime", Context.MODE_PRIVATE)
 
     override val name: String = "Rime"
 
@@ -47,6 +49,8 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     override fun initialize(): Boolean {
         if (isInitialized) return true
+        // 先将 APK assets 中的 rime 配置文件解压到 filesDir/rime/（仅第一次）
+        copyRimeAssetsIfNeeded()
         val success = RimeJni.initialize(context)
         isInitialized = success
         if (success) {
@@ -55,6 +59,30 @@ class RimeEngine(private val context: Context) : InputEngine {
             Log.w(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()} — Rime 引擎将不可用")
         }
         return success
+    }
+
+    /**
+     * 将 assets/rime/ 下的配置文件解压到 filesDir/rime/
+     * 仅在首次（或文件缺失）时执行
+     */
+    private fun copyRimeAssetsIfNeeded() {
+        val rimeDir = File(context.filesDir, "rime")
+        if (rimeDir.exists() && rimeDir.listFiles()?.isNotEmpty() == true) return
+        rimeDir.mkdirs()
+        try {
+            context.assets.list("rime")?.forEach { fileName ->
+                val outFile = File(rimeDir, fileName)
+                context.assets.open("rime/$fileName").use { input ->
+                    outFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d(TAG, "解压 Rime 资产: $fileName -> ${outFile.absolutePath} (${outFile.length()} bytes)")
+            }
+            prefs.edit().putBoolean("rime_assets_copied", true).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "解压 Rime 资产失败", e)
+        }
     }
 
     override fun shutdown() {

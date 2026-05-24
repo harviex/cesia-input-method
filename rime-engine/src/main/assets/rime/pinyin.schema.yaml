@@ -1,4 +1,4 @@
-# Rime schema
+# Rime schema — Cesia输入法 简化版
 schema:
   schema_id: pinyin
   name: 拼音
@@ -6,19 +6,20 @@ schema:
   author:
     - Cesia
   description: |
-    拼音输入法 - Cesia 输入法内置
-  dependencies:
+    雾凇拼音精简版 - Cesia输入法内置
+    Based on rime-ice (iDvel/rime-ice)
 
+# 开关
 switches:
   - name: ascii_mode
     reset: 0
-    states: [ 中文, 西文 ]
+    states: [ 中, Ａ ]
+  - name: ascii_punct
+    states: [ ¥, $ ]
   - name: full_shape
     states: [ 半角, 全角 ]
-  - name: simplification
-    reset: 0
-    states: [ 漢字, 简体 ]
 
+# 输入引擎
 engine:
   processors:
     - ascii_composer
@@ -39,16 +40,14 @@ engine:
     - punct_translator
     - script_translator
   filters:
-    - simplifier
     - uniquifier
 
+# 拼音拼写器
 speller:
   alphabet: zyxwvutsrqponmlkjihgfedcba
   delimiter: " '"
-  algebra:
-    - abbrev/^([a-z]).+$/$1/
-    - abbrev/^([zcs])h/$1/
 
+# 翻译器
 translator:
   dictionary: pinyin
   spelling_hints: 5
@@ -59,11 +58,14 @@ translator:
   comment_format:
     - xform/.*//
 
+# 标点符号
 punctuator:
   import_preset: default
 
+# 快捷键
 key_binder:
   import_preset: default
 
+# 候选触发
 recognizer:
   import_preset: default
