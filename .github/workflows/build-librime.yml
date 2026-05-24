@@ -1,0 +1,153 @@
+name: Build Librime
+
+on:
+  workflow_dispatch:
+    inputs:
+      librime_version:
+        description: 'librime version/branch to build'
+        required: false
+        default: 'master'
+
+jobs:
+  build-librime:
+    name: Cross-compile librime for Android
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+            android_abi: arm64-v8a
+          - abi: armeabi-v7a
+            target: armv7a-linux-androideabi
+            android_abi: armeabi-v7a
+          - abi: x86_64
+            target: x86_64-linux-android
+            android_abi: x86_64
+          - abi: x86
+            target: i686-linux-android
+            android_abi: x86
+
+    steps:
+      - name: Checkout Cesia repo
+        uses: actions/checkout@v4
+        with:
+          path: cesia
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            python3 \
+            pkg-config \
+            git
+
+      - name: Install Android NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "ndk;25.2.9519653"
+
+      - name: Clone librime source
+        run: |
+          git clone --depth 1 --branch ${{ github.event.inputs.librime_version }} \
+            https://github.com/rime/librime.git librime-src
+
+      - name: Clone submodule dependencies
+        working-directory: librime-src
+        run: |
+          git submodule update --init --depth 1
+
+      - name: Build rime-static for ${{ matrix.abi }}
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          cd librime-src
+
+          # Set up toolchain
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export CC=$TOOLCHAIN/bin/${{ matrix.target }}21-clang
+          export CXX=$TOOLCHAIN/bin/${{ matrix.target }}21-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+
+          # Build dependencies via cmake
+          mkdir -p build && cd build
+
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.android_abi }} \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_STATIC=ON \
+            -DBUILD_TEST=OFF \
+            -DBUILD_MERGED_MODULES=OFF \
+            -DENABLE_LOGGING=OFF \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -G Ninja
+
+          ninja -j$(nproc)
+
+      - name: Copy static library to Cesia module
+        run: |
+          mkdir -p cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}
+          cp librime-src/build/librime.a \
+             cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}/librime.a
+
+      - name: Copy headers
+        run: |
+          mkdir -p cesia/rime-engine/src/main/cpp/include
+          cp -r librime-src/src/*.h cesia/rime-engine/src/main/cpp/include/
+
+      - name: Upload libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: librime-${{ matrix.abi }}
+          path: |
+            cesia/rime-engine/src/main/jniLibs/${{ matrix.abi }}/*.a
+            cesia/rime-engine/src/main/cpp/include/
+          retention-days: 7
+
+  commit-libraries:
+    name: Commit librime libraries to repo
+    needs: build-librime
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Cesia repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: cesia
+
+      - name: Download all ABI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: librime-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Merge into rime-engine module
+        run: |
+          for abi_dir in artifacts/librime-*/; do
+            abi=$(basename "$abi_dir" | sed 's/librime-//')
+            mkdir -p cesia/rime-engine/src/main/jniLibs/$abi
+            cp "$abi_dir"/*.a cesia/rime-engine/src/main/jniLibs/$abi/
+          done
+          # Copy headers from first artifact (they all have same headers)
+          mkdir -p cesia/rime-engine/src/main/cpp/include
+          cp -r artifacts/librime-arm64-v8a/include/* cesia/rime-engine/src/main/cpp/include/
+
+      - name: Commit and push
+        working-directory: cesia
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rime-engine/src/main/jniLibs/ rime-engine/src/main/cpp/include/
+          git commit -m "build: add precompiled librime for Android ABIs" || echo "No changes"
+          git push || echo "Push failed"
