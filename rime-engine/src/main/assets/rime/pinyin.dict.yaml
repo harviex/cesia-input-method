@@ -1,0 +1,303 @@
+# Rime dictionary
+---
+name: pinyin
+version: "1.1.1"
+sort: by_weight
+...
+
+# 常用字表
+a	啊 阿
+ai	爱 安
+ba	把 不 吧 八
+bai	白 百
+ban	半 班
+bao	报 保
+bei	被 北 本
+bi	比 必 笔
+bian	边 变
+bie	别
+bo	播 博
+bu	不 部 步
+cai	才 菜
+can	参 残
+cang	藏
+cao	草
+cha	查 差
+chan	产 缠
+chang	长 常 场
+chao	朝 超
+che	车
+chen	陈 沉
+cheng	成 城 程
+chi	吃 持
+chong	重 冲
+chou	抽
+chu	出 处 除
+chuan	传 川
+chun	春
+ci	次 此 词
+cong	从 聪
+cuo	错
+da	大 打
+dai	代 带 待
+dan	但 单 担
+dao	到 道 导
+de	的 得
+deng	等 登
+di	地 第 低
+dian	点 电
+ding	定 顶
+dong	东 动 懂
+dou	都 斗
+du	读 独 度
+duan	段 短
+dui	对
+duo	多 朵
+e	额 恶
+er	而 儿 二
+fa	发 法 反
+fan	饭 反 翻
+fang	方 放 房
+fei	飞 非 费
+fen	分 份
+feng	风 封
+fu	父 夫 服 复 负
+gai	该 改 概
+gan	干 感 敢
+gang	刚 钢
+gao	高 告 稿
+ge	个 各 歌 格
+gei	给
+gong	公 工 功 共
+gu	古 故 顾 股
+gua	挂
+guan	关 观 管
+gui	贵 鬼 规
+guo	国 过 果
+hai	还 海 害
+han	汉 寒 喊 含
+hao	好 号 毫
+he	和 何 合 河
+hen	很 恨 狠
+hong	红 洪
+hou	后 候 厚
+hu	乎 呼 胡 湖
+hua	话 花 化 画
+huan	还 换 欢 环
+huang	黄 皇 荒
+hui	会 回 灰 辉
+huo	或 火 活 货
+ji	几 己 及 即 机 记 计 积 基 激 际
+jia	家 加 价 假
+jian	见 间 件 建
+jiang	将 讲 江
+jiao	叫 教 觉 角
+jie	结 接 节 姐 解 界
+jin	进 今 金 近 仅
+jing	经 京 精 惊 静
+jiu	就 九 久 酒
+ju	举 句 具 局
+jue	决 觉 绝
+jun	军 君
+kan	看 刊 砍
+kao	考 靠
+ke	可 科 克 刻
+kong	空 孔 恐
+kou	口 扣
+ku	苦 库
+kuai	快 块
+kui	亏
+kun	困 昆
+la	拉 啦
+lai	来 赖
+lan	蓝 兰 栏
+lang	浪 郎
+lao	老 劳 牢
+le	了 乐
+lei	类 累 泪
+leng	冷
+li	里 力 立 理 利 离
+lian	连 脸 练 联
+liang	两 亮 量 良
+liao	了 料 列
+lie	列 烈 猎
+lin	林 临 邻
+ling	另 领 零 令
+liu	六 流 留
+long	龙 隆
+lou	楼 漏
+lu	路 陆 录 绿
+luan	乱
+lun	论 轮
+luo	落 罗 络
+lv	绿 率 旅
+ma	吗 马 妈
+mai	买 卖
+man	满 慢 漫
+mang	忙 盲
+mao	毛 猫 冒
+me	么
+mei	没 每 美 妹
+men	们 门
+mi	米 密 迷
+mian	面 免 棉
+min	民 敏
+ming	名 明 命
+mo	么 莫 摸
+mou	某
+mu	母 目 木 牧
+na	那 拿 哪 纳
+nan	男 南 难
+nao	脑 闹
+ne	呢
+nei	内 那
+neng	能
+ni	你 尼 泥
+nian	年 念
+niang	娘
+niao	鸟
+nin	您
+ning	宁 凝
+niu	牛 扭
+nong	农 浓
+nu	努 怒
+nv	女
+ou	欧 偶
+pa	怕 爬
+pai	排 拍 派
+pan	盘 判 叛
+pang	旁 胖
+pao	跑 泡
+pei	配 培 陪
+peng	朋 碰 蓬
+pi	皮 匹 批 疲
+pian	片 便 骗
+ping	平 评 苹 凭
+po	破 婆
+pu	普 铺 葡
+qi	起 其 七 气 汽 器
+qian	前 千 钱 签 浅
+qiang	强 墙 抢
+qiao	桥 巧 敲 瞧
+qin	亲 琴 勤
+qing	请 情 清 晴 轻
+qiu	求 球 秋
+qu	去 取 区 趣 曲
+quan	全 权 泉 拳
+que	却 确 雀
+ran	然 燃
+rang	让 壤
+re	热
+ren	人 任 认 忍
+reng	仍
+ri	日
+rong	容 荣 融
+rou	肉 柔
+ru	如 入 乳
+ruo	若 弱
+sa	撒
+san	三 散
+sang	桑 嗓
+sao	扫 嫂
+se	色 塞
+sen	森
+sha	沙 杀 啥
+shan	山 善 扇 闪
+shang	上 商 伤
+shao	少 烧 绍
+she	社 设 射 蛇
+shen	什 身 深 神
+sheng	生 声 省 升 圣
+shi	是 时 十 事 世 市 师 石 识 始 士 史 式
+shou	手 首 守 受 售
+shu	书 数 术 树 输 熟 属 舒
+shui	水 睡 税
+shun	顺 瞬
+shuo	说 硕
+si	四 死 思 丝 私
+song	送 松 宋
+su	速 素 苏 诉
+sui	虽 随 岁 碎
+sun	孙 损
+suo	所 缩 锁
+ta	他 她 它 踏
+tai	太 台 态 泰
+tan	谈 弹 探 叹
+tang	汤 堂 糖 躺
+tao	讨 套 逃 桃
+te	特
+ti	题 提 体 替
+tian	天 田 甜
+tiao	条 跳 调
+tie	铁 贴
+ting	听 停 庭 厅
+tong	同 通 童 统
+tou	头 投 偷
+tu	图 土 突
+tuan	团
+tui	推 退 腿
+tuo	脱 托 拖
+wa	瓦 挖 娃
+wai	外 歪
+wan	完 万 晚 玩 碗
+wang	王 往 望 忘 网
+wei	为 位 未 味 危 围 伟 委
+wen	文 问 闻 温
+wo	我 握 卧
+wu	无 五 物 务 武 舞 屋 误
+xi	西 希 息 习 喜 细 戏
+xia	下 夏 吓 瞎
+xian	先 现 线 显 鲜 险
+xiang	想 向 相 象 像 香
+xiao	小 笑 校 消 效
+xie	写 谢 些 鞋 血
+xin	新 心 信 辛
+xing	行 形 星 兴 幸
+xiong	雄 兄 熊
+xiu	修 休 秀
+xu	需 许 续 序 虚
+xuan	选 宣 旋
+xue	学 雪 血
+xun	寻 训 迅
+ya	呀 压 牙 亚
+yan	言 眼 研 严 演 验 烟
+yang	样 阳 养 洋 羊
+yao	要 药 摇 咬 腰
+ye	也 夜 业 叶 爷
+yi	一 以 已 意 义 艺 亿 议 医 移 易
+yin	因 音 银 引 印
+ying	应 英 影 营 硬 迎
+yong	用 永 勇 拥 泳
+you	有 又 由 友 右 游 油 优
+yu	与 于 语 雨 育 余 鱼 预 玉 遇
+yuan	元 员 原 远 院 愿
+yue	月 越 乐 约 阅
+yun	运 云 允 韵
+zai	在 再 载
+zan	赞 暂
+zao	早 造 遭 糟
+ze	则 责 择
+zen	怎
+zeng	增 曾
+zha	查 炸 摘
+zhan	站 战 展 占
+zhang	张 长 章 掌
+zhao	找 照 招 着
+zhe	这 着 者 折
+zhen	真 镇 针 阵 震
+zheng	正 整 争 征 证 政
+zhi	只 知 之 制 治 质 致 智 置 中 终 钟
+zhong	中 种 重 众 终
+zhou	周 州 洲 粥
+zhu	主 住 注 祝 猪 珠
+zhua	抓
+zhuan	转 专 传
+zhuang	装 状 壮
+zhui	追
+zhun	准
+zhuo	着 桌 捉
+zi	子 字 自 资 紫
+zong	总 宗 纵
+zu	组 足 族 祖
+zui	最 嘴 醉
+zuo	做 作 坐 座

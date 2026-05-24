@@ -20,9 +20,10 @@ local.properties
 
 # JNI
 *.o
-*.so
 *.dylib
 *.dll
+# 保留 jniLibs 中的预编译 .so（RIME 引擎）
+!**/jniLibs/**/*.so
 
 # Assets (large files)
 wenet_model.bin

@@ -1,0 +1,63 @@
+# Rime default configuration
+config_version: "1.1.1"
+
+style:
+  color_scheme: dark
+  horizontal: false
+  inline_preedit: true
+  candidate_format: "%c %@ "
+  font_face: "sans-serif"
+  font_point: 20
+  label_font_point: 14
+  comment_font_point: 12
+  text_orientation: vertical
+  candidate_list_layout: stacked
+  hilite_candidate: true
+  hilite_select_key: true
+  preview: true
+  vertical_auto_reverse: false
+  vertical_text: false
+  vertical_text_left_to_right: false
+  vertical_text_with_wrap: false
+  page_size: 5
+  layout:
+    min_width: 160
+    min_height: 0
+    border_width: 3
+    margin_x: 12
+    margin_y: 6
+    spacing: 10
+    candidate_spacing: 5
+    hilite_padding: 2
+    hilite_spacing: 4
+    round_corner: 4
+
+key_binder:
+  bindings:
+    - {accept: "Control+Shift+space", toggle: ascii_mode, when: always}
+    - {accept: "Shift+space", toggle: full_shape, when: always}
+    - {accept: "Control+period", toggle: ascii_punct, when: always}
+    - {accept: "Control+comma", toggle: simplification, when: always}
+    - {accept: "Tab", send: Page_Down, when: has_menu}
+    - {accept: "ISO_Left_Tab", send: Page_Up, when: has_menu}
+    - {accept: "Shift+Tab", send: Page_Up, when: has_menu}
+    - {accept: "comma", send: Page_Up, when: paging}
+    - {accept: "period", send: Page_Down, when: has_menu}
+    - {accept: minus, send: Page_Up, when: paging}
+    - {accept: equal, send: Page_Down, when: has_menu}
+    - {accept: "Escape", send: Escape, when: composing}
+    - {accept: "BackSpace", send: BackSpace, when: composing}
+    - {accept: "Delete", send: Delete, when: composing}
+    - {accept: "Return", send: Return, when: composing}
+    - {accept: "Shift+Return", send: Return, when: composing}
+    - {accept: "Control+Return", send: Return, when: composing}
+    - {accept: "Control+a", send: Home, when: composing}
+    - {accept: "Control+e", send: End, when: composing}
+    - {accept: "Control+b", send: Left, when: composing}
+    - {accept: "Control+f", send: Right, when: composing}
+    - {accept: "Control+p", send: Up, when: composing}
+    - {accept: "Control+n", send: Down, when: composing}
+    - {accept: "Control+h", send: BackSpace, when: composing}
+    - {accept: "Control+d", send: Delete, when: composing}
+    - {accept: "Control+k", send: "Shift+Delete", when: composing}
+    - {accept: "Control+g", send: Escape, when: composing}

@@ -25,7 +25,7 @@ def getVersionCode() {
 
 def getVersionName() {
     def count = getVersionCode()
-    return "1.0.$count"
+    return "1.1.1"
 }
 
 android {
@@ -41,6 +41,9 @@ android {
         // 确保 BuildConfig 中有版本号
         buildConfigField "String", "VERSION_NAME", "\"${getVersionName()}\""
         buildConfigField "String", "VERSION_CODE", "\"${getVersionCode()}\""
+        ndk {
+            abiFilters "arm64-v8a"
+        }
     }
 
     // 签名配置
