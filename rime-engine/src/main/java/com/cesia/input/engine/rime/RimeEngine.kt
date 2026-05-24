@@ -126,4 +126,18 @@ class RimeEngine(private val context: Context) : InputEngine {
         session?.prevPage()
         return candidates
     }
+
+    // --- PinyinEngine 兼容方法 ---
+
+    fun inputLetter(c: Char): String {
+        processKey(c)
+        return composingText
+    }
+
+    fun backspace(): String {
+        processKey("BackSpace")
+        return composingText
+    }
+
+    fun getCurrentPinyin(): String = composingText
 }

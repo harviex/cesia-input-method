@@ -22,7 +22,6 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import com.cesia.input.engine.PinyinEngine
 import com.cesia.input.engine.TypelessEngine
 import com.cesia.input.engine.rime.RimeEngine
 import com.cesia.input.engine.rime.RimeJni
@@ -74,9 +73,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 核心组件
     private var typelessEngine: TypelessEngine? = null
     private lateinit var statsManager: PolishStatsManager
-    private lateinit var pinyinEngine: PinyinEngine
-    private var rimeEngine: RimeEngine? = null
-    private var rimeEngineAvailable = false
+    private lateinit var rimeEngine: RimeEngine
 
     // 状态
     private var isRecording = false
@@ -227,23 +224,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
-        pinyinEngine = PinyinEngine(this)
 
-        // 初始化 Rime 引擎（stub 实现，后续替换为真实 librime）
-        try {
-            rimeEngine = RimeEngine(this)
-            rimeEngineAvailable = rimeEngine?.initialize() ?: false
-            if (rimeEngineAvailable) {
-                Log.i("Cesia", "Rime 引擎初始化成功")
-            } else {
-                Log.w("Cesia", "Rime 引擎初始化失败，回退到内置拼音引擎")
-                rimeEngine = null
-            }
-        } catch (e: Exception) {
-            Log.w("Cesia", "Rime 引擎初始化异常: ${e.message}")
-            rimeEngine = null
-            rimeEngineAvailable = false
-        }
+        // 初始化 Rime 引擎
+        rimeEngine = RimeEngine(this)
+        rimeEngine.initialize()
+        Log.i("Cesia", "Rime 引擎初始化完成")
 
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
@@ -457,9 +442,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         for (i in tvCandidates.indices) {
             val index = i
             tvCandidates[i].setOnClickListener {
-                if (isChineseMode && pinyinEngine.hasCandidates()) {
-                    val selected = pinyinEngine.selectCandidate(
-                        pinyinEngine.getCurrentPage() * 5 + index
+                if (isChineseMode && rimeEngine.hasCandidates()) {
+                    val selected = rimeEngine.selectCandidate(
+                        rimeEngine.getCurrentPage() * 5 + index
                     )
                     if (selected.isNotEmpty()) {
                         currentInputConnection?.commitText(selected, 1)
@@ -469,31 +454,31 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         btnCandidatePrev.setOnClickListener {
-            if (isChineseMode && pinyinEngine.hasCandidates()) {
-                pinyinEngine.prevPage()
+            if (isChineseMode && rimeEngine.hasCandidates()) {
+                rimeEngine.prevPage()
                 updateCandidateBar()
             }
         }
         btnCandidateNext.setOnClickListener {
-            if (isChineseMode && pinyinEngine.hasCandidates()) {
-                pinyinEngine.nextPage()
+            if (isChineseMode && rimeEngine.hasCandidates()) {
+                rimeEngine.nextPage()
                 updateCandidateBar()
             }
         }
     }
 
     private fun updateCandidateBar() {
-        if (!isChineseMode || !pinyinEngine.isComposing()) {
+        if (!isChineseMode || !rimeEngine.isComposing()) {
             candidateBar.visibility = View.GONE
             return
         }
-        val candidates = pinyinEngine.getCandidates()
+        val candidates = rimeEngine.getCandidates()
         if (candidates.isEmpty()) {
             candidateBar.visibility = View.GONE
             return
         }
         candidateBar.visibility = View.VISIBLE
-        tvComposing.text = pinyinEngine.getCurrentPinyin()
+        tvComposing.text = rimeEngine.getCurrentPinyin()
         for (i in tvCandidates.indices) {
             if (i < candidates.size) {
                 tvCandidates[i].text = candidates[i]
@@ -502,8 +487,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvCandidates[i].visibility = View.INVISIBLE
             }
         }
-        btnCandidatePrev.isEnabled = pinyinEngine.getCurrentPage() > 0
-        btnCandidateNext.isEnabled = pinyinEngine.getCurrentPage() < pinyinEngine.getPageCount() - 1
+        btnCandidatePrev.isEnabled = rimeEngine.getCurrentPage() > 0
+        btnCandidateNext.isEnabled = rimeEngine.getCurrentPage() < rimeEngine.getPageCount() - 1
     }
 
     // ======================== 按钮监听 ========================
@@ -539,7 +524,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnSettings.setOnClickListener { showSettings() }
 
         btnDelete.setOnClickListener {
-            if (isChineseMode && pinyinEngine.isComposing()) {
+            if (isChineseMode && rimeEngine.isComposing()) {
                 handleChineseBackspace()
             } else {
                 // 短按：清空光标之前的文字
@@ -547,7 +532,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         btnDelete.setOnLongClickListener {
-            if (isChineseMode && pinyinEngine.isComposing()) {
+            if (isChineseMode && rimeEngine.isComposing()) {
                 handleChineseBackspace()
             } else {
                 // 长按：清空光标之后的文字
@@ -820,12 +805,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             currentKeyboard = qwertyKeyboard
             keyboardView.keyboard = qwertyKeyboard
             keyboardView.invalidateAllKeys()
-            pinyinEngine.clear()
+            rimeEngine.clear()
             candidateBar.visibility = View.GONE
             updateStatus("中文拼音模式")
             updateLangSwitchKeyLabel("英")
         } else {
-            pinyinEngine.clear()
+            rimeEngine.clear()
             candidateBar.visibility = View.GONE
             updateStatus("英文模式")
             updateLangSwitchKeyLabel("中")
@@ -848,32 +833,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun handleChineseInput(primaryCode: Int) {
         val c = primaryCode.toChar()
         if (c in 'a'..'z') {
-            val pinyin = pinyinEngine.inputLetter(c)
+            val pinyin = rimeEngine.inputLetter(c)
             updateCandidateBar()
             updateStatus("拼音: $pinyin")
         } else if (c == ' ') {
-            if (pinyinEngine.isComposing()) {
-                if (pinyinEngine.hasCandidates()) {
-                    val selected = pinyinEngine.selectCandidate(0)
+            if (rimeEngine.isComposing()) {
+                if (rimeEngine.hasCandidates()) {
+                    val selected = rimeEngine.selectCandidate(0)
                     currentInputConnection?.commitText(selected, 1)
                 } else {
-                    val pinyin = pinyinEngine.getCurrentPinyin()
+                    val pinyin = rimeEngine.getCurrentPinyin()
                     currentInputConnection?.commitText(pinyin, 1)
                 }
-                pinyinEngine.clear()
+                rimeEngine.clear()
                 updateCandidateBar()
             } else {
                 currentInputConnection?.commitText(" ", 1)
             }
         } else {
-            if (pinyinEngine.isComposing()) {
-                val selected = if (pinyinEngine.hasCandidates()) {
-                    pinyinEngine.selectCandidate(0)
+            if (rimeEngine.isComposing()) {
+                val selected = if (rimeEngine.hasCandidates()) {
+                    rimeEngine.selectCandidate(0)
                 } else {
-                    pinyinEngine.getCurrentPinyin()
+                    rimeEngine.getCurrentPinyin()
                 }
                 currentInputConnection?.commitText(selected, 1)
-                pinyinEngine.clear()
+                rimeEngine.clear()
                 updateCandidateBar()
             }
             // 中文模式下自动转换标点为全角
@@ -909,10 +894,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun handleChineseBackspace() {
-        if (pinyinEngine.isComposing()) {
-            val pinyin = pinyinEngine.backspace()
+        if (rimeEngine.isComposing()) {
+            val pinyin = rimeEngine.backspace()
             if (pinyin.isEmpty()) {
-                pinyinEngine.clear()
+                rimeEngine.clear()
                 candidateBar.visibility = View.GONE
                 updateStatus("中文拼音模式")
             } else {
@@ -1589,14 +1574,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     return
                 }
                 val ic = currentInputConnection
-                if (isChineseMode && pinyinEngine.isComposing()) {
-                    val text = if (pinyinEngine.hasCandidates()) {
-                        pinyinEngine.selectCandidate(0)
+                if (isChineseMode && rimeEngine.isComposing()) {
+                    val text = if (rimeEngine.hasCandidates()) {
+                        rimeEngine.selectCandidate(0)
                     } else {
-                        pinyinEngine.getCurrentPinyin()
+                        rimeEngine.getCurrentPinyin()
                     }
                     currentInputConnection?.commitText(text, 1)
-                    pinyinEngine.clear()
+                    rimeEngine.clear()
                     updateCandidateBar()
                     addSentMessage(text)
                 } else {
@@ -1720,7 +1705,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         typelessEngine?.destroy()
         typelessEngine = null
         rimeEngine?.shutdown()
-        rimeEngine = null
         super.onDestroy()
     }
 
