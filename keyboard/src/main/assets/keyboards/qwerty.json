@@ -1,0 +1,60 @@
+{
+  "id": "qwerty",
+  "type": "QWERTY",
+  "keyWidth": 36,
+  "keyHeight": 48,
+  "horizontalGap": 2,
+  "verticalGap": 4,
+  "rows": [
+    {
+      "keys": [
+        {"label": "q", "codes": [113], "popupCharacters": "1", "type": "CHARACTER"},
+        {"label": "w", "codes": [119], "popupCharacters": "2", "type": "CHARACTER"},
+        {"label": "e", "codes": [101], "popupCharacters": "3", "type": "CHARACTER"},
+        {"label": "r", "codes": [114], "popupCharacters": "4", "type": "CHARACTER"},
+        {"label": "t", "codes": [116], "popupCharacters": "5", "type": "CHARACTER"},
+        {"label": "y", "codes": [121], "popupCharacters": "6", "type": "CHARACTER"},
+        {"label": "u", "codes": [117], "popupCharacters": "7", "type": "CHARACTER"},
+        {"label": "i", "codes": [105], "popupCharacters": "8", "type": "CHARACTER"},
+        {"label": "o", "codes": [111], "popupCharacters": "9", "type": "CHARACTER"},
+        {"label": "p", "codes": [112], "popupCharacters": "0", "type": "CHARACTER"}
+      ]
+    },
+    {
+      "keys": [
+        {"label": "a", "codes": [97], "popupCharacters": "@", "type": "CHARACTER", "marginLeft": 18},
+        {"label": "s", "codes": [115], "popupCharacters": "#", "type": "CHARACTER"},
+        {"label": "d", "codes": [100], "popupCharacters": "$", "type": "CHARACTER"},
+        {"label": "f", "codes": [102], "popupCharacters": "%", "type": "CHARACTER"},
+        {"label": "g", "codes": [103], "popupCharacters": "&", "type": "CHARACTER"},
+        {"label": "h", "codes": [104], "popupCharacters": "-", "type": "CHARACTER"},
+        {"label": "j", "codes": [106], "popupCharacters": "+", "type": "CHARACTER"},
+        {"label": "k", "codes": [107], "popupCharacters": "(", "type": "CHARACTER"},
+        {"label": "l", "codes": [108], "popupCharacters": ")", "type": "CHARACTER"}
+      ]
+    },
+    {
+      "keys": [
+        {"label": "⇧", "codes": [-1], "type": "SHIFT", "width": 48, "sticky": true},
+        {"label": "z", "codes": [122], "popupCharacters": "*", "type": "CHARACTER"},
+        {"label": "x", "codes": [120], "popupCharacters": "\"", "type": "CHARACTER"},
+        {"label": "c", "codes": [99], "popupCharacters": "'", "type": "CHARACTER"},
+        {"label": "v", "codes": [118], "popupCharacters": ":", "type": "CHARACTER"},
+        {"label": "b", "codes": [98], "popupCharacters": ";", "type": "CHARACTER"},
+        {"label": "n", "codes": [110], "popupCharacters": "!", "type": "CHARACTER"},
+        {"label": "m", "codes": [109], "popupCharacters": "?", "type": "CHARACTER"},
+        {"label": "⌫", "codes": [-5], "type": "BACKSPACE", "width": 48, "isRepeatable": true}
+      ]
+    },
+    {
+      "keys": [
+        {"label": "123", "codes": [-100], "type": "SYMBOL_SWITCH", "width": 48},
+        {"label": "中", "codes": [-101], "type": "LANG_SWITCH", "width": 48},
+        {"label": "📋", "codes": [-107], "type": "CLIPBOARD", "width": 48},
+        {"label": "空格", "codes": [32], "type": "SPACE", "width": 144},
+        {"label": ".", "codes": [46], "popupCharacters": ",", "type": "PERIOD"},
+        {"label": "⏎", "codes": [10], "type": "ENTER", "width": 72}
+      ]
+    }
+  ]
+}
