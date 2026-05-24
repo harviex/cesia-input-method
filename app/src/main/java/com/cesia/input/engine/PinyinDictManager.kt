@@ -40,6 +40,8 @@ class PinyinDictManager(private val context: Context) {
         const val LOCAL_DICT_FILE = "pinyin.dict.yaml"
         const val LOCAL_BASE_FILE = "base.dict.yaml"
         const val LOCAL_8105_FILE = "8105.dict.yaml"
+        // 向后兼容：云备份可能还在用旧文件名
+        const val LOCAL_PHRASES_FILE = "pinyin_phrases.json"
     }
 
     /**
@@ -227,6 +229,13 @@ class PinyinDictManager(private val context: Context) {
     fun hasDownloadedDict(): Boolean {
         return prefs.getBoolean(PREF_DICT_DOWNLOADED, false)
     }
+
+    /**
+     * 兼容旧版 PinyinEngine：返回外部词库路径（已废弃，始终返回 null）
+     */
+    fun getDictFilePath(): String? = null
+
+    fun getPhrasesFilePath(): String? = null
 
     data class DictInfo(
         val dictCount: Int,

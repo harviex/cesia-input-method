@@ -86,8 +86,8 @@ class PinyinEngine(context: Context) {
 
             if (dictPath != null) {
                 try {
-                    val jsonStr = java.io.File(dictPath).readText()
-                    val json = JSONObject(jsonStr)
+                    val jsonStr = java.io.File(dictPath as String).readText()
+                    val json = org.json.JSONObject(jsonStr)
                     for (key in json.keys()) {
                         pinyinMap[key] = json.getString(key)
                     }
@@ -100,8 +100,8 @@ class PinyinEngine(context: Context) {
 
             if (phrasesPath != null) {
                 try {
-                    val jsonStr = java.io.File(phrasesPath).readText()
-                    val json = JSONObject(jsonStr)
+                    val jsonStr = java.io.File(phrasesPath as String).readText()
+                    val json = org.json.JSONObject(jsonStr)
                     for (key in json.keys()) {
                         val value = json.getString(key)
                         // Store as-is: either "词1,词2" compact format or raw string
