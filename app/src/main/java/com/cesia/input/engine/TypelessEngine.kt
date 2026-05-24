@@ -202,7 +202,49 @@ class TypelessEngine(
     }
 
     private fun cleanPolishedText(raw: String): String {
-        return raw.trim().removePrefix("```").removeSuffix("```").trim()
+        var text = raw.trim()
+
+        // 移除 markdown 代码块
+        text = text.removePrefix("```").removeSuffix("```").trim()
+        text = text.removePrefix("```json").removeSuffix("```").trim()
+
+        // 移除常见的解释性前缀
+        val explanationPrefixes = listOf(
+            "润色后：", "润色后的文本：", "修改后的文本：", "修改后：",
+            "结果：", "输出：", "回复：", "回答：",
+            "Polished:", "Result:", "Output:", "Here is",
+            "以下是润色后的", "以下是修改后的", "润色结果："
+        )
+        for (prefix in explanationPrefixes) {
+            if (text.startsWith(prefix, ignoreCase = true)) {
+                text = text.removePrefix(prefix).trim()
+                break
+            }
+        }
+
+        // 移除引号包裹
+        if (text.startsWith("\"") && text.endsWith("\"") && text.length > 1) {
+            text = text.substring(1, text.length - 1).trim()
+        }
+
+        // 过滤解释性段落
+        val lines = text.lines()
+        if (lines.size > 1) {
+            val meaningfulLines = lines.filter { line ->
+                val trimmed = line.trim()
+                trimmed.isNotEmpty() &&
+                !trimmed.startsWith("说明：") &&
+                !trimmed.startsWith("解释：") &&
+                !trimmed.startsWith("注意：") &&
+                !trimmed.startsWith("Note:") &&
+                !trimmed.startsWith("Explanation:")
+            }
+            if (meaningfulLines.isNotEmpty() && meaningfulLines.size < lines.size) {
+                text = meaningfulLines.joinToString("\n")
+            }
+        }
+
+        return text.trim()
     }
 
     private fun isPlaceholder(text: String): Boolean {

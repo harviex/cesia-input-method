@@ -73,7 +73,7 @@ class PolishService(
             return PolishResult.Error("OpenRouter API Key 未配置")
         }
 
-        val systemPrompt = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
+        val systemPrompt = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字。\n\n严格要求：\n1. 只输出润色排版后的纯文本本身\n2. 严禁输出任何解释、说明、前缀或后缀\n3. 严禁删减核心信息\n4. 严禁随意扩写新内容\n5. 仅修正错别字、口语和语序，加入标点\n6. 如果内容包含多个观点或步骤，请通过换行分段或使用* 进行分点陈列"
 
         val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
         var lastError = ""
@@ -312,7 +312,7 @@ class PolishService(
         val messages = JSONArray().apply {
             put(JSONObject().apply {
                 put("role", "system")
-                put("content", "你是一个文本编辑助手。根据用户指令修改原文。只输出修改后的文本，不要解释。")
+                put("content", "你是一个文本编辑助手。根据用户指令修改原文。\n\n严格要求：\n1. 只输出修改后的文本本身\n2. 不要输出任何解释、说明、前缀或后缀\n3. 不要扩写新内容\n4. 不要删减核心信息\n5. 如果指令不明确，直接输出原文")
             })
             put(JSONObject().apply {
                 put("role", "user")
@@ -327,7 +327,7 @@ class PolishService(
             val json = JSONObject().apply {
                 put("model", model)
                 put("messages", messages)
-                put("temperature", 0.3)
+                put("temperature", 0.1)
                 put("max_tokens", maxTokens)
             }
 
@@ -348,10 +348,19 @@ class PolishService(
                     val respJson = JSONObject(respBody)
                     val choices = respJson.optJSONArray("choices")
                     if (choices != null && choices.length() > 0) {
-                        return choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+                        val rawContent = choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+                        val cleaned = cleanAiResponse(rawContent)
+                        if (cleaned.isNotEmpty()) {
+                            return cleaned
+                        }
                     }
                 } else {
-                    Log.w("PolishService", "魔法模型 $model HTTP ${result.code}: ${result.body?.string()?.take(100)}")
+                    val errorBody = result.body?.string()?.take(100) ?: ""
+                    Log.w("PolishService", "魔法模型 $model HTTP ${result.code}: $errorBody")
+                    // 429 限流时换下一个模型
+                    if (result.code == 429) continue
+                    // 其他错误也尝试下一个模型
+                    continue
                 }
             } catch (e: Exception) {
                 Log.w("PolishService", "魔法模型 $model 异常: ${e.message}")
@@ -359,6 +368,56 @@ class PolishService(
         }
         Log.e("PolishService", "魔法修改所有模型均失败")
         return null
+    }
+
+    /**
+     * 清理 AI 响应，移除解释性文字
+     */
+    private fun cleanAiResponse(raw: String): String {
+        var text = raw.trim()
+
+        // 移除 markdown 代码块
+        text = text.removePrefix("```").removeSuffix("```").trim()
+        text = text.removePrefix("```json").removeSuffix("```").trim()
+
+        // 移除常见的解释性前缀
+        val explanationPrefixes = listOf(
+            "修改后的文本：", "修改后：", "润色后：", "润色后的文本：",
+            "结果：", "输出：", "回复：", "回答：",
+            "Modified text:", "Result:", "Output:", "Here is",
+            "以下是修改后的", "以下是润色后的", "修改结果："
+        )
+        for (prefix in explanationPrefixes) {
+            if (text.startsWith(prefix, ignoreCase = true)) {
+                text = text.removePrefix(prefix).trim()
+                break
+            }
+        }
+
+        // 移除引号包裹
+        if (text.startsWith("\"") && text.endsWith("\"") && text.length > 1) {
+            text = text.substring(1, text.length - 1).trim()
+        }
+
+        // 如果包含多行，只取第一段（避免解释性文字）
+        val lines = text.lines()
+        if (lines.size > 1) {
+            // 检查是否有明显的解释性段落
+            val meaningfulLines = lines.filter { line ->
+                val trimmed = line.trim()
+                trimmed.isNotEmpty() &&
+                !trimmed.startsWith("说明：") &&
+                !trimmed.startsWith("解释：") &&
+                !trimmed.startsWith("注意：") &&
+                !trimmed.startsWith("Note:") &&
+                !trimmed.startsWith("Explanation:")
+            }
+            if (meaningfulLines.isNotEmpty() && meaningfulLines.size < lines.size) {
+                text = meaningfulLines.joinToString("\n")
+            }
+        }
+
+        return text.trim()
     }
 
     private fun polishWithPromptCustom(prompt: String): String? {

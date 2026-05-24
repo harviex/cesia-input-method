@@ -1423,27 +1423,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             try {
                 val result = polishService?.polishWithPrompt(prompt)
                 Handler(Looper.getMainLooper()).post {
-                    isAiProcessing = false
                     if (result != null && result.isNotEmpty()) {
-                        if (result == fullText) {
+                        if (result == magicOriginalText) {
                             updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
                         } else {
                             magicHistoryManager?.addRecord(instruction)
-                            saveUndoHistory(fullText, instruction)
+                            saveUndoHistory(magicOriginalText, instruction)
                             try {
                                 val ic2 = currentInputConnection
                                 ic2?.performContextMenuAction(android.R.id.selectAll)
                                 ic2?.commitText(result, 1)
                                 resetToIdle()
                             } catch (e2: Exception) {
-                                Log.e("Cesia", "replaceInputText 异常", e2)
+                                Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
                                 updateStatus("❌ 上屏失败: ${e2.message}")
                                 return@post
                             }
                         }
                     } else {
-                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                        updateStatus("⚠️ 润色结果为空，请检查网络或稍后重试")
                     }
+                }
                 }
             } catch (e: Exception) {
                 Handler(Looper.getMainLooper()).post {
@@ -2101,4 +2101,3 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         } catch (_: Exception) {}
     }
-}
