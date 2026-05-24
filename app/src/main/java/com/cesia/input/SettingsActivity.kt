@@ -330,8 +330,13 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             "从未下载"
         }
+        val sizeStr = when {
+            info.dictSize < 1024 -> "${info.dictSize}B"
+            info.dictSize < 1024 * 1024 -> "${info.dictSize / 1024}KB"
+            else -> "${info.dictSize / 1024 / 1024}MB"
+        }
         val statusText = if (info.downloaded) {
-            "词库: ${formatSize(info.dictSize)} | 词条: ${info.dictCount} 条\n来源: ${info.source}\n同步: $syncTime"
+            "词库: $sizeStr | 词条: ${info.dictCount} 条\n来源: ${info.source}\n同步: $syncTime"
         } else {
             "词库: 使用内置精简版 (~1000字)\n提示: 可下载完整词库获得更好的输入体验\n来源: 内置"
         }
@@ -377,14 +382,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun showImportDialog() {
         AlertDialog.Builder(this)
             .setTitle("导入词库")
-            .setMessage("选择要导入的词库文件（JSON格式）")
-            .setPositiveButton("导入字典") { _, _ ->
-                openFilePicker(IMPORT_DICT_REQUEST, "选择拼音字典文件")
-            }
-            .setNegativeButton("导入词组") { _, _ ->
-                openFilePicker(IMPORT_PHRASES_REQUEST, "选择词组文件")
-            }
-            .setNeutralButton("取消", null)
+            .setMessage("当前版本已改用在线下载词库，不再支持本地导入。\n请使用「下载词库」按钮获取完整词库。")
+            .setPositiveButton("确定", null)
             .show()
     }
 
@@ -402,34 +401,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != Activity.RESULT_OK) return
-
-        when (requestCode) {
-            IMPORT_DICT_REQUEST -> {
-                val uri = data?.data ?: return
-                val path = getRealPathFromUri(uri)
-                dictManager.importDict(path, null) { success, msg ->
-                    runOnUiThread {
-                        tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
-                        appendLog(msg)
-                        refreshDictInfo()
-                        if (success) Toast.makeText(this, "导入成功！重启输入法后生效", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-            IMPORT_PHRASES_REQUEST -> {
-                val uri = data?.data ?: return
-                val path = getRealPathFromUri(uri)
-                dictManager.importDict(null, path) { success, msg ->
-                    runOnUiThread {
-                        tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
-                        appendLog(msg)
-                        refreshDictInfo()
-                        if (success) Toast.makeText(this, "导入成功！重启输入法后生效", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
+        // 文件导入已废弃，不再处理
     }
 
     private fun getRealPathFromUri(uri: Uri): String? {
@@ -457,13 +429,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun exportDict() {
-        val exportDir = "${getExternalFilesDir(null)?.absolutePath}/dict_export"
-        dictManager.exportDict(exportDir) { success, msg ->
-            runOnUiThread {
-                tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
-                appendLog(msg)
-            }
-        }
+        Toast.makeText(this, "当前版本已改用在线下载词库，不再支持本地导出", Toast.LENGTH_SHORT).show()
     }
 
     private fun showCloudBackupDialog() {
