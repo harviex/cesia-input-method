@@ -1346,8 +1346,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 keyboardView.invalidateAllKeys()
             }
 
-            // 符号切换
+            // 符号切换 (?123/符/ABC)
             KEYCODE_SWITCH_SYMBOL -> toggleKeyboard()
+
+            // 中英文切换 (🌐)
+            KEYCODE_SWITCH_LANG -> toggleKeyboard()
 
             // 返回键
             KEYCODE_BACK_KEY -> switchToQwertyKeyboard()
