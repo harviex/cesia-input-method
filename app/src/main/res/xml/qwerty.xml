@@ -15,7 +15,7 @@
 
     <!-- 第1行：数字键 -->
     <Row>
-        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" android:popupCharacters="¹½⅓¼" android:popupKeyboard="@xml/kbd_popup_template" />
+        <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left" android:popupCharacters="¹½⅓¼" />
         <Key android:codes="50" android:keyLabel="2" android:popupCharacters="²⅔" />
         <Key android:codes="51" android:keyLabel="3" android:popupCharacters="³¾⅜" />
         <Key android:codes="52" android:keyLabel="4" android:popupCharacters="⁴" />

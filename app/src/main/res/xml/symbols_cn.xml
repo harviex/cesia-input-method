@@ -13,10 +13,10 @@
         <Key android:codes="65311" android:keyLabel="？" />
         <Key android:codes="65306" android:keyLabel="：" />
         <Key android:codes="65307" android:keyLabel="；" />
-        <Key android:codes="8220" android:keyLabel=""" />
-        <Key android:codes="8221" android:keyLabel="""/>
-        <Key android:codes="8216" android:keyLabel="'" />
-        <Key android:codes="8217" android:keyLabel="'" android:keyEdgeFlags="right" />
+        <Key android:codes="8220" android:keyLabel="\u201C" />
+        <Key android:codes="8221" android:keyLabel="\u201D" />
+        <Key android:codes="8216" android:keyLabel="\u2018" />
+        <Key android:codes="8217" android:keyLabel="\u2019" android:keyEdgeFlags="right" />
     </Row>
 
     <Row>
