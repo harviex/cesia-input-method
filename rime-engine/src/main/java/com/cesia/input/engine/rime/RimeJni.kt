@@ -2,15 +2,12 @@ package com.cesia.input.engine.rime
 
 import android.content.Context
 import android.util.Log
+import com.cesia.input.engine.rime.trime.*
+import com.osfans.trime.core.Rime as TrimeRime
 
 /**
- * Rime JNI 桥接层
- * 调用 native librime 实现真正的 Rime 输入法引擎
- *
- * keycode 说明：
- * - Rime native 使用内部 keycode，字母直接对应 ASCII 码（a=97, b=98...）
- * - 不是 Android 的 KeyEvent.KEYCODE_A (=29)
- * - 参考 rime/key_table.h：以字符的 Unicode code point 作为 keycode
+ * Rime JNI 桥接层（Cesia 封装）
+ * 通过 com.osfans.trime.core.Rime 包下的 native 方法调用 librime_jni.so
  */
 object RimeJni {
 
@@ -30,6 +27,7 @@ object RimeJni {
         if (initialized) return true
         errorMessage = null
         try {
+            // 加载 librime_jni.so（Trime 的 JNI 库）
             System.loadLibrary("rime_jni")
             Log.i(TAG, "STEP1: librime_jni.so 加载成功")
 
@@ -43,10 +41,15 @@ object RimeJni {
             val defaultFile = java.io.File(sharedDir, "default.yaml")
             Log.i(TAG, "STEP3: dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
 
-            val started = nativeStartup(sharedDir, userDir)
-            Log.i(TAG, "STEP4: nativeStartup=$started")
+            // startupRime(sharedDir, userDir, versionName, fullCheck)
+            TrimeRime.startupRime(sharedDir, userDir, "1.0.0", false)
+            Log.i(TAG, "STEP4: startupRime 完成")
+
+            // 检查是否真正启动成功
+            val started = isRimeStarted()
             if (!started) {
-                errorMessage = "nativeStartup返回false (共享目录: $sharedDir)"
+                errorMessage = "startupRime 后 isRimeStarted=false (共享目录: $sharedDir)"
+                Log.e(TAG, errorMessage!!)
             }
             initialized = started
             return started
@@ -60,7 +63,7 @@ object RimeJni {
 
     fun shutdown() {
         if (initialized) {
-            try { nativeExit() } catch (_: Exception) {}
+            try { TrimeRime.exitRime() } catch (_: Exception) {}
             initialized = false
         }
     }
@@ -68,18 +71,11 @@ object RimeJni {
     fun createSession(): RimeSession = RimeSession(1L)
     fun destroySession(session: RimeSession) {}
 
-    /**
-     * 处理按键
-     * key 格式：单个字符用 ASCII 码，功能键用标准 ASCII 控制码
-     * a-z → 97-122 (ASCII)
-     * BackSpace → 8, Space → 32, Enter → 10, Escape → 27
-     * Delete → 127
-     */
     fun processKey(sessionId: Long, key: String): Boolean {
         if (!initialized) return false
         return try {
             val keycode = keyToRimeKeyCode(key)
-            nativeProcessKey(keycode, 0)
+            TrimeRime.processRimeKey(keycode, 0)
         } catch (e: Throwable) {
             Log.e(TAG, "processKey failed: $key", e)
             false
@@ -89,7 +85,8 @@ object RimeJni {
     fun getComposingText(sessionId: Long): String {
         if (!initialized) return ""
         return try {
-            nativeGetPreedit() ?: ""
+            val context = TrimeRime.getRimeContext()
+            context.composition.preedit ?: ""
         } catch (e: Throwable) {
             Log.e(TAG, "getComposingText failed", e)
             ""
@@ -99,9 +96,8 @@ object RimeJni {
     fun getCandidates(sessionId: Long): List<String> {
         if (!initialized) return emptyList()
         return try {
-            val arr = nativeGetCandidates() ?: return emptyList()
-            val count = nativeGetCandidateCount()
-            (0 until count).map { i -> arr.get(i)?.toString() ?: "" }.filter { it.isNotEmpty() }
+            val ctx = TrimeRime.getRimeContext()
+            ctx.menu.candidates.map { it.text }
         } catch (e: Throwable) {
             Log.e(TAG, "getCandidates failed", e)
             emptyList()
@@ -111,58 +107,58 @@ object RimeJni {
     fun commitComposition(sessionId: Long): String {
         if (!initialized) return ""
         return try {
-            nativeCommitComposition()
-            nativeGetCommit() ?: ""
+            TrimeRime.commitRimeComposition()
+            TrimeRime.getRimeCommit().text ?: ""
         } catch (e: Throwable) { "" }
     }
 
     fun selectCandidate(sessionId: Long, index: Int): String {
         if (!initialized) return ""
         return try {
-            nativeSelectCandidate(index) ?: ""
+            TrimeRime.selectRimeCandidate(index, false)
+            val ctx = TrimeRime.getRimeContext()
+            ctx.menu.candidates.getOrNull(index)?.text ?: ""
         } catch (e: Throwable) { "" }
     }
 
     fun clearComposition(sessionId: Long) {
         if (!initialized) return
-        try { nativeClearComposition() } catch (_: Throwable) {}
+        try { TrimeRime.clearRimeComposition() } catch (_: Throwable) {}
     }
 
     fun changePage(sessionId: Long, backward: Boolean): Boolean {
         if (!initialized) return false
-        return try { nativeChangePage(backward) } catch (e: Throwable) { false }
+        return try { TrimeRime.changeRimeCandidatePage(backward) } catch (e: Throwable) { false }
     }
 
     fun getPageCount(sessionId: Long): Int {
         if (!initialized) return 0
         return try {
-            val ps = nativeGetPageSize()
-            val total = nativeGetCandidateCount()
-            if (ps <= 0) 0 else (total + ps - 1) / ps
+            val ctx = TrimeRime.getRimeContext()
+            if (ctx.menu.pageSize <= 0) 0
+            else (ctx.menu.candidates.size + ctx.menu.pageSize - 1) / ctx.menu.pageSize
         } catch (e: Throwable) { 0 }
     }
 
-    fun getCurrentPage(sessionId: Long): Int = 0
+    fun getCurrentPage(sessionId: Long): Int {
+        if (!initialized) return 0
+        return try {
+            TrimeRime.getRimeContext().menu.pageNumber
+        } catch (e: Throwable) { 0 }
+    }
 
-    /**
-     * 将按键字符转换为 Rime 内部 keycode
-     * Rime 使用 Unicode code point 作为 keycode
-     */
     private fun keyToRimeKeyCode(key: String): Int {
         if (key.length == 1) {
-            val c = key[0]
-            // 字母、数字、符号直接返回 ASCII/Unicode code point
-            return c.code
+            return key[0].code
         }
-        // 功能键映射为 ASCII 控制码
         return when (key) {
-            "BackSpace", "Back" -> 8       // ASCII BS
-            "Enter", "Return" -> 10        // ASCII LF
-            "Tab" -> 9                     // ASCII HT
-            "Escape" -> 27                 // ASCII ESC
-            "Space" -> 32                  // ASCII SP
-            "Delete", "Del" -> 127         // ASCII DEL
-            "Up" -> 0x26 + 0x10000         // 方向键需要特殊处理
+            "BackSpace", "Back" -> 8
+            "Enter", "Return" -> 10
+            "Tab" -> 9
+            "Escape" -> 27
+            "Space" -> 32
+            "Delete", "Del" -> 127
+            "Up" -> 0x26 + 0x10000
             "Down" -> 0x28 + 0x10000
             "Left" -> 0x25 + 0x10000
             "Right" -> 0x27 + 0x10000
@@ -177,24 +173,13 @@ object RimeJni {
         }
     }
 
-    // ============ Native methods ============
-    @JvmStatic external fun nativeStartup(sharedDir: String, userDir: String): Boolean
-    @JvmStatic external fun nativeRedeploy()
-    @JvmStatic external fun nativeIsMaintenanceComplete(): Boolean
-    @JvmStatic external fun nativeIsStarted(): Boolean
-    @JvmStatic external fun nativeExit()
-    @JvmStatic external fun nativeProcessKey(keycode: Int, mask: Int): Boolean
-    @JvmStatic external fun nativeCommitComposition(): Boolean
-    @JvmStatic external fun nativeClearComposition()
-    @JvmStatic external fun nativeGetCommit(): String?
-    @JvmStatic external fun nativeGetPreedit(): String?
-    @JvmStatic external fun nativeGetCursorPos(): Int
-    @JvmStatic external fun nativeGetCandidates(): Array<String>?
-    @JvmStatic external fun nativeGetCandidateCount(): Int
-    @JvmStatic external fun nativeGetPageSize(): Int
-    @JvmStatic external fun nativeChangePage(backward: Boolean): Boolean
-    @JvmStatic external fun nativeSelectCandidate(index: Int): String?
-    @JvmStatic external fun nativeGetInput(): String?
-    @JvmStatic external fun nativeGetOption(key: String): Boolean
-    @JvmStatic external fun nativeSetOption(key: String, value: Boolean)
+    private fun isRimeStarted(): Boolean {
+        return try {
+            val schemas = TrimeRime.getRimeSchemaList()
+            schemas.isNotEmpty()
+        } catch (e: Throwable) {
+            Log.e(TAG, "isRimeStarted check failed", e)
+            false
+        }
+    }
 }
