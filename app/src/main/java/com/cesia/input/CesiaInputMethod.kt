@@ -319,7 +319,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setupCandidateBar()
         applyKeyboardTheme()
 
-        updateStatus("Cesia 已就绪")
+        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}")
         setStatusDot("idle")
         isViewInitialized = true
 
@@ -1313,7 +1313,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
                 } else {
                     val c = primaryCode.toChar()
-                    statusText.text = "键:$c init=${rimeEngine.isInitialized} started=${RimeJni.nativeIsStarted()}"
+                    statusText.text = "键:$c init=${rimeEngine.isInitialized} composing=${rimeEngine.isComposing}"
                     val success = rimeEngine.processKey(c)
                     Log.d("CesiaRime", "processKey('$c') success=$success composing=${rimeEngine.isComposing} text='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size}")
                     updateCandidateBar()
