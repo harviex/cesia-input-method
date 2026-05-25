@@ -6,6 +6,11 @@ import android.util.Log
 /**
  * Rime JNI 桥接层
  * 调用 native librime 实现真正的 Rime 输入法引擎
+ *
+ * keycode 说明：
+ * - Rime native 使用内部 keycode，字母直接对应 ASCII 码（a=97, b=98...）
+ * - 不是 Android 的 KeyEvent.KEYCODE_A (=29)
+ * - 参考 rime/key_table.h：以字符的 Unicode code point 作为 keycode
  */
 object RimeJni {
 
@@ -21,27 +26,23 @@ object RimeJni {
     fun initialize(context: Context): Boolean {
         if (initialized) return true
         try {
-            // 加载 native 库
             System.loadLibrary("rime_jni")
             Log.i(TAG, "librime_jni.so 加载成功")
 
             val sharedDir = context.filesDir.absolutePath + "/rime"
             val userDir = context.filesDir.absolutePath + "/rime"
-            // 确保目录存在
             java.io.File(sharedDir).mkdirs()
             java.io.File(userDir).mkdirs()
-            
-            // 验证词库文件是否存在
+
+            // 验证词库文件
             val dictFile = java.io.File(sharedDir, "pinyin.dict.yaml")
             val schemaFile = java.io.File(sharedDir, "pinyin.schema.yaml")
             val defaultFile = java.io.File(sharedDir, "default.yaml")
-            Log.i(TAG, "dict存在=${dictFile.exists()} size=${dictFile.length()}")
-            Log.i(TAG, "schema存在=${schemaFile.exists()} size=${schemaFile.length()}")
-            Log.i(TAG, "default存在=${defaultFile.exists()} size=${defaultFile.length()}")
-            
+            Log.i(TAG, "dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
+
             nativeStartup(sharedDir, userDir)
             initialized = true
-            Log.i(TAG, "Rime native 引擎初始化成功, shared=$sharedDir")
+            Log.i(TAG, "Rime native 引擎初始化成功 shared=$sharedDir")
             return true
         } catch (e: Throwable) {
             Log.e(TAG, "Rime native 引擎初始化失败", e)
@@ -52,26 +53,25 @@ object RimeJni {
 
     fun shutdown() {
         if (initialized) {
-            try {
-                nativeExit()
-            } catch (_: Exception) {}
+            try { nativeExit() } catch (_: Exception) {}
             initialized = false
         }
     }
 
-    fun createSession(): RimeSession {
-        return RimeSession(1L) // native 层使用全局 session
-    }
+    fun createSession(): RimeSession = RimeSession(1L)
+    fun destroySession(session: RimeSession) {}
 
-    fun destroySession(session: RimeSession) {
-        // native 层使用全局 session，无需单独销毁
-    }
-
+    /**
+     * 处理按键
+     * key 格式：单个字符用 ASCII 码，功能键用标准 ASCII 控制码
+     * a-z → 97-122 (ASCII)
+     * BackSpace → 8, Space → 32, Enter → 10, Escape → 27
+     * Delete → 127
+     */
     fun processKey(sessionId: Long, key: String): Boolean {
         if (!initialized) return false
         return try {
-            // 将字符转换为 keycode
-            val keycode = keyToKeyCode(key)
+            val keycode = keyToRimeKeyCode(key)
             nativeProcessKey(keycode, 0)
         } catch (e: Throwable) {
             Log.e(TAG, "processKey failed: $key", e)
@@ -82,8 +82,7 @@ object RimeJni {
     fun getComposingText(sessionId: Long): String {
         if (!initialized) return ""
         return try {
-            val preedit = nativeGetPreedit()
-            if (preedit.isNullOrEmpty()) "" else preedit
+            nativeGetPreedit() ?: ""
         } catch (e: Throwable) {
             Log.e(TAG, "getComposingText failed", e)
             ""
@@ -93,12 +92,9 @@ object RimeJni {
     fun getCandidates(sessionId: Long): List<String> {
         if (!initialized) return emptyList()
         return try {
-            val arr = nativeGetCandidates()
+            val arr = nativeGetCandidates() ?: return emptyList()
             val count = nativeGetCandidateCount()
-            Log.d(TAG, "getCandidates: count=$count, initialized=$initialized")
-            (0 until count).map { i ->
-                arr?.get(i)?.toString() ?: ""
-            }.filter { it.isNotEmpty() }
+            (0 until count).map { i -> arr.get(i)?.toString() ?: "" }.filter { it.isNotEmpty() }
         } catch (e: Throwable) {
             Log.e(TAG, "getCandidates failed", e)
             emptyList()
@@ -110,34 +106,24 @@ object RimeJni {
         return try {
             nativeCommitComposition()
             nativeGetCommit() ?: ""
-        } catch (e: Throwable) {
-            ""
-        }
+        } catch (e: Throwable) { "" }
     }
 
     fun selectCandidate(sessionId: Long, index: Int): String {
         if (!initialized) return ""
         return try {
             nativeSelectCandidate(index) ?: ""
-        } catch (e: Throwable) {
-            ""
-        }
+        } catch (e: Throwable) { "" }
     }
 
     fun clearComposition(sessionId: Long) {
         if (!initialized) return
-        try {
-            nativeClearComposition()
-        } catch (_: Throwable) {}
+        try { nativeClearComposition() } catch (_: Throwable) {}
     }
 
     fun changePage(sessionId: Long, backward: Boolean): Boolean {
         if (!initialized) return false
-        return try {
-            nativeChangePage(backward)
-        } catch (e: Throwable) {
-            false
-        }
+        return try { nativeChangePage(backward) } catch (e: Throwable) { false }
     }
 
     fun getPageCount(sessionId: Long): Int {
@@ -146,55 +132,45 @@ object RimeJni {
             val ps = nativeGetPageSize()
             val total = nativeGetCandidateCount()
             if (ps <= 0) 0 else (total + ps - 1) / ps
-        } catch (e: Throwable) {
-            0
-        }
+        } catch (e: Throwable) { 0 }
     }
 
-    fun getCurrentPage(sessionId: Long): Int {
-        // 简化：返回 0
-        return 0
-    }
+    fun getCurrentPage(sessionId: Long): Int = 0
 
-    // 将字符转换为 Android keycode
-    private fun keyToKeyCode(key: String): Int {
+    /**
+     * 将按键字符转换为 Rime 内部 keycode
+     * Rime 使用 Unicode code point 作为 keycode
+     */
+    private fun keyToRimeKeyCode(key: String): Int {
         if (key.length == 1) {
             val c = key[0]
-            if (c in 'a'..'z') return c - 'a' + 29 // KEYCODE_A = 29
-            if (c in 'A'..'Z') return c - 'A' + 29
-            if (c in '0'..'9') return c - '0' + 7  // KEYCODE_0 = 7
-            return when (c) {
-                ' ' -> 62  // KEYCODE_SPACE
-                ',' -> 55  // KEYCODE_COMMA
-                '.' -> 56  // KEYCODE_PERIOD
-                ';' -> 74  // KEYCODE_SEMICOLON
-                '\'' -> 75 // KEYCODE_APOSTROPHE
-                '/' -> 76  // KEYCODE_SLASH
-                '\\' -> 73 // KEYCODE_BACKSLASH
-                '[' -> 71  // KEYCODE_LEFT_BRACKET
-                ']' -> 72  // KEYCODE_RIGHT_BRACKET
-                '=' -> 69  // KEYCODE_EQUALS
-                '-' -> 69  // KEYCODE_MINUS
-                '`' -> 68  // KEYCODE_GRAVE
-                else -> c.code
-            }
+            // 字母、数字、符号直接返回 ASCII/Unicode code point
+            return c.code
         }
+        // 功能键映射为 ASCII 控制码
         return when (key) {
-            "BackSpace", "Back" -> 67  // KEYCODE_DEL
-            "Enter", "Return" -> 66    // KEYCODE_ENTER
-            "Tab" -> 61                // KEYCODE_TAB
-            "Escape" -> 111            // KEYCODE_ESCAPE
-            "Space" -> 62              // KEYCODE_SPACE
-            "Up" -> 19                 // KEYCODE_DPAD_UP
-            "Down" -> 20               // KEYCODE_DPAD_DOWN
-            "Left" -> 21               // KEYCODE_DPAD_LEFT
-            "Right" -> 22              // KEYCODE_DPAD_RIGHT
-            else -> 0
+            "BackSpace", "Back" -> 8       // ASCII BS
+            "Enter", "Return" -> 10        // ASCII LF
+            "Tab" -> 9                     // ASCII HT
+            "Escape" -> 27                 // ASCII ESC
+            "Space" -> 32                  // ASCII SP
+            "Delete", "Del" -> 127         // ASCII DEL
+            "Up" -> 0x26 + 0x10000         // 方向键需要特殊处理
+            "Down" -> 0x28 + 0x10000
+            "Left" -> 0x25 + 0x10000
+            "Right" -> 0x27 + 0x10000
+            "Home" -> 0x24 + 0x10000
+            "End" -> 0x23 + 0x10000
+            "PageUp" -> 0x21 + 0x10000
+            "PageDown" -> 0x22 + 0x10000
+            else -> {
+                Log.w(TAG, "未知按键: $key, 使用原值")
+                key.hashCode()
+            }
         }
     }
 
     // ============ Native methods ============
-
     @JvmStatic external fun nativeStartup(sharedDir: String, userDir: String)
     @JvmStatic external fun nativeExit()
     @JvmStatic external fun nativeProcessKey(keycode: Int, mask: Int): Boolean
