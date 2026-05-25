@@ -224,15 +224,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 初始化引擎
         Log.d("Cesia", "createInputViewSafe: 开始初始化引擎")
-        statsManager = PolishStatsManager(this)
-        magicHistoryManager = MagicHistoryManager(this)
-        currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
+        try {
+            statsManager = PolishStatsManager(this)
+            magicHistoryManager = MagicHistoryManager(this)
+            currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
+            Log.d("Cesia", "createInputViewSafe: statsManager 初始化完成")
+        } catch (e: Exception) {
+            Log.e("Cesia", "statsManager 初始化失败", e)
+        }
 
-        rimeEngine = RimeEngine(this)
-        rimeEngine.initialize()
-        Log.i("Cesia", "Rime 引擎初始化完成")
+        try {
+            rimeEngine = RimeEngine(this)
+            rimeEngine.initialize()
+            Log.i("Cesia", "Rime 引擎初始化完成")
+        } catch (e: Exception) {
+            Log.e("Cesia", "Rime 引擎初始化失败", e)
+        }
 
-        typelessEngine = TypelessEngine(this, this).also { engine ->
+        try {
+            typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
                 Handler(Looper.getMainLooper()).post { updateStatus(msg) }
             }
@@ -307,6 +317,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             engine.initialize(getOpenRouterApiKey())
+        } catch (e: Exception) {
+            Log.e("Cesia", "TypelessEngine 初始化失败", e)
         }
 
         loadSettings()
