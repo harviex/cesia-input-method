@@ -1310,13 +1310,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 字母键 a-z → Rime 处理（英文模式直接上屏）
             in 97..122 -> {
                 if (isEnglishMode) {
-                    // 英文模式：直接上屏字母
                     currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
                 } else {
                     val c = primaryCode.toChar()
+                    // 先在状态栏显示已按的键，确认 Java 层按键可达
+                    tvStatus.text = "按键: $c | composing=${rimeEngine.isComposing} init=${rimeEngine.isInitialized}"
                     val success = rimeEngine.processKey(c)
-                    // 详细日志：无论成功与否都打印 Rime 状态
-                    Log.d("CesiaRime", "processKey('$c') success=$success composing=${rimeEngine.isComposing} text='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size} engineInit=${rimeEngine.isInitialized}")
+                    Log.d("CesiaRime", "processKey('$c') success=$success composing=${rimeEngine.isComposing} text='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size}")
                     updateCandidateBar()
                 }
             }
