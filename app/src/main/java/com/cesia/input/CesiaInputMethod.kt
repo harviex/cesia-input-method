@@ -1216,8 +1216,35 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
+    // 符号切换键（符/ABC）：在 QWERTY ↔ 中文符号 之间切换
     private fun toggleKeyboard() {
         if (isSymbolMode) switchToQwertyKeyboard() else switchToSymbolKeyboard()
+    }
+
+    // 中英文切换键（🌐）：切换到英文 QWERTY（无中文输入），再按切回
+    private var isEnglishMode = false
+
+    private fun toggleLanguage() {
+        if (isEnglishMode) {
+            // 切回中文
+            isEnglishMode = false
+            isSymbolMode = false
+            currentKeyboard = qwertyKeyboard
+            keyboardView.keyboard = qwertyKeyboard
+            keyboardView.invalidateAllKeys()
+            // 清除 Rime 的 composing 状态
+            rimeEngine.clear()
+            updateCandidateBar()
+        } else {
+            // 切到英文
+            isEnglishMode = true
+            isSymbolMode = false
+            currentKeyboard = qwertyKeyboard
+            keyboardView.keyboard = qwertyKeyboard
+            keyboardView.invalidateAllKeys()
+            rimeEngine.clear()
+            updateCandidateBar()
+        }
     }
 
     // ======================== 长按检测 ========================
@@ -1274,10 +1301,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
 
         when (primaryCode) {
-            // 字母键 a-z → Rime 处理
+            // 字母键 a-z → Rime 处理（英文模式直接上屏）
             in 97..122 -> {
-                rimeEngine.processKey(primaryCode.toChar())
-                updateCandidateBar()
+                if (isEnglishMode) {
+                    // 英文模式：直接上屏字母
+                    currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                } else {
+                    val c = primaryCode.toChar()
+                    val success = rimeEngine.processKey(c)
+                    Log.d("CesiaRime", "processKey('$c') = $success, composing=${rimeEngine.isComposing}, text=${rimeEngine.composingText}, candidates=${rimeEngine.candidates.size}")
+                    updateCandidateBar()
+                }
             }
 
             // 数字键 0-9
@@ -1298,7 +1332,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 空格键
             32 -> {
-                if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                if (isEnglishMode) {
+                    currentInputConnection?.commitText(" ", 1)
+                } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                     val selected = rimeEngine.selectCandidate(0)
                     currentInputConnection?.commitText(selected, 1)
                     rimeEngine.clear()
@@ -1314,7 +1350,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // BackSpace
             -5, Keyboard.KEYCODE_DELETE -> {
-                if (rimeEngine.isComposing) {
+                if (isEnglishMode) {
+                    currentInputConnection?.deleteSurroundingText(1, 0)
+                } else if (rimeEngine.isComposing) {
                     rimeEngine.processKey("BackSpace")
                     updateCandidateBar()
                 } else {
@@ -1324,7 +1362,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 回车键
             10, Keyboard.KEYCODE_DONE -> {
-                if (rimeEngine.isComposing) {
+                if (isEnglishMode) {
+                    currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                    currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+                } else if (rimeEngine.isComposing) {
                     val text = if (rimeEngine.hasCandidates) {
                         rimeEngine.selectCandidate(0)
                     } else {
@@ -1350,7 +1391,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             KEYCODE_SWITCH_SYMBOL -> toggleKeyboard()
 
             // 中英文切换 (🌐)
-            KEYCODE_SWITCH_LANG -> toggleKeyboard()
+            KEYCODE_SWITCH_LANG -> toggleLanguage()
 
             // 返回键
             KEYCODE_BACK_KEY -> switchToQwertyKeyboard()
