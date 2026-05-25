@@ -165,7 +165,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun createInputViewSafe(): View {
         Log.d("Cesia", "createInputViewSafe: 开始加载布局")
-        val view = layoutInflater.inflate(R.layout.input_view, null)
+        val view = getLayoutInflater().inflate(R.layout.input_view, null)
 
         keyboardView = view.findViewById(R.id.keyboard_view)
         micButton = view.findViewById(R.id.btn_mic)
