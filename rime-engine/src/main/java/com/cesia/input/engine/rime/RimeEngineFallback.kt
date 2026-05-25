@@ -15,18 +15,15 @@ class RimeEngineFallback(private val context: Context) {
     }
 
     private var isReady = false
-    // 拼音 → 候选词列表 的映射
     private val pinyinMap = LinkedHashMap<String, List<String>>()
-    // 当前状态
     private var currentPinyin = ""
     private var currentPage = 0
     private val pageSize = 5
 
-    val currentPageIdx: Int get() = currentPage
-
     val isInitialized: Boolean get() = isReady
     val isComposing: Boolean get() = currentPinyin.isNotEmpty()
     val composingText: String get() = currentPinyin
+
     val candidates: List<String>
         get() {
             if (currentPinyin.isEmpty()) return emptyList()
@@ -36,12 +33,15 @@ class RimeEngineFallback(private val context: Context) {
             val to = minOf(from + pageSize, words.size)
             return words.subList(from, to)
         }
+
     val hasCandidates: Boolean get() = candidates.isNotEmpty()
+
     val pageCount: Int
         get() {
             val words = pinyinMap[currentPinyin] ?: return 0
             return (words.size + pageSize - 1) / pageSize
         }
+
     val currentPageIdx: Int get() = currentPage
 
     fun initialize(): Boolean {
