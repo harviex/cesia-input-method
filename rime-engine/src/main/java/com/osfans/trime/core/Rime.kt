@@ -35,5 +35,15 @@ class Rime {
         @JvmStatic external fun selectRimeSchemas(schemaIds: Array<String>): Boolean
         @JvmStatic external fun getRimeCandidates(startIndex: Int, limit: Int): Array<CandidateItem>
         @JvmStatic external fun getRimeBulkCandidates(): Array<Any>
+
+        /**
+         * Native 回调入口 — librime_jni 通过此方法通知 Java 层 Rime 事件
+         * @param type 事件类型
+         * @param params 事件参数
+         */
+        @JvmStatic
+        fun handleRimeMessage(type: Int, params: Array<Any>) {
+            // 事件回调（暂不处理，避免 native 崩溃）
+        }
     }
 }

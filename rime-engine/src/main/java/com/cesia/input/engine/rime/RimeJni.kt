@@ -44,6 +44,20 @@ object RimeJni {
             TrimeRime.startupRime(sharedDir, userDir, "1.0.0", false)
             Log.i(TAG, "STEP4: startupRime 完成")
 
+            // 清除旧的 build 目录，强制 Rime 重新编译
+            val buildDir = java.io.File(sharedDir, "build")
+            if (buildDir.exists()) {
+                buildDir.deleteRecursively()
+                Log.i(TAG, "STEP5: 清除旧 build 目录")
+            }
+
+            // 触发 Rime 部署（编译 schema 和词库）
+            if (schemaFile.exists()) {
+                val schemaOk = TrimeRime.deployRimeSchemaFile(schemaFile.absolutePath)
+                Log.i(TAG, "STEP5: deployRimeSchemaFile=${schemaOk}")
+            }
+            // 注意：不调用 deployRimeConfigFile，避免覆盖 default.yaml 中的 schema_list
+
             val started = isRimeStarted()
             if (!started) {
                 errorMessage = "startupRime 后 isRimeStarted=false (共享目录: $sharedDir)"
@@ -73,7 +87,9 @@ object RimeJni {
         if (!initialized) return false
         return try {
             val keycode = keyToRimeKeyCode(key)
-            TrimeRime.processRimeKey(keycode, 0)
+            val result = TrimeRime.processRimeKey(keycode, 0)
+            Log.d(TAG, "processRimeKey key=$key keycode=$keycode result=$result")
+            result
         } catch (e: Throwable) {
             Log.e(TAG, "processKey failed: $key", e)
             false
@@ -173,8 +189,20 @@ object RimeJni {
 
     private fun isRimeStarted(): Boolean {
         return try {
-            val schemas = TrimeRime.getRimeSchemaList()
-            schemas.isNotEmpty()
+            // 等待 Rime 引擎完成初始化（最多 60 秒）
+            // 通过检查 schema 列表是否非空来判断
+            for (i in 0 until 600) {
+                try {
+                    val schemas = TrimeRime.getRimeSchemaList()
+                    if (schemas.isNotEmpty()) {
+                        Log.i(TAG, "isRimeStarted: schemaList=${schemas.size} after ${i * 100}ms")
+                        return true
+                    }
+                } catch (_: Throwable) {}
+                Thread.sleep(100)
+            }
+            Log.e(TAG, "isRimeStarted: timeout after 60s, schemaList still empty")
+            false
         } catch (e: Throwable) {
             Log.e(TAG, "isRimeStarted check failed", e)
             false
