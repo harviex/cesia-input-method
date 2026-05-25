@@ -40,10 +40,10 @@ object RimeJni {
             val defaultFile = java.io.File(sharedDir, "default.yaml")
             Log.i(TAG, "dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
 
-            nativeStartup(sharedDir, userDir)
-            initialized = true
-            Log.i(TAG, "Rime native 引擎初始化成功 shared=$sharedDir")
-            return true
+            val started = nativeStartup(sharedDir, userDir)
+            initialized = started
+            Log.i(TAG, "Rime native 引擎初始化: started=$started shared=$sharedDir")
+            return started
         } catch (e: Throwable) {
             Log.e(TAG, "Rime native 引擎初始化失败", e)
             initialized = false

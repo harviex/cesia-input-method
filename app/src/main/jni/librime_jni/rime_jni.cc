@@ -23,7 +23,7 @@ static void declare_librime_module_dependencies() {
 
 class Rime {
  public:
-  Rime() : api_(rime_get_api()), session_id_(0) {}
+  Rime() : api_(rime_get_api()), session_id_(0), started_(false) {}
   Rime(Rime const &) = delete;
   void operator=(Rime const &) = delete;
 
@@ -32,8 +32,9 @@ class Rime {
     return instance;
   }
 
-  void startup(const char *shared_dir, const char *user_dir) {
-    if (!api_) return;
+  bool startup(const char *shared_dir, const char *user_dir) {
+    if (!api_) return false;
+    if (started_) return true;
     RIME_STRUCT(RimeTraits, traits);
     traits.shared_data_dir = shared_dir;
     traits.user_data_dir = user_dir;
@@ -44,39 +45,35 @@ class Rime {
     traits.distribution_version = "1.1.1";
     api_->setup(&traits);
     api_->initialize(&traits);
-    // 异步部署（编译词库 .dict.yaml → .bin），不阻塞主线程
+    started_ = true;
+    // 异步部署（编译词库 .dict.yaml → .bin）
+    // 即使部署失败也不影响基本初始化
     api_->start_maintenance(false);
+    return true;
   }
 
   bool isMaintenanceComplete() {
-    if (!api_) return true;
+    if (!api_ || !started_) return true;
     return api_->is_maintenance_mode_complete();
   }
 
-  void ensureSession() {
-    if (!api_) return;
+  bool ensureSession() {
+    if (!api_ || !started_) return false;
     if (!session_id_) {
-      // 等待部署完成（最多10秒）
-      // is_maintenance_mode_complete() 返回 true 表示维护已完成
-      for (int i = 0; i < 100; i++) {
+      // 等待部署完成（最多3秒），不要阻塞太久
+      for (int i = 0; i < 30; i++) {
         if (api_->is_maintenance_mode_complete()) break;
         usleep(100000); // 100ms
       }
       session_id_ = api_->create_session();
-      if (!session_id_) {
-        __android_log_print(ANDROID_LOG_ERROR, "RimeJNI", "create_session failed");
-      }
     }
+    return session_id_ != 0;
   }
 
   void redeploy() {
-    // 销毁旧 session，触发重新部署
-    if (session_id_) {
-      session_id_ = 0;
-    }
-    if (api_) {
-      api_->start_maintenance(false);
-    }
+    if (!api_ || !started_) return;
+    session_id_ = 0;
+    api_->start_maintenance(false);
   }
 
   RimeSessionId session() {
@@ -84,14 +81,25 @@ class Rime {
     return session_id_;
   }
 
+  bool isStarted() const { return started_; }
+
   bool processKey(int keycode, int mask) {
+    if (!api_ || !started_) return false;
+    if (!ensureSession()) return false;
     return api_->process_key(session(), keycode, mask);
   }
 
-  bool commitComposition() { return api_->commit_composition(session()); }
-  void clearComposition() { api_->clear_composition(session()); }
+  bool commitComposition() {
+    if (!api_ || !started_) return false;
+    return api_->commit_composition(session());
+  }
+  void clearComposition() {
+    if (!api_ || !started_) return;
+    api_->clear_composition(session());
+  }
 
   jstring getCommit(JNIEnv *env) {
+    if (!api_ || !started_) return env->NewStringUTF("");
     RIME_STRUCT(RimeCommit, data);
     if (api_->get_commit(session(), &data)) {
       jstring result = env->NewStringUTF(data.text ? data.text : "");
@@ -101,8 +109,8 @@ class Rime {
     return env->NewStringUTF("");
   }
 
-  // Returns preedit string via output parameter
   bool getPreedit(JNIEnv *env, std::string &preedit, int &cursor_pos) {
+    if (!api_ || !started_) return false;
     RIME_STRUCT(RimeContext, ctx);
     if (!api_->get_context(session(), &ctx)) return false;
     preedit = ctx.composition.preedit ? ctx.composition.preedit : "";
@@ -111,22 +119,17 @@ class Rime {
     return true;
   }
 
-  // Returns input string
   jstring getInput(JNIEnv *env) {
+    if (!api_ || !started_) return env->NewStringUTF("");
     auto input = api_->get_input(session());
     return env->NewStringUTF(input ? input : "");
   }
 
-  int getInputLength() {
-    auto input = api_->get_input(session());
-    if (!input) return 0;
-    int len = 0;
-    while (input[len]) len++;
-    return len;
-  }
-
-  // Get candidates as string array
   jobjectArray getCandidates(JNIEnv *env, int *highlighted) {
+    if (!api_ || !started_) {
+      *highlighted = -1;
+      return env->NewObjectArray(0, env->FindClass("java/lang/String"), nullptr);
+    }
     RIME_STRUCT(RimeContext, ctx);
     if (!api_->get_context(session(), &ctx)) {
       *highlighted = -1;
@@ -145,6 +148,7 @@ class Rime {
   }
 
   int getCandidateCount() {
+    if (!api_ || !started_) return 0;
     RIME_STRUCT(RimeContext, ctx);
     if (!api_->get_context(session(), &ctx)) return 0;
     int count = ctx.menu.num_candidates;
@@ -153,6 +157,7 @@ class Rime {
   }
 
   int getPageSize() {
+    if (!api_ || !started_) return 0;
     RIME_STRUCT(RimeContext, ctx);
     if (!api_->get_context(session(), &ctx)) return 0;
     int size = ctx.menu.page_size;
@@ -161,18 +166,22 @@ class Rime {
   }
 
   bool changePage(bool backward) {
+    if (!api_ || !started_) return false;
     return api_->change_page(session(), backward);
   }
 
   bool selectCandidate(int index) {
+    if (!api_ || !started_) return false;
     return api_->select_candidate_on_current_page(session(), index);
   }
 
   bool getOption(const char *key) {
+    if (!api_ || !started_) return false;
     return api_->get_option(session(), key);
   }
 
   void setOption(const char *key, bool value) {
+    if (!api_ || !started_) return;
     api_->set_option(session(), key, value);
   }
 
@@ -180,12 +189,16 @@ class Rime {
     if (session_id_) {
       session_id_ = 0;
     }
-    api_->finalize();
+    if (started_) {
+      api_->finalize();
+      started_ = false;
+    }
   }
 
  private:
   RimeApi *api_;
   RimeSessionId session_id_;
+  bool started_;
 };
 
 static jstring toJString(JNIEnv *env, const char *s) {
@@ -207,10 +220,10 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
   return JNI_VERSION_1_6;
 }
 
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_com_cesia_input_engine_rime_RimeJni_nativeStartup(
     JNIEnv *env, jclass clazz, jstring shared_dir, jstring user_dir) {
-  Rime::Instance().startup(
+  return Rime::Instance().startup(
       fromJString(env, shared_dir).c_str(),
       fromJString(env, user_dir).c_str());
 }
@@ -223,6 +236,11 @@ Java_com_cesia_input_engine_rime_RimeJni_nativeRedeploy(JNIEnv *env, jclass claz
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_cesia_input_engine_rime_RimeJni_nativeIsMaintenanceComplete(JNIEnv *env, jclass clazz) {
   return Rime::Instance().isMaintenanceComplete();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_cesia_input_engine_rime_RimeJni_nativeIsStarted(JNIEnv *env, jclass clazz) {
+  return Rime::Instance().isStarted();
 }
 
 extern "C" JNIEXPORT void JNICALL

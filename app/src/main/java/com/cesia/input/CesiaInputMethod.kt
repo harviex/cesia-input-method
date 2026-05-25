@@ -1313,8 +1313,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
                 } else {
                     val c = primaryCode.toChar()
-                    // 先在状态栏显示已按的键，确认 Java 层按键可达
-                    statusText.text = "按键: $c | composing=${rimeEngine.isComposing} init=${rimeEngine.isInitialized}"
+                    // 调试：显示按键和 Rime 状态
+                    statusText.text = "键:$c init=${rimeEngine.isInitialized} composing=${rimeEngine.isComposing} preedit='${rimeEngine.composingText}' cand=${rimeEngine.candidates.size}"
                     val success = rimeEngine.processKey(c)
                     Log.d("CesiaRime", "processKey('$c') success=$success composing=${rimeEngine.isComposing} text='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size}")
                     updateCandidateBar()
