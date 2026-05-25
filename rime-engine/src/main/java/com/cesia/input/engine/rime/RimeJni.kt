@@ -27,22 +27,23 @@ object RimeJni {
         if (initialized) return true
         try {
             System.loadLibrary("rime_jni")
-            Log.i(TAG, "librime_jni.so 加载成功")
+            Log.i(TAG, "STEP1: librime_jni.so 加载成功")
 
             val sharedDir = context.filesDir.absolutePath + "/rime"
             val userDir = context.filesDir.absolutePath + "/rime"
             java.io.File(sharedDir).mkdirs()
             java.io.File(userDir).mkdirs()
+            Log.i(TAG, "STEP2: 目录创建成功 shared=$sharedDir")
 
             // 验证词库文件
             val dictFile = java.io.File(sharedDir, "pinyin.dict.yaml")
             val schemaFile = java.io.File(sharedDir, "pinyin.schema.yaml")
             val defaultFile = java.io.File(sharedDir, "default.yaml")
-            Log.i(TAG, "dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
+            Log.i(TAG, "STEP3: dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
 
             val started = nativeStartup(sharedDir, userDir)
+            Log.i(TAG, "STEP4: nativeStartup 返回 started=$started")
             initialized = started
-            Log.i(TAG, "Rime native 引擎初始化: started=$started shared=$sharedDir")
             return started
         } catch (e: Throwable) {
             Log.e(TAG, "Rime native 引擎初始化失败", e)
