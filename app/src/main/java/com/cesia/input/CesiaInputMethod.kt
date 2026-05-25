@@ -231,9 +231,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rimeEngine = RimeEngine(this)
         val rimeOk = rimeEngine.initialize()
         Log.i("Cesia", "Rime 引擎初始化: ok=$rimeOk")
-        if (!rimeOk) {
-            updateStatus("Rime初始化失败: ${rimeEngine.lastError() ?: "未知"}")
-        }
+        val rimeErrorMsg = if (!rimeOk) rimeEngine.lastError() ?: "未知" else null
 
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
@@ -322,7 +320,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setupCandidateBar()
         applyKeyboardTheme()
 
-        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}")
+        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}" +
+            (rimeErrorMsg?.let { " | 错误: $it" } ?: ""))
         setStatusDot("idle")
         isViewInitialized = true
 
