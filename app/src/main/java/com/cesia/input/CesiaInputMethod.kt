@@ -79,7 +79,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var isRecording = false
     private var isSymbolMode = false
     private var isCapsLock = false
-    private var isChineseMode = true  // 默认中文键盘
     private var isProcessingResult = false
     private var isWaitingForChoice = false
     private var lastMicClickTime = 0L
@@ -314,9 +313,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .getString(PREF_AI_STYLE, "自然") ?: "自然"
 
         // 默认中文模式
-        isChineseMode = true
-        updateLangSwitchKeyLabel("英")
-
         setupButtonListeners()
         setupCandidateBar()
         applyKeyboardTheme()
@@ -442,7 +438,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         for (i in tvCandidates.indices) {
             val index = i
             tvCandidates[i].setOnClickListener {
-                if (isChineseMode && rimeEngine.hasCandidates) {
+                if (rimeEngine.hasCandidates) {
                     val selected = rimeEngine.selectCandidate(
                         rimeEngine.currentPage * 5 + index
                     )
@@ -454,13 +450,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         btnCandidatePrev.setOnClickListener {
-            if (isChineseMode && rimeEngine.hasCandidates) {
+            if (rimeEngine.hasCandidates) {
                 rimeEngine.prevPage()
                 updateCandidateBar()
             }
         }
         btnCandidateNext.setOnClickListener {
-            if (isChineseMode && rimeEngine.hasCandidates) {
+            if (rimeEngine.hasCandidates) {
                 rimeEngine.nextPage()
                 updateCandidateBar()
             }
@@ -468,45 +464,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun updateCandidateBar() {
-        if (!isChineseMode) {
-            candidateBar.visibility = View.GONE
-            return
-        }
-
-        // 诊断信息
-        val init = rimeEngine.isInitialized
-        val avail = rimeEngine.isAvailable
         val composing = rimeEngine.isComposing
         val candidates = rimeEngine.candidates
-        val pinyin = rimeEngine.getCurrentPinyin()
+        val pinyin = rimeEngine.composingText
 
-        Log.d("Cesia", "updateCandidateBar: init=$init avail=$avail composing=$composing pinyin=$pinyin candidates=${candidates.size}")
-
+        // 没有正在输入的内容：隐藏候选栏
         if (!composing && pinyin.isEmpty()) {
             candidateBar.visibility = View.GONE
             return
         }
 
         candidateBar.visibility = View.VISIBLE
-
-        if (candidates.isEmpty()) {
-            // 显示诊断信息而不是空白
-            tvComposing.text = if (pinyin.isNotEmpty()) pinyin else "(无输入)"
-            for (i in tvCandidates.indices) {
-                tvCandidates[i].text = when (i) {
-                    0 -> if (!init) "❌ 引擎未初始化" else if (!avail) "❌ 引擎不可用" else "⏳ 等待输入..."
-                    1 -> "init=$init avail=$avail"
-                    2 -> "composing=$composing pinyin=$pinyin"
-                    else -> ""
-                }
-                tvCandidates[i].visibility = if (tvCandidates[i].text.isNotEmpty()) View.VISIBLE else View.INVISIBLE
-            }
-            btnCandidatePrev.isEnabled = false
-            btnCandidateNext.isEnabled = false
-            return
-        }
-
         tvComposing.text = pinyin
+
+        // 显示候选词（每个候选词是独立的字/词）
         for (i in tvCandidates.indices) {
             if (i < candidates.size) {
                 tvCandidates[i].text = candidates[i]
@@ -515,6 +486,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvCandidates[i].visibility = View.INVISIBLE
             }
         }
+
+        // 翻页按钮
         btnCandidatePrev.isEnabled = rimeEngine.currentPage > 0
         btnCandidateNext.isEnabled = rimeEngine.currentPage < rimeEngine.pageCount - 1
     }
@@ -552,16 +525,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnSettings.setOnClickListener { showSettings() }
 
         btnDelete.setOnClickListener {
-            if (isChineseMode && rimeEngine.isComposing) {
-                handleChineseBackspace()
+            if (rimeEngine.isComposing) {
+                rimeEngine.processKey("BackSpace")
+                updateCandidateBar()
             } else {
                 // 短按：清空光标之前的文字
                 currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
             }
         }
         btnDelete.setOnLongClickListener {
-            if (isChineseMode && rimeEngine.isComposing) {
-                handleChineseBackspace()
+            if (rimeEngine.isComposing) {
+                rimeEngine.processKey("BackSpace")
+                updateCandidateBar()
             } else {
                 // 长按：清空光标之后的文字
                 currentInputConnection?.deleteSurroundingText(0, Integer.MAX_VALUE)
@@ -825,119 +800,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     // ======================== 中/英切换 ========================
-
-    private fun toggleChineseMode() {
-        isChineseMode = !isChineseMode
-        if (isChineseMode) {
-            isSymbolMode = false
-            currentKeyboard = qwertyKeyboard
-            keyboardView.keyboard = qwertyKeyboard
-            keyboardView.invalidateAllKeys()
-            rimeEngine.clear()
-            candidateBar.visibility = View.GONE
-            updateStatus("中文拼音模式")
-            updateLangSwitchKeyLabel("英")
-        } else {
-            rimeEngine.clear()
-            candidateBar.visibility = View.GONE
-            updateStatus("英文模式")
-            updateLangSwitchKeyLabel("中")
-        }
-    }
-
-    private fun updateLangSwitchKeyLabel(label: String) {
-        val keyboard = currentKeyboard ?: return
-        for (key in keyboard.keys) {
-            if (key.codes.isNotEmpty() && key.codes[0] == KEYCODE_SWITCH_LANG) {
-                key.label = label
-                break
-            }
-        }
-        keyboardView.invalidateAllKeys()
-    }
-
-    // ======================== 中文拼音输入 ========================
-
-    private fun handleChineseInput(primaryCode: Int) {
-        val c = primaryCode.toChar()
-        if (c in 'a'..'z') {
-            Log.d("Cesia", "handleChineseInput: key=$c, rimeInit=${rimeEngine.isInitialized}, rimeAvail=${rimeEngine.isAvailable}")
-            val pinyin = rimeEngine.inputLetter(c)
-            Log.d("Cesia", "handleChineseInput: pinyin=$pinyin, composing=${rimeEngine.isComposing}, candidates=${rimeEngine.candidates.size}")
-            updateCandidateBar()
-            updateStatus("拼音: $pinyin")
-        } else if (c == ' ') {
-            if (rimeEngine.isComposing) {
-                if (rimeEngine.hasCandidates) {
-                    val selected = rimeEngine.selectCandidate(0)
-                    currentInputConnection?.commitText(selected, 1)
-                } else {
-                    val pinyin = rimeEngine.getCurrentPinyin()
-                    currentInputConnection?.commitText(pinyin, 1)
-                }
-                rimeEngine.clear()
-                updateCandidateBar()
-            } else {
-                currentInputConnection?.commitText(" ", 1)
-            }
-        } else {
-            if (rimeEngine.isComposing) {
-                val selected = if (rimeEngine.hasCandidates) {
-                    rimeEngine.selectCandidate(0)
-                } else {
-                    rimeEngine.getCurrentPinyin()
-                }
-                currentInputConnection?.commitText(selected, 1)
-                rimeEngine.clear()
-                updateCandidateBar()
-            }
-            // 中文模式下自动转换标点为全角
-            val charStr: String = if (isChineseMode) {
-                when (c) {
-                    ',' -> "\uFF0C"
-                    '.' -> "\u3002"
-                    '!' -> "\uFF01"
-                    '?' -> "\uFF1F"
-                    ';' -> "\uFF1B"
-                    ':' -> "\uFF1A"
-                    '(' -> "\uFF08"
-                    ')' -> "\uFF09"
-                    '[' -> "\u3010"
-                    ']' -> "\u3011"
-                    '{' -> "\uFF5B"
-                    '}' -> "\uFF5D"
-                    '<' -> "\u300A"
-                    '>' -> "\u300B"
-                    '\"' -> "\u300C"
-                    '\u0027' -> "\u300E"
-                    '\\' -> "\u3001"
-                    '|' -> "\uFF5C"
-                    '~' -> "\uFF5E"
-                    '`' -> "\u00B7"
-                    else -> c.toString()
-                }
-            } else {
-                c.toString()
-            }
-            currentInputConnection?.commitText(charStr, 1)
-        }
-    }
-
-    private fun handleChineseBackspace() {
-        if (rimeEngine.isComposing) {
-            val pinyin = rimeEngine.backspace()
-            if (pinyin.isEmpty()) {
-                rimeEngine.clear()
-                candidateBar.visibility = View.GONE
-                updateStatus("中文拼音模式")
-            } else {
-                updateCandidateBar()
-                updateStatus("拼音: $pinyin")
-            }
-        } else {
-            currentInputConnection?.deleteSurroundingText(1, 0)
-        }
-    }
 
     // ======================== 录音 ========================
 
@@ -1508,7 +1370,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (!isSymbolMode) {
             isSymbolMode = true
             // 使用语言对应的符号键盘
-            val symKbd = if (isChineseMode) symbolKeyboardCn else symbolKeyboardEn
+            val symKbd = symbolKeyboardCn
             currentKeyboard = symKbd
             keyboardView.keyboard = symKbd
             keyboardView.invalidateAllKeys()
@@ -1583,86 +1445,124 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
 
         when (primaryCode) {
-            KEYCODE_SWITCH_SYMBOL -> toggleKeyboard()
-            KEYCODE_SWITCH_LANG -> toggleChineseMode()
-            KEYCODE_BACK_KEY -> {
-                // ← 返回键：切换回字母键盘
-                switchToQwertyKeyboard()
+            // ===== 字母键 a-z：直接交给 Rime 处理 =====
+            in 97..122 -> {
+                rimeEngine.processKey(primaryCode.toChar())
+                updateCandidateBar()
             }
+
+            // ===== 数字键 0-9 =====
+            in 48..57 -> {
+                if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                    // Rime composing 时：数字选候选词
+                    val index = primaryCode - 48 // 0=第1个, 1=第2个...
+                    if (index == 0) index + 1 // 0 当作第10个候选（Rime 惯例）
+                    if (index <= rimeEngine.candidates.size) {
+                        val selected = rimeEngine.selectCandidate(index - 1)
+                        currentInputConnection?.commitText(selected, 1)
+                        rimeEngine.clear()
+                        updateCandidateBar()
+                    }
+                } else {
+                    currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                }
+            }
+
+            // ===== 空格键 =====
+            32 -> {
+                if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                    val selected = rimeEngine.selectCandidate(0)
+                    currentInputConnection?.commitText(selected, 1)
+                    rimeEngine.clear()
+                    updateCandidateBar()
+                } else if (rimeEngine.isComposing) {
+                    // 有拼音但无候选：上屏拼音
+                    currentInputConnection?.commitText(rimeEngine.composingText, 1)
+                    rimeEngine.clear()
+                    updateCandidateBar()
+                } else {
+                    currentInputConnection?.commitText(" ", 1)
+                }
+            }
+
+            // ===== BackSpace =====
+            -5, Keyboard.KEYCODE_DELETE -> {
+                if (rimeEngine.isComposing) {
+                    rimeEngine.processKey("BackSpace")
+                    updateCandidateBar()
+                } else {
+                    currentInputConnection?.deleteSurroundingText(1, 0)
+                }
+            }
+
+            // ===== 回车键 =====
+            10, Keyboard.KEYCODE_DONE -> {
+                if (rimeEngine.isComposing) {
+                    val text = if (rimeEngine.hasCandidates) {
+                        rimeEngine.selectCandidate(0)
+                    } else {
+                        rimeEngine.composingText
+                    }
+                    currentInputConnection?.commitText(text, 1)
+                    rimeEngine.clear()
+                    updateCandidateBar()
+                } else {
+                    currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                    currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+                }
+            }
+
+            // ===== Shift =====
             -1 -> {
                 isCapsLock = !isCapsLock
                 qwertyKeyboard.isShifted = isCapsLock
                 keyboardView.invalidateAllKeys()
             }
-            -5 -> {
-                if (isChineseMode) handleChineseBackspace()
-                else currentInputConnection?.deleteSurroundingText(1, 0)
-            }
+
+            // ===== 符号切换 =====
+            KEYCODE_SWITCH_SYMBOL -> toggleKeyboard()
+
+            // ===== 返回键 =====
+            KEYCODE_BACK_KEY -> switchToQwertyKeyboard()
+
+            // ===== 发送键（纸飞机）=====
             -200 -> {
                 if (sendKeyLongPressTriggered) {
                     sendKeyLongPressTriggered = false
                     return
                 }
-                val ic = currentInputConnection
-                if (isChineseMode && rimeEngine.isComposing) {
-                    val text = if (rimeEngine.hasCandidates) {
-                        rimeEngine.selectCandidate(0)
-                    } else {
-                        rimeEngine.getCurrentPinyin()
-                    }
+                if (rimeEngine.isComposing) {
+                    val text = if (rimeEngine.hasCandidates) rimeEngine.selectCandidate(0) else rimeEngine.composingText
                     currentInputConnection?.commitText(text, 1)
                     rimeEngine.clear()
                     updateCandidateBar()
-                    addSentMessage(text)
-                } else {
-                    val textBefore = ic?.getTextBeforeCursor(200, 0)?.toString().orEmpty()
-                    if (textBefore.isNotEmpty()) addSentMessage(textBefore)
                 }
+                val ic = currentInputConnection
                 val editorInfo = currentInputEditorInfo
                 val imeOptions = editorInfo?.imeOptions ?: 0
                 val action = imeOptions and EditorInfo.IME_MASK_ACTION
-                val hasSendAction = action == EditorInfo.IME_ACTION_SEND
-                        || action == EditorInfo.IME_ACTION_DONE
-                if (hasSendAction) {
-                    ic?.performEditorAction(action)
-                } else {
+                val hasSendAction = action == EditorInfo.IME_ACTION_SEND || action == EditorInfo.IME_ACTION_DONE
+                if (hasSendAction) ic?.performEditorAction(action)
+                else {
                     ic?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                     ic?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
                 }
             }
-            Keyboard.KEYCODE_DELETE -> {
-                if (isChineseMode) handleChineseBackspace()
-                else currentInputConnection?.deleteSurroundingText(1, 0)
-            }
-            Keyboard.KEYCODE_SHIFT -> {
-                isCapsLock = !isCapsLock
-                qwertyKeyboard.isShifted = isCapsLock
-                keyboardView.invalidateAllKeys()
-            }
-            Keyboard.KEYCODE_DONE -> {
-                currentInputConnection?.apply {
-                    sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-                    sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-                }
-            }
+
+            // ===== 模式切换 =====
             Keyboard.KEYCODE_MODE_CHANGE -> toggleKeyboard()
+
+            // ===== 其他按键（标点符号等）=====
             else -> {
-                if (isSymbolMode) {
-                    // 符号键盘：中文模式下转换标点，英文模式直接输出
-                    if (isChineseMode) {
-                        handleChineseInput(primaryCode)
-                    } else {
-                        currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
-                    }
-                } else if (isChineseMode) {
-                    handleChineseInput(primaryCode)
-                } else {
-                    var char = primaryCode.toChar()
-                    if (isCapsLock && char.isLowerCase()) {
-                        char = char.uppercaseChar()
-                    }
-                    currentInputConnection?.commitText(char.toString(), 1)
+                val c = primaryCode.toChar()
+                if (rimeEngine.isComposing) {
+                    // Rime composing 时输入标点：先提交当前输入，再输入标点
+                    val text = if (rimeEngine.hasCandidates) rimeEngine.selectCandidate(0) else rimeEngine.composingText
+                    currentInputConnection?.commitText(text, 1)
+                    rimeEngine.clear()
+                    updateCandidateBar()
                 }
+                currentInputConnection?.commitText(c.toString(), 1)
             }
         }
     }
@@ -1677,8 +1577,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
                 override fun run() {
-                    if (isChineseMode) handleChineseBackspace()
-                    else currentInputConnection?.deleteSurroundingText(1, 0)
+                    rimeEngine.processKey("BackSpace")
+                    updateCandidateBar()
                     backspaceHandler.postDelayed(this, 80)
                 }
             }
