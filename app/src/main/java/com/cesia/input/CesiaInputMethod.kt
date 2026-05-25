@@ -24,28 +24,24 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.cesia.input.engine.TypelessEngine
 import com.cesia.input.engine.rime.RimeEngine
-import com.cesia.input.engine.rime.RimeJni
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
+import com.cesia.input.ui.CustomKeyboardView
 import com.google.android.material.button.MaterialButton
 
 /**
- * Cesia 输入法
+ * Cesia 输入法 — Rime 内核版
  *
- * v1.0.126 — UI重设计版
- * 主要变化:
- * - 默认中文键盘+中文符号
- * - 重设计麦克风按钮（蓝底圆角）
- * - 声波动画
- * - 魔法修改单键切换
- * - 自动写作菜单即选即用
- * - 置顶/删除模式操作
- * - 长按魔法修改显示最近发送内容
+ * 架构：
+ * - 键盘 UI：标准 QWERTY 布局（qwerty.xml + symbols_cn.xml + symbols.xml）
+ * - 输入引擎：Rime（librime JNI）处理拼音→汉字
+ * - 底部功能栏：魔法修改、魔法书、语音、清空、发送
+ * - 语音润色：TypelessEngine（OpenRouter API）
  */
 class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
-    // 视图
-    private lateinit var keyboardView: com.cesia.input.ui.CustomKeyboardView
+    // ======================== 视图 ========================
+    private lateinit var keyboardView: CustomKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
     private lateinit var symbolKeyboardEn: Keyboard
     private lateinit var symbolKeyboardCn: Keyboard
@@ -70,12 +66,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnCandidatePrev: ImageButton
     private lateinit var btnCandidateNext: ImageButton
 
-    // 核心组件
+    // ======================== 核心组件 ========================
     private var typelessEngine: TypelessEngine? = null
     private lateinit var statsManager: PolishStatsManager
     private lateinit var rimeEngine: RimeEngine
 
-    // 状态
+    // ======================== 状态 ========================
     private var isRecording = false
     private var isSymbolMode = false
     private var isCapsLock = false
@@ -100,10 +96,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var sendKeyHandler = Handler(Looper.getMainLooper())
     private var sendKeyRunnable: Runnable? = null
 
-    // 魔法模式（改进版：单键切换）
+    // 魔法模式
     private var magicMode = false
     private var magicOriginalText = ""
-    private var magicIsWaitingForVoice = false  // 魔法按钮已高亮，等待再次点击触发语音
+    private var magicIsWaitingForVoice = false
 
     // 撤销历史
     private val undoHistory = mutableListOf<Pair<String, String>>()
@@ -117,14 +113,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicHistoryManager: MagicHistoryManager? = null
     private var currentMagicPrompt: String? = null
 
-    // 发送消息历史（最近10条）
+    // 发送消息历史
     private val sentMessages = mutableListOf<String>()
     private val maxSentMessages = 10
 
-    // 菜单动作模式
-    private var menuActionMode: String? = null  // null=正常, "pin"=置顶模式, "delete"=删除模式
-
-    // 初始化完成标志
+    // 初始化标志
     private var isViewInitialized = false
 
     // 主题
@@ -146,6 +139,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val THEME_DARK = 1
     }
 
+    // ======================== 生命周期 ========================
+
     override fun onCreate() {
         val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt(PREF_THEME_MODE, THEME_LIGHT)
@@ -159,7 +154,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return createInputViewSafe()
         } catch (e: Exception) {
             Log.e("Cesia", "onCreateInputView 严重崩溃", e)
-            // 返回TextView避免输入法Service完全崩溃
             return android.widget.TextView(this).apply {
                 text = "Cesia 加载失败，请重启输入法"
                 setTextColor(android.graphics.Color.RED)
@@ -181,7 +175,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
         btnSettings = view.findViewById(R.id.btn_settings)
         btnDelete = view.findViewById(R.id.btn_delete)
-        btnClipboard = view.findViewById(R.id.btn_clipboard)
+        btnClipboard = view.findViewById(R.id.btn_magic_book)  // 魔法书按钮
         btnMagic = view.findViewById(R.id.btn_magic)
         statusDot = view.findViewById(R.id.v_status_dot)
         statusText = view.findViewById(R.id.tv_status)
@@ -199,19 +193,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnCandidatePrev = view.findViewById(R.id.btn_candidate_prev)
         btnCandidateNext = view.findViewById(R.id.btn_candidate_next)
 
-        // 初始化键盘（try-catch防止xml解析异常）
+        // 初始化键盘
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
         try {
             symbolKeyboardEn = Keyboard(this, R.xml.symbols)
         } catch (e: Exception) {
             Log.e("Cesia", "加载英文符号键盘失败", e)
-            symbolKeyboardEn = qwertyKeyboard // fallback
+            symbolKeyboardEn = qwertyKeyboard
         }
         try {
             symbolKeyboardCn = Keyboard(this, R.xml.symbols_cn)
         } catch (e: Exception) {
             Log.e("Cesia", "加载中文符号键盘失败", e)
-            symbolKeyboardCn = symbolKeyboardEn // fallback
+            symbolKeyboardCn = symbolKeyboardEn
         }
         currentKeyboard = qwertyKeyboard
 
@@ -224,7 +218,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
-        // 初始化 Rime 引擎
         rimeEngine = RimeEngine(this)
         rimeEngine.initialize()
         Log.i("Cesia", "Rime 引擎初始化完成")
@@ -312,100 +305,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getString(PREF_AI_STYLE, "自然") ?: "自然"
 
-        // 默认中文模式
         setupButtonListeners()
         setupCandidateBar()
         applyKeyboardTheme()
 
         updateStatus("Cesia 已就绪")
         setStatusDot("idle")
-
         isViewInitialized = true
 
         return view
-    }
-
-    // ======================== 声波动画 ========================
-
-    private var waveAnim: AnimationDrawable? = null
-
-    private fun startVoiceWave() {
-        try {
-            voiceWave.visibility = View.VISIBLE
-            val bg = voiceWave.background
-            if (bg is AnimationDrawable) {
-                waveAnim = bg
-                bg.start()
-            }
-            // 脉冲缩放动画
-            val pulse = ScaleAnimation(
-                1.0f, 1.3f, 1.0f, 1.3f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f
-            ).apply {
-                duration = 600
-                repeatMode = ScaleAnimation.REVERSE
-                repeatCount = ScaleAnimation.INFINITE
-            }
-            voiceWave.startAnimation(pulse)
-        } catch (_: Exception) {}
-    }
-
-    private fun stopVoiceWave() {
-        try {
-            waveAnim?.stop()
-            waveAnim = null
-            voiceWave.clearAnimation()
-            voiceWave.visibility = View.GONE
-        } catch (_: Exception) {}
-    }
-
-    // ======================== 按钮动画 ========================
-
-    private fun animateMicSplit() {
-        try {
-            // btn_mic 缩小消失
-            micButton.animate().scaleX(0.5f).scaleY(0.5f).alpha(0f).setDuration(200).withEndAction {
-                micButton.visibility = View.GONE
-
-                // 声波动画出现（在两个按钮之间）
-                voiceWave.visibility = View.VISIBLE
-                startVoiceWave()
-
-                // AI+ 从左侧滑入
-                btnMicAi.visibility = View.VISIBLE
-                btnMicAi.translationX = -80f
-                btnMicAi.animate().translationX(0f).alpha(1f).setDuration(250).start()
-
-                // AI× 从右侧滑入
-                btnMicNoAi.visibility = View.VISIBLE
-                btnMicNoAi.translationX = 80f
-                btnMicNoAi.animate().translationX(0f).alpha(1f).setDuration(250).start()
-            }.start()
-        } catch (_: Exception) {}
-    }
-
-    private fun animateMicMerge() {
-        try {
-            stopVoiceWave()
-            voiceWave.visibility = View.GONE
-
-            // AI+ 向左滑出
-            btnMicAi.animate().translationX(-80f).alpha(0f).setDuration(200).withEndAction {
-                btnMicAi.visibility = View.GONE
-            }.start()
-
-            // AI× 向右滑出
-            btnMicNoAi.animate().translationX(80f).alpha(0f).setDuration(200).withEndAction {
-                btnMicNoAi.visibility = View.GONE
-                // 主按钮从缩小状态放大回来
-                micButton.visibility = View.VISIBLE
-                micButton.scaleX = 0.5f
-                micButton.scaleY = 0.5f
-                micButton.alpha = 0f
-                micButton.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(250).start()
-            }.start()
-        } catch (_: Exception) {}
     }
 
     // ======================== 主题 ========================
@@ -433,6 +341,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
         }
     }
+
+    // ======================== 候选栏 ========================
 
     private fun setupCandidateBar() {
         for (i in tvCandidates.indices) {
@@ -468,7 +378,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val candidates = rimeEngine.candidates
         val pinyin = rimeEngine.composingText
 
-        // 没有正在输入的内容：隐藏候选栏
         if (!composing && pinyin.isEmpty()) {
             candidateBar.visibility = View.GONE
             return
@@ -477,7 +386,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBar.visibility = View.VISIBLE
         tvComposing.text = pinyin
 
-        // 显示候选词（每个候选词是独立的字/词）
         for (i in tvCandidates.indices) {
             if (i < candidates.size) {
                 tvCandidates[i].text = candidates[i]
@@ -487,7 +395,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // 翻页按钮
         btnCandidatePrev.isEnabled = rimeEngine.currentPage > 0
         btnCandidateNext.isEnabled = rimeEngine.currentPage < rimeEngine.pageCount - 1
     }
@@ -517,11 +424,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else false
         }
 
-        // AI+ 按钮
         btnMicAi.setOnClickListener { onAiPlusSelected() }
-        // AI× 按钮
         btnMicNoAi.setOnClickListener { onAiCrossSelected() }
-
         btnSettings.setOnClickListener { showSettings() }
 
         btnDelete.setOnClickListener {
@@ -529,7 +433,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
             } else {
-                // 短按：清空光标之前的文字
                 currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
             }
         }
@@ -538,38 +441,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
             } else {
-                // 长按：清空光标之后的文字
                 currentInputConnection?.deleteSurroundingText(0, Integer.MAX_VALUE)
             }
             true
         }
 
-        // 自动写作按钮：短按→有魔法指令则执行魔法，否则AI自动回复；长按→弹出魔法菜单
         btnClipboard.setOnClickListener { executeMagicOrAiReply() }
         btnClipboard.setOnLongClickListener { showMagicHistoryPopup(); true }
 
-        // 魔法修改按钮：单击→高亮→再单击→录音并应用；长按无功能
         btnMagic.setOnClickListener { toggleMagicMode() }
         btnMagic.setOnLongClickListener { true }
     }
 
-    // ======================== 魔法修改（单键切换） ========================
+    // ======================== 魔法修改 ========================
 
-    /**
-     * 单击魔法修改按钮：高亮→再单击→开始录音应用魔法
-     */
     private fun toggleMagicMode() {
         if (!magicIsWaitingForVoice) {
-            // 第一次点击：高亮按钮
             magicIsWaitingForVoice = true
             btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFF9800.toInt())
             btnMagic.setTextColor(0xFFFFFFFF.toInt())
             btnMagic.elevation = 6f
             updateStatus("✨ 点击✨按钮开始语音修改")
-            // 脉冲高亮动画
             btnMagic.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200).start()
         } else {
-            // 第二次点击：开始录音
             magicIsWaitingForVoice = false
             btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
             btnMagic.setTextColor(0xFF888888.toInt())
@@ -579,9 +473,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /**
-     * 真正开始魔法修改模式
-     */
     private fun startMagicMode() {
         val ic = currentInputConnection ?: run {
             updateStatus("❌ 无输入框连接")
@@ -605,13 +496,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         startVoiceWave()
         isRecording = true
         micButton.text = "🎤 说话"
-
         typelessEngine?.startListening(continuous = true)
     }
 
-    /**
-     * 取消魔法高亮
-     */
     private fun resetMagicHighlight() {
         magicIsWaitingForVoice = false
         try {
@@ -620,6 +507,336 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             btnMagic.elevation = 0f
             btnMagic.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
         } catch (_: Exception) {}
+    }
+
+    private fun handleMagicResult(recognizedText: String) {
+        magicMode = false
+        typelessEngine?.magicMode = false
+        isRecording = false
+        stopVoiceWave()
+        setStatusDot("idle")
+
+        val instruction = recognizedText.trim()
+        if (instruction.isEmpty()) {
+            updateStatus("⚠️ 未识别到指令")
+            return
+        }
+
+        Log.d("CesiaMagic", "原文: $magicOriginalText")
+        Log.d("CesiaMagic", "指令: $instruction")
+        updateStatus("✨ 正在施展魔法...")
+
+        val prompt = buildMagicPrompt(magicOriginalText, instruction)
+        val polishService = typelessEngine?.getPolishService()
+
+        Thread {
+            try {
+                val result = polishService?.polishWithPrompt(prompt)
+                Handler(Looper.getMainLooper()).post {
+                    if (result != null && result.isNotEmpty()) {
+                        if (result == magicOriginalText) {
+                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
+                        } else {
+                            magicHistoryManager?.addRecord(instruction)
+                            saveUndoHistory(magicOriginalText, instruction)
+                            try {
+                                val ic2 = currentInputConnection
+                                ic2?.performContextMenuAction(android.R.id.selectAll)
+                                ic2?.commitText(result, 1)
+                                resetToIdle()
+                            } catch (e2: Exception) {
+                                Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
+                                updateStatus("❌ 上屏失败: ${e2.message}")
+                            }
+                        }
+                    } else {
+                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                    }
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    updateStatus("❌ 修改失败: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun buildMagicPrompt(original: String, instruction: String): String {
+        return "原文：$original\n\n用户指令：$instruction\n\n请根据用户指令修改原文，输出修改后的完整文本。只输出修改后的文本，不要输出任何解释。"
+    }
+
+    // ======================== 魔法历史 & 菜单 ========================
+
+    private fun executeMagicOrAiReply() {
+        try {
+            if (currentMagicPrompt != null) {
+                executeSelectedMagic(currentMagicPrompt!!)
+            } else {
+                triggerAiReply()
+            }
+        } catch (e: Exception) {
+            Log.e("Cesia", "executeMagicOrAiReply 异常", e)
+            updateStatus("❌ 操作失败: ${e.message}")
+        }
+    }
+
+    private fun executeSelectedMagic(instruction: String) {
+        if (isAiProcessing) {
+            updateStatus("⏳ AI正在处理中，请稍候...")
+            return
+        }
+        val ic = currentInputConnection ?: run {
+            updateStatus("❌ 无输入框连接")
+            return
+        }
+        val textBefore = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
+        val textAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
+        val fullText = textBefore + textAfter
+
+        if (fullText.isEmpty()) {
+            updateStatus("⚠️ 输入框无文字，无法修改")
+            return
+        }
+
+        isAiProcessing = true
+        updateStatus("✨ 正在施展魔法...")
+        setStatusDot("processing")
+        val prompt = buildMagicPrompt(fullText, instruction)
+        val polishService = typelessEngine?.getPolishService()
+
+        Thread {
+            try {
+                val result = polishService?.polishWithPrompt(prompt)
+                Handler(Looper.getMainLooper()).post {
+                    isAiProcessing = false
+                    if (result != null && result.isNotEmpty()) {
+                        if (result == fullText) {
+                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
+                        } else {
+                            magicHistoryManager?.addRecord(instruction)
+                            saveUndoHistory(fullText, instruction)
+                            try {
+                                val ic2 = currentInputConnection
+                                ic2?.performContextMenuAction(android.R.id.selectAll)
+                                ic2?.commitText(result, 1)
+                                resetToIdle()
+                            } catch (e2: Exception) {
+                                Log.e("Cesia", "replaceInputText 异常", e2)
+                                updateStatus("❌ 上屏失败: ${e2.message}")
+                                return@post
+                            }
+                        }
+                    } else {
+                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                    }
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    isAiProcessing = false
+                    updateStatus("❌ 修改失败: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun saveUndoHistory(originalText: String, instruction: String) {
+        undoHistory.add(0, Pair(originalText, instruction))
+        while (undoHistory.size > undoMaxSteps) {
+            undoHistory.removeAt(undoHistory.size - 1)
+        }
+    }
+
+    private fun performUndo() {
+        if (undoHistory.isEmpty()) {
+            updateStatus("↩️ 没有可撤销的记录")
+            return
+        }
+        val (originalText, _) = undoHistory.removeAt(0)
+        val ic = currentInputConnection ?: run {
+            updateStatus("❌ 无输入框连接")
+            return
+        }
+        try {
+            ic.performContextMenuAction(android.R.id.selectAll)
+            ic.commitText(originalText, 1)
+            updateStatus("↩️ 已撤销到原文")
+        } catch (e: Exception) {
+            updateStatus("❌ 撤销失败: ${e.message}")
+        }
+    }
+
+    private fun showMagicHistoryPopup() {
+        val mgr = magicHistoryManager ?: return
+        val records = mgr.getRecords()
+
+        try {
+            val inflater = android.view.LayoutInflater.from(this)
+            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
+
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+            popup.isOutsideTouchable = true
+            popup.elevation = 4f
+
+            val items = mutableListOf<MagicHistoryManager.MagicRecord>()
+            items.addAll(records)
+
+            val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
+            val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+            val btnUndo = popupView.findViewById<TextView>(R.id.btn_undo_manage)
+
+            gridView.adapter = object : android.widget.BaseAdapter() {
+                override fun getCount() = items.size
+                override fun getItem(p: Int) = items[p]
+                override fun getItemId(p: Int) = items[p].id
+                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                    val record = items[p]
+                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
+
+                    val prefix = if (record.isPinned) "📌 " else if (record.instruction == currentMagicPrompt) "✓ " else ""
+                    tv.text = "${prefix}${record.instruction}"
+                    tv.setTextColor(if (record.instruction == currentMagicPrompt) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+                    tv.setTypeface(null, if (record.instruction == currentMagicPrompt) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+
+                    tvFull.text = record.instruction
+                    tvFull.visibility = View.GONE
+
+                    v.setOnLongClickListener {
+                        tv.visibility = View.GONE
+                        tvFull.visibility = View.VISIBLE
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            try {
+                                tvFull.visibility = View.GONE
+                                tv.visibility = View.VISIBLE
+                            } catch (_: Exception) {}
+                        }, 3000)
+                        true
+                    }
+                    return v
+                }
+            }
+
+            gridView.setOnItemClickListener { _, _, position, _ ->
+                val record = items[position]
+                currentMagicPrompt = record.instruction
+                updateStatus("✅ 已应用：${record.instruction.take(20)}…")
+                popup.dismiss()
+                executeSelectedMagic(record.instruction)
+            }
+
+            gridView.setOnItemLongClickListener { _, v, position, _ ->
+                val record = items[position]
+                val popupMenu = android.widget.PopupMenu(this, v)
+                popupMenu.menu.add(0, 1, 0, if (record.isPinned) "取消置顶" else "📌 置顶")
+                popupMenu.menu.add(0, 2, 1, "🗑️ 删除")
+                popupMenu.setOnMenuItemClickListener { item ->
+                    when (item.itemId) {
+                        1 -> {
+                            mgr.togglePin(record.id)
+                            currentMagicPrompt = mgr.getActiveInstruction()
+                            items.clear()
+                            items.addAll(mgr.getRecords())
+                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                            updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
+                            true
+                        }
+                        2 -> {
+                            mgr.removeRecord(record.id)
+                            items.clear()
+                            val updated = mgr.getRecords()
+                            items.addAll(updated)
+                            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                                currentMagicPrompt = mgr.getActiveInstruction()
+                            }
+                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                            if (items.isEmpty()) {
+                                btnPin.visibility = View.GONE
+                                btnDelete.visibility = View.GONE
+                            }
+                            updateStatus("🗑️ 已删除")
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                popupMenu.show()
+                true
+            }
+
+            btnPin.setOnClickListener {
+                if (items.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnPin)
+                for (r in items) {
+                    val title = "${if (r.isPinned) "📌 " else "○ "}${r.instruction.take(18)}"
+                    popupMenu.menu.add(0, r.id.toInt(), 0, title)
+                }
+                popupMenu.setOnMenuItemClickListener { item ->
+                    val record = items.find { it.id.toInt() == item.itemId }
+                    if (record != null) {
+                        mgr.togglePin(record.id)
+                        currentMagicPrompt = mgr.getActiveInstruction()
+                        items.clear()
+                        items.addAll(mgr.getRecords())
+                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                        updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            btnDelete.setOnClickListener {
+                if (items.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnDelete)
+                for (r in items) {
+                    popupMenu.menu.add(0, r.id.toInt(), 0, "🗑️ ${r.instruction.take(18)}")
+                }
+                popupMenu.menu.add(0, -1, items.size, "⚠️ 删除全部（${items.size}条）")
+                popupMenu.setOnMenuItemClickListener { item ->
+                    if (item.itemId == -1) {
+                        mgr.clearAll()
+                        items.clear()
+                        currentMagicPrompt = null
+                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                        btnPin.visibility = View.GONE
+                        btnDelete.visibility = View.GONE
+                        updateStatus("🗑️ 已删除全部记录")
+                    } else {
+                        mgr.removeRecord(item.itemId.toLong())
+                        items.clear()
+                        val updated = mgr.getRecords()
+                        items.addAll(updated)
+                        if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                            currentMagicPrompt = mgr.getActiveInstruction()
+                        }
+                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            btnUndo.setOnClickListener {
+                popup.dismiss()
+                performUndo()
+            }
+
+            if (items.isEmpty()) {
+                btnPin.visibility = View.GONE
+                btnDelete.visibility = View.GONE
+                btnUndo.visibility = View.GONE
+            }
+
+            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
+        } catch (e: Exception) {
+            Log.e("Cesia", "showMagicHistoryPopup 异常", e)
+            updateStatus("长按可管理魔法指令")
+        }
     }
 
     // ======================== AI自动回复 ========================
@@ -799,8 +1016,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
     }
 
-    // ======================== 中/英切换 ========================
-
     // ======================== 录音 ========================
 
     private fun startRecordingImmediately() {
@@ -819,7 +1034,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun showAiChoiceButtons() {
-        // 有声波动画
         animateMicSplit()
     }
 
@@ -849,7 +1063,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             pendingAiMode = false
             hideAiChoiceButtons()
             currentInputConnection?.commitText(recognizedText, 1)
-            // 标记为发送消息
             addSentMessage(recognizedText)
             resetToIdle()
         } else if (isRecording) {
@@ -891,36 +1104,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateStatus("Cesia 已就绪")
     }
 
-    private fun toggleRecording() {
-        val now = System.currentTimeMillis()
-        if (now - lastMicClickTime < 300) return
-        lastMicClickTime = now
-        if (isRecording || isWaitingForChoice) {
-            if (isProcessingResult) {
-                updateStatus("✨ 正在施展魔法...")
-                return
-            }
-            if (isWaitingForChoice) {
-                updateStatus("请点击 AI+ 或 AI× 选择处理方式")
-            }
-        } else {
-            startRecordingImmediately()
-        }
-    }
-
-    private fun startRecording() {
-        startRecordingImmediately()
-    }
-
     private fun stopRecording() {
         stopRecordingAndWait()
     }
 
-    // ======================== 发送消息历史 ========================
-
-    /**
-     * 记录发送的消息（最近10条）
-     */
     private fun addSentMessage(text: String) {
         if (text.isBlank()) return
         sentMessages.add(text)
@@ -929,439 +1116,74 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /**
-     * 长按魔法修改按钮→显示最近10条发送内容
-     */
-    private fun showSentMessagesPopup() {
-        if (sentMessages.isEmpty()) {
-            updateStatus("暂无发送记录")
-            return
-        }
+    // ======================== 声波动画 ========================
+
+    private var waveAnim: AnimationDrawable? = null
+
+    private fun startVoiceWave() {
         try {
-            // 使用和魔法菜单相同的风格
-            val inflater = android.view.LayoutInflater.from(this)
-            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
-            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
-
-            gridView.numColumns = 1
-
-            val keyboardWidth = keyboardView.width
-            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
-            popup.isOutsideTouchable = true
-            popup.elevation = 4f
-
-            // 复制发件历史到列表（倒序→最新的在前）
-            val items = sentMessages.reversed().toMutableList()
-
-            // 隐藏管理栏（不适合发件历史）
-            popupView.findViewById<android.view.View>(R.id.btn_pin_manage).visibility = View.GONE
-            popupView.findViewById<android.view.View>(R.id.btn_delete_manage).visibility = View.GONE
-            popupView.findViewById<android.view.View>(R.id.btn_undo_manage).visibility = View.GONE
-
-            // 添加标题
-            val titleView = TextView(this).apply {
-                text = "📨 最近发送的${items.size}条内容"
-                textSize = 13f
-                gravity = Gravity.CENTER
-                setPadding(12, 10, 12, 6)
-                setTextColor(0xFF666666.toInt())
+            voiceWave.visibility = View.VISIBLE
+            val bg = voiceWave.background
+            if (bg is AnimationDrawable) {
+                waveAnim = bg
+                bg.start()
             }
-            (popupView as? LinearLayout)?.addView(titleView, 0)
-
-            gridView.adapter = object : android.widget.BaseAdapter() {
-                override fun getCount() = items.size
-                override fun getItem(p: Int) = items[p]
-                override fun getItemId(p: Int) = p.toLong()
-                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
-                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
-                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
-                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
-                    val text = items[p]
-                    tv.text = "📤 $text"
-                    tv.setSingleLine(true)
-                    tv.ellipsize = android.text.TextUtils.TruncateAt.END
-
-                    // 长按：展开显示全文
-                    tvFull.text = text
-                    tvFull.visibility = View.GONE
-
-                    v.setOnLongClickListener {
-                        tv.visibility = View.GONE
-                        tvFull.visibility = View.VISIBLE
-                        // 自动收起
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            try {
-                                tvFull.visibility = View.GONE
-                                tv.visibility = View.VISIBLE
-                            } catch (_: Exception) {}
-                        }, 3000)
-                        true
-                    }
-                    return v
-                }
+            val pulse = ScaleAnimation(
+                1.0f, 1.3f, 1.0f, 1.3f,
+                ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+                ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+            ).apply {
+                duration = 600
+                repeatMode = ScaleAnimation.REVERSE
+                repeatCount = ScaleAnimation.INFINITE
             }
-            gridView.setOnItemClickListener { _, _, position, _ ->
-                val text = items[position]
-                currentInputConnection?.commitText(text, 1)
-                updateStatus("📨 已引用发送内容")
-                popup.dismiss()
-            }
-
-            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
-        } catch (e: Exception) {
-            Log.e("Cesia", "showSentMessagesPopup 异常", e)
-        }
+            voiceWave.startAnimation(pulse)
+        } catch (_: Exception) {}
     }
 
-    // ======================== 魔法模式（语音修改） ========================
-
-    private fun handleMagicResult(recognizedText: String) {
-        magicMode = false
-        typelessEngine?.magicMode = false
-        isRecording = false
-        stopVoiceWave()
-        setStatusDot("idle")
-
-        val instruction = recognizedText.trim()
-        if (instruction.isEmpty()) {
-            updateStatus("⚠️ 未识别到指令")
-            return
-        }
-
-        Log.d("CesiaMagic", "原文: $magicOriginalText")
-        Log.d("CesiaMagic", "指令: $instruction")
-        updateStatus("✨ 正在施展魔法...")
-
-        val prompt = buildMagicPrompt(magicOriginalText, instruction)
-        val polishService = typelessEngine?.getPolishService()
-
-        Thread {
-            try {
-                val result = polishService?.polishWithPrompt(prompt)
-                Handler(Looper.getMainLooper()).post {
-                    if (result != null && result.isNotEmpty()) {
-                        if (result == magicOriginalText) {
-                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
-                        } else {
-                            magicHistoryManager?.addRecord(instruction)
-                            saveUndoHistory(magicOriginalText, instruction)
-                            try {
-                                val ic2 = currentInputConnection
-                                ic2?.performContextMenuAction(android.R.id.selectAll)
-                                ic2?.commitText(result, 1)
-                                resetToIdle()
-                            } catch (e2: Exception) {
-                                Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
-                                updateStatus("❌ 上屏失败: ${e2.message}")
-                            }
-                        }
-                    } else {
-                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
-                    }
-                }
-            } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post {
-                    updateStatus("❌ 修改失败: ${e.message}")
-                }
-            }
-        }.start()
-    }
-
-    private fun buildMagicPrompt(original: String, instruction: String): String {
-        return "原文：$original\n\n用户指令：$instruction\n\n请根据用户指令修改原文，输出修改后的完整文本。只输出修改后的文本，不要输出任何解释。"
-    }
-
-    // ======================== 魔法修改历史 & 菜单 ========================
-
-    private fun executeMagicOrAiReply() {
+    private fun stopVoiceWave() {
         try {
-            if (currentMagicPrompt != null) {
-                executeSelectedMagic(currentMagicPrompt!!)
-            } else {
-                triggerAiReply()
-            }
-        } catch (e: Exception) {
-            Log.e("Cesia", "executeMagicOrAiReply 异常", e)
-            updateStatus("❌ 操作失败: ${e.message}")
-        }
+            waveAnim?.stop()
+            waveAnim = null
+            voiceWave.clearAnimation()
+            voiceWave.visibility = View.GONE
+        } catch (_: Exception) {}
     }
 
-    private fun executeSelectedMagic(instruction: String) {
-        if (isAiProcessing) {
-            updateStatus("⏳ AI正在处理中，请稍候...")
-            return
-        }
-        val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
-            return
-        }
-        val textBefore = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
-        val textAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
-        val fullText = textBefore + textAfter
+    // ======================== 麦克风按钮动画 ========================
 
-        if (fullText.isEmpty()) {
-            updateStatus("⚠️ 输入框无文字，无法修改")
-            return
-        }
-
-        isAiProcessing = true
-        updateStatus("✨ 正在施展魔法...")
-        setStatusDot("processing")
-        val prompt = buildMagicPrompt(fullText, instruction)
-        val polishService = typelessEngine?.getPolishService()
-
-        Thread {
-            try {
-                val result = polishService?.polishWithPrompt(prompt)
-                Handler(Looper.getMainLooper()).post {
-                    isAiProcessing = false
-                    if (result != null && result.isNotEmpty()) {
-                        if (result == fullText) {
-                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
-                        } else {
-                            magicHistoryManager?.addRecord(instruction)
-                            saveUndoHistory(fullText, instruction)
-                            try {
-                                val ic2 = currentInputConnection
-                                ic2?.performContextMenuAction(android.R.id.selectAll)
-                                ic2?.commitText(result, 1)
-                                resetToIdle()
-                            } catch (e2: Exception) {
-                                Log.e("Cesia", "replaceInputText 异常", e2)
-                                updateStatus("❌ 上屏失败: ${e2.message}")
-                                return@post
-                            }
-                        }
-                    } else {
-                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
-                    }
-                }
-            } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post {
-                    isAiProcessing = false
-                    updateStatus("❌ 修改失败: ${e.message}")
-                }
-            }
-        }.start()
-    }
-
-    private fun saveUndoHistory(originalText: String, instruction: String) {
-        undoHistory.add(0, Pair(originalText, instruction))
-        while (undoHistory.size > undoMaxSteps) {
-            undoHistory.removeAt(undoHistory.size - 1)
-        }
-    }
-
-    private fun performUndo() {
-        if (undoHistory.isEmpty()) {
-            updateStatus("↩️ 没有可撤销的记录")
-            return
-        }
-        val (originalText, _) = undoHistory.removeAt(0)
-        val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
-            return
-        }
+    private fun animateMicSplit() {
         try {
-            ic.performContextMenuAction(android.R.id.selectAll)
-            ic.commitText(originalText, 1)
-            updateStatus("↩️ 已撤销到原文")
-        } catch (e: Exception) {
-            updateStatus("❌ 撤销失败: ${e.message}")
-        }
+            micButton.animate().scaleX(0.5f).scaleY(0.5f).alpha(0f).setDuration(200).withEndAction {
+                micButton.visibility = View.GONE
+                voiceWave.visibility = View.VISIBLE
+                startVoiceWave()
+                btnMicAi.visibility = View.VISIBLE
+                btnMicAi.translationX = -80f
+                btnMicAi.animate().translationX(0f).alpha(1f).setDuration(250).start()
+                btnMicNoAi.visibility = View.VISIBLE
+                btnMicNoAi.translationX = 80f
+                btnMicNoAi.animate().translationX(0f).alpha(1f).setDuration(250).start()
+            }.start()
+        } catch (_: Exception) {}
     }
 
-    /**
-     * 长按自动写作：弹出魔法菜单
-     *
-     * - 点击项 → 立即应用
-     * - 长按项 → 弹出置顶/删除菜单
-     * - 底部栏：↩️ 撤销
-     */
-    private fun showMagicHistoryPopup() {
-        val mgr = magicHistoryManager ?: return
-        val records = mgr.getRecords()
-
+    private fun animateMicMerge() {
         try {
-            val inflater = android.view.LayoutInflater.from(this)
-            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
-            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
-
-            val keyboardWidth = keyboardView.width
-            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
-            popup.isOutsideTouchable = true
-            popup.elevation = 4f
-
-            val items = mutableListOf<MagicHistoryManager.MagicRecord>()
-            items.addAll(records)
-
-            // 管理栏按钮
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
-            val btnUndo = popupView.findViewById<TextView>(R.id.btn_undo_manage)
-
-            // 网格适配器
-            gridView.adapter = object : android.widget.BaseAdapter() {
-                override fun getCount() = items.size
-                override fun getItem(p: Int) = items[p]
-                override fun getItemId(p: Int) = items[p].id
-                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
-                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
-                    val record = items[p]
-                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
-                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
-
-                    val prefix = if (record.isPinned) "📌 " else if (record.instruction == currentMagicPrompt) "✓ " else ""
-                    tv.text = "${prefix}${record.instruction}"
-                    tv.setTextColor(if (record.instruction == currentMagicPrompt) 0xFF1565C0.toInt() else 0xFF333333.toInt())
-                    tv.setTypeface(null, if (record.instruction == currentMagicPrompt) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-
-                    // 长按展开全文
-                    tvFull.text = record.instruction
-                    tvFull.visibility = View.GONE
-
-                    v.setOnLongClickListener {
-                        tv.visibility = View.GONE
-                        tvFull.visibility = View.VISIBLE
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            try {
-                                tvFull.visibility = View.GONE
-                                tv.visibility = View.VISIBLE
-                            } catch (_: Exception) {}
-                        }, 3000)
-                        true
-                    }
-                    return v
-                }
-            }
-
-            // 点击项：立即应用魔法
-            gridView.setOnItemClickListener { _, _, position, _ ->
-                val record = items[position]
-                currentMagicPrompt = record.instruction
-                updateStatus("✅ 已应用：${record.instruction.take(20)}…")
-                popup.dismiss()
-                executeSelectedMagic(record.instruction)
-            }
-
-            // 长按项：弹出置顶/删除菜单
-            gridView.setOnItemLongClickListener { _, v, position, _ ->
-                val record = items[position]
-                val popupMenu = android.widget.PopupMenu(this, v)
-                popupMenu.menu.add(0, 1, 0, if (record.isPinned) "取消置顶" else "📌 置顶")
-                popupMenu.menu.add(0, 2, 1, "🗑️ 删除")
-                popupMenu.setOnMenuItemClickListener { item ->
-                    when (item.itemId) {
-                        1 -> {
-                            mgr.togglePin(record.id)
-                            currentMagicPrompt = mgr.getActiveInstruction()
-                            // 刷新网格
-                            items.clear()
-                            items.addAll(mgr.getRecords())
-                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                            updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
-                            true
-                        }
-                        2 -> {
-                            mgr.removeRecord(record.id)
-                            items.clear()
-                            val updated = mgr.getRecords()
-                            items.addAll(updated)
-                            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                                currentMagicPrompt = mgr.getActiveInstruction()
-                            }
-                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                            if (items.isEmpty()) {
-                                btnPin.visibility = View.GONE
-                                btnDelete.visibility = View.GONE
-                            }
-                            updateStatus("🗑️ 已删除")
-                            true
-                        }
-                        else -> false
-                    }
-                }
-                popupMenu.show()
-                true
-            }
-
-            // 置顶按钮：弹出全部置顶操作菜单
-            btnPin.setOnClickListener {
-                if (items.isEmpty()) return@setOnClickListener
-                val popupMenu = android.widget.PopupMenu(this, btnPin)
-                for (r in items) {
-                    val title = "${if (r.isPinned) "📌 " else "○ "}${r.instruction.take(18)}"
-                    popupMenu.menu.add(0, r.id.toInt(), 0, title)
-                }
-                popupMenu.setOnMenuItemClickListener { item ->
-                    val record = items.find { it.id.toInt() == item.itemId }
-                    if (record != null) {
-                        mgr.togglePin(record.id)
-                        currentMagicPrompt = mgr.getActiveInstruction()
-                        items.clear()
-                        items.addAll(mgr.getRecords())
-                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                        updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
-                    }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            // 删除按钮：弹出全部删除操作菜单
-            btnDelete.setOnClickListener {
-                if (items.isEmpty()) return@setOnClickListener
-                val popupMenu = android.widget.PopupMenu(this, btnDelete)
-                for (r in items) {
-                    popupMenu.menu.add(0, r.id.toInt(), 0, "🗑️ ${r.instruction.take(18)}")
-                }
-                popupMenu.menu.add(0, -1, items.size, "⚠️ 删除全部（${items.size}条）")
-                popupMenu.setOnMenuItemClickListener { item ->
-                    if (item.itemId == -1) {
-                        mgr.clearAll()
-                        items.clear()
-                        currentMagicPrompt = null
-                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                        btnPin.visibility = View.GONE
-                        btnDelete.visibility = View.GONE
-                        updateStatus("🗑️ 已删除全部记录")
-                    } else {
-                        mgr.removeRecord(item.itemId.toLong())
-                        items.clear()
-                        val updated = mgr.getRecords()
-                        items.addAll(updated)
-                        if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                            currentMagicPrompt = mgr.getActiveInstruction()
-                        }
-                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                    }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            // 撤销按钮
-            btnUndo.setOnClickListener {
-                popup.dismiss()
-                performUndo()
-            }
-
-            // 无记录时隐藏管理栏
-            if (items.isEmpty()) {
-                btnPin.visibility = View.GONE
-                btnDelete.visibility = View.GONE
-                btnUndo.visibility = View.GONE
-            }
-
-            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
-        } catch (e: Exception) {
-            Log.e("Cesia", "showMagicHistoryPopup 异常", e)
-            updateStatus("长按可管理魔法指令")
-        }
+            stopVoiceWave()
+            voiceWave.visibility = View.GONE
+            btnMicAi.animate().translationX(-80f).alpha(0f).setDuration(200).withEndAction {
+                btnMicAi.visibility = View.GONE
+            }.start()
+            btnMicNoAi.animate().translationX(80f).alpha(0f).setDuration(200).withEndAction {
+                btnMicNoAi.visibility = View.GONE
+                micButton.visibility = View.VISIBLE
+                micButton.scaleX = 0.5f
+                micButton.scaleY = 0.5f
+                micButton.alpha = 0f
+                micButton.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(250).start()
+            }.start()
+        } catch (_: Exception) {}
     }
 
     // ======================== 键盘切换 ========================
@@ -1369,10 +1191,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun switchToSymbolKeyboard() {
         if (!isSymbolMode) {
             isSymbolMode = true
-            // 使用语言对应的符号键盘
-            val symKbd = symbolKeyboardCn
-            currentKeyboard = symKbd
-            keyboardView.keyboard = symKbd
+            currentKeyboard = symbolKeyboardCn
+            keyboardView.keyboard = symbolKeyboardCn
             keyboardView.invalidateAllKeys()
         }
     }
@@ -1390,7 +1210,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isSymbolMode) switchToQwertyKeyboard() else switchToSymbolKeyboard()
     }
 
-    // ======================== 长按 Fn 效果 ========================
+    // ======================== 长按检测 ========================
 
     private fun startLongPressDetection(key: Keyboard.Key) {
         cancelLongPress()
@@ -1421,7 +1241,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelSendKeyLongPress()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
-            showSentMessagesPopup()
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         }.also {
             sendKeyHandler.postDelayed(it, 500)
@@ -1445,18 +1264,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
 
         when (primaryCode) {
-            // ===== 字母键 a-z：直接交给 Rime 处理 =====
+            // 字母键 a-z → Rime 处理
             in 97..122 -> {
                 rimeEngine.processKey(primaryCode.toChar())
                 updateCandidateBar()
             }
 
-            // ===== 数字键 0-9 =====
+            // 数字键 0-9
             in 48..57 -> {
                 if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                    // Rime composing 时：数字选候选词
-                    val index = primaryCode - 48 // 0=第1个, 1=第2个...
-                    if (index == 0) index + 1 // 0 当作第10个候选（Rime 惯例）
+                    val index = primaryCode - 48
+                    if (index == 0) index + 1
                     if (index <= rimeEngine.candidates.size) {
                         val selected = rimeEngine.selectCandidate(index - 1)
                         currentInputConnection?.commitText(selected, 1)
@@ -1468,7 +1286,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
 
-            // ===== 空格键 =====
+            // 空格键
             32 -> {
                 if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                     val selected = rimeEngine.selectCandidate(0)
@@ -1476,7 +1294,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     rimeEngine.clear()
                     updateCandidateBar()
                 } else if (rimeEngine.isComposing) {
-                    // 有拼音但无候选：上屏拼音
                     currentInputConnection?.commitText(rimeEngine.composingText, 1)
                     rimeEngine.clear()
                     updateCandidateBar()
@@ -1485,7 +1302,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
 
-            // ===== BackSpace =====
+            // BackSpace
             -5, Keyboard.KEYCODE_DELETE -> {
                 if (rimeEngine.isComposing) {
                     rimeEngine.processKey("BackSpace")
@@ -1495,7 +1312,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
 
-            // ===== 回车键 =====
+            // 回车键
             10, Keyboard.KEYCODE_DONE -> {
                 if (rimeEngine.isComposing) {
                     val text = if (rimeEngine.hasCandidates) {
@@ -1512,20 +1329,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
 
-            // ===== Shift =====
+            // Shift
             -1 -> {
                 isCapsLock = !isCapsLock
                 qwertyKeyboard.isShifted = isCapsLock
                 keyboardView.invalidateAllKeys()
             }
 
-            // ===== 符号切换 =====
+            // 符号切换
             KEYCODE_SWITCH_SYMBOL -> toggleKeyboard()
 
-            // ===== 返回键 =====
+            // 返回键
             KEYCODE_BACK_KEY -> switchToQwertyKeyboard()
 
-            // ===== 发送键（纸飞机）=====
+            // 发送键（纸飞机）
             -200 -> {
                 if (sendKeyLongPressTriggered) {
                     sendKeyLongPressTriggered = false
@@ -1549,14 +1366,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
 
-            // ===== 模式切换 =====
-            Keyboard.KEYCODE_MODE_CHANGE -> toggleKeyboard()
-
-            // ===== 其他按键（标点符号等）=====
+            // 其他按键（标点符号等）
             else -> {
                 val c = primaryCode.toChar()
                 if (rimeEngine.isComposing) {
-                    // Rime composing 时输入标点：先提交当前输入，再输入标点
                     val text = if (rimeEngine.hasCandidates) rimeEngine.selectCandidate(0) else rimeEngine.composingText
                     currentInputConnection?.commitText(text, 1)
                     rimeEngine.clear()
@@ -1584,7 +1397,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             backspaceHandler.postDelayed(backspaceRunnable!!, 400)
         }
-        // 发送键长按检测
         if (primaryCode == -200) {
             startSendKeyLongPress()
         }

@@ -8,6 +8,9 @@ import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import android.util.AttributeSet
 
+/**
+ * 自定义键盘视图 — 在按键右上角显示长按弹窗符号
+ */
 class CustomKeyboardView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -28,14 +31,10 @@ class CustomKeyboardView @JvmOverloads constructor(
         for (key in keys) {
             if (!key.popupCharacters.isNullOrEmpty()) {
                 val symbol = key.popupCharacters[0].toString()
-                // 调大符号：0.45f，最大28f
                 val textSize = (key.height * 0.45f).coerceIn(20f, 28f)
                 subsidiaryPaint.textSize = textSize
-
-                // 右上角：右边留6px，顶部留4px+文字高度偏移
                 val x = key.x + key.width - 6f
                 val y = key.y + textSize + 4f
-
                 canvas.drawText(symbol, x, y, subsidiaryPaint)
             }
         }
