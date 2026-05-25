@@ -21,10 +21,14 @@ object RimeJni {
 
     fun isAvailable(): Boolean = initialized
 
-    fun unavailableMessage(): String? = if (initialized) null else "Rime JNI 未初始化"
+    @Volatile
+    private var errorMessage: String? = null
+
+    fun unavailableMessage(): String? = errorMessage
 
     fun initialize(context: Context): Boolean {
         if (initialized) return true
+        errorMessage = null
         try {
             System.loadLibrary("rime_jni")
             Log.i(TAG, "STEP1: librime_jni.so 加载成功")
@@ -33,19 +37,21 @@ object RimeJni {
             val userDir = context.filesDir.absolutePath + "/rime"
             java.io.File(sharedDir).mkdirs()
             java.io.File(userDir).mkdirs()
-            Log.i(TAG, "STEP2: 目录创建成功 shared=$sharedDir")
 
-            // 验证词库文件
             val dictFile = java.io.File(sharedDir, "pinyin.dict.yaml")
             val schemaFile = java.io.File(sharedDir, "pinyin.schema.yaml")
             val defaultFile = java.io.File(sharedDir, "default.yaml")
             Log.i(TAG, "STEP3: dict=${dictFile.exists()}(${dictFile.length()}) schema=${schemaFile.exists()} default=${defaultFile.exists()}")
 
             val started = nativeStartup(sharedDir, userDir)
-            Log.i(TAG, "STEP4: nativeStartup 返回 started=$started")
+            Log.i(TAG, "STEP4: nativeStartup=$started")
+            if (!started) {
+                errorMessage = "nativeStartup返回false (共享目录: $sharedDir)"
+            }
             initialized = started
             return started
         } catch (e: Throwable) {
+            errorMessage = "${e.javaClass.simpleName}: ${e.message}"
             Log.e(TAG, "Rime native 引擎初始化失败", e)
             initialized = false
             return false

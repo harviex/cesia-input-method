@@ -38,7 +38,6 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     override fun initialize(): Boolean {
         if (isInitialized) return true
-        // 解压 assets/rime/ 配置文件到 filesDir/rime/
         copyRimeAssetsIfNeeded()
         val success = RimeJni.initialize(context)
         isInitialized = success
@@ -47,6 +46,8 @@ class RimeEngine(private val context: Context) : InputEngine {
         }
         return success
     }
+
+    fun lastError(): String? = RimeJni.unavailableMessage()
 
     private fun copyRimeAssetsIfNeeded() {
         val rimeDir = File(context.filesDir, "rime")

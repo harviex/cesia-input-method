@@ -229,8 +229,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
         rimeEngine = RimeEngine(this)
-        rimeEngine.initialize()
-        Log.i("Cesia", "Rime 引擎初始化完成")
+        val rimeOk = rimeEngine.initialize()
+        Log.i("Cesia", "Rime 引擎初始化: ok=$rimeOk")
+        if (!rimeOk) {
+            updateStatus("Rime初始化失败: ${rimeEngine.lastError() ?: "未知"}")
+        }
 
         typelessEngine = TypelessEngine(this, this).also { engine ->
             engine.onLogMessage = { msg ->
