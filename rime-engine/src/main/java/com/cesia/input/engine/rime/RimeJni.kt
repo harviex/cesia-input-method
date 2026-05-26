@@ -216,7 +216,7 @@ object RimeJni {
     fun setAsciiMode(ascii: Boolean) {
         if (!initialized) return
         try {
-            TrimeRime.setRuntimeOption("ascii_mode", ascii)
+            TrimeRime.setRimeOption("ascii_mode", ascii)
             Log.d(TAG, "setAsciiMode: $ascii")
         } catch (e: Throwable) {
             Log.e(TAG, "setAsciiMode failed", e)

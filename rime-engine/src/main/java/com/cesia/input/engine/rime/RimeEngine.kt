@@ -151,10 +151,6 @@ class RimeEngine(private val context: Context) : InputEngine {
         return candidates
     }
 
-    fun setAsciiMode(ascii: Boolean) {
-        RimeJni.setAsciiMode(ascii)
-    }
-
     // 兼容方法
     fun inputLetter(c: Char): String {
         processKey(c)
