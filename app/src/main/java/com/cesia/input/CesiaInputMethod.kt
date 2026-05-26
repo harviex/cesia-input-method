@@ -292,7 +292,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         keyboardView.keyboard = currentKeyboard
         keyboardView.setOnKeyboardActionListener(this)
-        keyboardView.isPreviewEnabled = true
 
         // 设置功能键长按副功能提示文字
         keyboardView.setFunctionalLabels(mapOf(
