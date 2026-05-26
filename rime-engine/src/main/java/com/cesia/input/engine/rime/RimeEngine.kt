@@ -169,3 +169,4 @@ class RimeEngine(private val context: Context) : InputEngine {
     fun setAsciiMode(ascii: Boolean) {
         RimeJni.setAsciiMode(ascii)
     }
+
