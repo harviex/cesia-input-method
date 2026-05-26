@@ -3,6 +3,7 @@ package com.cesia.input.engine.rime
 import android.content.Context
 import android.util.Log
 import com.osfans.trime.core.Rime as TrimeRime
+import com.osfans.trime.core.RimeKeyEvent
 import java.io.File
 
 /**
