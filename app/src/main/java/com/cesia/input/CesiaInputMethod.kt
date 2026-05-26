@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -24,6 +25,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
+import android.text.TextUtils
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -74,9 +76,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 候选词展开面板
     private lateinit var candidatePanel: LinearLayout
     private lateinit var tvPanelComposing: TextView
-    private lateinit var tvPageInfo: TextView
-    private lateinit var btnPanelPrev: ImageButton
-    private lateinit var btnPanelNext: ImageButton
     private lateinit var btnPanelClose: ImageButton
     private lateinit var gvCandidates: GridView
     private var panelAdapter: ArrayAdapter<String>? = null
@@ -260,9 +259,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选面板视图
         candidatePanel = view.findViewById(R.id.candidate_panel)
         tvPanelComposing = view.findViewById(R.id.tv_panel_composing)
-        tvPageInfo = view.findViewById(R.id.tv_page_info)
-        btnPanelPrev = view.findViewById(R.id.btn_panel_prev)
-        btnPanelNext = view.findViewById(R.id.btn_panel_next)
         btnPanelClose = view.findViewById(R.id.btn_panel_close)
         gvCandidates = view.findViewById(R.id.gv_candidates)
 
@@ -439,31 +435,53 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun setupCandidatePanel() {
-        // GridView 适配器
-        panelAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
+        // GridView 适配器 — 文字自动缩小以适应格子宽度
+        panelAdapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, mutableListOf()) {
+            // 缓存列宽，首次测量后固定
+            private var columnWidthPx = 0
+            private val minTextSp = 10f
+            private val maxTextSp = 14f
+
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val tv = super.getView(position, convertView, parent) as TextView
+                tv.gravity = Gravity.CENTER
+                tv.setPadding(2, 6, 2, 6)
+                tv.maxLines = 1
+                tv.ellipsize = android.text.TextUtils.TruncateAt.END
+
+                // 测量列宽
+                if (columnWidthPx == 0) {
+                    val grid = parent as? GridView
+                    columnWidthPx = if (grid != null && grid.numColumns > 0) {
+                        (grid.width - grid.paddingLeft - grid.paddingRight -
+                            (grid.numColumns - 1) * grid.horizontalSpacing) / grid.numColumns
+                    } else {
+                        // 默认按屏幕宽度/5估算
+                        val dm = resources.displayMetrics
+                        (dm.widthPixels * 0.9f / 5).toInt()
+                    }
+                }
+
+                // 自动缩小字号：如果文字宽度超过列宽，按比例缩小
+                val text = getItem(position) ?: ""
+                if (text.isNotEmpty() && columnWidthPx > 0) {
+                    var size = maxTextSp
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
+                    val paint = tv.paint
+                    while (size > minTextSp && paint.measureText(text) > columnWidthPx) {
+                        size -= 0.5f
+                        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
+                    }
+                }
+
+                return tv
+            }
+        }
         gvCandidates.adapter = panelAdapter
 
         // GridView 点击选候选词
         gvCandidates.setOnItemClickListener { _, _, position, _ ->
-            val candList = rimeEngine.candidates
-            if (position < candList.size) {
-                val selected = rimeEngine.selectCandidate(position)
-                if (selected.isNotEmpty()) {
-                    currentInputConnection?.commitText(selected, 1)
-                    if (isPanelExpanded) collapseCandidatePanel()
-                    updateCandidateBar()
-                }
-            }
-        }
-
-        // 翻页按钮
-        btnPanelPrev.setOnClickListener {
-            rimeEngine.prevPage()
-            updateCandidateBar()
-        }
-        btnPanelNext.setOnClickListener {
-            rimeEngine.nextPage()
-            updateCandidateBar()
+            selectCandidateByGlobalIndex(position)
         }
 
         // 收起按钮
@@ -483,6 +501,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         isPanelExpanded = false
         candidatePanel.visibility = View.GONE
         btnCandidateExpand.setImageResource(android.R.drawable.arrow_down_float)
+    }
+
+    /** 通过全局索引选择候选词（自动翻页） */
+    private fun selectCandidateByGlobalIndex(globalIndex: Int) {
+        val allCands = rimeEngine.getAllCandidates()
+        if (globalIndex >= allCands.size) return
+        // Rime 默认每页9个
+        val pageSize = 9
+        val targetPage = globalIndex / pageSize
+        val idxInPage = globalIndex % pageSize
+        // 翻页到目标页
+        var curPage = rimeEngine.currentPage
+        while (curPage < targetPage) { rimeEngine.nextPage(); curPage++ }
+        while (curPage > targetPage) { rimeEngine.prevPage(); curPage-- }
+        val selected = rimeEngine.selectCandidate(idxInPage)
+        if (selected.isNotEmpty()) {
+            currentInputConnection?.commitText(selected, 1)
+            if (isPanelExpanded) collapseCandidatePanel()
+            updateCandidateBar()
+        }
     }
 
     private fun updateCandidateBar() {
@@ -515,15 +553,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选词>4时显示展开按钮
         btnCandidateExpand.visibility = if (candidates.size > 4) View.VISIBLE else View.GONE
 
-        // 更新展开面板
+        // 更新展开面板 — 显示全部候选词
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            tvPageInfo.text = "${rimeEngine.currentPage + 1}/${rimeEngine.pageCount}"
+            val allCands = rimeEngine.getAllCandidates()
             panelAdapter?.clear()
-            panelAdapter?.addAll(candidates.mapIndexed { idx, c -> "${idx+1}.$c" })
+            panelAdapter?.addAll(allCands.mapIndexed { idx, c -> "${idx+1}.$c" })
             panelAdapter?.notifyDataSetChanged()
-            btnPanelPrev.isEnabled = rimeEngine.currentPage > 0
-            btnPanelNext.isEnabled = rimeEngine.currentPage < rimeEngine.pageCount - 1
         }
     }
 

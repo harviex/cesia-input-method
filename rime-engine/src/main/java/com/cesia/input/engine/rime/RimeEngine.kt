@@ -155,6 +155,26 @@ class RimeEngine(private val context: Context) : InputEngine {
         return candidates
     }
 
+    /** 获取所有页的候选词（合并） */
+    fun getAllCandidates(): List<String> {
+        val s = session ?: return emptyList()
+        if (s.pageCount <= 1) return s.candidates
+        val all = mutableListOf<String>()
+        val startPage = s.currentPage
+        // 先回到第0页
+        while (s.currentPage > 0) s.prevPage()
+        // 从第0页开始往后收集
+        all.addAll(s.candidates)
+        while (s.currentPage < s.pageCount - 1) {
+            if (!s.nextPage()) break
+            all.addAll(s.candidates)
+        }
+        // 回到起始页
+        while (s.currentPage < startPage) s.nextPage()
+        while (s.currentPage > startPage) s.prevPage()
+        return all
+    }
+
     // 兼容方法
     fun inputLetter(c: Char): String {
         processKey(c)

@@ -104,11 +104,12 @@
         android:id="@+id/candidate_panel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:maxHeight="200dp"
         android:orientation="vertical"
         android:background="#F8F8F8"
         android:visibility="gone">
 
-        <!-- 拼音 + 分页信息 -->
+        <!-- 拼音 + 收起按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="28dp"
@@ -119,43 +120,13 @@
 
             <TextView
                 android:id="@+id/tv_panel_composing"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textColor="#4488FF" />
-
-            <View
                 android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <TextView
-                android:id="@+id/tv_page_info"
-                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textColor="#999999"
-                android:layout_marginEnd="8dp" />
-
-            <ImageButton
-                android:id="@+id/btn_panel_prev"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_media_previous"
-                android:background="?android:attr/selectableItemBackground"
-                android:scaleType="centerInside"
-                android:padding="2dp"
-                android:contentDescription="上一页" />
-
-            <ImageButton
-                android:id="@+id/btn_panel_next"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_media_next"
-                android:background="?android:attr/selectableItemBackground"
-                android:scaleType="centerInside"
-                android:padding="2dp"
-                android:contentDescription="下一页" />
+                android:layout_weight="1"
+                android:textSize="13sp"
+                android:textColor="#4488FF"
+                android:singleLine="true"
+                android:ellipsize="end" />
 
             <ImageButton
                 android:id="@+id/btn_panel_close"
@@ -165,22 +136,23 @@
                 android:background="?android:attr/selectableItemBackground"
                 android:scaleType="centerInside"
                 android:padding="2dp"
-                android:layout_marginStart="4dp"
                 android:contentDescription="收起" />
         </LinearLayout>
 
-        <!-- 候选词网格 5列 x 多行 -->
+        <!-- 候选词网格 5列，超出可滚动，文字自动缩小 -->
         <GridView
             android:id="@+id/gv_candidates"
             android:layout_width="match_parent"
-            android:layout_height="120dp"
+            android:layout_height="180dp"
             android:numColumns="5"
             android:verticalSpacing="2dp"
             android:horizontalSpacing="2dp"
             android:padding="4dp"
             android:stretchMode="columnWidth"
             android:gravity="center"
-            android:listSelector="?android:attr/selectableItemBackground" />
+            android:listSelector="?android:attr/selectableItemBackground"
+            android:scrollbars="vertical"
+            android:fastScrollEnabled="false" />
     </LinearLayout>
 
     <!-- 键盘区域 -->
