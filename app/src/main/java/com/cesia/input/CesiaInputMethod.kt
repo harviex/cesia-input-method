@@ -547,18 +547,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateStatus("拼音: $pinyin | $candStr")
         }
 
-        // 更新候选词列表
-        candidateAdapter?.updateData(candidates)
+        // 更新候选词列表（全部）
+        val allCandsForBar = rimeEngine.getAllCandidates()
+        candidateAdapter?.updateData(allCandsForBar)
 
         // 候选词>4时显示展开按钮
-        btnCandidateExpand.visibility = if (candidates.size > 4) View.VISIBLE else View.GONE
+        btnCandidateExpand.visibility = if (allCandsForBar.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板 — 显示全部候选词
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCands = rimeEngine.getAllCandidates()
             panelAdapter?.clear()
-            panelAdapter?.addAll(allCands.mapIndexed { idx, c -> "${idx+1}.$c" })
+            panelAdapter?.addAll(allCands)
             panelAdapter?.notifyDataSetChanged()
         }
     }
