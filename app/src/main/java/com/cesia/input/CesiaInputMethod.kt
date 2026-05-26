@@ -6,6 +6,7 @@ import android.graphics.drawable.AnimationDrawable
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
+import com.cesia.input.CesiaKeyboardView
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -47,7 +48,7 @@ import com.google.android.material.button.MaterialButton
 class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
     // ======================== 视图 ========================
-    private lateinit var keyboardView: KeyboardView
+    private lateinit var keyboardView: CesiaKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
     private lateinit var symbolKeyboardEn: Keyboard
     private lateinit var symbolKeyboardCn: Keyboard
@@ -292,6 +293,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         keyboardView.keyboard = currentKeyboard
         keyboardView.setOnKeyboardActionListener(this)
         keyboardView.isPreviewEnabled = true
+
+        // 设置功能键长按副功能提示文字
+        keyboardView.setFunctionalLabels(mapOf(
+            97 to "全选",   // a
+            115 to "Home",  // s
+            100 to "End",   // d
+            102 to "PgUp",  // f
+            103 to "PgDn",  // g
+            104 to "←",     // h
+            106 to "↓",     // j
+            107 to "↑",     // k
+            108 to "→",     // l
+            120 to "剪切",  // x
+            99 to "复制",   // c
+            118 to "粘贴",  // v
+            122 to "撤销",  // z
+            110 to "Ins",   // n
+            109 to "Del"    // m
+        ))
         Log.d("Cesia", "createInputViewSafe: 键盘设置完成")
 
         // 初始化引擎
@@ -525,27 +545,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun updateCandidateBar() {
         val composing = rimeEngine.isComposing
-        val candidates = rimeEngine.candidates
         val pinyin = rimeEngine.composingText
 
-        Log.d("Cesia", "updateCandidateBar: composing=$composing, pinyin='$pinyin', candidates.size=${candidates.size}, candidateBar.visibility=${candidateBar.visibility}")
+        Log.d("Cesia", "updateCandidateBar: composing=$composing, pinyin='$pinyin'")
 
+        // 没有输入时恢复初始状态
         if (!composing && pinyin.isEmpty()) {
             candidateBar.visibility = View.GONE
             Log.d("Cesia", "updateCandidateBar: HIDE candidateBar")
             if (isPanelExpanded) collapseCandidatePanel()
+            // 恢复候选词栏拼音显示
+            tvComposing.text = ""
+            tvComposing.visibility = View.VISIBLE
+            updateStatus("Cesia 已就绪")
             return
         }
 
+        // 有输入时：状态栏只显示拼音
         candidateBar.visibility = View.VISIBLE
         Log.d("Cesia", "updateCandidateBar: SHOW candidateBar")
-        tvComposing.text = pinyin
-
-        // 同时显示在状态栏，方便排查
-        if (composing || pinyin.isNotEmpty()) {
-            val candStr = if (candidates.size > 0) candidates.take(5).joinToString(" ") else "(无候选)"
-            updateStatus("拼音: $pinyin | $candStr")
-        }
+        // 候选词栏不显示拼音，只显示候选词（拼音在状态栏）
+        tvComposing.text = ""
+        tvComposing.visibility = View.GONE
+        updateStatus(pinyin)
 
         // 更新候选词列表（全部）
         val allCandsForBar = rimeEngine.getAllCandidates()
@@ -554,7 +576,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选词>4时显示展开按钮
         btnCandidateExpand.visibility = if (allCandsForBar.size > 4) View.VISIBLE else View.GONE
 
-        // 更新展开面板 — 显示全部候选词
+        // 更新展开面板 — 显示全部候选词 + 拼音
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCands = rimeEngine.getAllCandidates()
@@ -1266,6 +1288,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setStatusDot("idle")
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
+        // 恢复候选词栏拼音显示
+        if (::tvComposing.isInitialized) {
+            tvComposing.text = ""
+            tvComposing.visibility = View.VISIBLE
+        }
         updateStatus("Cesia 已就绪")
     }
 
@@ -1521,11 +1548,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (isAsciiMode) {
                     ic?.deleteSurroundingText(1, 0)
                 } else {
+                    val wasComposing = rimeEngine.isComposing
                     val handled = rimeEngine.processKey("BackSpace")
                     if (!handled) {
                         ic?.deleteSurroundingText(1, 0)
                     }
-                    updateCandidateBar()
+                    // 如果刚退出 composing 状态，恢复初始状态
+                    if (wasComposing && !rimeEngine.isComposing) {
+                        resetToIdle()
+                    } else {
+                        updateCandidateBar()
+                    }
                 }
             }
 

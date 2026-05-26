@@ -156,7 +156,7 @@
     </LinearLayout>
 
     <!-- 键盘区域 -->
-    <android.inputmethodservice.KeyboardView
+    <com.cesia.input.CesiaKeyboardView
         android:id="@+id/keyboard_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
