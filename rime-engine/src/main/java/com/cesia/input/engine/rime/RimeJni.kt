@@ -3,7 +3,6 @@ package com.cesia.input.engine.rime
 import android.content.Context
 import android.util.Log
 import com.osfans.trime.core.Rime as TrimeRime
-import com.osfans.trime.core.RimeKeyEvent
 import java.io.File
 
 /**
@@ -283,8 +282,8 @@ object RimeJni {
             "PageUp" -> 0xFF55            // XK_Page_Up
             "PageDown" -> 0xFF56          // XK_Page_Down
             else -> {
-                Log.w(TAG, "未知按键: $key, 尝试 getKeycodeByName")
-                try { RimeKeyEvent.getKeycodeByName(key) } catch (_: Throwable) { key.hashCode() }
+                Log.w(TAG, "未知按键: $key, 使用 hashCode")
+                key.hashCode()
             }
         }
     }
