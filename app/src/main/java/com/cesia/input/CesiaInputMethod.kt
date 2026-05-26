@@ -29,7 +29,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.cesia.input.engine.TypelessEngine
 import com.cesia.input.engine.rime.RimeEngine
-import com.cesia.input.engine.PinyinEngine
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
 import com.google.android.material.button.MaterialButton
@@ -82,11 +81,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var gvCandidates: GridView
     private var panelAdapter: ArrayAdapter<String>? = null
     private var isPanelExpanded = false
-
-    // T9 引擎
-    private var t9Keyboard: Keyboard? = null
-    private var t9Engine: PinyinEngine? = null
-    private var t9Input = StringBuilder()  // T9 数字输入缓冲
 
     // ======================== 核心组件 ========================
     private var typelessEngine: TypelessEngine? = null
@@ -297,15 +291,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Log.e("Cesia", "加载数字键盘失败", e)
             numberKeyboard = qwertyKeyboard
         }
-        try {
-            t9Keyboard = Keyboard(this, R.xml.t9)
-            Log.d("Cesia", "t9 键盘加载成功")
-        } catch (e: Exception) {
-            Log.w("Cesia", "加载 T9 键盘失败，回退到数字键盘", e)
-            t9Keyboard = numberKeyboard
-        }
-        // 初始化 T9 引擎
-        t9Engine = PinyinEngine(this)
         currentKeyboard = qwertyKeyboard
 
         keyboardView.keyboard = currentKeyboard
@@ -540,42 +525,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             btnPanelPrev.isEnabled = rimeEngine.currentPage > 0
             btnPanelNext.isEnabled = rimeEngine.currentPage < rimeEngine.pageCount - 1
         }
-    }
-
-    /** T9 模式：更新候选词栏显示 T9 拼音候选 */
-    private fun updateCandidateBarWithT9(digitStr: String, t9Candidates: List<String>) {
-        if (!::candidateBar.isInitialized) return
-        try {
-            candidateBar.visibility = View.VISIBLE
-            tvComposing.text = digitStr
-            candidateAdapter?.updateData(t9Candidates.mapIndexed { i, c -> "${i+1}.$c" })
-            btnCandidateExpand.visibility = View.GONE
-            functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-            functionalLongPressRunnable = null
-        } catch (_: Exception) {}
-    }
-
-    /** T9 模式：从 PinyinEngine 获取候选词并更新候选词栏 */
-    private fun updateCandidateBarFromT9() {
-        if (!::candidateBar.isInitialized) return
-        try {
-            val engine = t9Engine ?: return
-            val pinyin = engine.getCurrentPinyin()
-            val cands = engine.getCandidates()
-            if (pinyin.isNotEmpty() && cands.isNotEmpty()) {
-                candidateBar.visibility = View.VISIBLE
-                tvComposing.text = pinyin
-                candidateAdapter?.updateData(cands.mapIndexed { i, c -> "${i+1}.$c" })
-                btnCandidateExpand.visibility = View.GONE
-            } else if (pinyin.isNotEmpty()) {
-                candidateBar.visibility = View.VISIBLE
-                tvComposing.text = pinyin
-                candidateAdapter?.updateData(emptyList())
-                btnCandidateExpand.visibility = View.GONE
-            } else {
-                candidateBar.visibility = View.GONE
-            }
-        } catch (_: Exception) {}
     }
 
     // ======================== 按钮监听 ========================
@@ -1373,7 +1322,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             KeyboardMode.QWERTY -> qwertyKeyboard
             KeyboardMode.SYMBOL_CN -> symbolKeyboardCn
             KeyboardMode.SYMBOL_EN -> symbolKeyboardEn
-            KeyboardMode.NUMBER -> t9Keyboard ?: numberKeyboard
+            KeyboardMode.NUMBER -> numberKeyboard
         }
         keyboardView.keyboard = currentKeyboard
         keyboardView.invalidateAllKeys()
@@ -1389,8 +1338,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (keyboardMode == KeyboardMode.NUMBER) switchToKeyboard(KeyboardMode.QWERTY)
         else {
             switchToKeyboard(KeyboardMode.NUMBER)
-            t9Input.clear()
-            t9Engine?.clear()
         }
     }
 
@@ -1493,19 +1440,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // ======================== 数字键 0-9 ========================
             in 48..57 -> {
                 if (keyboardMode == KeyboardMode.NUMBER) {
-                    // T9 模式：短按输入数字对应字母到拼音引擎，长按直接输入数字
-                    val digitChar = primaryCode.toChar()
-                    val digitStr = digitChar.toString()
-                    val t9Letters = when(digitChar) {
-                        '2' -> "abc"; '3' -> "def"; '4' -> "ghi"; '5' -> "jkl"
-                        '6' -> "mno"; '7' -> "pqrs"; '8' -> "tuv"; '9' -> "wxyz"
-                        else -> ""
-                    }
-                    if (t9Letters.isNotEmpty()) {
-                        // 取第一个字母输入到拼音引擎
-                        t9Engine?.inputLetter(t9Letters[0])
-                        updateCandidateBarFromT9()
-                    }
+                    ic?.commitText(primaryCode.toChar().toString(), 1)
                 } else if (!isAsciiMode && composing && hasCands) {
                     val index = if (primaryCode == 48) 9 else (primaryCode - 49)
                     if (index < cands.size) {
@@ -1546,11 +1481,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // ======================== 退格键 ========================
             -5, Keyboard.KEYCODE_DELETE -> {
-                if (keyboardMode == KeyboardMode.NUMBER) {
-                    // T9 模式：退格清除 T9 拼音
-                    t9Engine?.backspace()
-                    updateCandidateBarFromT9()
-                } else if (isAsciiMode) {
+                if (isAsciiMode) {
                     ic?.deleteSurroundingText(1, 0)
                 } else {
                     val handled = rimeEngine.processKey("BackSpace")
@@ -1687,14 +1618,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
                 Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 500)
             }
-        }
-        // T9 模式：长按数字键直接输入数字
-        if (keyboardMode == KeyboardMode.NUMBER && primaryCode in 48..57) {
-            functionalLongPressRunnable = Runnable {
-                currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
-                keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            }
-            Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 400)
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
