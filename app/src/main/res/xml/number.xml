@@ -1,63 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    数字键盘 — 复刻 Trime number 键盘
-    包含：数字 + 运算符 + 功能键
+    数字键盘 — 5列布局
+    第1行: 英(切英文)  1  2  3  ⌫(退格)
+    第2行: *  4  5  6  ↵(回车)
+    第3行: 符(切符号)  7  8  9  0
+    第4行: .  ,  空格  ±  =
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
-    android:keyWidth="20%p"
+    android:keyWidth="18%p"
     android:keyHeight="48dp"
     android:horizontalGap="1dp"
     android:verticalGap="4dp">
 
-    <!-- 第1行：运算符 + 数字 -->
+    <!-- 第1行: 英 1 2 3 ⌫ -->
     <Row>
-        <Key android:codes="43" android:keyLabel="+" android:keyEdgeFlags="left" />
+        <Key android:codes="-101" android:keyLabel="英" android:keyEdgeFlags="left" />
         <Key android:codes="49" android:keyLabel="1" />
         <Key android:codes="50" android:keyLabel="2" />
         <Key android:codes="51" android:keyLabel="3" />
-        <Key android:codes="35" android:keyLabel="#" android:keyEdgeFlags="right" />
+        <Key android:codes="-5" android:keyLabel="⌫" android:isRepeatable="true" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第2行 -->
+    <!-- 第2行: * 4 5 6 ↵ -->
     <Row>
-        <Key android:codes="45" android:keyLabel="-" android:keyEdgeFlags="left" />
+        <Key android:codes="42" android:keyLabel="*" android:keyEdgeFlags="left" />
         <Key android:codes="52" android:keyLabel="4" />
         <Key android:codes="53" android:keyLabel="5" />
         <Key android:codes="54" android:keyLabel="6" />
-        <Key android:codes="37" android:keyLabel="%" android:keyEdgeFlags="right" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第3行 -->
+    <!-- 第3行: 符 7 8 9 0 -->
     <Row>
-        <Key android:codes="42" android:keyLabel="*" android:keyEdgeFlags="left" />
+        <Key android:codes="-100" android:keyLabel="符" android:keyEdgeFlags="left" />
         <Key android:codes="55" android:keyLabel="7" />
         <Key android:codes="56" android:keyLabel="8" />
         <Key android:codes="57" android:keyLabel="9" />
-        <Key android:codes="58" android:keyLabel=":" android:keyEdgeFlags="right" />
+        <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- 第4行 -->
+    <!-- 第4行: . , 空格 ± = -->
     <Row>
-        <Key android:codes="47" android:keyLabel="/" android:keyEdgeFlags="left" />
-        <Key android:codes="177" android:keyLabel="±" />
-        <Key android:codes="48" android:keyLabel="0" />
-        <Key android:codes="46" android:keyLabel="." />
+        <Key android:codes="46" android:keyLabel="." android:keyEdgeFlags="left" />
         <Key android:codes="44" android:keyLabel="," />
-    </Row>
-
-    <!-- 第5行：等号 + 返回 + 空格 + 退格 + 回车 -->
-    <Row>
-        <Key android:codes="61" android:keyLabel="=" android:keyEdgeFlags="left" />
-        <Key android:codes="-100" android:keyLabel="ABC"
-            android:keyWidth="15%p" />
-        <Key android:codes="32" android:keyLabel="空格"
-            android:keyWidth="30%p" />
-        <Key android:codes="-5" android:keyLabel="⌫"
-            android:isRepeatable="true"
-            android:keyWidth="15%p" />
-        <Key android:codes="10" android:keyLabel="↵"
-            android:keyWidth="15%p"
-            android:keyEdgeFlags="right" />
+        <Key android:codes="32" android:keyLabel="空格" android:keyWidth="28%p" />
+        <Key android:codes="177" android:keyLabel="±" />
+        <Key android:codes="61" android:keyLabel="=" android:keyEdgeFlags="right" />
     </Row>
 
 </Keyboard>
