@@ -262,11 +262,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rvCandidates = view.findViewById(R.id.rv_candidates)
         candidateAdapter = CandidateAdapter { index, _ ->
             if (rimeEngine.hasCandidates) {
-                val selected = rimeEngine.selectCandidate(index)
-                if (selected.isNotEmpty()) {
-                    currentInputConnection?.commitText(selected, 1)
-                    if (::candidateBar.isInitialized) updateCandidateBar()
-                }
+                selectCandidateByGlobalIndex(index)
             }
         }
         rvCandidates?.adapter = candidateAdapter
@@ -1873,7 +1869,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // ======================== 其他按键（标点等）=======================
             else -> {
                 if (!isAsciiMode && composing) commitAndClear()
-                val c = primaryCode.toChar()
+                // 中文模式下，逗号/句号映射为中文标点
+                val adjustedCode = if (!isAsciiMode) {
+                    when (primaryCode) {
+                        44 -> 65292   // , → ，
+                        46 -> 12290   // . → 。
+                        47 -> 65311   // / → ？
+                        else -> primaryCode
+                    }
+                } else primaryCode
+                val c = adjustedCode.toChar()
                 if (c != '\u0000') { ic?.commitText(c.toString(), 1) }
             }
         }
@@ -1906,21 +1911,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false  // 重置短按标志
         Log.d("Cesia", "onPress: primaryCode=$primaryCode")
-        if (primaryCode > 0) {
-            val key = currentKeyboard?.keys?.find { it.codes?.contains(primaryCode) == true }
-            if (key != null && !key.popupCharacters.isNullOrEmpty()) {
-                startLongPressDetection(key)
-            }
-        }
-        // 数字键盘按键长按检测（T9字母候选 / 符号候选）
-        if (keyboardMode == KeyboardMode.NUMBER && primaryCode != -104 && primaryCode != -100 && primaryCode != -101 && primaryCode != -103 && primaryCode != -5 && primaryCode != 10) {
-            val isT9Key = mainToSub.containsKey(primaryCode)
-            val isOneKey = (primaryCode == 49)
-            if (isT9Key || isOneKey) {
-                startNumberKeyboardLongPress(primaryCode, isOneKey)
-            }
-        }
         // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
+        // 注意：功能键长按优先于 popupCharacters 长按，避免冲突
+        var functionalLongPressRegistered = false
         if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
             if (getFunctionalLongAction(primaryCode) != null) {
                 Log.d("CesiaLongPress", "onPress: 注册长按 primaryCode=$primaryCode")
@@ -1936,6 +1929,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     currentLongPressKey = null
                 }
                 Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 500)
+                functionalLongPressRegistered = true
+            }
+        }
+        // popupCharacters 长按检测（仅当没有功能键长按检测时）
+        if (!functionalLongPressRegistered && primaryCode > 0) {
+            val key = currentKeyboard?.keys?.find { it.codes?.contains(primaryCode) == true }
+            if (key != null && !key.popupCharacters.isNullOrEmpty()) {
+                startLongPressDetection(key)
+            }
+        }
+        // 数字键盘按键长按检测（T9字母候选 / 符号候选）
+        if (keyboardMode == KeyboardMode.NUMBER && primaryCode != -104 && primaryCode != -100 && primaryCode != -101 && primaryCode != -103 && primaryCode != -5 && primaryCode != 10) {
+            val isT9Key = mainToSub.containsKey(primaryCode)
+            val isOneKey = (primaryCode == 49)
+            if (isT9Key || isOneKey) {
+                startNumberKeyboardLongPress(primaryCode, isOneKey)
             }
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {

@@ -9,7 +9,7 @@
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="20%p"
-    android:keyHeight="48dp"
+    android:keyHeight="42dp"
     android:horizontalGap="1dp"
     android:verticalGap="4dp">
 
