@@ -1914,7 +1914,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false
         Log.d("Cesia", "onPress: primaryCode=$primaryCode")
-        if (primaryCode > 0) {
+        // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
+        // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
+        // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突
+        var skipPopupLongPress = false
+        if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
+            if (getFunctionalLongAction(primaryCode) != null) {
+                Log.d("CesiaLongPress", "onPress: 注册功能长按 primaryCode=$primaryCode")
+                skipPopupLongPress = true
+                functionalLongPressRunnable = Runnable {
+                    Log.d("CesiaLongPress", "功能长按触发! primaryCode=$primaryCode shortPressHandled=$shortPressHandled")
+                    if (!shortPressHandled) {
+                        getFunctionalLongAction(primaryCode)?.invoke()
+                        keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        longPressTriggered = true
+                        longPressConsumed = false
+                    }
+                    currentLongPressKey = null
+                }
+                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 500)
+            }
+        }
+        // popupCharacters 长按检测（功能键不注册，避免与功能长按冲突）
+        if (!skipPopupLongPress && primaryCode > 0) {
             val key = currentKeyboard?.keys?.find { it.codes?.contains(primaryCode) == true }
             if (key != null && !key.popupCharacters.isNullOrEmpty()) {
                 startLongPressDetection(key)
@@ -1926,23 +1948,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val isOneKey = (primaryCode == 49)
             if (isT9Key || isOneKey) {
                 startNumberKeyboardLongPress(primaryCode, isOneKey)
-            }
-        }
-        // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
-        if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
-            if (getFunctionalLongAction(primaryCode) != null) {
-                Log.d("CesiaLongPress", "onPress: 注册长按 primaryCode=$primaryCode")
-                functionalLongPressRunnable = Runnable {
-                    Log.d("CesiaLongPress", "长按触发! primaryCode=$primaryCode shortPressHandled=$shortPressHandled")
-                    if (!shortPressHandled) {
-                        getFunctionalLongAction(primaryCode)?.invoke()
-                        keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                        longPressTriggered = true
-                        longPressConsumed = false
-                    }
-                    currentLongPressKey = null
-                }
-                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 500)
             }
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
