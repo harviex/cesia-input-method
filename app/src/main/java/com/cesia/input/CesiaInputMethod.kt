@@ -62,7 +62,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
-    private lateinit var btnClipboard: MaterialButton
+    private lateinit var btnClipboard: ImageButton
     private lateinit var btnMagic: MaterialButton
     private lateinit var btnSend: ImageButton
     private lateinit var statusDot: View
