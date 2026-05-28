@@ -5,30 +5,30 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 魔法语句网格 - 可滚动 -->
+    <!-- 魔法语句网格 - 可滚动，固定高度占满剩余空间 -->
     <GridView
         android:id="@+id/gv_magic_items"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="300dp"
         android:numColumns="2"
         android:columnWidth="0dp"
         android:stretchMode="columnWidth"
         android:horizontalSpacing="2dp"
         android:verticalSpacing="2dp"
         android:padding="6dp"
-        android:maxHeight="360dp"
         android:scrollbars="vertical"
         android:fastScrollEnabled="true"
         android:listSelector="@android:color/transparent" />
 
-    <!-- 底部管理栏 5个按钮 -->
+    <!-- 底部管理栏 5个按钮 - 始终可见 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="#F5F5F5"
-        android:paddingHorizontal="4dp">
+        android:paddingHorizontal="4dp"
+        android:elevation="2dp">
 
         <TextView
             android:id="@+id/btn_pin_manage"

@@ -952,16 +952,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val keyboardWidth = keyboardView.width
         val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
 
-        // 固定高度避免闪烁：先 measure 再设置固定高度
-        popupView.measure(
-            android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
-            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-        )
-        val measuredHeight = popupView.measuredHeight.coerceAtMost(
+        // 预测量总高度（GridView 固定 300dp + 按钮栏 44dp）
+        val gridHeightPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 300f, resources.displayMetrics
+        ).toInt()
+        val barHeightPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
+        ).toInt()
+        val totalHeight = (gridHeightPx + barHeightPx).coerceAtMost(
             (resources.displayMetrics.heightPixels * 0.6f).toInt()
         )
 
-        val popup = PopupWindow(popupView, popupWidth, measuredHeight, true)
+        val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
         popup.isOutsideTouchable = true
         popup.elevation = 4f
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
