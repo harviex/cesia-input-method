@@ -63,6 +63,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: MaterialButton
     private lateinit var btnMagic: MaterialButton
+    private lateinit var btnSend: ImageButton
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
     private lateinit var voiceWave: View
@@ -249,6 +250,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnDelete = view.findViewById(R.id.btn_delete)
         btnClipboard = view.findViewById(R.id.btn_magic_book)
         btnMagic = view.findViewById(R.id.btn_magic)
+        btnSend = view.findViewById(R.id.btn_send)
         statusDot = view.findViewById(R.id.v_status_dot)
         statusText = view.findViewById(R.id.tv_status)
         voiceWave = view.findViewById(R.id.v_voice_wave)
@@ -655,6 +657,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnMagic.setOnClickListener { toggleMagicMode() }
         btnMagic.setOnLongClickListener { true }
+
+        // 发送按钮
+        btnSend.setOnClickListener {
+            val ic = currentInputConnection ?: return@setOnClickListener
+            if (!isAsciiMode && rimeEngine.isComposing) {
+                val text = if (rimeEngine.hasCandidates) {
+                    rimeEngine.selectCandidate(0).ifEmpty { rimeEngine.composingText }
+                } else { rimeEngine.composingText }
+                if (text.isNotEmpty()) { ic.commitText(text, 1) }
+                rimeEngine.clear()
+                updateCandidateBar()
+            }
+            val editorInfo = currentInputEditorInfo
+            val action = (editorInfo?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
+            if (action == EditorInfo.IME_ACTION_SEND || action == EditorInfo.IME_ACTION_DONE) {
+                ic.performEditorAction(action)
+            } else {
+                sendDownUpEnter()
+            }
+        }
     }
 
     // ======================== 魔法修改 ========================
