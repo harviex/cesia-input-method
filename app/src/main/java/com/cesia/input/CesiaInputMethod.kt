@@ -929,215 +929,111 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun showMagicHistoryPopup() {
         val mgr = magicHistoryManager ?: return
-        val records = mgr.getRecords()
 
-        try {
-            val inflater = android.view.LayoutInflater.from(this)
-            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
-            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
-
-            val keyboardWidth = keyboardView.width
-            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-            val popup = PopupWindow(popupView, popupWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
-            popup.isOutsideTouchable = true
-            popup.elevation = 4f
-
-            val items = mutableListOf<MagicHistoryManager.MagicRecord>()
-            items.addAll(records)
-
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-            val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_manage)
-            val btnEdit = popupView.findViewById<TextView>(R.id.btn_edit_manage)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
-            val btnUndo = popupView.findViewById<TextView>(R.id.btn_undo_manage)
-
-            gridView.adapter = object : android.widget.BaseAdapter() {
-                override fun getCount() = items.size
-                override fun getItem(p: Int) = items[p]
-                override fun getItemId(p: Int) = items[p].id
-                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
-                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
-                    val record = items[p]
-                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
-                    val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
-
-                    val prefix = if (record.isPinned) "📌 " else if (record.instruction == currentMagicPrompt) "✓ " else ""
-                    tv.text = "${prefix}${record.instruction}"
-                    tv.setTextColor(if (record.instruction == currentMagicPrompt) 0xFF1565C0.toInt() else 0xFF333333.toInt())
-                    tv.setTypeface(null, if (record.instruction == currentMagicPrompt) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-
-                    tvFull.text = record.instruction
-                    tvFull.visibility = View.GONE
-
-                    v.setOnLongClickListener {
-                        tv.visibility = View.GONE
-                        tvFull.visibility = View.VISIBLE
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            try {
-                                tvFull.visibility = View.GONE
-                                tv.visibility = View.VISIBLE
-                            } catch (_: Exception) {}
-                        }, 3000)
-                        true
-                    }
-                    return v
+        // 后台加载记录，避免主线程 JSON 解析卡界面
+        Thread {
+            val records = mgr.getRecords()
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    showMagicHistoryPopupInternal(mgr, records)
+                } catch (e: Exception) {
+                    Log.e("Cesia", "showMagicHistoryPopup UI 异常", e)
+                    updateStatus("长按可管理魔法指令")
                 }
             }
+        }.start()
+    }
 
-            gridView.setOnItemClickListener { _, _, position, _ ->
-                val record = items[position]
-                currentMagicPrompt = record.instruction
-                updateStatus("✅ 已应用：${record.instruction.take(20)}…")
-                popup.dismiss()
-                executeSelectedMagic(record.instruction)
-            }
+    private fun showMagicHistoryPopupInternal(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
+        val inflater = android.view.LayoutInflater.from(this)
+        val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+        val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
 
-            gridView.setOnItemLongClickListener { _, v, position, _ ->
-                val record = items[position]
-                val popupMenu = android.widget.PopupMenu(this, v)
-                popupMenu.menu.add(0, 1, 0, if (record.isPinned) "取消置顶" else "📌 置顶")
-                popupMenu.menu.add(0, 2, 1, "🗑️ 删除")
-                popupMenu.setOnMenuItemClickListener { item ->
-                    when (item.itemId) {
-                        1 -> {
-                            mgr.togglePin(record.id)
-                            currentMagicPrompt = mgr.getActiveInstruction()
-                            items.clear()
-                            items.addAll(mgr.getRecords())
-                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                            updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
-                            true
-                        }
-                        2 -> {
-                            mgr.removeRecord(record.id)
-                            items.clear()
-                            val updated = mgr.getRecords()
-                            items.addAll(updated)
-                            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                                currentMagicPrompt = mgr.getActiveInstruction()
-                            }
-                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                            if (items.isEmpty()) {
-                                btnPin.visibility = View.GONE
-                                btnDelete.visibility = View.GONE
-                            }
-                            updateStatus("🗑️ 已删除")
-                            true
-                        }
-                        else -> false
-                    }
+        val keyboardWidth = keyboardView.width
+        val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+        // 固定高度避免闪烁：先 measure 再设置固定高度
+        popupView.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+        )
+        val measuredHeight = popupView.measuredHeight.coerceAtMost(
+            (resources.displayMetrics.heightPixels * 0.6f).toInt()
+        )
+
+        val popup = PopupWindow(popupView, popupWidth, measuredHeight, true)
+        popup.isOutsideTouchable = true
+        popup.elevation = 4f
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+
+        val items = mutableListOf<MagicHistoryManager.MagicRecord>()
+        items.addAll(records)
+
+        val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
+        val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_manage)
+        val btnEdit = popupView.findViewById<TextView>(R.id.btn_edit_manage)
+        val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val btnUndo = popupView.findViewById<TextView>(R.id.btn_undo_manage)
+
+        gridView.adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = items.size
+            override fun getItem(p: Int) = items[p]
+            override fun getItemId(p: Int) = items[p].id
+            override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                val record = items[p]
+                val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                val tvFull = v.findViewById<TextView>(R.id.tv_magic_full)
+
+                val prefix = if (record.isPinned) "📌 " else if (record.instruction == currentMagicPrompt) "✓ " else ""
+                tv.text = "${prefix}${record.instruction}"
+                tv.setTextColor(if (record.instruction == currentMagicPrompt) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+                tv.setTypeface(null, if (record.instruction == currentMagicPrompt) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+
+                tvFull.text = record.instruction
+                tvFull.visibility = View.GONE
+
+                v.setOnLongClickListener {
+                    tv.visibility = View.GONE
+                    tvFull.visibility = View.VISIBLE
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        try {
+                            tvFull.visibility = View.GONE
+                            tv.visibility = View.VISIBLE
+                        } catch (_: Exception) {}
+                    }, 3000)
+                    true
                 }
-                popupMenu.show()
-                true
+                return v
             }
+        }
 
-            btnPin.setOnClickListener {
-                if (items.isEmpty()) return@setOnClickListener
-                val popupMenu = android.widget.PopupMenu(this, btnPin)
-                for (r in items) {
-                    val title = "${if (r.isPinned) "📌 " else "○ "}${r.instruction.take(18)}"
-                    popupMenu.menu.add(0, r.id.toInt(), 0, title)
-                }
-                popupMenu.setOnMenuItemClickListener { item ->
-                    val record = items.find { it.id.toInt() == item.itemId }
-                    if (record != null) {
+        gridView.setOnItemClickListener { _, _, position, _ ->
+            val record = items[position]
+            currentMagicPrompt = record.instruction
+            updateStatus("✅ 已应用：${record.instruction.take(20)}…")
+            popup.dismiss()
+            executeSelectedMagic(record.instruction)
+        }
+
+        gridView.setOnItemLongClickListener { _, v, position, _ ->
+            val record = items[position]
+            val popupMenu = android.widget.PopupMenu(this, v)
+            popupMenu.menu.add(0, 1, 0, if (record.isPinned) "取消置顶" else "📌 置顶")
+            popupMenu.menu.add(0, 2, 1, "🗑️ 删除")
+            popupMenu.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> {
                         mgr.togglePin(record.id)
                         currentMagicPrompt = mgr.getActiveInstruction()
                         items.clear()
                         items.addAll(mgr.getRecords())
                         (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
                         updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
+                        true
                     }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            // ===== 新增：弹出文本框输入新魔法 =====
-            btnAdd.setOnClickListener {
-                val editText = android.widget.EditText(this).apply {
-                    hint = "输入魔法指令..."
-                    setPadding(32, 16, 32, 16)
-                }
-                AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                    .setTitle("➕ 新增魔法")
-                    .setView(editText)
-                    .setPositiveButton("添加") { _, _ ->
-                        val text = editText.text.toString().trim()
-                        if (text.isNotEmpty()) {
-                            mgr.addRecord(text)
-                            items.clear()
-                            items.addAll(mgr.getRecords())
-                            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                            updateStatus("✅ 已新增：${text.take(20)}")
-                        }
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-
-            // ===== 修改：点击魔法后在原地编辑 =====
-            btnEdit.setOnClickListener {
-                if (items.isEmpty()) return@setOnClickListener
-                val popupMenu = android.widget.PopupMenu(this, btnEdit)
-                for (r in items) {
-                    val title = if (r.isPinned) "📌 ${r.instruction.take(25)}" else r.instruction.take(25)
-                    popupMenu.menu.add(0, r.id.toInt(), 0, title)
-                }
-                popupMenu.setOnMenuItemClickListener { item ->
-                    val record = items.find { it.id.toInt() == item.itemId }
-                    if (record != null) {
-                        // 弹出编辑对话框
-                        val editText = android.widget.EditText(this).apply {
-                            setText(record.instruction)
-                            setSelection(record.instruction.length)
-                            setPadding(32, 16, 32, 16)
-                        }
-                        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                            .setTitle("✏️ 修改魔法")
-                            .setView(editText)
-                            .setPositiveButton("保存") { _, _ ->
-                                val newText = editText.text.toString().trim()
-                                if (newText.isNotEmpty() && newText != record.instruction) {
-                                    // 删除旧的，添加新的
-                                    mgr.removeRecord(record.id)
-                                    mgr.addRecord(newText)
-                                    items.clear()
-                                    items.addAll(mgr.getRecords())
-                                    (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                                    if (currentMagicPrompt == record.instruction) {
-                                        currentMagicPrompt = newText
-                                    }
-                                    updateStatus("✅ 已修改：${newText.take(20)}")
-                                }
-                            }
-                            .setNegativeButton("取消", null)
-                            .show()
-                    }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            btnDelete.setOnClickListener {
-                if (items.isEmpty()) return@setOnClickListener
-                val popupMenu = android.widget.PopupMenu(this, btnDelete)
-                for (r in items) {
-                    popupMenu.menu.add(0, r.id.toInt(), 0, "🗑️ ${r.instruction.take(18)}")
-                }
-                popupMenu.menu.add(0, -1, items.size, "⚠️ 删除全部（${items.size}条）")
-                popupMenu.setOnMenuItemClickListener { item ->
-                    if (item.itemId == -1) {
-                        mgr.clearAll()
-                        items.clear()
-                        currentMagicPrompt = null
-                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-                        btnPin.visibility = View.GONE
-                        btnDelete.visibility = View.GONE
-                        updateStatus("🗑️ 已删除全部记录")
-                    } else {
-                        mgr.removeRecord(item.itemId.toLong())
+                    2 -> {
+                        mgr.removeRecord(record.id)
                         items.clear()
                         val updated = mgr.getRecords()
                         items.addAll(updated)
@@ -1145,30 +1041,167 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             currentMagicPrompt = mgr.getActiveInstruction()
                         }
                         (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                        if (items.isEmpty()) {
+                            btnPin.visibility = View.GONE
+                            btnDelete.visibility = View.GONE
+                        }
+                        updateStatus("🗑️ 已删除")
+                        true
                     }
-                    true
+                    else -> false
                 }
-                popupMenu.show()
             }
-
-            // ===== 撤销 =====
-            btnUndo.setOnClickListener {
-                popup.dismiss()
-                performUndo()
-            }
-
-            if (items.isEmpty()) {
-                btnPin.visibility = View.GONE
-                btnAdd.visibility = View.GONE
-                btnEdit.visibility = View.GONE
-                btnDelete.visibility = View.GONE
-                btnUndo.visibility = View.GONE
-            }
-            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
-        } catch (e: Exception) {
-            Log.e("Cesia", "showMagicHistoryPopup 异常", e)
-            updateStatus("长按可管理魔法指令")
+            popupMenu.show()
+            true
         }
+
+        btnPin.setOnClickListener {
+            if (items.isEmpty()) return@setOnClickListener
+            val popupMenu = android.widget.PopupMenu(this, btnPin)
+            for (r in items) {
+                val title = "${if (r.isPinned) "📌 " else "○ "}${r.instruction.take(18)}"
+                popupMenu.menu.add(0, r.id.toInt(), 0, title)
+            }
+            popupMenu.setOnMenuItemClickListener { item ->
+                val record = items.find { it.id.toInt() == item.itemId }
+                if (record != null) {
+                    mgr.togglePin(record.id)
+                    currentMagicPrompt = mgr.getActiveInstruction()
+                    items.clear()
+                    items.addAll(mgr.getRecords())
+                    (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                    updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
+                }
+                true
+            }
+            popupMenu.show()
+        }
+
+        // ===== 新增：弹出文本框输入新魔法 =====
+        btnAdd.setOnClickListener {
+            val editText = android.widget.EditText(applicationContext).apply {
+                hint = "输入魔法指令..."
+                setPadding(32, 16, 32, 16)
+            }
+            val dialog = AlertDialog.Builder(applicationContext, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("➕ 新增魔法")
+                .setView(editText)
+                .setPositiveButton("添加") { _, _ ->
+                    val text = editText.text.toString().trim()
+                    if (text.isNotEmpty()) {
+                        mgr.addRecord(text)
+                        items.clear()
+                        items.addAll(mgr.getRecords())
+                        (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                        updateStatus("✅ 已新增：${text.take(20)}")
+                    }
+                }
+                .setNegativeButton("取消", null)
+                .create()
+            // 输入法服务没有 window token，反射设置 TYPE_APPLICATION_ATTACHED_DIALOG
+            try {
+                val field = android.view.WindowManager.LayoutParams::class.java
+                    .getDeclaredField("TYPE_APPLICATION_ATTACHED_DIALOG")
+                field.isAccessible = true
+                dialog.window?.setType(field.getInt(null))
+            } catch (_: Exception) { /* fallback: 不设置 type */ }
+            dialog.show()
+        }
+
+        // ===== 修改：点击魔法后在原地编辑 =====
+        btnEdit.setOnClickListener {
+            if (items.isEmpty()) return@setOnClickListener
+            val popupMenu = android.widget.PopupMenu(this, btnEdit)
+            for (r in items) {
+                val title = if (r.isPinned) "📌 ${r.instruction.take(25)}" else r.instruction.take(25)
+                popupMenu.menu.add(0, r.id.toInt(), 0, title)
+            }
+            popupMenu.setOnMenuItemClickListener { item ->
+                val record = items.find { it.id.toInt() == item.itemId }
+                if (record != null) {
+                    val editText = android.widget.EditText(applicationContext).apply {
+                        setText(record.instruction)
+                        setSelection(record.instruction.length)
+                        setPadding(32, 16, 32, 16)
+                    }
+                    val dialog = AlertDialog.Builder(applicationContext, android.R.style.Theme_Material_Light_Dialog_Alert)
+                        .setTitle("✏️ 修改魔法")
+                        .setView(editText)
+                        .setPositiveButton("保存") { _, _ ->
+                            val newText = editText.text.toString().trim()
+                            if (newText.isNotEmpty() && newText != record.instruction) {
+                                mgr.removeRecord(record.id)
+                                mgr.addRecord(newText)
+                                items.clear()
+                                items.addAll(mgr.getRecords())
+                                (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                                if (currentMagicPrompt == record.instruction) {
+                                    currentMagicPrompt = newText
+                                }
+                                updateStatus("✅ 已修改：${newText.take(20)}")
+                            }
+                        }
+                        .setNegativeButton("取消", null)
+                        .create()
+                    // 输入法服务没有 window token，反射设置 TYPE_APPLICATION_ATTACHED_DIALOG
+                    try {
+                        val field = android.view.WindowManager.LayoutParams::class.java
+                            .getDeclaredField("TYPE_APPLICATION_ATTACHED_DIALOG")
+                        field.isAccessible = true
+                        dialog.window?.setType(field.getInt(null))
+                    } catch (_: Exception) { /* fallback: 不设置 type */ }
+                    dialog.show()
+                }
+                true
+            }
+            popupMenu.show()
+        }
+
+        btnDelete.setOnClickListener {
+            if (items.isEmpty()) return@setOnClickListener
+            val popupMenu = android.widget.PopupMenu(this, btnDelete)
+            for (r in items) {
+                popupMenu.menu.add(0, r.id.toInt(), 0, "🗑️ ${r.instruction.take(18)}")
+            }
+            popupMenu.menu.add(0, -1, items.size, "⚠️ 删除全部（${items.size}条）")
+            popupMenu.setOnMenuItemClickListener { item ->
+                if (item.itemId == -1) {
+                    mgr.clearAll()
+                    items.clear()
+                    currentMagicPrompt = null
+                    (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                    btnPin.visibility = View.GONE
+                    btnDelete.visibility = View.GONE
+                    updateStatus("🗑️ 已删除全部记录")
+                } else {
+                    mgr.removeRecord(item.itemId.toLong())
+                    items.clear()
+                    val updated = mgr.getRecords()
+                    items.addAll(updated)
+                    if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                        currentMagicPrompt = mgr.getActiveInstruction()
+                    }
+                    (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                }
+                true
+            }
+            popupMenu.show()
+        }
+
+        // ===== 撤销 =====
+        btnUndo.setOnClickListener {
+            popup.dismiss()
+            performUndo()
+        }
+
+        if (items.isEmpty()) {
+            btnPin.visibility = View.GONE
+            btnAdd.visibility = View.GONE
+            btnEdit.visibility = View.GONE
+            btnDelete.visibility = View.GONE
+            btnUndo.visibility = View.GONE
+        }
+        popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
     }
 
     // ======================== AI自动回复 ========================
@@ -1534,6 +1567,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             KeyboardMode.NUMBER -> numberKeyboard
         }
         keyboardView.keyboard = currentKeyboard
+        // 只有 NUMBER 模式（T9 数字键盘）才绘制字母主字符
+        keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
         keyboardView.invalidateAllKeys()
     }
 

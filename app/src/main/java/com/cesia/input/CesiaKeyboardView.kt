@@ -27,6 +27,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
     // T9 数字键盘副字符
     private var t9Labels = mapOf<Int, String>()
 
+    // T9 模式标志 — 只有 T9 数字键盘才绘制字母主字符
+    var isT9Mode = false
+
     // T9 主字符映射（数字码 → 字母标签）
     private val t9MainLabels = mapOf(
         50 to "abc", 51 to "def", 52 to "ghi", 53 to "jkl",
@@ -92,11 +95,13 @@ class CesiaKeyboardView @JvmOverloads constructor(
             if (key.label == null) continue
 
             // ===== T9 主字符（大号字母，按键中央） =====
-            val t9Main = t9MainLabels[code]
-            if (t9Main != null) {
-                val cx = key.x + key.width / 2f
-                val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
-                canvas.drawText(t9Main, cx, cy, t9MainPaint)
+            if (isT9Mode) {
+                val t9Main = t9MainLabels[code]
+                if (t9Main != null) {
+                    val cx = key.x + key.width / 2f
+                    val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                    canvas.drawText(t9Main, cx, cy, t9MainPaint)
+                }
             }
 
             val x = key.x + key.width - 10f
