@@ -5,19 +5,16 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 魔法语句网格 - 可滚动，固定高度占满剩余空间 -->
+    <!-- 魔法语句网格 - 可滚动，1列布局（第一项独占一行） -->
     <GridView
         android:id="@+id/gv_magic_items"
         android:layout_width="match_parent"
         android:layout_height="300dp"
-        android:numColumns="2"
-        android:columnWidth="0dp"
-        android:stretchMode="columnWidth"
+        android:numColumns="1"
         android:horizontalSpacing="2dp"
         android:verticalSpacing="2dp"
         android:padding="6dp"
         android:scrollbars="vertical"
-        android:fastScrollEnabled="true"
         android:listSelector="@android:color/transparent" />
 
     <!-- 底部管理栏 5个按钮 - 始终可见 -->
