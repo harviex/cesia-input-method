@@ -718,19 +718,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 魔法修改 ========================
 
     private fun toggleMagicMode() {
-        if (!magicIsWaitingForVoice) {
-            magicIsWaitingForVoice = true
-            btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFF9800.toInt())
-            btnMagic.setTextColor(0xFFFFFFFF.toInt())
-            btnMagic.elevation = 6f
-            updateStatus("✨ 点击✨按钮开始语音修改")
-            btnMagic.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200).start()
+        if (isRecording) {
+            // 正在录音 → 结束录音，取消高亮，识别结果由 onRecognitionComplete → handleMagicResult 处理
+            stopRecording()
+            resetMagicHighlight()
         } else {
-            magicIsWaitingForVoice = false
-            btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-            btnMagic.setTextColor(0xFF888888.toInt())
-            btnMagic.elevation = 0f
-            btnMagic.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
+            // 未录音 → 读取输入框文字 + 高亮 + 开始录音
             startMagicMode()
         }
     }
@@ -753,7 +746,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicMode = true
         typelessEngine?.magicMode = true
 
-        updateStatus("🎤 请说出修改指令...")
+        // 高亮按钮表示正在录音
+        magicIsWaitingForVoice = true
+        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFF9800.toInt())
+        btnMagic.setTextColor(0xFFFFFFFF.toInt())
+        btnMagic.elevation = 6f
+        btnMagic.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200).start()
+
+        updateStatus("🎤 请说出修改指令...（再次点击✨停止）")
         setStatusDot("recording")
         startVoiceWave()
         isRecording = true
@@ -777,6 +777,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         isRecording = false
         stopVoiceWave()
         setStatusDot("idle")
+        resetMagicHighlight()
 
         val instruction = recognizedText.trim()
         if (instruction.isEmpty()) {
