@@ -86,7 +86,7 @@
 
     <!-- 第5行：返回QWERTY + 数字 + 空格 + 句号 + 回车 -->
     <Row>
-        <Key android:codes="-999" android:keyLabel="ABC" android:keyEdgeFlags="left"
+        <Key android:codes="-999" android:keyLabel="⇱ ABC" android:keyEdgeFlags="left"
             android:keyWidth="12%p" />
         <Key android:codes="-102" android:keyLabel="123"
             android:keyWidth="10%p" />

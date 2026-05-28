@@ -37,9 +37,9 @@
 
     <Row>
         <Key android:codes="-100" android:keyLabel="符" android:keyEdgeFlags="left" />
-        <Key android:codes="-101" android:keyLabel="T9" />
-        <Key android:codes="32" android:keyLabel="空格" />
-        <Key android:codes="-103" android:keyLabel="控" />
+        <Key android:codes="-101" android:keyLabel="🌐" />
+        <Key android:codes="32" android:keyLabel="空格" android:popupCharacters="0" />
+        <Key android:codes="-999" android:keyLabel="⇱ 返回" />
         <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" />
     </Row>
 

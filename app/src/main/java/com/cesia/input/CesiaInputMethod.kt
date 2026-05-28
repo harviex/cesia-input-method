@@ -1785,9 +1785,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun switchToDefaultKeyboard() {
+        val wasT9 = keyboardMode == KeyboardMode.NUMBER
         switchToKeyboard(KeyboardMode.QWERTY)
         isAsciiMode = false
         rimeEngine.setAsciiMode(false)
+        if (wasT9) rimeEngine.selectSchema("pinyin")
         rimeEngine.clear()
         updateCandidateBar()
     }
