@@ -46,6 +46,33 @@ engine:
 speller:
   alphabet: zyxwvutsrqponmlkjihgfedcba
   delimiter: " '"
+  algebra:
+    # ===== 简拼 =====
+    - abbrev/^([a-z]).+$/$1/           # 单字母简拼：nm→n, sh→s
+    - abbrev/^([zcs]h).+$/$1/          # 双字母简拼：zh→z, ch→c, sh→s
+
+    # ===== 平翘舌模糊 =====
+    - derive/^([zcs])h/$1/             # zh→z, ch→c, sh→s
+    - derive/^([zcs])([^h])/$1h$2/     # z→zh, c→ch, s→sh
+
+    # ===== 前后鼻音模糊 =====
+    - derive/([aeiou])n$/$1ng/         # an→ang, en→eng, in→ing...
+    - derive/([aeiou])ng$/$1n/         # ang→an, eng→en, ing→in...
+
+    # ===== 韵母顺序模糊 =====
+    - derive/uei$/ui/                  # uei↔ui
+    - derive/ui$/uei/
+    - derive/iou$/iu/                  # iou↔iu
+    - derive/iu$/iou/
+
+    # ===== 常用纠错 =====
+    - derive/^([nl])ve$/$1ue/correction  # lve→lue, nve→nue
+    - derive/^([jqxy])u/$1v/correction   # ju→jv, qu→qv...
+    - derive/un$/uen/correction          # un↔uen
+    - derive/ong$/on/correction           # ong↔on
+    - derive/ao$/oa/correction            # ao↔oa
+    - derive/([dtngkhrzcs])o(u|ng)$/$1o/correction  # don→dong 等
+    - derive/([iu])a(o|ng?)$/a$1$2/correction       # ian↔iang 等
 
 # 翻译器
 translator:
