@@ -631,15 +631,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 更新候选词列表
-        candidateAdapter?.updateData(allCands)
-        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
+        // T9 模式：过滤掉纯拼音字母候选，只显示汉字词
+        val displayCands = if (keyboardMode == KeyboardMode.NUMBER) {
+            allCands.filter { cand -> cand.any { it.code > 127 } }
+        } else {
+            allCands
+        }
+        candidateAdapter?.updateData(displayCands)
+        btnCandidateExpand.visibility = if (displayCands.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板
         if (isPanelExpanded) {
-            tvPanelComposing.text = pinyin
+            tvPanelComposing.text = if (keyboardMode == KeyboardMode.NUMBER) "" else pinyin
             val allCandsPanel = rimeEngine.getAllCandidates()
+            val panelCands = if (keyboardMode == KeyboardMode.NUMBER) {
+                allCandsPanel.filter { cand -> cand.any { it.code > 127 } }
+            } else {
+                allCandsPanel
+            }
             panelAdapter?.clear()
-            panelAdapter?.addAll(allCandsPanel)
+            panelAdapter?.addAll(panelCands)
             panelAdapter?.notifyDataSetChanged()
         }
     }
