@@ -71,7 +71,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 候选词栏
     private lateinit var candidateBar: LinearLayout
-    private lateinit var tvComposing: TextView
     private lateinit var btnCandidateExpand: ImageButton
     private var rvCandidates: RecyclerView? = null
     private var candidateAdapter: CandidateAdapter? = null
@@ -289,7 +288,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 候选词栏
         candidateBar = view.findViewById(R.id.candidate_bar)
-        tvComposing = view.findViewById(R.id.tv_composing)
         btnCandidateExpand = view.findViewById(R.id.btn_candidate_expand)
 
         // RecyclerView 候选词列表
@@ -478,14 +476,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             (statusText.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
             statusText.setTextColor(0xFFE0E0E0.toInt())
             candidateBar.setBackgroundColor(0xFF16213E.toInt())
-            tvComposing.setTextColor(0xFF4488FF.toInt())
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
             keyboardView.setBackgroundColor(0xFFE8E8E8.toInt())
             (statusText.parent as? View)?.setBackgroundColor(0xFFEEEEEE.toInt())
             statusText.setTextColor(0xFF555555.toInt())
             candidateBar.setBackgroundColor(0xFFF0F0F0.toInt())
-            tvComposing.setTextColor(0xFF4488FF.toInt())
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
         }
     }
@@ -607,8 +603,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (!composing && pinyin.isEmpty()) {
             candidateBar.visibility = View.GONE
             if (isPanelExpanded) collapseCandidatePanel()
-            tvComposing.text = ""
-            tvComposing.visibility = View.VISIBLE
             updateStatus("Cesia 已就绪")
             Log.d("CesiaT9", "updateCandidateBar: HIDE (not composing)")
             return
@@ -616,8 +610,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 有输入时
         candidateBar.visibility = View.VISIBLE
-        tvComposing.text = ""
-        tvComposing.visibility = View.GONE
         Log.d("CesiaT9", "updateCandidateBar: SHOW cands=$allCands")
 
         // T9 模式：状态栏只显示数字序列
@@ -1468,11 +1460,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setStatusDot("idle")
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
-        // 恢复候选词栏拼音显示
-        if (::tvComposing.isInitialized) {
-            tvComposing.text = ""
-            tvComposing.visibility = View.VISIBLE
-        }
         updateStatus("Cesia 已就绪")
     }
 
