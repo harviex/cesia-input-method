@@ -1866,7 +1866,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         when (primaryCode) {
 
             // ======================== 字母键 a-z ========================
-            // ======================== 字母键 a-z ========================\n            in 97..122 -> {
+            in 97..122 -> {
                 Log.d("CesiaLongPress", "onKey: 字母键 primaryCode=$primaryCode")
                 Log.d("CesiaLongPress", "onKey: 取消长按 primaryCode=$primaryCode")
                 functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
