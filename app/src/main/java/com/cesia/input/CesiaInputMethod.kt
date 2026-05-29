@@ -998,15 +998,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             inner class VH(val tv: TextView) : RecyclerView.ViewHolder(tv)
 
-            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val tv = inflater.inflate(R.layout.item_magic_grid, parent, false) as TextView
                 return VH(tv)
             }
 
-            override fun onBindViewHolder(holder: VH, position: Int) {
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                 val record = items[position]
                 val isEmptySlot = (record.id == SLOT_EMPTY_ID)
-                val tv = holder.tv
+                val tv = (holder as VH).tv
 
                 if (isEmptySlot) {
                     tv.text = "➕ 长按新增魔法"
@@ -1034,7 +1034,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
                 // 长按：弹出编辑框
                 tv.setOnLongClickListener {
-                    showEditDialog(record, position, mgr) { rebuildItems(); notifyDataSetChanged() }
+                    showEditDialog(record, position, mgr) { rebuildItems(); adapter.notifyDataSetChanged() }
                     true
                 }
             }
