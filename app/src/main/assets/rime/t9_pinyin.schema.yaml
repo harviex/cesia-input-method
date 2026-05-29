@@ -1,4 +1,6 @@
 # Rime schema — Cesia T9 九键拼音
+# 基于雾凇词库（pinyin.dict.yaml），通过 speller.algebra derive 规则将字母映射到数字
+# 用户按 T9 数字键 → speller 通过 derive 反推到字母 → script_translator 查词库
 schema:
   schema_id: t9_pinyin
   name: 九键拼音
@@ -7,6 +9,7 @@ schema:
     - Cesia
   description: |
     T9 九键拼音输入 - 2=abc 3=def 4=ghi 5=jkl 6=mno 7=pqrs 8=tuv 9=wxyz
+    支持词组和语言模型，基于雾凇词库
 
 # 开关
 switches:
@@ -32,7 +35,7 @@ engine:
     - fallback_segmentor
   translators:
     - punct_translator
-    - table_translator
+    - script_translator
   filters:
     - uniquifier
 
@@ -41,14 +44,24 @@ speller:
   alphabet: "23456789"
   delimiter: "'"
   max_code_length: 20
+  algebra:
+    # 字母 → T9 数字映射（核心：让 Rime 能把数字匹配到对应字母的拼音）
+    - derive/[abc]/2/
+    - derive/[def]/3/
+    - derive/[ghi]/4/
+    - derive/[jkl]/5/
+    - derive/[mno]/6/
+    - derive/[pqrs]/7/
+    - derive/[tuv]/8/
+    - derive/[wxyz]/9/
 
-# 翻译器 — 数字序列查词（词库第二列为 T9 数字编码）
+# 翻译器 — script_translator 支持拼音切分、词组、语言模型
 translator:
-  dictionary: t9_pinyin
+  dictionary: pinyin
   spelling_hints: 5
   enable_completion: true
   enable_sentence: true
-  enable_user_dict: false
+  enable_user_dict: true
   comment_format:
     - xform/.*//
 
