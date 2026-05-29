@@ -126,6 +126,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var backspaceHandler = Handler(Looper.getMainLooper())
     private var backspaceRunnable: Runnable? = null
 
+    // T9 数字键长按标志：长按触发后设为 true，阻止 onKey 处理短按逻辑
+    private var numberLongPressFired = false
+
     // 发送键长按检测
     private var sendKeyLongPressTriggered = false
     private var sendKeyHandler = Handler(Looper.getMainLooper())
@@ -1613,31 +1616,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 1 键长按：弹出符号候选
                 showSymbolPopup()
             } else {
-                // T9 键长按：弹出字母候选 (a/b/c 等)
-                val letters = t9Map[mainToSub[primaryCode]] ?: ""
-                showLetterPopup(primaryCode, letters)
+                // T9 键长按：直接上屏数字，清空拼音状态，不显示任何候选
+                val digit = mainToSub[primaryCode]
+                val text = if (digit != null) digit.toString() else primaryCode.toChar().toString()
+                currentInputConnection?.commitText(text, 1)
+                // 清空 T9 缓冲和拼音引擎
+                t9InputBuffer.clear()
+                rimeEngine.clear()
+                // 清空候选栏和状态栏
+                candidateAdapter?.updateData(emptyList())
+                updateStatus("")
+                // 设置标志，阻止 onKey 的短按逻辑
+                numberLongPressFired = true
             }
-            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            keyboardView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         }
-        Handler(Looper.getMainLooper()).postDelayed(numberLongPressRunnable!!, 400)
+        Handler(Looper.getMainLooper()).postDelayed(numberLongPressRunnable!!, 500)
     }
 
     private fun cancelNumberLongPress() {
         numberLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         numberLongPressRunnable = null
         numberLongPressKeyCode = 0
-    }
-
-    /** 长按 T9 键弹出字母候选窗 */
-    private fun showLetterPopup(keyCode: Int, letters: String) {
-        if (letters.isEmpty()) return
-        val items = letters.map { it.toString() }
-        // 隐藏候选栏，显示展开面板作为字母选单
-        candidateBar.visibility = View.VISIBLE
-        candidateAdapter?.updateData(items)
-        btnCandidateExpand.visibility = View.GONE
-        // 临时切换到字母选择模式
-        updateStatus("选择字母: ${items.joinToString("/")}")
     }
 
     /** 长按 1 键弹出符号候选窗 */
@@ -1890,6 +1890,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             in 48..57 -> {
                 if (keyboardMode == KeyboardMode.NUMBER) {
                     cancelNumberLongPress()
+                    // 如果长按已触发，跳过 T9 处理
+                    if (numberLongPressFired) {
+                        numberLongPressFired = false
+                        return
+                    }
                     handleNumberKeyboardKey(primaryCode)
                 } else {
                     // 全键盘模式的数字键原有逻辑
@@ -2166,6 +2171,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
         cancelNumberLongPress()
+        numberLongPressFired = false
         functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         functionalLongPressRunnable = null
         cancelSendKeyLongPress()
