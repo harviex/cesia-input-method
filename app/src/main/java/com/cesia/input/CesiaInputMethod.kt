@@ -1732,12 +1732,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val digits = t9InputBuffer.toString()
         Log.d("CesiaT9", "processT9Input: digits='$digits', composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates.size}, allCands=${rimeEngine.getAllCandidates().size}")
         if (digits.isNotEmpty()) {
-            val lastDigit = digits.last().toString()
-            val result = rimeEngine.processKey(lastDigit)
-            // 最快速度加按2再退格，触发Rime正确处理数字
-            rimeEngine.processKey("2")
-            rimeEngine.processKey("BackSpace")
-            Log.d("CesiaT9", "processKey('$lastDigit') +2+BackSpace result=$result, after: composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
+            // 重建session，输入完整数字串
+            rimeEngine.clear()
+            rimeEngine.createSession()
+            for (d in digits) {
+                rimeEngine.processKey(d.toString())
+            }
+            Log.d("CesiaT9", "processKey(full) '$digits' after: composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
         }
         updateCandidateBar()
     }
