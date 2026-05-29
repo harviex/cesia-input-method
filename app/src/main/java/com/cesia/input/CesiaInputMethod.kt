@@ -1866,11 +1866,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         when (primaryCode) {
 
             // ======================== 字母键 a-z ========================
-            in 97..122 -> {
-                Log.d("CesisLongPress", "onKey: 字母键 primaryCode=$primaryCode")
+            // ======================== 字母键 a-z ========================\n            in 97..122 -> {
+                Log.d("CesiaLongPress", "onKey: 字母键 primaryCode=$primaryCode")
                 Log.d("CesiaLongPress", "onKey: 取消长按 primaryCode=$primaryCode")
                 functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
                 functionalLongPressRunnable = null
+                // T9模式：同时取消数字键盘长按检测，防止短按后长按仍触发
+                if (keyboardMode == KeyboardMode.NUMBER) {
+                    cancelNumberLongPress()
+                }
                 shortPressHandled = true
                 if (isAsciiMode) {
                     ic?.commitText(primaryCode.toChar().toString(), 1)
@@ -1885,6 +1889,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // Shift模式：直接输入数字
             in 48..57 -> {
                 if (keyboardMode == KeyboardMode.NUMBER) {
+                    cancelNumberLongPress()
                     handleNumberKeyboardKey(primaryCode)
                 } else {
                     // 全键盘模式的数字键原有逻辑
