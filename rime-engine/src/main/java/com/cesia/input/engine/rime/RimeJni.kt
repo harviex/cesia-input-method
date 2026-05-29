@@ -122,7 +122,7 @@ object RimeJni {
         return try {
             val ctx = TrimeRime.getRimeContext()
             val menu = ctx.menu
-            Log.d(TAG, "getCandidates: menu.candidates.size=${menu.candidates.size}, pageSize=${menu.pageSize}, pageNumber=${menu.pageNumber}, isLastPage=${menu.isLastPage}, composition.preedit=${ctx.composition.preedit}")
+            Log.d(TAG, "getCandidates: menu.candidates.size=${menu.candidates.size}, pageSize=${menu.pageSize}, pageNumber=${menu.pageNumber}, isLastPage=${menu.isLastPage}, composition.preedit=${ctx.composition.preedit}, texts=${menu.candidates.map { it.text }}")
             if (menu.candidates.isEmpty()) {
                 // 尝试打印 composition 状态帮助诊断
                 Log.d(TAG, "getCandidates: EMPTY - composition=${ctx.composition}, hasMenu=${ctx.menu.candidates.isNotEmpty()}")
