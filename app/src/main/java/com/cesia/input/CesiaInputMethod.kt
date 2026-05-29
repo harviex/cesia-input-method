@@ -994,9 +994,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
         val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
 
         // 追踪当前编辑状态
         var editingPosition = -1
+        var hasFocusedEdit = false
 
         fun notifyChanged() {
             (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
@@ -1013,29 +1015,31 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
                 val isEmptySlot = (record.id == SLOT_EMPTY_ID)
+                val isEditing = (p == editingPosition)
 
-                if (p == editingPosition) {
-                    // 编辑模式
+                // 只在编辑状态变化时操作，避免 getView 重复调用导致闪烁
+                if (isEditing) {
                     tv.visibility = View.GONE
                     et.visibility = View.VISIBLE
-                    et.setText(if (isEmptySlot) "" else record.instruction)
+                    // 只在文本不同时设置，避免光标跳动
+                    val newText = if (isEmptySlot) "" else record.instruction
+                    if (et.text.toString() != newText) {
+                        et.setText(newText)
+                        if (!isEmptySlot) et.setSelection(et.text.length)
+                    }
                     et.hint = if (isEmptySlot) "✨ 输入新魔法指令..." else "✏️ 修改魔法指令..."
-                    et.requestFocus()
-                    if (!isEmptySlot) et.setSelection(et.text.length)
-                    // Done 键保存并退出编辑模式
                     et.setOnEditorActionListener { _, actionId, _ ->
                         if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
                             saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
                             editingPosition = -1
+                            hasFocusedEdit = false
                             true
                         } else false
                     }
                 } else {
-                    // 显示模式
                     et.visibility = View.GONE
                     tv.visibility = View.VISIBLE
                     et.setOnEditorActionListener(null)
-                    et.clearFocus()
 
                     if (isEmptySlot) {
                         tv.text = "➕ 长按新增魔法"
@@ -1068,18 +1072,31 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // ===== 长按：进入编辑模式 =====
         gridView.setOnItemLongClickListener { _, _, position, _ ->
-            editingPosition = position
-            notifyChanged()
+            if (editingPosition != position) {
+                editingPosition = position
+                hasFocusedEdit = false
+                notifyChanged()
+                // 延迟 requestFocus，等.getView执行完后再聚焦
+                gridView.post {
+                    val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
+                    child?.findViewById<android.widget.EditText>(R.id.et_magic_edit)?.requestFocus()
+                }
+            }
             true
         }
 
-        // ===== 编辑完成监听 =====
-        // 滚动时保存并退出编辑模式
+        // ===== 关闭按钮 =====
+        btnClose.setOnClickListener {
+            popup.dismiss()
+        }
+
+        // ===== 滚动时退出编辑模式但不保存 =====
         gridView.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
             override fun onScrollStateChanged(view: android.widget.AbsListView?, scrollState: Int) {
                 if (scrollState != android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE && editingPosition >= 0) {
-                    saveEditing(editingPosition, gridView, mgr) { rebuildItems(); notifyChanged() }
                     editingPosition = -1
+                    hasFocusedEdit = false
+                    notifyChanged()
                 }
             }
             override fun onScroll(view: android.widget.AbsListView?, firstVisibleItem: Int, visibleItemCount: Int, totalItemCount: Int) {}
@@ -1089,6 +1106,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (editingPosition >= 0) {
                 saveEditing(editingPosition, gridView, mgr) { rebuildItems(); notifyChanged() }
                 editingPosition = -1
+                hasFocusedEdit = false
             }
         }
 
