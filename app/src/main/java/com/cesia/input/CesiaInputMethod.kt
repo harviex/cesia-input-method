@@ -601,27 +601,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         val allCands = rimeEngine.getAllCandidates()
-        Log.d("CesiaT9", "updateCandidateBar: composing=$composing, pinyin='$pinyin', cands=${allCands.size}, t9Buf='$t9InputBuffer', mode=$keyboardMode")
+        val t9Active = (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty())
+        Log.d("CesiaT9", "updateCandidateBar: composing=$composing, pinyin='$pinyin', cands=${allCands.size}, t9Buf='$t9InputBuffer', t9Active=$t9Active")
 
         // 没有输入时恢复初始状态
-        if (!composing && pinyin.isEmpty()) {
+        // T9模式下有数字缓冲也算有输入
+        val hasInput = composing || pinyin.isNotEmpty() || t9Active
+        if (!hasInput) {
             candidateBar.visibility = View.GONE
             if (isPanelExpanded) collapseCandidatePanel()
             tvComposing.text = ""
             tvComposing.visibility = View.VISIBLE
             updateStatus("Cesia 已就绪")
-            Log.d("CesiaT9", "updateCandidateBar: HIDE (not composing)")
+            Log.d("CesiaT9", "updateCandidateBar: HIDE (no input)")
             return
         }
 
-        // 有输入时
+        // 有输入时显示候选栏
         candidateBar.visibility = View.VISIBLE
         tvComposing.text = ""
         tvComposing.visibility = View.GONE
         Log.d("CesiaT9", "updateCandidateBar: SHOW cands=$allCands")
 
-        // T9 模式：状态栏只显示数字序列
-        if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+        // 状态栏显示
+        if (t9Active) {
             updateStatus(t9InputBuffer.toString())
         } else {
             updateStatus(pinyin)
@@ -1593,6 +1596,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun resetT9State() {
         t9InputBuffer.clear()
         rimeEngine.clear()
+        rimeEngine.createSession()
         isShiftMode = false
         isShiftLocked = false
         updateCandidateBar()
@@ -1728,11 +1732,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun processT9Input() {
         val digits = t9InputBuffer.toString()
-        Log.d("CesiaT9", "processT9Input: digits='$digits', composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates.size}, allCands=${rimeEngine.getAllCandidates().size}")
+        Log.d("CesiaT9", "processT9Input: digits='$digits', composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
         if (digits.isNotEmpty()) {
-            val lastDigit = digits.last().toString()
-            val result = rimeEngine.processKey(lastDigit)
-            Log.d("CesiaT9", "processKey('$lastDigit') result=$result, after: composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
+            // 每次重建 session 并输入完整数字串，确保 Rime 正确处理 T9
+            rimeEngine.clear()
+            rimeEngine.createSession()
+            val result = rimeEngine.processKey(digits)
+            Log.d("CesiaT9", "processKey('$digits') result=$result, after: composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
         }
         updateCandidateBar()
     }
@@ -1747,6 +1753,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             t9InputBuffer.clear()
             rimeEngine.clear()
+            rimeEngine.createSession()
             updateCandidateBar()
         }
     }
@@ -1941,15 +1948,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (keyboardMode == KeyboardMode.NUMBER) {
                     // 数字键盘退格
                     if (!isShiftMode && t9InputBuffer.isNotEmpty()) {
-                        // 先告诉 Rime 删除一个按键
-                        rimeEngine.processKey("BackSpace")
-                        // 同步更新缓冲
+                        // 删除最后一个数字
                         t9InputBuffer.deleteCharAt(t9InputBuffer.length - 1)
                         if (t9InputBuffer.isEmpty()) {
                             rimeEngine.clear()
+                            rimeEngine.createSession()
                             resetT9State()
                         } else {
-                            updateCandidateBar()
+                            // 重新处理剩余数字
+                            processT9Input()
                         }
                     } else {
                         ic?.deleteSurroundingText(1, 0)
