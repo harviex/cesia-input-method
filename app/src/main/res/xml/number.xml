@@ -3,7 +3,7 @@
     数字键盘 — 5×4 布局
     T9拼音输入 + 符号副字符
     主字符（abc/def...）由 CesiaKeyboardView 自定义绘制
-    副字符（数字2-9）由 popupCharacters + 红色小字绘制
+    副字符（数字/标点）由 popupCharacters + 红色小字绘制
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="20%p"
@@ -12,19 +12,19 @@
     android:verticalGap="4dp">
 
     <Row>
-        <Key android:codes="65292" android:keyLabel="，" android:keyEdgeFlags="left" />
-        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="!" />
+        <Key android:codes="65292" android:keyLabel="，" android:popupCharacters="," android:keyEdgeFlags="left" />
+        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="1" />
         <Key android:codes="50" android:keyLabel="" android:popupCharacters="2" />
         <Key android:codes="51" android:keyLabel="" android:popupCharacters="3" />
-        <Key android:codes="65311" android:keyLabel="？" android:keyEdgeFlags="right" />
+        <Key android:codes="65311" android:keyLabel="？" android:popupCharacters="?" android:keyEdgeFlags="right" />
     </Row>
 
     <Row>
-        <Key android:codes="12290" android:keyLabel="。" android:keyEdgeFlags="left" />
+        <Key android:codes="12290" android:keyLabel="。" android:popupCharacters="." android:keyEdgeFlags="left" />
         <Key android:codes="52" android:keyLabel="" android:popupCharacters="4" />
         <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" />
         <Key android:codes="54" android:keyLabel="" android:popupCharacters="6" />
-        <Key android:codes="65281" android:keyLabel="！" android:keyEdgeFlags="right" />
+        <Key android:codes="65281" android:keyLabel="！" android:popupCharacters="!" android:keyEdgeFlags="right" />
     </Row>
 
     <Row>
@@ -38,7 +38,7 @@
     <Row>
         <Key android:codes="-100" android:keyLabel="符" android:keyEdgeFlags="left" />
         <Key android:codes="-999" android:keyLabel="⇱ 返回" />
-        <Key android:codes="32" android:keyLabel="空格" />
+        <Key android:codes="32" android:keyLabel="空格" android:popupCharacters="0" />
         <Key android:codes="-101" android:keyLabel="🌐" />
         <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" />
     </Row>

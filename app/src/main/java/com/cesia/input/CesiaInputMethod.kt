@@ -586,6 +586,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
             currentInputConnection?.commitText(selected, 1)
+            // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
+            if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+                t9InputBuffer.clear()
+                rimeEngine.clear()
+                rimeEngine.createSession()
+            }
             if (isPanelExpanded) collapseCandidatePanel()
             updateCandidateBar()
         }
@@ -1688,7 +1694,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 processT9Input()
             } else {
                 when (primaryCode) {
-                    49 -> currentInputConnection?.commitText("1", 1)
+                    49 -> {
+                        // 1键：全选（Ctrl+A）
+                        val ic = currentInputConnection ?: return@when
+                        ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_A).apply {
+                            metaState = android.view.KeyEvent.META_CTRL_ON
+                        })
+                        ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_A).apply {
+                            metaState = android.view.KeyEvent.META_CTRL_ON
+                        })
+                    }
                     65292 -> currentInputConnection?.commitText("，", 1)
                     12290 -> currentInputConnection?.commitText("。", 1)
                     65311 -> currentInputConnection?.commitText("？", 1)
