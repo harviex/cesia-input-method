@@ -1166,7 +1166,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             popupMenu.show()
         }
 
-        popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
+        val win = window?.window?.decorView
+        if (win != null) {
+            popup.showAtLocation(win, Gravity.TOP or Gravity.START, 0, 0)
+        } else {
+            popup.showAtLocation(keyboardView, Gravity.TOP, 0, 0)
+        }
     }
 
     /** 保存编辑中的魔法 */
