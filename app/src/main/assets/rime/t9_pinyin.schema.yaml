@@ -36,13 +36,13 @@ engine:
   filters:
     - uniquifier
 
-# T9 数字拼写器 — 只接受 2-9
+# T9 数字拼写器
 speller:
   alphabet: "23456789"
   delimiter: "'"
   max_code_length: 20
 
-# 翻译器 — 数字序列 → 拼音
+# 翻译器 — 数字序列查词（词库第二列为 T9 数字编码）
 translator:
   dictionary: t9_pinyin
   spelling_hints: 5
