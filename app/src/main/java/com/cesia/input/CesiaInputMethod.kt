@@ -1696,13 +1696,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 when (primaryCode) {
                     49 -> {
                         // 1键：全选（Ctrl+A）
-                        val ic = currentInputConnection ?: return@when
-                        ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_A).apply {
-                            metaState = android.view.KeyEvent.META_CTRL_ON
-                        })
-                        ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_A).apply {
-                            metaState = android.view.KeyEvent.META_CTRL_ON
-                        })
+                        currentInputConnection?.let { ic ->
+                            val ctrlMeta = android.view.KeyEvent.META_CTRL_ON
+                            ic.sendKeyEvent(android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_A, 0, ctrlMeta))
+                            ic.sendKeyEvent(android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_A, 0, ctrlMeta))
+                        }
                     }
                     65292 -> currentInputConnection?.commitText("，", 1)
                     12290 -> currentInputConnection?.commitText("。", 1)
