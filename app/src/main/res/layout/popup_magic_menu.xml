@@ -5,18 +5,14 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 魔法语句列表 - 1列布局 -->
-    <GridView
-        android:id="@+id/gv_magic_items"
+    <!-- 魔法语句列表 - RecyclerView 1列 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_magic_items"
         android:layout_width="match_parent"
         android:layout_height="300dp"
-        android:numColumns="1"
-        android:horizontalSpacing="0dp"
-        android:verticalSpacing="2dp"
         android:padding="6dp"
-        android:scrollbars="vertical"
-        android:listSelector="@android:color/transparent"
-        android:stretchMode="columnWidth" />
+        android:clipToPadding="false"
+        android:scrollbars="vertical" />
 
     <!-- 底部管理栏：置顶 + 删除 + 关闭 -->
     <LinearLayout

@@ -4,7 +4,6 @@
     android:layout_height="wrap_content"
     android:padding="2dp">
 
-    <!-- 正常显示模式：TextView -->
     <TextView
         android:id="@+id/tv_magic_text"
         android:layout_width="match_parent"
@@ -20,24 +19,6 @@
         android:paddingBottom="10dp"
         android:background="@drawable/magic_item_bg"
         android:letterSpacing="0.02"
-        android:lineSpacingExtra="2dp" />
-
-    <!-- 编辑模式：EditText（默认隐藏） -->
-    <EditText
-        android:id="@+id/et_magic_edit"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="13sp"
-        android:textColor="#1565C0"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:background="#E3F2FD"
-        android:visibility="gone"
-        android:inputType="text"
-        android:imeOptions="actionDone"
         android:lineSpacingExtra="2dp" />
 
 </FrameLayout>
