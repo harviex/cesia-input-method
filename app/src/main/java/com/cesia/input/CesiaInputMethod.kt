@@ -995,7 +995,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
 
         // ===== RecyclerView Adapter =====
-        val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        lateinit var adapter: RecyclerView.Adapter<RecyclerView.ViewHolder>
+
+        adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             inner class VH(val tv: TextView) : RecyclerView.ViewHolder(tv)
 
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
