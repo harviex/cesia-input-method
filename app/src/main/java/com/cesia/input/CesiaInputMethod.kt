@@ -600,47 +600,43 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun updateCandidateBar() {
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-
-        Log.d("Cesia", "updateCandidateBar: composing=$composing, pinyin='$pinyin'")
+        val allCands = rimeEngine.getAllCandidates()
+        Log.d("CesiaT9", "updateCandidateBar: composing=$composing, pinyin='$pinyin', cands=${allCands.size}, t9Buf='$t9InputBuffer', mode=$keyboardMode")
 
         // 没有输入时恢复初始状态
         if (!composing && pinyin.isEmpty()) {
             candidateBar.visibility = View.GONE
-            Log.d("Cesia", "updateCandidateBar: HIDE candidateBar")
             if (isPanelExpanded) collapseCandidatePanel()
-            // 恢复候选词栏拼音显示
             tvComposing.text = ""
             tvComposing.visibility = View.VISIBLE
             updateStatus("Cesia 已就绪")
+            Log.d("CesiaT9", "updateCandidateBar: HIDE (not composing)")
             return
         }
 
-        // 有输入时：状态栏显示拼音（T9模式显示首候选词的拼音）
+        // 有输入时
         candidateBar.visibility = View.VISIBLE
-        Log.d("Cesia", "updateCandidateBar: SHOW candidateBar")
         tvComposing.text = ""
         tvComposing.visibility = View.GONE
+        Log.d("CesiaT9", "updateCandidateBar: SHOW cands=$allCands")
 
-        // T9 模式：状态栏只显示数字序列，候选词在候选栏
+        // T9 模式：状态栏只显示数字序列
         if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
             updateStatus(t9InputBuffer.toString())
         } else {
             updateStatus(pinyin)
         }
 
-        // 更新候选词列表（全部）
-        val allCandsForBar = rimeEngine.getAllCandidates()
-        candidateAdapter?.updateData(allCandsForBar)
+        // 更新候选词列表
+        candidateAdapter?.updateData(allCands)
+        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
 
-        // 候选词>4时显示展开按钮
-        btnCandidateExpand.visibility = if (allCandsForBar.size > 4) View.VISIBLE else View.GONE
-
-        // 更新展开面板 — 显示全部候选词 + 拼音
+        // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            val allCands = rimeEngine.getAllCandidates()
+            val allCandsPanel = rimeEngine.getAllCandidates()
             panelAdapter?.clear()
-            panelAdapter?.addAll(allCands)
+            panelAdapter?.addAll(allCandsPanel)
             panelAdapter?.notifyDataSetChanged()
         }
     }
@@ -1732,12 +1728,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun processT9Input() {
         val digits = t9InputBuffer.toString()
-        Log.d("CesiaT9", "processT9Input: digits='$digits'")
-        // 只传入最新的数字键（不是重输全部）
+        Log.d("CesiaT9", "processT9Input: digits='$digits', composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates.size}, allCands=${rimeEngine.getAllCandidates().size}")
         if (digits.isNotEmpty()) {
             val lastDigit = digits.last().toString()
             val result = rimeEngine.processKey(lastDigit)
-            Log.d("CesiaT9", "processKey('$lastDigit') result=$result composing=${rimeEngine.isComposing} hasCands=${rimeEngine.hasCandidates}")
+            Log.d("CesiaT9", "processKey('$lastDigit') result=$result, after: composing=${rimeEngine.isComposing}, composingText='${rimeEngine.composingText}', candidates=${rimeEngine.candidates}")
         }
         updateCandidateBar()
     }
