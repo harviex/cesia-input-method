@@ -195,6 +195,11 @@ class RimeEngine(private val context: Context) : InputEngine {
         RimeJni.setAsciiMode(ascii)
     }
 
+    /** 简繁切换：通过 Rime setOption 切换（需要 schema 中配置 traditional 开关） */
+    fun setTraditional(trad: Boolean) {
+        RimeJni.setOption("traditional", trad)
+    }
+
     /** 切换 Rime schema */
     fun selectSchema(schemaId: String): Boolean {
         return Rime.selectRimeSchemas(arrayOf(schemaId))

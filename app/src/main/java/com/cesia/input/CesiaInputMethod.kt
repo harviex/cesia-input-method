@@ -821,6 +821,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 sendDownUpEnter()
             }
         }
+        // 发送键长按：剪贴板管理器
+        btnSend.setOnLongClickListener {
+            showClipboardManagerPopup()
+            true
+        }
     }
 
     // ======================== 魔法修改 ========================
@@ -1074,6 +1079,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         popup.isOutsideTouchable = false  // 点击外部不关闭，只有执行魔法或点关闭按钮才关闭
         popup.elevation = 4f
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        popup.setFocusable(false)
 
         // ===== 数据列表：置顶项在前，非置顶项按时间倒序，末尾固定一个空槽 =====
         val SLOT_EMPTY_ID = -999L
@@ -1460,17 +1467,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 简繁切换：候选词上屏时自动转换为繁体/简体 */
+    /** 简繁切换：通过 Rime 原生 OpenCC 转换（候选词和输出均自动转换） */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
+        rimeEngine.setTraditional(isTraditional)
         updateStatus(if (isTraditional) "✅ 已切换为繁体输出" else "✅ 已切换为简体输出")
         updateTraditionalButton()
+        // 切换后清空当前输入，重新触发候选
+        rimeEngine.clear()
+        updateCandidateBar()
     }
 
-    /** 候选词选中上屏时，如开启繁体则转换 */
+    /** 候选词选中上屏（Rime 原生已处理简繁转换，直接上屏） */
     private fun commitCandidateText(text: String) {
-        val output = if (isTraditional) toTraditional(text) else text
-        currentInputConnection?.commitText(output, 1)
+        currentInputConnection?.commitText(text, 1)
     }
 
     private fun updateTraditionalButton() {
@@ -2152,6 +2162,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             gvClipboard.adapter = ClipboardAdapter(inflater2, filteredItems, this)
 
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+            val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
+
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            popup.isOutsideTouchable = true
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.elevation = 8f
+
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
                 val item = filteredItems.getOrNull(position) ?: return@setOnItemClickListener
@@ -2167,15 +2186,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 showClipboardItemActions(item, items) { loadClipboardHistory(); applyFilter() }
                 true
             }
-
-            val keyboardWidth = keyboardView.width
-            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-            val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
-
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-            popup.isOutsideTouchable = true
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
-            popup.elevation = 8f
 
             btnClose.setOnClickListener { popup.dismiss() }
 
@@ -2236,7 +2246,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         updateClipboardFavorites(); onUpdate()
                     }
                     3 -> { // 分词 — 用空格分词后逐段插入
-                        val words = item.text.split(Regex("[\s,，。；;:：！!？?、]+"))
+                        val words = item.text.split(Regex("""[\s,，。；;:：！!？?、]+"""))
                             .filter { it.isNotEmpty() }
                         if (words.size > 1) {
                             currentInputConnection?.commitText(words.joinToString(" "), 1)

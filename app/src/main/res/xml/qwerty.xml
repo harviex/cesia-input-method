@@ -86,7 +86,7 @@
     <Row>
         <Key android:codes="-100" android:keyLabel="符" android:keyEdgeFlags="left"
             android:keyWidth="12%p" />
-        <Key android:codes="-102" android:keyLabel="九宫" android:keyTextSize="10sp"
+        <Key android:codes="-102" android:keyLabel="数" android:keyTextSize="12sp"
             android:keyWidth="10%p" />
         <Key android:codes="44" android:keyLabel="，" android:popupCharacters="," />
         <Key android:codes="32" android:keyLabel="       "

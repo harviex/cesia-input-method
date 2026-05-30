@@ -8,12 +8,12 @@
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="20%p"
     android:keyHeight="42dp"
-    android:horizontalGap="4dp"
+    android:horizontalGap="0dp"
     android:verticalGap="4dp">
 
     <Row android:keyHeight="52dp">
         <Key android:codes="65292" android:keyLabel="，" android:popupCharacters="“" android:keyEdgeFlags="left"
-            android:keyWidth="16%p" android:horizontalGap="5dp" />
+            android:keyWidth="16%p" />
         <Key android:codes="49" android:keyLabel="" android:popupCharacters="1" />
         <Key android:codes="50" android:keyLabel="" android:popupCharacters="2" />
         <Key android:codes="51" android:keyLabel="" android:popupCharacters="3" />
@@ -23,7 +23,7 @@
 
     <Row android:keyHeight="52dp">
         <Key android:codes="12290" android:keyLabel="。" android:popupCharacters="." android:keyEdgeFlags="left"
-            android:keyWidth="16%p" android:horizontalGap="5dp" />
+            android:keyWidth="16%p" />
         <Key android:codes="52" android:keyLabel="" android:popupCharacters="4" />
         <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" />
         <Key android:codes="54" android:keyLabel="" android:popupCharacters="6" />
@@ -33,7 +33,7 @@
 
     <Row android:keyHeight="52dp">
         <Key android:codes="-104" android:keyLabel="⇧" android:keyEdgeFlags="left"
-            android:keyWidth="16%p" android:horizontalGap="5dp" />
+            android:keyWidth="16%p" />
         <Key android:codes="55" android:keyLabel="" android:popupCharacters="7" />
         <Key android:codes="56" android:keyLabel="" android:popupCharacters="8" />
         <Key android:codes="57" android:keyLabel="" android:popupCharacters="9" />
@@ -42,8 +42,7 @@
     </Row>
 
     <Row>
-        <Key android:codes="-100" android:keyLabel="符" android:keyWidth="14%p" android:keyEdgeFlags="left"
-            android:horizontalGap="5dp" />
+        <Key android:codes="-100" android:keyLabel="符" android:keyWidth="14%p" android:keyEdgeFlags="left" />
         <Key android:codes="-999" android:keyLabel="⌨" android:keyWidth="14%p" />
         <Key android:codes="32" android:keyLabel="空格" android:keyWidth="22%p" android:popupCharacters="0" />
         <Key android:codes="-108" android:keyLabel="" android:keyWidth="14%p" />

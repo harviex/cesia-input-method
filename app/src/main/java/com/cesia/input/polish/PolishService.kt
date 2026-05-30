@@ -112,6 +112,11 @@ class PolishService(
             put("messages", messages)
             put("temperature", 0.3)
             put("max_tokens", 512)
+            put("stop", JSONArray().apply {
+                put("</assistant>")
+                put("<|endoftext|>")
+                put("<|im_end|>")
+            })
         }
 
         val body = json.toString().toRequestBody("application/json".toMediaType())
@@ -332,6 +337,11 @@ class PolishService(
                 put("messages", messages)
                 put("temperature", 0.3)
                 put("max_tokens", 512)
+                put("stop", JSONArray().apply {
+                    put("</assistant>")
+                    put("<|endoftext|>")
+                    put("<|im_end|>")
+                })
             }
 
             val body = json.toString().toRequestBody("application/json".toMediaType())

@@ -229,6 +229,17 @@ object RimeJni {
         }
     }
 
+    /** 设置任意 Rime 选项（用于简繁切换等） */
+    fun setOption(option: String, value: Boolean) {
+        if (!initialized) return
+        try {
+            TrimeRime.setRimeOption(option, value)
+            Log.d(TAG, "setOption: $option = $value")
+        } catch (e: Throwable) {
+            Log.e(TAG, "setOption failed: $option", e)
+        }
+    }
+
     // ======================== 翻页 ========================
 
     fun changePage(sessionId: Long, backward: Boolean): Boolean {

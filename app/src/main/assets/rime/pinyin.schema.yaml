@@ -18,6 +18,9 @@ switches:
     states: [ ¥, $ ]
   - name: full_shape
     states: [ 半角, 全角 ]
+  - name: traditional
+    reset: 0
+    states: [ 简, 繁 ]
 
 # 输入引擎
 engine:
@@ -41,9 +44,16 @@ engine:
     - script_translator
   filters:
     - uniquifier
+    - simplifier@traditional
+
+# OpenCC 简繁转换
+traditional:
+  opencc_config: s2t.json
+  option_name: traditional
+  show_in_popup_menu: true
+  tips: all
 
 # 拼音拼写器
-speller:
   alphabet: zyxwvutsrqponmlkjihgfedcba
   delimiter: " '"
   algebra:
