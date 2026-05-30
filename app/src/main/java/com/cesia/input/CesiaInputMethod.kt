@@ -1784,6 +1784,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
         longPressRunnable = null
         currentLongPressKey = null
+        longPressTriggered = false
+        longPressConsumed = false
     }
 
     private fun startSendKeyLongPress() {
@@ -1808,13 +1810,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 3. 退格/空格/回车等控制键优先交给 Rime 处理
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
+        // 统一长按状态机：每次 onKey 先重置标志，防止跨键泄漏
         val wasLongPressed = longPressTriggered && !longPressConsumed
-        if (wasLongPressed) {
-            longPressConsumed = true
-            cancelLongPress()
-            return
-        }
+        longPressTriggered = false
+        longPressConsumed = false
         cancelLongPress()
+        if (wasLongPressed) {
+            return  // 上一次按键的长按被消耗，跳过本次短按
+        }
 
         val ic = currentInputConnection
         val composing = rimeEngine.isComposing
@@ -1933,6 +1936,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // ======================== 回车键（只换行，不发送）=======================
             10, Keyboard.KEYCODE_DONE -> {
+                shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
                 if (!isAsciiMode && composing) {
                     // 直接上屏当前拼音字母（不转换成汉字）
                     val pinyinText = rimeEngine.composingText
@@ -1987,16 +1991,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // ======================== 数字切换（123）=======================
             KEYCODE_SWITCH_NUMBER -> toggleNumberKeyboard()
             KEYCODE_CONTROL -> handleControlKey()
-            KEYCODE_SHIFT -> handleShiftKey()
+            KEYCODE_SHIFT -> { shortPressHandled = true; handleShiftKey() }
 
             // ======================== 剪贴板功能键 ========================
-            -108 -> { // 全选（短按），长按取消检测
+            -108 -> { // 全选（短按），长按=粘贴
                 clipboardPasteRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
                 clipboardPasteRunnable = null
                 shortPressHandled = true
                 currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
             }
-            -109 -> { // 复制（短按），长按取消检测
+            -109 -> { // 复制（短按），长按=剪切
                 clipboardCutRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
                 clipboardCutRunnable = null
                 shortPressHandled = true
