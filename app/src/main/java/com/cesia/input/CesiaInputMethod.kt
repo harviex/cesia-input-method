@@ -75,6 +75,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnCandidateExpand: ImageButton
     private var rvCandidates: RecyclerView? = null
     private var candidateAdapter: CandidateAdapter? = null
+    private var tvT9Letters: TextView? = null
+    private var dividerT9: View? = null
 
     // 候选词展开面板
     private lateinit var candidatePanel: LinearLayout
@@ -104,6 +106,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var isShiftMode = false  // 数字键盘 Shift 状态（临时切换）
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     private var isShiftLocked = false  // Shift 锁定状态
+    private var qwertyShiftLock = false  // 全键盘shift锁定（跨键盘切换保持）
     private var t9InputBuffer = StringBuilder()  // T9 数字输入缓冲
     private val t9Map = mapOf(
         2 to "abc", 3 to "def", 4 to "ghi", 5 to "jkl",
@@ -194,7 +197,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             120 -> { { currentInputConnection?.performContextMenuAction(android.R.id.cut) } }  // x=剪切
             99  -> { { currentInputConnection?.performContextMenuAction(android.R.id.copy) } }  // c=复制
             118 -> { { currentInputConnection?.performContextMenuAction(android.R.id.paste) } }  // v=粘贴
-            98  -> { { toggleBold() } }  // b=粗体
+            98  -> { { toggleUpperCase() } }  // b=大写转换
             122 -> { { sendCtrlKey(KeyEvent.KEYCODE_Z) } }  // z=撤销
             110 -> { { sendControlKey(KeyEvent.KEYCODE_INSERT) } }  // n=Insert
             109 -> { { sendControlKey(KeyEvent.KEYCODE_FORWARD_DEL) } }  // m=Delete
@@ -211,27 +214,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun sendCtrlKey(keyCode: Int) = sendControlKey(keyCode, KeyEvent.META_CTRL_ON)
 
-    /** 黑体：对选中文字应用 Mathematical Bold Unicode 加粗 */
-    private fun toggleBold() {
+    /** 大写转换：选中的英文→大写，数字→中文大写数字 */
+    private fun toggleUpperCase() {
         val ic = currentInputConnection ?: return
         val selectedText = ic.getSelectedText(0)?.toString()
         if (selectedText.isNullOrEmpty()) {
-            updateStatus("请先选中要加粗的文字")
+            updateStatus("请先选中要转换的文字")
             return
         }
-        val boldText = toBoldText(selectedText)
-        // 直接插入加粗文本（commitText 在大多数编辑器中会替换选区）
-        ic.commitText(boldText, 1)
-        updateStatus("✅ 已加粗 ${selectedText.length} 字")
+        val result = toUpperCaseText(selectedText)
+        ic.commitText(result, 1)
+        updateStatus("✅ 已转换 ${selectedText.length} 字")
     }
 
-    /** 将文本转换为 Mathematical Bold Unicode（聊天可见加粗） */
-    private fun toBoldText(text: String): String {
+    /** 英文转大写，数字转中文大写 */
+    private fun toUpperCaseText(text: String): String {
+        val chineseNumbers = charArrayOf('零','壹','贰','叁','肆','伍','陆','柒','捌','玖')
         return text.map { ch ->
-            when (ch) {
-                in 'a'..'z' -> (0x1D41A + (ch - 'a')).toChar()
-                in 'A'..'Z' -> (0x1D400 + (ch - 'A')).toChar()
-                in '0'..'9' -> (0x1D7CE + (ch - '0')).toChar()
+            when {
+                ch in 'a'..'z' -> ch.uppercaseChar()
+                ch in 'A'..'Z' -> ch
+                ch in '0'..'9' -> chineseNumbers[ch - '0']
                 else -> ch
             }
         }.joinToString("")
@@ -314,6 +317,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选词栏
         candidateBar = view.findViewById(R.id.candidate_bar)
         btnCandidateExpand = view.findViewById(R.id.btn_candidate_expand)
+        tvT9Letters = view.findViewById(R.id.tv_t9_letters)
+        dividerT9 = view.findViewById(R.id.divider_t9)
 
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
@@ -326,6 +331,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rvCandidates?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
         )
+
+        // T9 字母区点击：弹出字母选择
+        tvT9Letters?.setOnClickListener {
+            val lettersText = tvT9Letters?.text?.toString() ?: return@setOnClickListener
+            // 用 PopupMenu 显示各组字母供选择
+            val popup = android.widget.PopupMenu(this, tvT9Letters)
+            val groups = lettersText.split(" ")
+            groups.forEachIndexed { index, group ->
+                val items = group.split("")
+                items.filter { it.isNotEmpty() }.forEach { ch ->
+                    popup.menu.add(index, ch[0].code, 0, ch)
+                }
+            }
+            popup.setOnMenuItemClickListener { item ->
+                currentInputConnection?.commitText(item.title.toString(), 1)
+                // 上屏后清空 t9 缓冲区
+                if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+                    t9InputBuffer.clear()
+                    rimeEngine.clear()
+                }
+                updateCandidateBar()
+                updateStatus("Cesia 已就绪")
+                true
+            }
+            popup.show()
+        }
 
         // 候选面板视图
         candidatePanel = view.findViewById(R.id.candidate_panel)
@@ -376,7 +407,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             120 to "剪切", // x
             99 to "复制",  // c
             118 to "粘贴", // v
-            98 to "黑体",  // b
+            98 to "大写",  // b
             122 to "撤销", // z
             110 to "Ins",  // n
             109 to "Del",  // m
@@ -638,11 +669,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 有输入时
         candidateBar.visibility = View.VISIBLE
 
-        // T9 模式：状态栏只显示数字序列
+        // T9 模式：状态栏只显示数字序列，候选栏前置字母区
         if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
             updateStatus(t9InputBuffer.toString())
+            // 显示 T9 字母区：将每个数字转为对应字母组
+            val letters = t9InputBuffer.toString().map { digit ->
+                when (digit) {
+                    '2' -> "abc"; '3' -> "def"; '4' -> "ghi"; '5' -> "jkl"
+                    '6' -> "mno"; '7' -> "pqrs"; '8' -> "tuv"; '9' -> "wxyz"
+                    '0' -> " "
+                    else -> ""
+                }
+            }.joinToString(" ")
+            tvT9Letters?.text = letters
+            tvT9Letters?.visibility = View.VISIBLE
+            dividerT9?.visibility = View.VISIBLE
         } else {
             updateStatus(pinyin)
+            tvT9Letters?.visibility = View.GONE
+            dividerT9?.visibility = View.GONE
         }
 
         // 更新候选词列表
@@ -1585,12 +1630,39 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         keyboardView.keyboard = currentKeyboard
         // 只有 NUMBER 模式（T9 数字键盘）才绘制字母主字符
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
-        // 切换到非T9键盘时清除 shift 锁定/临时状态，避免 T9 锁定圆点出现在全键盘/符号键盘上
-        if (mode != KeyboardMode.NUMBER) {
-            isShiftLocked = false
-            isShiftMode = false
-            isAsciiMode = false
-            rimeEngine.setAsciiMode(false)
+        // 切换键盘时清除 T9 相关状态（避免 T9 锁定圆点出现在其他键盘上）
+        if (mode == KeyboardMode.NUMBER) {
+            // 进入 T9：全键盘临时shift状态清除（qwertyShiftLock 不重置）
+            if (keyboardMode != KeyboardMode.NUMBER) {
+                isAsciiMode = false
+                rimeEngine.setAsciiMode(false)
+            }
+        } else if (mode == KeyboardMode.QWERTY) {
+            // 进入全键盘：如有持久shift锁，恢复 ascii 模式
+            if (qwertyShiftLock) {
+                isShiftLocked = true
+                isAsciiMode = true
+                rimeEngine.setAsciiMode(true)
+            }
+            rimeEngine.clear()
+            // 从T9按⇱回到QWERTY时，清除T9的shift状态残留
+            if (keyboardMode == KeyboardMode.NUMBER) {
+                isShiftLocked = false
+                isShiftMode = false
+            }
+        } else {
+            // 进入符号键盘：保存当前键盘类型，清除T9状态
+            if (keyboardMode == KeyboardMode.NUMBER) {
+                isShiftLocked = false
+                isShiftMode = false
+                isAsciiMode = false
+                rimeEngine.setAsciiMode(false)
+            }
+            // QWERTY→符号键盘：保持 qwertyShiftLock 不变，清除临时ascii模式
+            if (keyboardMode == KeyboardMode.QWERTY) {
+                isAsciiMode = false
+                rimeEngine.setAsciiMode(false)
+            }
         }
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
@@ -1651,6 +1723,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isShiftMode = false
                 commitT9AndClear()
             } else {
+                // 全键盘：解除持久锁
+                qwertyShiftLock = false
                 isAsciiMode = false
                 rimeEngine.setAsciiMode(false)
                 rimeEngine.clear()
@@ -1687,6 +1761,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (keyboardMode == KeyboardMode.NUMBER) {
             isShiftMode = true
         } else {
+            // 全键盘长按锁定 = 持久锁（跨键盘切换保持）
+            qwertyShiftLock = true
             isAsciiMode = true
             rimeEngine.setAsciiMode(true)
             rimeEngine.clear()
@@ -1739,8 +1815,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 when (primaryCode) {
                     49 -> {
-                        // 1键：黑体 — 对选中文字加粗
-                        toggleBold()
+                        // 1键：大写转换
+                        toggleUpperCase()
                     }
                     65292 -> {
                         currentInputConnection?.commitText("，", 1)
@@ -2130,6 +2206,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 } else primaryCode
                 val c = adjustedCode.toChar()
                 if (c != '\u0000') { ic?.commitText(c.toString(), 1) }
+                // 标点上屏后清空候选栏和状态栏
+                rimeEngine.clear()
+                if (keyboardMode == KeyboardMode.NUMBER) t9InputBuffer.clear()
+                updateCandidateBar()
             }
         }
     }

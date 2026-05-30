@@ -49,7 +49,7 @@
             android:padding="4dp" />
     </LinearLayout>
 
-    <!-- 候选词栏：拼音 + 横向滚动候选词 + 展开按钮 -->
+    <!-- 候选词栏：T9字母区 + 分隔线 + 横向滚动候选词 + 展开按钮 -->
     <LinearLayout
         android:id="@+id/candidate_bar"
         android:layout_width="match_parent"
@@ -60,6 +60,28 @@
         android:paddingStart="4dp"
         android:paddingEnd="4dp"
         android:visibility="gone">
+
+        <!-- T9 字母区（如 pqrs），输入数字时显示 -->
+        <TextView
+            android:id="@+id/tv_t9_letters"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:visibility="gone" />
+
+        <!-- 分隔线 -->
+        <View
+            android:id="@+id/divider_t9"
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:background="#CCCCCC"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:visibility="gone" />
 
         <!-- 横向滚动候选词列表 -->
         <androidx.recyclerview.widget.RecyclerView
