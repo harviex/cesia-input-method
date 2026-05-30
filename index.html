@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cesia 输入法 — AI 驱动的 Android 输入法</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#e4e4ef;--muted:#787890;--accent:#81D8D0;--accent-dim:rgba(129,216,208,0.12);--glow:rgba(129,216,208,0.25)}
+body{font-family:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;backdrop-filter:blur(16px);background:rgba(10,10,15,0.75);border-bottom:1px solid var(--border);padding:0 2rem;height:56px;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-weight:700;font-size:1.1rem;color:var(--text);text-decoration:none}
+nav .logo span{color:var(--accent)}
+nav .links a{color:var(--muted);text-decoration:none;font-size:0.85rem;margin-left:1.8rem;transition:color 0.2s}
+nav .links a:hover{color:var(--text)}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6rem 2rem 4rem;position:relative}
+.hero::before{content:"";position:absolute;width:600px;height:600px;background:radial-gradient(circle,var(--glow) 0%,transparent 70%);top:10%;left:50%;transform:translateX(-50%);pointer-events:none}
+.hero .badge{display:inline-flex;align-items:center;gap:0.4rem;background:var(--accent-dim);border:1px solid rgba(129,216,208,0.2);border-radius:100px;padding:0.35rem 0.9rem;font-size:0.78rem;color:var(--accent);font-weight:500;margin-bottom:1.8rem}
+.hero h1{font-size:clamp(2.4rem,5vw,4rem);font-weight:700;letter-spacing:-0.03em;line-height:1.1;max-width:700px;margin-bottom:1.2rem}
+.hero h1 .highlight{background:linear-gradient(135deg,var(--accent) 0%,#a78bfa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .subtitle{font-size:1.1rem;color:var(--muted);max-width:480px;margin-bottom:2.4rem;line-height:1.7}
+.hero .cta-row{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.8rem 1.8rem;border-radius:10px;font-size:0.95rem;font-weight:600;text-decoration:none;transition:all 0.2s;cursor:pointer;border:none}
+.btn-primary{background:var(--accent);color:#0a0a0f;box-shadow:0 0 30px var(--glow)}
+.btn-primary:hover{box-shadow:0 0 50px var(--glow);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--muted)}
+.phone-mockup{margin-top:3rem;width:280px;height:560px;background:var(--surface);border-radius:36px;border:2px solid var(--border);overflow:hidden;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.4),0 0 60px rgba(129,216,208,0.06)}
+.phone-mockup .status-bar{height:28px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em}
+.phone-mockup .app-demo{padding:16px;height:calc(100% - 28px);display:flex;flex-direction:column;justify-content:flex-end}
+.phone-mockup .demo-input{background:var(--bg);border-radius:12px;padding:10px 14px;font-size:0.82rem;color:var(--text);border:1px solid var(--border);margin-bottom:10px}
+.phone-mockup .demo-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
+.phone-mockup .demo-keyboard .key{background:rgba(255,255,255,0.04);border-radius:6px;height:32px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
+.phone-mockup .demo-keyboard .key.accent{background:var(--accent-dim);color:var(--accent);border-color:rgba(129,216,208,0.15)}
+.phone-mockup .demo-keyboard .key.wide{grid-column:span 2}
+.features{padding:6rem 2rem;max-width:1080px;margin:0 auto}
+.section-label{font-size:0.75rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.8rem}
+.section-title{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:700;letter-spacing:-0.02em;margin-bottom:0.8rem}
+.section-desc{color:var(--muted);max-width:520px;margin-bottom:3rem}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.2rem}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;transition:border-color 0.2s,transform 0.2s}
+.feature-card:hover{border-color:rgba(129,216,208,0.3);transform:translateY(-2px)}
+.feature-card .icon{width:40px;height:40px;border-radius:10px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:1rem}
+.feature-card h3{font-size:1rem;font-weight:600;margin-bottom:0.4rem}
+.feature-card p{font-size:0.87rem;color:var(--muted);line-height:1.6}
+.how-it-works{padding:6rem 2rem;max-width:800px;margin:0 auto;text-align:center}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem}
+.step .num{width:36px;height:36px;border-radius:50%;border:1px solid var(--accent);color:var(--accent);font-weight:700;font-size:0.85rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:0.8rem}
+.step h4{font-size:0.95rem;font-weight:600;margin-bottom:0.3rem}
+.step p{font-size:0.82rem;color:var(--muted)}
+.download{padding:6rem 2rem;max-width:680px;margin:0 auto;text-align:center}
+.download-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3rem 2rem}
+.download-card .icon-large{font-size:2.4rem;margin-bottom:1rem}
+.download-card h2{font-size:1.5rem;font-weight:700;margin-bottom:0.5rem}
+.download-card p{color:var(--muted);font-size:0.9rem;margin-bottom:1.8rem}
+.download-btns{display:flex;gap:0.8rem;justify-content:center;flex-wrap:wrap}
+.download-btns .btn{font-size:0.88rem;padding:0.7rem 1.4rem}
+.version-info{margin-top:1.2rem;font-size:0.75rem;color:var(--muted)}
+footer{padding:3rem 2rem;border-top:1px solid var(--border);text-align:center;font-size:0.8rem;color:var(--muted)}
+footer a{color:var(--text);text-decoration:none}
+@media(max-width:640px){.steps{grid-template-columns:1fr;gap:1.5rem}.feature-grid{grid-template-columns:1fr}.phone-mockup{width:240px;height:480px}nav .links{display:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.hero h1,.hero .subtitle,.hero .cta-row,.hero .phone-mockup{animation:fadeUp 0.8s ease both}
+.hero .subtitle{animation-delay:0.15s}
+.hero .cta-row{animation-delay:0.3s}
+.hero .phone-mockup{animation-delay:0.5s}
+</style>
+</head>
+<body>
+<nav>
+<a href="#" class="logo">Cesia<span>.</span></a>
+<div class="links"><a href="#features">功能</a><a href="#download">下载</a><a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></div>
+</nav>
+<section class="hero">
+<div class="badge">✦ AI · 语音 · 魔法修改</div>
+<h1>说话就能出<br><span class="highlight">好文字</span></h1>
+<p class="subtitle">Cesia 是一款 Android 输入法。你说大白话，AI 帮你润色；选中文字，一句话让 AI 帮你改。不上传按键，完全本地，低调好用。</p>
+<div class="cta-row">
+<a href="#download" class="btn btn-primary">↓ 下载 APK</a>
+<a href="https://github.com/harviex/cesia-input-method" class="btn btn-ghost" target="_blank">View on GitHub →</a>
+</div>
+<div class="phone-mockup">
+<div class="status-bar">Cesia &nbsp;·&nbsp; 12:00</div>
+<div class="app-demo">
+<div class="demo-input">今天天气真好，适合出去走走 ✨</div>
+<div class="demo-keyboard">
+<div class="key">Q</div><div class="key">W</div><div class="key">E</div><div class="key">R</div><div class="key">T</div>
+<div class="key">Y</div><div class="key">U</div><div class="key">I</div><div class="key">O</div><div class="key">P</div>
+<div class="key">A</div><div class="key">S</div><div class="key">D</div><div class="key">F</div><div class="key">G</div>
+<div class="key">H</div><div class="key">J</div><div class="key">K</div><div class="key">L</div><div class="key accent">🎤</div>
+<div class="key">Z</div><div class="key">X</div><div class="key">C</div><div class="key">V</div><div class="key">B</div>
+<div class="key">N</div><div class="key">M</div><div class="key accent">✨</div><div class="key wide accent">空格</div><div class="key">↵</div>
+</div>
+</div>
+</div>
+</section>
+<section class="features" id="features">
+<div class="section-label">Features</div>
+<h2 class="section-title">不只是打字</h2>
+<p class="section-desc">把 AI 真正融进输入流程，而不是加个按钮。</p>
+<div class="feature-grid">
+<div class="feature-card"><div class="icon">🎤</div><h3>AI 语音润色</h3><p>说话，系统识别，AI 自动润色成得体文字，一键上屏。写汇报、回消息、发朋友圈，比打字快多了。</p></div>
+<div class="feature-card"><div class="icon">✨</div><h3>魔法修改</h3><p>选中文字，说一句指令——扩写、缩句、翻译、换语气——AI 自动改写，不用手动改半个字。</p></div>
+<div class="feature-card"><div class="icon">📖</div><h3>魔法书</h3><p>把常用的修改指令收集起来，起个名字存好，下次一键调用。越用越聪明。</p></div>
+<div class="feature-card"><div class="icon">⌨️</div><h3>全键盘 & 双拼</h3><p>标准 QWERTY，支持拼音和双拼输入。功能键长按有快捷操作，老用户零成本上手。</p></div>
+<div class="feature-card"><div class="icon">🔢</div><h3>T9 九宫格</h3><p>九键拼音输入，单手打字很舒服。适合屏幕大、手小的场合。</p></div>
+<div class="feature-card"><div class="icon">🛡️</div><h3>本地优先</h3><p>按键内容不上传，本地处理。AI 润色通过 OpenRouter API 传输，配置你自己的 Key 也可以。</p></div>
+</div>
+</section>
+<section class="how-it-works" id="how">
+<div class="section-label">How it works</div>
+<h2 class="section-title">三步输入</h2>
+<p class="section-desc" style="margin:0 auto 0;">说话 → 润色 → 上屏。</p>
+<div class="steps">
+<div class="step"><div class="num">1</div><h4>说话</h4><p>点麦克风，直接说大白话就行</p></div>
+<div class="step"><div class="num">2</div><h4>润色</h4><p>AI 帮你把口语变成好文字</p></div>
+<div class="step"><div class="num">3</div><h4>上屏</h4><p>点一下，润色好的文字直接发出去</p></div>
+</div>
+</section>
+<section class="download" id="download">
+<div class="download-card">
+<div class="icon-large">📦</div>
+<h2>下载 Cesia</h2>
+<p>Android APK，直接安装，覆盖旧版本不需要卸载。</p>
+<div class="download-btns">
+<a href="https://github.com/harviex/cesia-input-method/releases/latest" class="btn btn-primary" target="_blank">↓ GitHub Releases</a>
+<a href="https://github.com/harviex/cesia-input-method/releases/latest" class="btn btn-ghost" target="_blank">查看更新日志 →</a>
+</div>
+<div class="version-info">最新版本 v1.1.x · 需要 Android 8+ · ARM64</div>
+</div>
+</section>
+<footer><p>Cesia 输入法 · harvie · 2025 · <a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></p></footer>
+<script>document.querySelectorAll("a[href^=\"#\"]").forEach(a=>{a.addEventListener("click",e=>{e.preventDefault();const el=document.querySelector(a.getAttribute("href"));el&&el.scrollIntoView({behavior:"smooth"})})})</script>
+</body>
+</html>
