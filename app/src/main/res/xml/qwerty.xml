@@ -40,18 +40,27 @@
         <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第2行：ASDF（功能键长按=编辑功能） ===== -->
+    <!-- ===== 第2行：ASDF（长按=编辑功能，副字符=数学符号） ===== -->
     <Row>
         <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left"
-            android:horizontalGap="5%p" />
-        <Key android:codes="115" android:keyLabel="s" />
-        <Key android:codes="100" android:keyLabel="d" />
-        <Key android:codes="102" android:keyLabel="f" />
-        <Key android:codes="103" android:keyLabel="g" />
-        <Key android:codes="104" android:keyLabel="h" />
-        <Key android:codes="106" android:keyLabel="j" />
-        <Key android:codes="107" android:keyLabel="k" />
-        <Key android:codes="108" android:keyLabel="l" />
+            android:horizontalGap="5%p"
+            android:popupCharacters="+" />
+        <Key android:codes="115" android:keyLabel="s"
+            android:popupCharacters="-" />
+        <Key android:codes="100" android:keyLabel="d"
+            android:popupCharacters="×" />
+        <Key android:codes="102" android:keyLabel="f"
+            android:popupCharacters="÷" />
+        <Key android:codes="103" android:keyLabel="g"
+            android:popupCharacters="=" />
+        <Key android:codes="104" android:keyLabel="h"
+            android:popupCharacters="≠" />
+        <Key android:codes="106" android:keyLabel="j"
+            android:popupCharacters="≈" />
+        <Key android:codes="107" android:keyLabel="k"
+            android:popupCharacters="±" />
+        <Key android:codes="108" android:keyLabel="l"
+            android:popupCharacters="√" />
     </Row>
 
     <!-- ===== 第3行：Shift + ZXCV + BackSpace ===== -->

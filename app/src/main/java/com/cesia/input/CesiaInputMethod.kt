@@ -178,15 +178,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 功能键长按映射（参考 Trime preset_keys）
     private fun getFunctionalLongAction(primaryCode: Int): (() -> Unit)? {
         return when (primaryCode) {
-            97  -> { { sendCtrlKey(KeyEvent.KEYCODE_A) } }  // a=全选
-            115 -> { { sendControlKey(KeyEvent.KEYCODE_MOVE_HOME) } }  // s=Home
-            100 -> { { sendControlKey(KeyEvent.KEYCODE_MOVE_END) } }  // d=End
-            102 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_UP) } }  // f=PgUp
-            103 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_DOWN) } }  // g=PgDn
-            104 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_LEFT) } }  // h=左
-            106 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_DOWN) } }  // j=下
-            107 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_UP) } }  // k=上
-            108 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_RIGHT) } }  // l=右
+            // ASDF行：长按输出数学符号（副字符）
+            97  -> { { currentInputConnection?.commitText("+", 1) } }   // a→+
+            115 -> { { currentInputConnection?.commitText("-", 1) } }   // s→-
+            100 -> { { currentInputConnection?.commitText("×", 1) } }   // d→×
+            102 -> { { currentInputConnection?.commitText("÷", 1) } }   // f→÷
+            103 -> { { currentInputConnection?.commitText("=", 1) } }   // g→=
+            104 -> { { currentInputConnection?.commitText("≠", 1) } }   // h→≠
+            106 -> { { currentInputConnection?.commitText("≈", 1) } }   // j→≈
+            107 -> { { currentInputConnection?.commitText("±", 1) } }   // k→±
+            108 -> { { currentInputConnection?.commitText("√", 1) } }   // l→√
+            // ZXCV行：编辑功能
             120 -> { { currentInputConnection?.performContextMenuAction(android.R.id.cut) } }  // x=剪切
             99  -> { { currentInputConnection?.performContextMenuAction(android.R.id.copy) } }  // c=复制
             118 -> { { currentInputConnection?.performContextMenuAction(android.R.id.paste) } }  // v=粘贴
@@ -216,10 +218,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         val boldText = toBoldText(selectedText)
-        // 删除选区并插入加粗文本
-        val time = SystemClock.uptimeMillis()
-        ic.sendKeyEvent(KeyEvent(time, time, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0))
-        ic.sendKeyEvent(KeyEvent(time, time, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL, 0))
+        // 直接插入加粗文本（commitText 在大多数编辑器中会替换选区）
         ic.commitText(boldText, 1)
         updateStatus("✅ 已加粗 ${selectedText.length} 字")
     }
@@ -361,25 +360,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 设置功能键长按副功能提示文字
         keyboardView.setFunctionalLabels(mapOf(
-            97 to "全选",   // a
-            115 to "Home",  // s
-            100 to "End",   // d
-            102 to "PgUp",  // f
-            103 to "PgDn",  // g
-            104 to "←",     // h
-            106 to "↓",     // j
-            107 to "↑",     // k
-            108 to "→",     // l
-            120 to "剪切",  // x
-            99 to "复制",   // c
-            118 to "粘贴",  // v
-            98 to "黑体",   // b=黑体（聊天可见加粗）
-            122 to "撤销",  // z
-            110 to "Ins",   // n
-            109 to "Del",   // m
+            // QWERTY第2行：数学符号（长按输出）
+            97 to "+",    // a
+            115 to "-",   // s
+            100 to "×",   // d
+            102 to "÷",   // f
+            103 to "=",   // g
+            104 to "≠",   // h
+            106 to "≈",   // j
+            107 to "±",   // k
+            108 to "√",   // l
+            // ZXCV行：编辑功能
+            120 to "剪切", // x
+            99 to "复制",  // c
+            118 to "粘贴", // v
+            98 to "黑体",  // b
+            122 to "撤销", // z
+            110 to "Ins",  // n
+            109 to "Del",  // m
             -108 to "粘贴", // 剪贴板键：副字符
-            -109 to "剪切",  // 复制键：副字符
-            10 to "撤销"    // 回车键：副字符
+            -109 to "剪切", // 复制键：副字符
+            10 to "撤销"   // 回车键：副字符
         ))
         // T9Labels 已清空（数字键不再显示灰色副字符）
         keyboardView.setT9Labels(mapOf())

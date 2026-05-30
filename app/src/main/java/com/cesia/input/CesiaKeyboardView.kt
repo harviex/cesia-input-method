@@ -146,14 +146,15 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(label, cx, cy, grayPaint)
             }
 
-            // ===== 4. Shift 锁定红色圆点（大一倍=8f，距右/上10px） =====
-            if (code == -104 && isT9Mode && isShiftLocked) {
+            // ===== 4. Shift 锁定红色圆点（半径8f，距右30px，距上10px） =====
+            // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
+            if ((code == -104 || code == -1) && isShiftLocked) {
                 val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = 0xFFCC0000.toInt()
                     style = Paint.Style.FILL
                 }
-                val dotX = key.x + key.width - 10f
-                val dotY = key.y + 10f + 8f  // 圆心下移半径
+                val dotX = key.x + key.width - 30f
+                val dotY = key.y + 10f + 8f
                 canvas.drawCircle(dotX, dotY, 8f, dotPaint)
             }
 
