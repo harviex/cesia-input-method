@@ -75,8 +75,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnCandidateExpand: ImageButton
     private var rvCandidates: RecyclerView? = null
     private var candidateAdapter: CandidateAdapter? = null
-    private var tvT9Letters: TextView? = null
-    private var dividerT9: View? = null
 
     // 候选词展开面板
     private lateinit var candidatePanel: LinearLayout
@@ -318,8 +316,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选词栏
         candidateBar = view.findViewById(R.id.candidate_bar)
         btnCandidateExpand = view.findViewById(R.id.btn_candidate_expand)
-        tvT9Letters = view.findViewById(R.id.tv_t9_letters)
-        dividerT9 = view.findViewById(R.id.divider_t9)
+        // tvT9Letters/dividerT9 已移除
 
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
@@ -333,31 +330,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
         )
 
-        // T9 字母区点击：弹出字母选择
-        tvT9Letters?.setOnClickListener {
-            val lettersText = tvT9Letters?.text?.toString() ?: return@setOnClickListener
-            // 用 PopupMenu 显示各组字母供选择
-            val popup = android.widget.PopupMenu(this, tvT9Letters)
-            val groups = lettersText.split(" ")
-            groups.forEachIndexed { index, group ->
-                val items = group.split("")
-                items.filter { it.isNotEmpty() }.forEach { ch ->
-                    popup.menu.add(index, ch[0].code, 0, ch)
-                }
-            }
-            popup.setOnMenuItemClickListener { item ->
-                currentInputConnection?.commitText(item.title.toString(), 1)
-                // 上屏后清空 t9 缓冲区
-                if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
-                    t9InputBuffer.clear()
-                    rimeEngine.clear()
-                }
-                updateCandidateBar()
-                updateStatus("Cesia 已就绪")
-                true
-            }
-            popup.show()
-        }
+        // T9 字母区已移除（不再显示英文字母和分隔线）
 
         // 候选面板视图
         candidatePanel = view.findViewById(R.id.candidate_panel)
@@ -391,6 +364,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         keyboardView.keyboard = currentKeyboard
         keyboardView.isT9Mode = true
         keyboardView.setOnKeyboardActionListener(this)
+
+        // 左右滑动循环切换全键盘/T9
+        keyboardView.onSwipeLeft = { toggleBySwipe() }
+        keyboardView.onSwipeRight = { toggleBySwipe() }
 
         // 设置功能键长按副功能提示文字
         keyboardView.setFunctionalLabels(mapOf(
@@ -670,27 +647,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 有输入时
         candidateBar.visibility = View.VISIBLE
 
-        // T9 模式：状态栏只显示数字序列，候选栏前置字母区
+        // T9 模式：状态栏显示数字序列（不再显示英文字母区和分隔线）
         if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
             updateStatus(t9InputBuffer.toString())
-            // 显示 T9 字母区：将每个数字转为对应字母组
-            val letters = t9InputBuffer.toString().map { digit ->
-                when (digit) {
-                    '2' -> "abc"; '3' -> "def"; '4' -> "ghi"; '5' -> "jkl"
-                    '6' -> "mno"; '7' -> "pqrs"; '8' -> "tuv"; '9' -> "wxyz"
-                    '0' -> " "
-                    else -> ""
-                }
-            }.joinToString(" ")
-            tvT9Letters?.text = letters
-            tvT9Letters?.visibility = View.VISIBLE
-            dividerT9?.visibility = View.VISIBLE
         } else {
             updateStatus(pinyin)
-            tvT9Letters?.visibility = View.GONE
-            dividerT9?.visibility = View.GONE
         }
-
         // 更新候选词列表
         // 更新候选词列表
         candidateAdapter?.updateData(allCands)
@@ -1616,6 +1578,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ======================== 键盘切换（Trime 风格）=======================
 
+    /** 左右滑动循环切换全键盘 ↔ T9 */
+    private fun toggleBySwipe() {
+        // 清除输入状态，防止切换后残留
+        rimeEngine.clear()
+        t9InputBuffer.clear()
+        candidateBar.visibility = View.GONE
+        updateStatus("Cesia 已就绪")
+        if (keyboardMode == KeyboardMode.NUMBER) {
+            // T9 → 全键盘
+            switchToKeyboard(KeyboardMode.QWERTY)
+            rimeEngine.selectSchema("pinyin")
+            rimeEngine.reload()
+        } else {
+            // 全键盘/符号 → T9
+            switchToKeyboard(KeyboardMode.NUMBER)
+            rimeEngine.selectSchema("t9_pinyin")
+            rimeEngine.reload()
+            resetNumberKeyboardState()
+        }
+    }
+
     private fun switchToKeyboard(mode: KeyboardMode) {
         // 记录进入符号键盘前的模式，用于返回
         if (mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN) {
@@ -1646,22 +1629,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.setAsciiMode(true)
             }
             rimeEngine.clear()
-            // 从T9按⇱回到QWERTY时，清除T9的shift状态残留
-            if (keyboardMode == KeyboardMode.NUMBER) {
-                isShiftLocked = false
-                isShiftMode = false
-            }
+            // 从T9回到QWERTY：T9的shift状态已在进入NUMBER时清除（switchToKeyboard NUMBER分支）
         } else {
             // 进入符号键盘：清除所有输入状态，避免卡住
             rimeEngine.clear()
             t9InputBuffer.clear()
-            if (keyboardMode == KeyboardMode.NUMBER) {
+            if (mode == KeyboardMode.NUMBER) {
+                // 从T9进入符号：清除T9状态
                 isShiftLocked = false
                 isShiftMode = false
                 isAsciiMode = false
                 rimeEngine.setAsciiMode(false)
             }
-            if (keyboardMode == KeyboardMode.QWERTY) {
+            if (mode == KeyboardMode.QWERTY) {
+                // 从全键盘进入符号：清除ascii模式
                 isAsciiMode = false
                 rimeEngine.setAsciiMode(false)
             }
@@ -1699,12 +1680,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             switchToKeyboard(KeyboardMode.QWERTY)
             rimeEngine.selectSchema("pinyin")
             rimeEngine.reload()
+            // reload() 会重置 Rime 内部状态，需重新应用 shift 锁定
+            if (qwertyShiftLock) {
+                isAsciiMode = true
+                rimeEngine.setAsciiMode(true)
+            }
         } else {
             // QWERTY → T9：切换 schema 到 t9_pinyin（需要 reload 使新 schema 生效）
             switchToKeyboard(KeyboardMode.NUMBER)
             rimeEngine.selectSchema("t9_pinyin")
             rimeEngine.reload()
-            resetNumberKeyboardState()
+            resetNumberKeyboardState()  // 清除 T9 shift 状态（已在 switchToKeyboard NUMBER 分支清除）
         }
     }
 

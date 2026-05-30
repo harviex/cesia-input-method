@@ -14,6 +14,7 @@ import android.util.TypedValue
  * - 功能键长按副字符（functionalLabels，灰色）
  * - T9 数字键盘主字符（大号字母，灰色）+ 副字符（红色数字）
  * - popupCharacters 副字符（红色小字，距右侧10px距上方10px）
+ * - 左右滑动切换全键盘/T9（防误触）
  */
 class CesiaKeyboardView @JvmOverloads constructor(
     context: Context,
@@ -32,6 +33,41 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // Shift 锁定状态（用于绘制不同图标）
     var isShiftLocked = false
+
+    // 手势检测：左右滑动切换全键盘/T9，防止误触
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
+    private var isSwipeDetected = false
+    private val swipeThreshold = 60f       // 最小水平滑动距离（px）
+    private val swipeMaxYDrift = 80f       // 最大垂直偏移（防止上下滑动误触）
+
+    var onSwipeLeft: (() -> Unit)? = null
+    var onSwipeRight: (() -> Unit)? = null
+
+    override fun onTouchEvent(me: android.view.MotionEvent): Boolean {
+        when (me.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                gestureStartX = me.x
+                gestureStartY = me.y
+                isSwipeDetected = false
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (!isSwipeDetected) {
+                    val dx = me.x - gestureStartX
+                    val dy = kotlin.math.abs(me.y - gestureStartY)
+                    val adx = kotlin.math.abs(dx)
+                    // 水平滑动超过阈值且垂直偏移不大 → 判定为滑动切键盘
+                    if (adx > swipeThreshold && dy < swipeMaxYDrift) {
+                        isSwipeDetected = true
+                        if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
+                        // 消耗后续所有事件，不触发按键
+                        return true
+                    }
+                }
+            }
+        }
+        return super.onTouchEvent(me)
+    }
 
     // T9 主字符映射（数字码 → 字母标签）
     private val t9MainLabels = mapOf(
@@ -138,7 +174,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 val cx = key.x + key.width / 2f
                 val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
                 val label = when (code) {
-                    49 -> "黑体"
+                    49 -> "大写"
                     -108 -> "全选"
                     -109 -> "复制"
                     else -> ""
