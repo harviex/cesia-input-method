@@ -217,6 +217,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun sendCtrlKey(keyCode: Int) = sendControlKey(keyCode, KeyEvent.META_CTRL_ON)
 
     /** 大写转换：选中的英文→大写，数字→中文大写数字 */
+    /** 判断魔法指令是否为生成类（允许空文本）还是修改类（需要文本） */
+    private fun isGenerationMagic(instruction: String): Boolean {
+        val genKeywords = listOf("帮我想", "帮我写", "生成", "创作", "编写", "写一个", "写一段", "给我一个")
+        return genKeywords.any { instruction.contains(it) }
+    }
+
     private fun toggleUpperCase() {
         val ic = currentInputConnection ?: return
         val selectedText = ic.getSelectedText(0)?.toString()
@@ -264,6 +270,42 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         } else {
             ic.deleteSurroundingText(1, 0)
         }
+    }
+
+    // ======================== 简繁转换映射表（候选词上屏时转换）=======================
+    private val SIMP_TRAD: Map<Char, Char> = mapOf(
+        '国' to '國', '会' to '會', '来' to '來', '时' to '時', '个' to '個',
+        '们' to '們', '说' to '說', '这' to '這', '为' to '為', '过' to '過',
+        '对' to '對', '还' to '還', '发' to '發', '经' to '經', '长' to '長',
+        '问' to '問', '开' to '開', '学' to '學', '动' to '動', '进' to '進',
+        '种' to '種', '应' to '應', '头' to '頭', '现' to '現', '实' to '實',
+        '点' to '點', '业' to '業', '关' to '關', '机' to '機', '认' to '認',
+        '让' to '讓', '东' to '東', '当' to '當', '没' to '沒', '产' to '產',
+        '车' to '車', '见' to '見', '电' to '電', '里' to '裡', '两' to '兩',
+        '场' to '場', '从' to '從', '无' to '無', '万' to '萬', '亚' to '亞',
+        '着' to '著', '处' to '處', '将' to '將', '书' to '書', '许' to '許',
+        '总' to '總', '听' to '聽', '员' to '員', '难' to '難', '结' to '結',
+        '极' to '極', '义' to '義', '记' to '記', '务' to '務', '战' to '戰',
+        '图' to '圖', '报' to '報', '类' to '類', '条' to '條', '统' to '統',
+        '办' to '辦', '华' to '華', '变' to '變', '运' to '運', '达' to '達',
+        '传' to '傳', '该' to '該', '众' to '眾', '写' to '寫', '军' to '軍',
+        '门' to '門', '语' to '語', '选' to '選', '区' to '區', '级' to '級',
+        '转' to '轉', '杀' to '殺', '范' to '範', '风' to '風', '虽' to '雖',
+        '举' to '舉', '销' to '銷', '独' to '獨', '资' to '資', '养' to '養',
+        '节' to '節', '价' to '價', '权' to '權', '苏' to '蘇', '刘' to '劉',
+        '孙' to '孫', '陈' to '陳', '杨' to '楊', '赵' to '趙', '张' to '張',
+        '罗' to '羅', '郑' to '鄭', '韩' to '韓', '钱' to '錢', '给' to '給',
+        '纳' to '納', '龙' to '龍', '刚' to '剛', '过' to '過', '边' to '邊',
+        '网' to '網', '飞' to '飛', '还' to '還', '系' to '係', '计' to '計',
+        '让' to '讓'
+
+    )
+    
+    /** 简→繁转换（逐字替换）*/
+    private fun toTraditional(text: String): String {
+        val sb = StringBuilder(text.length * 2)
+        for (ch in text) { sb.append(SIMP_TRAD[ch] ?: ch) }
+        return sb.toString()
     }
 
     companion object {
@@ -635,7 +677,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         while (curPage > targetPage) { rimeEngine.prevPage() }
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
-            currentInputConnection?.commitText(selected, 1)
+            commitCandidateText(selected)
             // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
@@ -725,17 +767,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
             } else {
-                currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
+                try {
+                    currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
+                } catch (_: Exception) { /* 安全忽略 */ }
             }
         }
         btnDelete.setOnLongClickListener {
             deleteLongPressTriggered = true
-            if (rimeEngine.isComposing) {
-                rimeEngine.processKey("BackSpace")
-                updateCandidateBar()
-            } else {
-                currentInputConnection?.deleteSurroundingText(0, Integer.MAX_VALUE)
-            }
+            try {
+                if (rimeEngine.isComposing) {
+                    rimeEngine.processKey("BackSpace")
+                    updateCandidateBar()
+                } else {
+                    // 安全删除：分段删除光标后文本，避免某些App崩溃
+                    val ic = currentInputConnection ?: return@setOnLongClickListener true
+                    val afterCursor = ic.getTextAfterCursor(10000, 0)
+                    if (afterCursor != null && afterCursor.isNotEmpty()) {
+                        val deleteLen = minOf(afterCursor.length, 1000)
+                        ic.deleteSurroundingText(0, deleteLen)
+                    }
+                }
+            } catch (_: Exception) { /* 安全忽略 */ }
             true
         }
 
@@ -799,7 +851,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 高亮按钮表示正在录音
         magicIsWaitingForVoice = true
-        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFF9800.toInt())
+        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
         btnMagic.setTextColor(0xFFFFFFFF.toInt())
         btnMagic.elevation = 6f
         btnMagic.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200).start()
@@ -905,8 +957,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val textAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
         val fullText = textBefore + textAfter
 
-        if (fullText.isEmpty()) {
-            updateStatus("⚠️ 输入框无文字，无法修改")
+        // 生成类魔法允许空文本，修改类魔法要求有文本
+        if (fullText.isEmpty() && !isGenerationMagic(instruction)) {
+            updateStatus("⚠️ 输入框无文字，无法执行修改类魔法")
             return
         }
 
@@ -1013,7 +1066,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         )
 
         val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-        popup.isOutsideTouchable = true
+        popup.isOutsideTouchable = false  // 点击外部不关闭，只有执行魔法或点关闭按钮才关闭
         popup.elevation = 4f
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
 
@@ -1402,30 +1455,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 简繁切换：高亮输入法中所有文字 */
+    /** 简繁切换：候选词上屏时自动转换为繁体/简体 */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
-        val ic = currentInputConnection ?: return
-        try {
-            // 获取全部文字（光标前后各10000字符）
-            val beforeCursor = ic.getTextBeforeCursor(10000, 0)?.toString() ?: ""
-            val afterCursor = ic.getTextAfterCursor(10000, 0)?.toString() ?: ""
-            val fullText = beforeCursor + afterCursor
-            if (fullText.isEmpty()) {
-                updateStatus(if (isTraditional) "✅ 已切换为繁体" else "✅ 已切换为简体")
-                updateTraditionalButton()
-                return
-            }
-            // 转换
-            val converted = if (isTraditional) toTraditional(fullText) else toSimplified(fullText)
-            // 替换
-            ic.performContextMenuAction(android.R.id.selectAll)
-            ic.commitText(converted, 1)
-            updateStatus(if (isTraditional) "✅ 已切换为繁体" else "✅ 已切换为简体")
-        } catch (e: Exception) {
-            updateStatus("❌ 切换失败: ${e.message}")
-        }
+        updateStatus(if (isTraditional) "✅ 已切换为繁体输出" else "✅ 已切换为简体输出")
         updateTraditionalButton()
+    }
+
+    /** 候选词选中上屏时，如开启繁体则转换 */
+    private fun commitCandidateText(text: String) {
+        val output = if (isTraditional) toTraditional(text) else text
+        currentInputConnection?.commitText(output, 1)
     }
 
     private fun updateTraditionalButton() {
@@ -1436,59 +1476,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // ======================== 简繁转换映射表 ========================
-    // 最常用约300组简繁对照（simplified → traditional）
-
-    private fun toTraditional(text: String): String {
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
-            sb.append(SIMP_TRAD[ch] ?: ch)
-        }
-        return sb.toString()
-    }
-
-    private fun toSimplified(text: String): String {
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
-            sb.append(TRAD_SIMP[ch] ?: ch)
-        }
-        return sb.toString()
-    }
-
-    // 简→繁映射（最常用约250组）
-    private val SIMP_TRAD: Map<Char, Char> = mapOf(
-        '国' to '國', '会' to '會', '来' to '來', '时' to '時', '个' to '個',
-        '们' to '們', '说' to '說', '这' to '這', '为' to '為', '过' to '過',
-        '对' to '對', '还' to '還', '发' to '發', '经' to '經', '长' to '長',
-        '问' to '問', '开' to '開', '学' to '學', '动' to '動', '进' to '進',
-        '种' to '種', '应' to '應', '头' to '頭', '现' to '現', '实' to '實',
-        '点' to '點', '业' to '業', '关' to '關', '机' to '機', '认' to '認',
-        '让' to '讓', '东' to '東', '当' to '當', '没' to '沒', '产' to '產',
-        '车' to '車', '见' to '見', '电' to '電', '里' to '裡', '两' to '兩',
-        '场' to '場', '从' to '從', '无' to '無', '万' to '萬', '亚' to '亞',
-        '着' to '著', '处' to '處', '将' to '將', '书' to '書', '许' to '許',
-        '总' to '總', '別' to '别', '听' to '聽', '员' to '員', '别' to '別',
-        '难' to '難', '结' to '結', '极' to '極', '义' to '義', '记' to '記',
-        '务' to '務', '战' to '戰', '图' to '圖', '报' to '報', '类' to '類',
-        '条' to '條', '统' to '統', '办' to '辦', '华' to '華', '变' to '變',
-        '让' to '讓', '运' to '運', '达' to '達', '传' to '傳', '该' to '該',
-        '众' to '眾', '写' to '寫', '军' to '軍', '门' to '門', '难' to '難',
-        '花' to '華', '整' to '整', '话' to '話', '观' to '觀', '爱' to '愛',
-        '强' to '強', '儿' to '兒', '万' to '萬', '达' to '達', '専' to '專',
-        '处' to '處', '几' to '幾', '着' to '著', '线' to '線', '组' to '組',
-        '数' to '數', '广' to '廣', '帅' to '帥', '师' to '師', '觉' to '覺',
-        '语' to '語', '选' to '選', '种' to '種', '区' to '區', '级' to '級',
-        '转' to '轉', '杀' to '殺', '范' to '範', '风' to '風', '虽' to '雖',
-        '举' to '舉', '销' to '銷', '独' to '獨', '资' to '資', '养' to '養',
-        '节' to '節', '价' to '價', '权' to '權', '苏' to '蘇', '刘' to '劉',
-        '孙' to '孫', '陈' to '陳', '杨' to '楊', '赵' to '趙', '张' to '張',
-        '罗' to '羅', '郑' to '鄭', '韩' to '韓', '钱' to '錢', '周' to '週',
-        '吴' to '吳', '邓' to '鄧', '冯' to '馮', '蒋' to '蔣', '顾' to '顧',
-        '没' to '沒', '给' to '給', '纳' to '納', '龙' to '龍', '刚' to '剛'
-    )
-
-    // 繁→简映射（反向）
-    private val TRAD_SIMP: Map<Char, Char> = SIMP_TRAD.entries.associate { (k, v) -> v to k }
 
     private fun loadSettings() {
         try {
@@ -1688,17 +1675,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         t9InputBuffer.clear()
         candidateBar.visibility = View.GONE
         updateStatus("Cesia 已就绪")
+        // UI 立即切换，schema reload 放后台
         if (keyboardMode == KeyboardMode.NUMBER) {
-            // T9 → 全键盘
             switchToKeyboard(KeyboardMode.QWERTY)
-            rimeEngine.selectSchema("pinyin")
-            rimeEngine.reload()
+            Thread { rimeEngine.selectSchema("pinyin"); rimeEngine.reload() }.start()
         } else {
-            // 全键盘/符号 → T9
             switchToKeyboard(KeyboardMode.NUMBER)
-            rimeEngine.selectSchema("t9_pinyin")
-            rimeEngine.reload()
-            resetNumberKeyboardState()
+            Thread {
+                rimeEngine.selectSchema("t9_pinyin")
+                rimeEngine.reload()
+                Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
+            }.start()
         }
     }
 
@@ -1969,7 +1956,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                 val selected = rimeEngine.selectCandidate(0)
                 if (selected.isNotEmpty()) {
-                    currentInputConnection?.commitText(selected, 1)
+                    commitCandidateText(selected)
                 }
             }
             t9InputBuffer.clear()
@@ -2143,7 +2130,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         if (index < cands.size) {
                             val selected = rimeEngine.selectCandidate(index)
                             if (selected.isNotEmpty()) {
-                                ic?.commitText(selected, 1)  // 中文候选，不加粗
+                                commitCandidateText(selected)
                             } else { commitAndClear() }
                         } else {
                             ic?.commitText(primaryCode.toChar().toString(), 1)

@@ -202,7 +202,17 @@ class TypelessEngine(
     }
 
     private fun cleanPolishedText(raw: String): String {
-        return raw.trim().removePrefix("```").removeSuffix("```").trim()
+        var text = raw.trim()
+        // 去除 markdown 代码块
+        text = text.removePrefix("```").removeSuffix("```").trim()
+        // 去除 AI 标签和注释
+        text = text.replace(Regex("<[^>]+>"), "")  // <!assistant> 等HTML标签
+        text = text.replace(Regex("【[^】]*】"), "")  // 【备注】等中文方括号
+        // 去除 "注："、"备注："、"说明：" 开头的注释行
+        text = text.replace(Regex("(注[：:]|备注[：:]|说明[：:]).*"), "")
+        // 去除末尾的 "（注：xxx）" 短注释
+        text = text.replace(Regex("（[^）]{1,30}）$"), "")
+        return text.trim()
     }
 
     private fun isPlaceholder(text: String): Boolean {

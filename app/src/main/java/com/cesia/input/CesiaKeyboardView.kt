@@ -82,9 +82,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
         color = 0xFF999999.toInt()
     }
 
-    // popupCharacters 副字符画笔（红色小字）
+    // popupCharacters 副字符画笔（tiffany蓝，加粗）
     private val popupPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.DEFAULT
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.RIGHT
         color = 0xFF81D8D0.toInt()
     }

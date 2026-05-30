@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    英文符号键盘 — 去重版，与中文符号键盘完全无重复
-    主字符=英文符号，副字符=对应中文符号
-    42键主 + 42键副 = 84字符，全部唯一
+    英文/半角符号键盘 — 全量去重版，与中文符号键盘完全无重复
+    主字符=半角符号，副字符=对应中文变体（非英文字母）
+    41字符键×2=82字符，全部唯一
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="9.5%p"
@@ -10,70 +10,70 @@
     android:horizontalGap="1dp"
     android:verticalGap="4dp">
 
-    <!-- ===== 第1行：常用标点 — 配对应中文（10键） ===== -->
+    <!-- ===== 第1行：常用标点（10键） ===== -->
     <Row>
-        <Key android:codes="33" android:keyLabel="!" android:popupCharacters="！" android:keyEdgeFlags="left" />
-        <Key android:codes="64" android:keyLabel="@" android:popupCharacters="＠" />
-        <Key android:codes="35" android:keyLabel="#" android:popupCharacters="＃" />
-        <Key android:codes="36" android:keyLabel="$" android:popupCharacters="￥" />
-        <Key android:codes="37" android:keyLabel="%" android:popupCharacters="％" />
-        <Key android:codes="94" android:keyLabel="^" android:popupCharacters="＾" />
-        <Key android:codes="38" android:keyLabel="&amp;" android:popupCharacters="＆" />
-        <Key android:codes="42" android:keyLabel="*" android:popupCharacters="×" />
-        <Key android:codes="40" android:keyLabel="(" android:popupCharacters="（" />
-        <Key android:codes="41" android:keyLabel=")" android:popupCharacters="）" android:keyEdgeFlags="right" />
+        <Key android:codes="33" android:keyLabel="!" android:popupCharacters="&#xFE57;" android:keyEdgeFlags="left" />
+        <Key android:codes="35" android:keyLabel="#" android:popupCharacters="&#xFF03;" />
+        <Key android:codes="37" android:keyLabel="%" android:popupCharacters="&#xFF05;" />
+        <Key android:codes="38" android:keyLabel="&amp;" android:popupCharacters="&#xFF06;" />
+        <Key android:codes="42" android:keyLabel="*" android:popupCharacters="&#xFF0A;" />
+        <Key android:codes="58" android:keyLabel=":" android:popupCharacters="&#xFF1A;" />
+        <Key android:codes="59" android:keyLabel=";" android:popupCharacters="&#xFF1B;" />
+        <Key android:codes="61" android:keyLabel="=" android:popupCharacters="&#xFF1D;" />
+        <Key android:codes="62" android:keyLabel="&gt;" android:popupCharacters="&#xFE66;" />
+        <Key android:codes="60" android:keyLabel="&lt;" android:popupCharacters="&#xFE65;" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第2行：括号类 — 配对应中文（10键） ===== -->
+    <!-- ===== 第2行：括号类（10键） ===== -->
     <Row>
-        <Key android:codes="95" android:keyLabel="_" android:popupCharacters="﹏" android:keyEdgeFlags="left" />
-        <Key android:codes="45" android:keyLabel="-" android:popupCharacters="—" />
-        <Key android:codes="61" android:keyLabel="=" android:popupCharacters="＝" />
-        <Key android:codes="43" android:keyLabel="+" android:popupCharacters="＋" />
-        <Key android:codes="91" android:keyLabel="[" android:popupCharacters="「" />
-        <Key android:codes="93" android:keyLabel="]" android:popupCharacters="」" />
-        <Key android:codes="123" android:keyLabel="{" android:popupCharacters="｛" />
-        <Key android:codes="125" android:keyLabel="}" android:popupCharacters="｝" />
-        <Key android:codes="92" android:keyLabel="\\" android:popupCharacters="＼" />
-        <Key android:codes="124" android:keyLabel="|" android:popupCharacters="｜" android:keyEdgeFlags="right" />
+        <Key android:codes="40" android:keyLabel="(" android:popupCharacters="&#xFF08;" android:keyEdgeFlags="left" />
+        <Key android:codes="41" android:keyLabel=")" android:popupCharacters="&#xFF09;" />
+        <Key android:codes="91" android:keyLabel="[" android:popupCharacters="&#x3010;" />
+        <Key android:codes="93" android:keyLabel="]" android:popupCharacters="&#x3011;" />
+        <Key android:codes="123" android:keyLabel="{" android:popupCharacters="&#xFF5B;" />
+        <Key android:codes="125" android:keyLabel="}" android:popupCharacters="&#xFF5D;" />
+        <Key android:codes="92" android:keyLabel="\\" android:popupCharacters="&#xFF3C;" />
+        <Key android:codes="124" android:keyLabel="|" android:popupCharacters="&#x2016;" />
+        <Key android:codes="95" android:keyLabel="_" android:popupCharacters="&#xFE33;" />
+        <Key android:codes="94" android:keyLabel="^" android:popupCharacters="&#xFE3F;" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第3行：标点类 — 配对应中文（10键） ===== -->
+    <!-- ===== 第3行：引号+货币+比较符（10键） ===== -->
     <Row>
-        <Key android:codes="59" android:keyLabel=";" android:popupCharacters="；" android:keyEdgeFlags="left" />
-        <Key android:codes="58" android:keyLabel=":" android:popupCharacters="：" />
-        <Key android:codes="39" android:keyLabel="&apos;" android:popupCharacters="‘" />
-        <Key android:codes="34" android:keyLabel="&quot;" android:popupCharacters="“" />
-        <Key android:codes="44" android:keyLabel="," android:popupCharacters="，" />
-        <Key android:codes="46" android:keyLabel="." android:popupCharacters="。" />
-        <Key android:codes="60" android:keyLabel="&lt;" android:popupCharacters="《" />
-        <Key android:codes="62" android:keyLabel="&gt;" android:popupCharacters="》" />
-        <Key android:codes="47" android:keyLabel="/" android:popupCharacters="／" />
-        <Key android:codes="63" android:keyLabel="?" android:popupCharacters="？" android:keyEdgeFlags="right" />
+        <Key android:codes="39" android:keyLabel="&apos;" android:popupCharacters="&#x2018;" android:keyEdgeFlags="left" />
+        <Key android:codes="34" android:keyLabel="&quot;" android:popupCharacters="&#x201C;" />
+        <Key android:codes="43" android:keyLabel="+" android:popupCharacters="&#xFF0B;" />
+        <Key android:codes="45" android:keyLabel="-" android:popupCharacters="&#xFF0D;" />
+        <Key android:codes="47" android:keyLabel="/" android:popupCharacters="&#xFF0F;" />
+        <Key android:codes="44" android:keyLabel="," android:popupCharacters="&#xFE10;" />
+        <Key android:codes="46" android:keyLabel="." android:popupCharacters="&#xFE11;" />
+        <Key android:codes="64" android:keyLabel="@" android:popupCharacters="&#xFF20;" />
+        <Key android:codes="36" android:keyLabel="$" android:popupCharacters="&#xFF04;" />
+        <Key android:codes="63" android:keyLabel="?" android:popupCharacters="&#xFE16;" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第4行：特殊符号（10键） ===== -->
+    <!-- ===== 第4行：特殊符号+控制（10键） ===== -->
     <Row>
         <Key android:codes="-104" android:keyLabel="⇧" android:isSticky="true" android:keyEdgeFlags="left" />
-        <Key android:codes="96" android:keyLabel="`" android:popupCharacters="·" />
-        <Key android:codes="126" android:keyLabel="~" android:popupCharacters="～" />
-        <Key android:codes="162" android:keyLabel="¢" android:popupCharacters="￠" />
-        <Key android:codes="8355" android:keyLabel="₣" android:popupCharacters="FR" />
-        <Key android:codes="8369" android:keyLabel="₱" android:popupCharacters="P" />
-        <Key android:codes="8363" android:keyLabel="₫" android:popupCharacters="D" />
-        <Key android:codes="8377" android:keyLabel="₹" android:popupCharacters="R" />
-        <Key android:codes="164" android:keyLabel="¤" android:popupCharacters="O" />
+        <Key android:codes="96" android:keyLabel="`" android:popupCharacters="&#xFE45;" />
+        <Key android:codes="126" android:keyLabel="~" android:popupCharacters="&#xFE19;" />
+        <Key android:codes="162" android:keyLabel="¢" android:popupCharacters="&#xFEC0;" />
+        <Key android:codes="8363" android:keyLabel="₫" android:popupCharacters="&#x20AB;" />
+        <Key android:codes="8355" android:keyLabel="₣" android:popupCharacters="&#x20A3;" />
+        <Key android:codes="8369" android:keyLabel="₱" android:popupCharacters="&#x20B1;" />
+        <Key android:codes="8377" android:keyLabel="₹" android:popupCharacters="&#x20B9;" />
+        <Key android:codes="8470" android:keyLabel="№" android:popupCharacters="&#x2116;" />
         <Key android:codes="-5" android:keyLabel="⌫" android:isRepeatable="true" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第5行：返回 + 中英符号切换 + 补充（7键） ===== -->
+    <!-- ===== 第5行：返回+切换+补充（7键） ===== -->
     <Row>
         <Key android:codes="-999" android:keyLabel="⇱" android:keyEdgeFlags="left" android:keyWidth="12%p" />
         <Key android:codes="-105" android:keyLabel="⇄" android:keyWidth="10%p" />
-        <Key android:codes="8470" android:keyLabel="№" android:popupCharacters="No" />
+        <Key android:codes="161" android:keyLabel="¡" android:popupCharacters="&#xA1;" />
         <Key android:codes="32" android:keyLabel="       " android:keyWidth="32%p" />
-        <Key android:codes="191" android:keyLabel="¿" android:popupCharacters="?" />
-        <Key android:codes="182" android:keyLabel="¶" android:popupCharacters="P" />
+        <Key android:codes="191" android:keyLabel="¿" android:popupCharacters="&#xBF;" />
+        <Key android:codes="182" android:keyLabel="¶" android:popupCharacters="&#xB6;" />
         <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" android:keyWidth="12%p" />
     </Row>
 

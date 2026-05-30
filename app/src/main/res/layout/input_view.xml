@@ -38,16 +38,6 @@
             android:maxLines="1"
             android:ellipsize="end" />
 
-        <ImageButton
-            android:id="@+id/btn_settings"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="设置"
-            android:scaleType="centerInside"
-            android:padding="4dp" />
-
         <TextView
             android:id="@+id/btn_traditional"
             android:layout_width="28dp"
@@ -59,6 +49,16 @@
             android:gravity="center"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="简繁切换" />
+
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="设置"
+            android:scaleType="centerInside"
+            android:padding="4dp" />
     </LinearLayout>
 
     <!-- 候选词栏：T9字母区 + 分隔线 + 横向滚动候选词 + 展开按钮 -->
