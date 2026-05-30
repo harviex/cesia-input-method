@@ -8,8 +8,8 @@
     - 逗号/句号/问号/感叹号已在T9和全键盘，此处不排
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
-    android:keyWidth="9%p"
-    android:keyHeight="42dp"
+    android:keyWidth="10%p"
+    android:keyHeight="48dp"
     android:horizontalGap="1dp"
     android:verticalGap="4dp">
 
@@ -88,8 +88,7 @@
     <!-- ===== 第4行：特殊符号（10键，两端⇧⌫对齐） ===== -->
     <Row>
         <Key android:codes="-104" android:keyLabel="⇧"
-            android:isSticky="true"
-            android:keyWidth="9%p" android:keyEdgeFlags="left" />
+            android:isSticky="true" android:keyEdgeFlags="left" />
         <Key android:codes="65507" android:keyLabel="﹏"
             android:popupCharacters="_" />
         <Key android:codes="65508" android:keyLabel="‖"
@@ -104,11 +103,11 @@
             android:popupCharacters="[[[" />
         <Key android:codes="65078" android:keyLabel="〗"
             android:popupCharacters="]]]" />
-        <Key android:codes="8211" android:keyLabel="–"
-            android:popupCharacters="-" />
+        <Key android:codes="8451" android:keyLabel="℃"
+            android:popupCharacters="C" />
         <Key android:codes="-5" android:keyLabel="⌫"
             android:isRepeatable="true"
-            android:keyWidth="9%p" android:keyEdgeFlags="right" />
+            android:keyEdgeFlags="right" />
     </Row>
 
     <!-- ===== 第5行：返回QWERTY + 数字 + 空格 + 句号 + 回车 ===== -->

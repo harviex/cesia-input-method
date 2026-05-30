@@ -178,16 +178,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 功能键长按映射（参考 Trime preset_keys）
     private fun getFunctionalLongAction(primaryCode: Int): (() -> Unit)? {
         return when (primaryCode) {
-            // ASDF行：长按输出数学符号（副字符）
-            97  -> { { currentInputConnection?.commitText("+", 1) } }   // a→+
-            115 -> { { currentInputConnection?.commitText("-", 1) } }   // s→-
-            100 -> { { currentInputConnection?.commitText("×", 1) } }   // d→×
-            102 -> { { currentInputConnection?.commitText("÷", 1) } }   // f→÷
-            103 -> { { currentInputConnection?.commitText("=", 1) } }   // g→=
-            104 -> { { currentInputConnection?.commitText("≠", 1) } }   // h→≠
-            106 -> { { currentInputConnection?.commitText("≈", 1) } }   // j→≈
-            107 -> { { currentInputConnection?.commitText("±", 1) } }   // k→±
-            108 -> { { currentInputConnection?.commitText("√", 1) } }   // l→√
+            // QWERTY上排(qwertyuiop)：长按输出数学符号（副字符）
+            113 -> { { currentInputConnection?.commitText("+", 1) } }   // q→+
+            119 -> { { currentInputConnection?.commitText("-", 1) } }   // w→-
+            101 -> { { currentInputConnection?.commitText("×", 1) } }   // e→×
+            114 -> { { currentInputConnection?.commitText("÷", 1) } }   // r→÷
+            116 -> { { currentInputConnection?.commitText("=", 1) } }   // t→=
+            121 -> { { currentInputConnection?.commitText("≠", 1) } }   // y→≠
+            117 -> { { currentInputConnection?.commitText("≈", 1) } }   // u→≈
+            105 -> { { currentInputConnection?.commitText("±", 1) } }   // i→±
+            111 -> { { currentInputConnection?.commitText("√", 1) } }   // o→√
+            // ASDF行：恢复编辑功能
+            97  -> { { sendCtrlKey(KeyEvent.KEYCODE_A) } }  // a=全选
+            115 -> { { sendControlKey(KeyEvent.KEYCODE_MOVE_HOME) } }  // s=Home
+            100 -> { { sendControlKey(KeyEvent.KEYCODE_MOVE_END) } }  // d=End
+            102 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_UP) } }  // f=PgUp
+            103 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_DOWN) } }  // g=PgDn
+            104 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_LEFT) } }  // h=左
+            106 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_DOWN) } }  // j=下
+            107 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_UP) } }  // k=上
+            108 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_RIGHT) } }  // l=右
             // ZXCV行：编辑功能
             120 -> { { currentInputConnection?.performContextMenuAction(android.R.id.cut) } }  // x=剪切
             99  -> { { currentInputConnection?.performContextMenuAction(android.R.id.copy) } }  // c=复制
@@ -360,16 +370,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 设置功能键长按副功能提示文字
         keyboardView.setFunctionalLabels(mapOf(
-            // QWERTY第2行：数学符号（长按输出）
-            97 to "+",    // a
-            115 to "-",   // s
-            100 to "×",   // d
-            102 to "÷",   // f
-            103 to "=",   // g
-            104 to "≠",   // h
-            106 to "≈",   // j
-            107 to "±",   // k
-            108 to "√",   // l
+            // QWERTY上排：数学符号（长按输出）
+            113 to "+",    // q
+            119 to "-",    // w
+            101 to "×",    // e
+            114 to "÷",    // r
+            116 to "=",    // t
+            121 to "≠",    // y
+            117 to "≈",    // u
+            105 to "±",    // i
+            111 to "√",    // o
+            // ASDF行：编辑功能
+            97 to "全选",  // a
+            115 to "Home", // s
+            100 to "End",  // d
+            102 to "PgUp", // f
+            103 to "PgDn", // g
+            104 to "←",    // h
+            106 to "↓",    // j
+            107 to "↑",    // k
+            108 to "→",    // l
             // ZXCV行：编辑功能
             120 to "剪切", // x
             99 to "复制",  // c
@@ -1579,6 +1599,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         keyboardView.keyboard = currentKeyboard
         // 只有 NUMBER 模式（T9 数字键盘）才绘制字母主字符
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
+        // 切换到非T9键盘时清除 shift 锁定/临时状态，避免 T9 锁定圆点出现在全键盘/符号键盘上
+        if (mode != KeyboardMode.NUMBER) {
+            isShiftLocked = false
+            isShiftMode = false
+            isAsciiMode = false
+            rimeEngine.setAsciiMode(false)
+        }
+        updateShiftIndicator()
         keyboardView.invalidateAllKeys()
     }
 
