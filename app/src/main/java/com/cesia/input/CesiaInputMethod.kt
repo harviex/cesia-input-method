@@ -266,6 +266,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val KEYCODE_SWITCH_NUMBER = -102
         const val KEYCODE_SHIFT = -104
         const val KEYCODE_CONTROL = -103
+        const val KEYCODE_SWITCH_SYMBOL_LANG = -105
         const val KEYCODE_BACK_KEY = -999
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
@@ -1632,11 +1633,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
         // 切换键盘时清除 T9 相关状态（避免 T9 锁定圆点出现在其他键盘上）
         if (mode == KeyboardMode.NUMBER) {
-            // 进入 T9：全键盘临时shift状态清除（qwertyShiftLock 不重置）
-            if (keyboardMode != KeyboardMode.NUMBER) {
-                isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-            }
+            // 进入 T9：清除所有非T9输入状态
+            isAsciiMode = false
+            rimeEngine.setAsciiMode(false)
+            isShiftMode = false
+            isShiftLocked = false
         } else if (mode == KeyboardMode.QWERTY) {
             // 进入全键盘：如有持久shift锁，恢复 ascii 模式
             if (qwertyShiftLock) {
@@ -1651,21 +1652,39 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isShiftMode = false
             }
         } else {
-            // 进入符号键盘：保存当前键盘类型，清除T9状态
+            // 进入符号键盘：清除所有输入状态，避免卡住
+            rimeEngine.clear()
+            t9InputBuffer.clear()
             if (keyboardMode == KeyboardMode.NUMBER) {
                 isShiftLocked = false
                 isShiftMode = false
                 isAsciiMode = false
                 rimeEngine.setAsciiMode(false)
             }
-            // QWERTY→符号键盘：保持 qwertyShiftLock 不变，清除临时ascii模式
             if (keyboardMode == KeyboardMode.QWERTY) {
                 isAsciiMode = false
                 rimeEngine.setAsciiMode(false)
             }
+            // 切换到符号键盘时隐藏候选栏
+            candidateBar.visibility = View.GONE
+            updateStatus("Cesia 已就绪")
         }
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
+        // 符号键盘增加左右3px边距
+        val paddingPx = if (mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN) {
+            (1.5f * resources.displayMetrics.density).toInt() // ≈3px on xhdpi
+        } else 0
+        keyboardView.setPadding(paddingPx, 0, paddingPx, 0)
+    }
+
+    private fun toggleSymbolLanguage() {
+        // 在中文符号键盘和英文符号键盘之间切换
+        if (keyboardMode == KeyboardMode.SYMBOL_CN) {
+            switchToKeyboard(KeyboardMode.SYMBOL_EN)
+        } else if (keyboardMode == KeyboardMode.SYMBOL_EN) {
+            switchToKeyboard(KeyboardMode.SYMBOL_CN)
+        }
     }
 
     private fun toggleSymbolKeyboard() {
@@ -2149,6 +2168,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // ======================== 符号切换（符）=======================
             KEYCODE_SWITCH_SYMBOL -> toggleSymbolKeyboard()
+
+            // ======================== 符号语言切换（中英符号）=======================
+            KEYCODE_SWITCH_SYMBOL_LANG -> toggleSymbolLanguage()
 
             // ======================== 数字切换（123）=======================
             KEYCODE_SWITCH_NUMBER -> toggleNumberKeyboard()
