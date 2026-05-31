@@ -22,6 +22,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : KeyboardView(context, attrs, defStyleAttr) {
 
+    init {
+        setPadding(0, 0, 0, 0)
+    }
+
     // 功能键长按副字符
     private var functionalLabels = mapOf<Int, String>()
 
@@ -33,6 +37,12 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // Shift 锁定状态（用于绘制不同图标）
     var isShiftLocked = false
+
+    // 默认语言：true=英文, false=中文（用于 n 键圆点指示）
+    var isDefaultEnglish = false
+
+    // CapsLock 状态（英文大写锁定）
+    var isCapsLock = false
 
     // 手势检测：左右滑动切换全键盘/T9，防止误触
     private var gestureStartX = 0f
@@ -182,7 +192,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(label, cx, cy, grayPaint)
             }
 
-            // ===== 4. Shift 锁定红色圆点（半径8f，距右30px，距上10px） =====
+            // ===== 4. Shift 锁定圆点 =====
             // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
             if ((code == -104 || code == -1) && isShiftLocked) {
                 val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -194,7 +204,29 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawCircle(dotX, dotY, 8f, dotPaint)
             }
 
-            // ===== 5. (剪贴板字符已合并到 section 3) =====
+            // ===== 5. n 键默认语言圆点（中文默认时"中"字前点亮） =====
+            // n 键 code=110，仅 QWERTY 模式（非T9）
+            if (code == 110 && !isT9Mode && !isDefaultEnglish) {
+                val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFF81D8D0.toInt()
+                    style = Paint.Style.FILL
+                }
+                // 圆点位于 n 键左侧中间
+                val dotX = key.x + 10f
+                val dotY = key.y + key.height / 2f
+                canvas.drawCircle(dotX, dotY, 5f, dotPaint)
+            }
+
+            // ===== 6. CapsLock 圆点（英文大写锁定时 Shift 键上显示） =====
+            if ((code == -1) && isCapsLock && !isShiftLocked) {
+                val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFF81D8D0.toInt()
+                    style = Paint.Style.FILL
+                }
+                val dotX = key.x + key.width - 30f
+                val dotY = key.y + 10f + 8f
+                canvas.drawCircle(dotX, dotY, 8f, dotPaint)
+            }
         }
     }
 }

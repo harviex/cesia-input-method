@@ -203,6 +203,7 @@
             android:layout_weight="0.8"
             android:drawableTop="@drawable/ic_star_four"
             android:drawableTint="#888888"
+            android:drawablePadding="10dp"
             android:text=""
             android:textSize="0sp"
             android:backgroundTint="#E0E0E0"

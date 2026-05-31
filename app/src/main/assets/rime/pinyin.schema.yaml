@@ -18,9 +18,9 @@ switches:
     states: [ ¥, $ ]
   - name: full_shape
     states: [ 半角, 全角 ]
-  - name: traditional
+  - name: simplification
     reset: 0
-    states: [ 简, 繁 ]
+    states: [ 漢字, 簡体 ]
 
 # 输入引擎
 engine:
@@ -44,16 +44,16 @@ engine:
     - script_translator
   filters:
     - uniquifier
-    - simplifier@traditional
+    - simplifier
 
-# OpenCC 简繁转换
-traditional:
+# 简繁转换内置 filter（使用 Rime 内置简繁转换，无需外部 opencc 文件）
+simplifier:
   opencc_config: s2t.json
-  option_name: traditional
-  show_in_popup_menu: true
   tips: all
+  show_in_popup_menu: true
 
 # 拼音拼写器
+speller:
   alphabet: zyxwvutsrqponmlkjihgfedcba
   delimiter: " '"
   algebra:

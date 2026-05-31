@@ -143,6 +143,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 回车键长按检测
     private var enterLongPressRunnable: Runnable? = null
 
+    // n 键长按检测（切换默认语言）
+    private var nLongPressRunnable: Runnable? = null
+
     // 魔法模式
     private var magicMode = false
     private var magicOriginalText = ""
@@ -450,7 +453,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             118 to "粘贴", // v
             98 to "大写",  // b
             122 to "撤销", // z
-            110 to "Ins",  // n
+            110 to "中｜英", // n 副字符：默认语言指示
             109 to "Del",  // m
             -108 to "粘贴", // 剪贴板键：副字符
             -109 to "剪切", // 复制键：副字符
@@ -683,11 +686,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
             commitCandidateText(selected)
-            // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
+            // T9模式：点选上屏后清除数字缓冲
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
                 rimeEngine.clear()
                 rimeEngine.createSession()
+            } else {
+                // QWERTY/全键盘模式：保留 Rime session 实现联想
+                // 上屏后继续显示后续候选词（Rime 的 enable_sentence/enable_completion 已配置）
             }
             if (isPanelExpanded) collapseCandidatePanel()
             updateCandidateBar()
@@ -699,35 +705,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val pinyin = rimeEngine.composingText
         val allCands = rimeEngine.getAllCandidates()
 
-        // 没有输入时恢复初始状态
-        if (!composing && pinyin.isEmpty()) {
+        // 有候选词时显示候选栏（包括联想候选）
+        if (allCands.isNotEmpty()) {
+            candidateBar.visibility = View.VISIBLE
+            // T9 模式：状态栏显示数字序列
+            if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+                updateStatus(t9InputBuffer.toString())
+            } else {
+                updateStatus(pinyin)
+            }
+            candidateAdapter?.updateData(allCands)
+            btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
+            if (isPanelExpanded) {
+                tvPanelComposing.text = pinyin
+                panelAdapter?.clear()
+                panelAdapter?.addAll(rimeEngine.getAllCandidates())
+                panelAdapter?.notifyDataSetChanged()
+            }
+        } else if (!composing && pinyin.isEmpty()) {
+            // 真正空闲时才隐藏
             candidateBar.visibility = View.GONE
             if (isPanelExpanded) collapseCandidatePanel()
-            updateStatus("Cesia 已就绪")
-            return
-        }
-
-        // 有输入时
-        candidateBar.visibility = View.VISIBLE
-
-        // T9 模式：状态栏显示数字序列（不再显示英文字母区和分隔线）
-        if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
-            updateStatus(t9InputBuffer.toString())
-        } else {
-            updateStatus(pinyin)
-        }
-        // 更新候选词列表
-        // 更新候选词列表
-        candidateAdapter?.updateData(allCands)
-        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
-
-        // 更新展开面板
-        if (isPanelExpanded) {
-            tvPanelComposing.text = pinyin
-            val allCandsPanel = rimeEngine.getAllCandidates()
-            panelAdapter?.clear()
-            panelAdapter?.addAll(allCandsPanel)
-            panelAdapter?.notifyDataSetChanged()
         }
     }
 
@@ -1099,10 +1097,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
         val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
 
-        // 追踪当前编辑状态
-        var editingPosition = -1
-        var hasFocusedEdit = false
-
         fun notifyChanged() {
             (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
         }
@@ -1116,49 +1110,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
                 val record = items[p]
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
-                val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
                 val isEmptySlot = (record.id == SLOT_EMPTY_ID)
-                val isEditing = (p == editingPosition)
 
-                // 只在编辑状态变化时操作，避免 getView 重复调用导致闪烁
-                if (isEditing) {
-                    tv.visibility = View.GONE
-                    et.visibility = View.VISIBLE
-                    // 只在文本不同时设置，避免光标跳动
-                    val newText = if (isEmptySlot) "" else record.instruction
-                    if (et.text.toString() != newText) {
-                        et.setText(newText)
-                        if (!isEmptySlot) et.setSelection(et.text.length)
-                    }
-                    et.hint = if (isEmptySlot) "✨ 输入新魔法指令..." else "✏️ 修改魔法指令..."
-                    et.setOnEditorActionListener { _, actionId, _ ->
-                        if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                            saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
-                            editingPosition = -1
-                            hasFocusedEdit = false
-                            true
-                        } else false
-                    }
+                tv.visibility = View.VISIBLE
+                if (isEmptySlot) {
+                    tv.text = "➕ 长按新增/编辑魔法"
+                    tv.setTextColor(0xFF999999.toInt())
+                    tv.setTypeface(null, android.graphics.Typeface.ITALIC)
+                    tv.textSize = 12f
+                    tv.maxLines = 1
                 } else {
-                    et.visibility = View.GONE
-                    tv.visibility = View.VISIBLE
-                    et.setOnEditorActionListener(null)
-
-                    if (isEmptySlot) {
-                        tv.text = "➕ 长按新增魔法"
-                        tv.setTextColor(0xFF999999.toInt())
-                        tv.setTypeface(null, android.graphics.Typeface.ITALIC)
-                        tv.textSize = 12f
-                        tv.maxLines = 1
-                    } else {
-                        val isActive = record.instruction == currentMagicPrompt
-                        val prefix = if (isActive) "✓ " else if (record.isPinned) "📌 " else ""
-                        tv.text = "${prefix}${record.instruction}"
-                        tv.setTextColor(if (isActive) 0xFF1565C0.toInt() else 0xFF333333.toInt())
-                        tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-                        tv.textSize = 13f
-                        tv.maxLines = 2
-                    }
+                    val isActive = record.instruction == currentMagicPrompt
+                    val prefix = if (isActive) "✓ " else if (record.isPinned) "📌 " else ""
+                    tv.text = "${prefix}${record.instruction}"
+                    tv.setTextColor(if (isActive) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+                    tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                    tv.textSize = 13f
+                    tv.maxLines = 2
                 }
                 return v
             }
@@ -1173,44 +1141,46 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             executeSelectedMagic(record.instruction)
         }
 
-        // ===== 长按：进入编辑模式 =====
+        // ===== 长按：进入编辑模式（弹窗编辑，避免 GridView 拦截输入） =====
         gridView.setOnItemLongClickListener { _, _, position, _ ->
-            if (editingPosition != position) {
-                editingPosition = position
-                hasFocusedEdit = false
-                notifyChanged()
-                // 延迟 requestFocus，等.getView执行完后再聚焦
-                gridView.post {
-                    val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
-                    child?.findViewById<android.widget.EditText>(R.id.et_magic_edit)?.requestFocus()
-                }
+            val record = items[position]
+            val isEmptySlot = (record.id == SLOT_EMPTY_ID)
+            // 弹出编辑对话框
+            val editText = android.widget.EditText(this@CesiaInputMethod).apply {
+                setText(if (isEmptySlot) "" else record.instruction)
+                setSelection(text.length)
+                hint = if (isEmptySlot) "✨ 输入新魔法指令..." else "✏️ 修改魔法指令..."
+                setPadding(32, 24, 32, 24)
             }
+            AlertDialog.Builder(this@CesiaInputMethod)
+                .setTitle(if (isEmptySlot) "新增魔法" else "编辑魔法")
+                .setView(editText)
+                .setPositiveButton("保存") { _, _ ->
+                    val newText = editText.text.toString().trim()
+                    if (newText.isNotEmpty()) {
+                        if (isEmptySlot) {
+                            mgr.addRecord(newText)
+                            currentMagicPrompt = newText
+                            updateStatus("✅ 已新增魔法：${newText.take(20)}")
+                        } else {
+                            if (newText != record.instruction) {
+                                mgr.removeRecord(record.id)
+                                mgr.addRecord(newText)
+                                updateStatus("✅ 已修改魔法：${newText.take(20)}")
+                            }
+                        }
+                        rebuildItems()
+                        notifyChanged()
+                    }
+                }
+                .setNegativeButton("取消", null)
+                .show()
             true
         }
 
         // ===== 关闭按钮 =====
         btnClose.setOnClickListener {
             popup.dismiss()
-        }
-
-        // ===== 滚动时退出编辑模式但不保存 =====
-        gridView.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
-            override fun onScrollStateChanged(view: android.widget.AbsListView?, scrollState: Int) {
-                if (scrollState != android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE && editingPosition >= 0) {
-                    editingPosition = -1
-                    hasFocusedEdit = false
-                    notifyChanged()
-                }
-            }
-            override fun onScroll(view: android.widget.AbsListView?, firstVisibleItem: Int, visibleItemCount: Int, totalItemCount: Int) {}
-        })
-
-        popup.setOnDismissListener {
-            if (editingPosition >= 0) {
-                saveEditing(editingPosition, gridView, mgr) { rebuildItems(); notifyChanged() }
-                editingPosition = -1
-                hasFocusedEdit = false
-            }
         }
 
         // ===== 置顶按钮 =====
@@ -1473,8 +1443,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rimeEngine.setTraditional(isTraditional)
         updateStatus(if (isTraditional) "✅ 已切换为繁体输出" else "✅ 已切换为简体输出")
         updateTraditionalButton()
-        // 切换后清空当前输入，重新触发候选
-        rimeEngine.clear()
+        // 如果当前有输入法正在 composing，重新触发候选词以应用简繁转换
+        if (rimeEngine.isComposing) {
+            // 保存当前拼音，clear 后重新输入
+            val currentPinyin = rimeEngine.composingText
+            rimeEngine.clear()
+            rimeEngine.createSession()
+            // 重新输入拼音触发新候选
+            for (ch in currentPinyin) {
+                rimeEngine.processKey(ch)
+            }
+        } else {
+            rimeEngine.clear()
+        }
         updateCandidateBar()
     }
 
@@ -1501,6 +1482,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             typelessEngine?.getPolishService()?.updateApiKey(apiKey)
             val modelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
             typelessEngine?.updateModelId(modelId)
+            defaultLangWasEnglish = prefs.getBoolean("default_lang_english", false)
         } catch (_: Exception) {
             apiUrl = DEFAULT_API_URL
         }
@@ -1729,14 +1711,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isShiftMode = false
             isShiftLocked = false
         } else if (mode == KeyboardMode.QWERTY) {
-            // 进入全键盘：如有持久shift锁，恢复 ascii 模式
-            if (qwertyShiftLock) {
-                isShiftLocked = true
-                isAsciiMode = true
-                rimeEngine.setAsciiMode(true)
-            }
+            // 进入全键盘：根据默认语言设置
+            isCapsLock = false
+            isShiftLocked = false
+            isAsciiMode = defaultLangWasEnglish
+            rimeEngine.setAsciiMode(defaultLangWasEnglish)
             rimeEngine.clear()
-            // 从T9回到QWERTY：T9的shift状态已在进入NUMBER时清除（switchToKeyboard NUMBER分支）
         } else {
             // 进入符号键盘：清除所有输入状态，避免卡住
             rimeEngine.clear()
@@ -1824,45 +1804,68 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun updateShiftIndicator() {
-        // 同步 shift 锁定状态到 KeyboardView
         keyboardView.isShiftLocked = isShiftLocked
+        keyboardView.isDefaultEnglish = defaultLangWasEnglish
+        keyboardView.isCapsLock = isCapsLock
         keyboardView.invalidateAllKeys()
     }
 
+    // ======================== 默认语言（n键长按切换） ========================
+    private var defaultLangWasEnglish = false  // false=中文默认, true=英文默认
+
+    private fun toggleDefaultLanguage() {
+        defaultLangWasEnglish = !defaultLangWasEnglish
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        prefs.edit().putBoolean("default_lang_english", defaultLangWasEnglish).apply()
+        // 立即切换当前全键盘状态
+        if (keyboardMode == KeyboardMode.QWERTY) {
+            isAsciiMode = defaultLangWasEnglish
+            isCapsLock = false
+            isShiftLocked = false
+            rimeEngine.setAsciiMode(defaultLangWasEnglish)
+            rimeEngine.clear()
+            updateShiftIndicator()
+            keyboardView.invalidateAllKeys()
+            updateCandidateBar()
+        }
+        updateStatus(if (defaultLangWasEnglish) "🌐 默认语言：英文" else "🌐 默认语言：中文")
+    }
+
+    // ======================== Shift 逻辑（全键盘） ========================
+    // 三态：英文小写 → 单击 → 英文大写锁定 → 单击 → 英文小写
+    //       任意状态 → 长按 → 中文模式
+    //       中文模式 → 单击 → 英文大写锁定
+    //       中文模式 → 长按 → 英文小写
+
     private fun handleShiftKey() {
+        if (keyboardMode == KeyboardMode.NUMBER) {
+            // T9 保持原有行为
+            handleShiftKeyT9()
+            return
+        }
+        // 全键盘 Shift 逻辑
         if (isShiftLocked) {
-            // 锁定状态 → 单击解除锁定，退回正常
+            // 中文模式（Shift锁定）→ 单击 → 英文大写锁定
             isShiftLocked = false
-            if (keyboardMode == KeyboardMode.NUMBER) {
-                isShiftMode = false
-                commitT9AndClear()
-            } else {
-                // 全键盘：解除持久锁
-                qwertyShiftLock = false
-                isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-                rimeEngine.clear()
-            }
-        } else if (isShiftActive()) {
-            // 临时shift状态 → 单击退回正常
-            if (keyboardMode == KeyboardMode.NUMBER) {
-                isShiftMode = false
-                commitT9AndClear()
-            } else {
-                isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-                rimeEngine.clear()
-            }
+            isAsciiMode = true
+            isCapsLock = true
+            rimeEngine.setAsciiMode(true)
+            rimeEngine.clear()
+        } else if (isCapsLock) {
+            // 英文大写锁定 → 单击 → 英文小写
+            isCapsLock = false
+            isAsciiMode = true
+            rimeEngine.setAsciiMode(true)
+            rimeEngine.clear()
+        } else if (isAsciiMode) {
+            // 英文小写 → 单击 → 英文大写锁定
+            isCapsLock = true
         } else {
-            // 正常状态 → 单击临时shift（输入一个字符后自动退回）
-            if (keyboardMode == KeyboardMode.NUMBER) {
-                isShiftMode = true
-            } else {
-                isAsciiMode = true
-                rimeEngine.setAsciiMode(true)
-                rimeEngine.clear()
-            }
-            isShiftLocked = false
+            // 中文模式（非锁定）→ 单击 → 英文大写锁定
+            isAsciiMode = true
+            isCapsLock = true
+            rimeEngine.setAsciiMode(true)
+            rimeEngine.clear()
         }
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
@@ -1870,15 +1873,37 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun handleShiftLongPress() {
-        // 长按 shift：锁定shift
-        isShiftLocked = true
         if (keyboardMode == KeyboardMode.NUMBER) {
+            // T9 保持原有行为
+            isShiftLocked = true
             isShiftMode = true
-        } else {
-            // 全键盘长按锁定 = 持久锁（跨键盘切换保持）
-            qwertyShiftLock = true
+            longPressTriggered = true
+            longPressConsumed = false
+            updateShiftIndicator()
+            keyboardView.invalidateAllKeys()
+            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            return
+        }
+        // 全键盘 Shift 长按
+        if (isShiftLocked) {
+            // 中文锁定 → 长按 → 英文小写
+            isShiftLocked = false
             isAsciiMode = true
+            isCapsLock = false
             rimeEngine.setAsciiMode(true)
+            rimeEngine.clear()
+        } else if (!isAsciiMode) {
+            // 中文非锁定 → 长按 → 英文小写
+            isAsciiMode = true
+            isCapsLock = false
+            rimeEngine.setAsciiMode(true)
+            rimeEngine.clear()
+        } else {
+            // 英文（小写或大写锁定）→ 长按 → 中文模式（锁定）
+            isShiftLocked = true
+            isAsciiMode = false
+            isCapsLock = false
+            rimeEngine.setAsciiMode(false)
             rimeEngine.clear()
         }
         longPressTriggered = true
@@ -1886,25 +1911,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        updateCandidateBar()
     }
 
-    /** 当前是否处于 shift 激活状态（T9模式下=isShiftMode，QWERTY模式下=isAsciiMode） */
-    private fun isShiftActive(): Boolean {
-        return if (keyboardMode == KeyboardMode.NUMBER) isShiftMode else isAsciiMode
-    }
-
-    /** 临时shift输入一个字符后自动退回 */
-    private fun autoExitShift() {
-        if (!isShiftLocked && isShiftActive()) {
-            if (keyboardMode == KeyboardMode.NUMBER) {
-                isShiftMode = false
-            } else {
-                isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-            }
-            updateShiftIndicator()
-            keyboardView.invalidateAllKeys()
+    /** T9 键盘原有 Shift 行为 */
+    private fun handleShiftKeyT9() {
+        if (isShiftLocked) {
+            isShiftLocked = false
+            isShiftMode = false
+            commitT9AndClear()
+        } else if (isShiftMode) {
+            isShiftMode = false
+            commitT9AndClear()
+        } else {
+            isShiftMode = true
+            isShiftLocked = false
         }
+        updateShiftIndicator()
+        keyboardView.invalidateAllKeys()
+        updateCandidateBar()
     }
 
     private fun handleNumberKeyboardKey(primaryCode: Int) {
@@ -2092,7 +2117,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /**
-     * 剪贴板管理器弹窗 — 两列风格，支持分词/收藏/锁定/删除/搜索/关闭/长按编辑
+     * 剪贴板管理器弹窗 — 点击外部不关闭，支持置顶/锁定/删除/分词/分享/编辑/搜索
+     * 参考魔法书菜单风格
      */
     private fun showClipboardManagerPopup() {
         try {
@@ -2103,14 +2129,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
-            // 加载剪贴板历史
+            // 加载剪贴板历史（置顶在前，其余按时间倒序）
             val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             val items = mutableListOf<ClipboardItem>()
             var searchFilter = ""
 
             fun loadClipboardHistory() {
-                clipboardHistory.clear()
-                clipboardFavorites.clear()
+                items.clear()
                 try {
                     if (clipboardMgr?.hasPrimaryClip() == true) {
                         val clip = clipboardMgr.primaryClip ?: return
@@ -2120,7 +2145,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 items.add(ClipboardItem(text = text, isPinned = false))
                             }
                         }
-                        // 从 SharedPreferences 读取持久化的收藏
+                        // 持久化收藏置顶
                         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
                         val favStr = prefs.getString("favorites", "") ?: ""
                         if (favStr.isNotEmpty()) {
@@ -2167,19 +2192,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-            popup.isOutsideTouchable = true
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.isOutsideTouchable = false  // 点击外部不关闭
             popup.elevation = 8f
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
 
-            // 单击：插入文本（非空条目）
+            // 单击：插入文本并关闭弹窗
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
                 val item = filteredItems.getOrNull(position) ?: return@setOnItemClickListener
                 if (item.isEmpty) return@setOnItemClickListener
-                currentInputConnection?.commitText(item.text, 1)
+                try {
+                    currentInputConnection?.commitText(item.text, 1)
+                } catch (e: Exception) {
+                    Log.e("Cesia", "剪贴板插入失败", e)
+                }
                 popup.dismiss()
             }
 
-            // 长按：操作菜单（收藏/锁定/删除/编辑/分词）
+            // 长按：弹出操作菜单（置顶/锁定/删除/分词/编辑/搜索/分享）
             gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
                 val item = filteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
                 if (item.isEmpty) return@setOnItemLongClickListener true
@@ -2194,7 +2224,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 保存到历史
             if (clipboardMgr?.hasPrimaryClip() == true) {
                 try {
-                    val clip = clipboardMgr.primaryClip ?: return@showClipboardManagerPopup
+                    val clip = clipboardMgr.primaryClip ?: return
                     for (i in 0 until clip.itemCount) {
                         val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
                         if (text.isNotEmpty()) {
@@ -2232,7 +2262,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .setTitle(item.text.take(30) + if (item.text.length > 30) "…" else "")
             .setItems(actions.toTypedArray()) { _, which ->
                 when (which) {
-                    0 -> currentInputConnection?.commitText(item.text, 1) // 插入
+                    0 -> { // 插入
+                        currentInputConnection?.commitText(item.text, 1)
+                        // 插入后关闭剪贴板弹窗 - 通过回调通知
+                        onUpdate()
+                    }
                     1 -> { // 置顶
                         allItems.remove(item)
                         val toggled = item.copy(isPinned = !item.isPinned)
@@ -2297,7 +2331,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             .setNegativeButton("取消", null)
             .create()
-        try { dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT) } catch (_: Exception) {}
+        showImeDialog(dialog)
         dialog.show()
     }
 
@@ -2387,14 +2421,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 functionalLongPressRunnable = null
                 shortPressHandled = true
                 if (isAsciiMode) {
-                    ic?.commitText(primaryCode.toChar().toString(), 1)
-                    // QWERTY临时shift：输入一个字母后自动退回中文
-                    if (!isShiftLocked && keyboardMode != KeyboardMode.NUMBER) {
-                        isAsciiMode = false
-                        rimeEngine.setAsciiMode(false)
-                        updateShiftIndicator()
-                        keyboardView.invalidateAllKeys()
-                    }
+                    // CapsLock 时输出大写字母
+                    val charToOutput = if (isCapsLock) primaryCode.toChar().uppercaseChar() else primaryCode.toChar()
+                    ic?.commitText(charToOutput.toString(), 1)
                 } else {
                     rimeEngine.processKey(primaryCode.toChar())
                     updateCandidateBar()
@@ -2416,11 +2445,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             } else { commitAndClear() }
                         } else {
                             ic?.commitText(primaryCode.toChar().toString(), 1)
-                            autoExitShift()
                         }
                     } else {
                         ic?.commitText(primaryCode.toChar().toString(), 1)
-                        autoExitShift()
                     }
                     updateCandidateBar()
                 }
@@ -2662,6 +2689,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 Handler(Looper.getMainLooper()).postDelayed(it, 400)
             }
         }
+        // n 键长按（全键盘）：切换默认语言（中/英）
+        if (primaryCode == 110 && keyboardMode == KeyboardMode.QWERTY) {
+            nLongPressRunnable = Runnable {
+                if (!shortPressHandled) {
+                    toggleDefaultLanguage()
+                    longPressTriggered = true
+                    longPressConsumed = false
+                    keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                }
+            }.also {
+                Handler(Looper.getMainLooper()).postDelayed(it, 500)
+            }
+        }
         // 剪贴板键长按：-108=粘贴，-109=剪切
         if (primaryCode == -108) {
             clipboardPasteRunnable = Runnable {
@@ -2725,6 +2765,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         shiftLongPressRunnable = null
         enterLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         enterLongPressRunnable = null
+        nLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        nLongPressRunnable = null
         cancelSendKeyLongPress()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null

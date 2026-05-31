@@ -41,14 +41,13 @@ engine:
     - script_translator
   filters:
     - uniquifier
-    - simplifier@traditional
+    - simplifier
 
-# OpenCC 简繁转换
-traditional:
+# 简繁转换内置 filter
+simplifier:
   opencc_config: s2t.json
-  option_name: traditional
-  show_in_popup_menu: true
   tips: all
+  show_in_popup_menu: true
 
 # T9 数字拼写器
 speller:
