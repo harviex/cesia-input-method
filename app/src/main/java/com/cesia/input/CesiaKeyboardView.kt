@@ -31,6 +31,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
     // T9 模式标志 — 只有 T9 数字键盘才绘制字母主字符
     var isT9Mode = false
 
+    // Shift 模式标志 — 全键盘字母键主字符绘制为大写
+    var isShiftMode = false
+
     // Shift 锁定状态（用于绘制不同图标）
     var isShiftLocked = false
 
@@ -111,7 +114,28 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写
+        val kb = this.keyboard
+        if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
+            for (key in kb.keys) {
+                val code = key.codes?.firstOrNull() ?: continue
+                if (code in 97..122 && key.label != null && key.label.length == 1) {
+                    key.label = key.label.toString().uppercase()
+                }
+            }
+        }
+
         super.onDraw(canvas)
+
+        // 恢复原始小写label
+        if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
+            for (key in kb.keys) {
+                val code = key.codes?.firstOrNull() ?: continue
+                if (code in 97..122 && key.label != null && key.label.length == 1) {
+                    key.label = key.label.toString().lowercase()
+                }
+            }
+        }
 
         val spSize = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_SP, labelTextSize, resources.displayMetrics
@@ -128,8 +152,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
         )
         t9MainPaint.textSize = t9MainSpSize
 
-        val keyboard = keyboard ?: return
-        for (key in keyboard.keys) {
+        val keys = this.keyboard?.keys ?: return
+        for (key in keys) {
             val code = key.codes?.firstOrNull() ?: continue
             if (key.label == null) continue
 

@@ -12,18 +12,28 @@
     android:horizontalGap="1dp"
     android:verticalGap="4dp">
 
-    <!-- ===== 第0行：数字行 ===== -->
+    <!-- ===== 第0行：数字行（键宽减小10px≈9%p） ===== -->
     <Row>
-        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="!" android:keyEdgeFlags="left" />
-        <Key android:codes="50" android:keyLabel="2" android:popupCharacters="@" />
-        <Key android:codes="51" android:keyLabel="3" android:popupCharacters="#" />
-        <Key android:codes="52" android:keyLabel="4" android:popupCharacters="$" />
-        <Key android:codes="53" android:keyLabel="5" android:popupCharacters="%" />
-        <Key android:codes="54" android:keyLabel="6" android:popupCharacters="^" />
-        <Key android:codes="55" android:keyLabel="7" android:popupCharacters="&amp;" />
-        <Key android:codes="56" android:keyLabel="8" android:popupCharacters="*" />
-        <Key android:codes="57" android:keyLabel="9" android:popupCharacters="(" />
-        <Key android:codes="48" android:keyLabel="0" android:popupCharacters=")" android:keyEdgeFlags="right" />
+        <Key android:codes="49" android:keyLabel="1" android:popupCharacters="!" android:keyEdgeFlags="left"
+            android:keyWidth="10%p" />
+        <Key android:codes="50" android:keyLabel="2" android:popupCharacters="@"
+            android:keyWidth="9%p" />
+        <Key android:codes="51" android:keyLabel="3" android:popupCharacters="#"
+            android:keyWidth="9%p" />
+        <Key android:codes="52" android:keyLabel="4" android:popupCharacters="$"
+            android:keyWidth="9%p" />
+        <Key android:codes="53" android:keyLabel="5" android:popupCharacters="%"
+            android:keyWidth="9%p" />
+        <Key android:codes="54" android:keyLabel="6" android:popupCharacters="^"
+            android:keyWidth="9%p" />
+        <Key android:codes="55" android:keyLabel="7" android:popupCharacters="&amp;"
+            android:keyWidth="9%p" />
+        <Key android:codes="56" android:keyLabel="8" android:popupCharacters="*"
+            android:keyWidth="9%p" />
+        <Key android:codes="57" android:keyLabel="9" android:popupCharacters="("
+            android:keyWidth="9%p" />
+        <Key android:codes="48" android:keyLabel="0" android:popupCharacters=")" android:keyEdgeFlags="right"
+            android:keyWidth="10%p" />
     </Row>
 
     <!-- ===== 第1行：QWERTY 上排字母（副字符=数学符号） ===== -->

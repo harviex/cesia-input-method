@@ -214,7 +214,7 @@
             android:stateListAnimator="@null"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="5dp"
             android:layout_marginStart="6dp"
             android:layout_marginEnd="6dp"
             app:cornerRadius="20dp" />
