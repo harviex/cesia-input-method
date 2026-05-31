@@ -74,7 +74,7 @@
         <Key android:codes="32" android:keyLabel="       " android:keyWidth="32%p" />
         <Key android:codes="65311" android:keyLabel="？" android:popupCharacters="&#xFE16;" />
         <Key android:codes="65281" android:keyLabel="！" android:popupCharacters="&#xFE57;" />
-        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" android:keyWidth="12%p" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" android:keyWidth="15%p" />
     </Row>
 
 </Keyboard>

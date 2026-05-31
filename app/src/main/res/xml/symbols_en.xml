@@ -98,7 +98,7 @@
             android:keyWidth="10%p" />
         <Key android:codes="10" android:keyLabel="↵"
             android:keyEdgeFlags="right"
-            android:keyWidth="12%p" />
+            android:keyWidth="15%p" />
     </Row>
 
 </Keyboard>
