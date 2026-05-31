@@ -1074,17 +1074,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         popup.elevation = 4f
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-        popup.setFocusable(true)
-
-        // 拦截触摸事件：点击PopupWindow外部区域时不关闭、不传递
-        popup.setTouchInterceptor { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
-                // 外部点击：消费掉，不关闭也不传递
-                true
-            } else {
-                false
-            }
-        }
+        popup.setFocusable(false)
 
         // ===== 数据列表：置顶项在前，非置顶项按时间倒序，末尾固定一个空槽 =====
         val SLOT_EMPTY_ID = -999L
@@ -1183,16 +1173,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 editingPosition = position
                 hasFocusedEdit = false
                 notifyChanged()
-                // 延迟 requestFocus + 强制弹出软键盘
+                // 延迟 requestFocus，等.getView执行完后再聚焦并弹出软键盘
                 gridView.post {
                     val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
                     val et = child?.findViewById<android.widget.EditText>(R.id.et_magic_edit)
                     et?.requestFocus()
-                    // 强制弹出软键盘
-                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-                    imm?.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-                    // 让PopupWindow获取焦点以支持输入
-                    popupView.requestFocus()
+                    // 延迟弹出软键盘（PopupWindow不可聚焦时需通过子View弹出）
+                    et?.postDelayed({
+                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                        imm?.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    }, 100)
                 }
             }
             true
@@ -2178,9 +2168,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-            popup.isOutsideTouchable = true
+            popup.isOutsideTouchable = false
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.elevation = 8f
+            popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            popup.setFocusable(false)
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
