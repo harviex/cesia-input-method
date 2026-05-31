@@ -1280,6 +1280,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ======================== 魔法编辑模式 ========================
 
+    /** 更新魔法编辑模式状态栏：显示已输入内容 + Rime 当前拼音 */
+    private fun updateMagicEditStatus() {
+        val comp = rimeEngine.composingText
+        val display = magicEditBuffer.toString() + comp
+        if (display.isEmpty()) {
+            updateStatus("✏️ 输入魔法指令...（按发送键保存）")
+        } else {
+            updateStatus("✏️ $display")
+        }
+        // 同步更新候选栏
+        val allCands = rimeEngine.getAllCandidates()
+        candidateAdapter?.updateData(allCands)
+        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+    }
+
     /** 进入魔法编辑模式：关闭弹窗，清空缓冲区，等待键盘输入 */
     private fun enterMagicEditMode(mgr: MagicHistoryManager) {
         magicEditMode = true
@@ -2415,47 +2430,85 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // ======================== 魔法编辑模式拦截 ========================
         if (magicEditMode) {
-            when {
+            when (primaryCode) {
                 // 发送键/回车键：保存魔法并退出编辑模式
-                primaryCode == -200 || primaryCode == 10 -> {
+                -200, 10 -> {
+                    // 先把 Rime 当前 composition 的文字追加到缓冲区
+                    val comp = rimeEngine.composingText
+                    if (comp.isNotEmpty()) {
+                        magicEditBuffer.append(comp)
+                        rimeEngine.clear()
+                    }
                     exitMagicEditMode(save = true)
                     return
                 }
                 // 返回键：取消并退出编辑模式
-                primaryCode == KeyEvent.KEYCODE_BACK -> {
+                KeyEvent.KEYCODE_BACK -> {
+                    rimeEngine.clear()
                     exitMagicEditMode(save = false)
                     return
                 }
-                // 退格键：删除缓冲区最后一个字符
-                primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE -> {
-                    if (magicEditBuffer.isNotEmpty()) {
+                // 退格键：优先删除 Rime composition，其次删除缓冲区
+                -5, Keyboard.KEYCODE_DELETE -> {
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.processKey("BackSpace")
+                        updateMagicEditStatus()
+                    } else if (magicEditBuffer.isNotEmpty()) {
                         magicEditBuffer.deleteCharAt(magicEditBuffer.length - 1)
+                        updateMagicEditStatus()
                     }
-                    updateStatus("✏️ ${magicEditBuffer.toString().ifEmpty { "输入魔法指令..." }}")
                     return
                 }
-                // 字母/数字/符号：追加到缓冲区
-                primaryCode > 0 && primaryCode.toChar().isLetterOrDigit() -> {
+                // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
+                in 97..122 -> {
+                    rimeEngine.processKey(primaryCode.toChar())
+                    updateMagicEditStatus()
+                    return
+                }
+                // 数字键 0-9：如果有候选词则选词，否则追加到缓冲区
+                in 48..57 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                        val cands = rimeEngine.candidates
+                        if (index < cands.size) {
+                            val selected = rimeEngine.selectCandidate(index)
+                            if (selected.isNotEmpty()) {
+                                magicEditBuffer.append(selected)
+                                rimeEngine.clear()
+                            }
+                        }
+                    } else {
+                        magicEditBuffer.append(primaryCode.toChar())
+                    }
+                    updateMagicEditStatus()
+                    return
+                }
+                // 空格：如果有候选词则选第一个词，否则追加空格
+                32 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val selected = rimeEngine.selectCandidate(0)
+                        if (selected.isNotEmpty()) {
+                            magicEditBuffer.append(selected)
+                            rimeEngine.clear()
+                        }
+                    } else {
+                        magicEditBuffer.append(' ')
+                    }
+                    updateMagicEditStatus()
+                    return
+                }
+                // 标点符号直接追加
+                44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
+                    rimeEngine.clear()
                     magicEditBuffer.append(primaryCode.toChar())
-                    updateStatus("✏️ ${magicEditBuffer}")
-                    return
-                }
-                // 空格
-                primaryCode == 32 -> {
-                    magicEditBuffer.append(' ')
-                    updateStatus("✏️ ${magicEditBuffer}")
-                    return
-                }
-                // 标点符号也追加
-                primaryCode in listOf(44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124) -> {
-                    magicEditBuffer.append(primaryCode.toChar())
-                    updateStatus("✏️ ${magicEditBuffer}")
+                    updateMagicEditStatus()
                     return
                 }
                 // 中文标点（Unicode）
-                primaryCode in listOf(65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217) -> {
+                65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
+                    rimeEngine.clear()
                     magicEditBuffer.append(primaryCode.toChar())
-                    updateStatus("✏️ ${magicEditBuffer}")
+                    updateMagicEditStatus()
                     return
                 }
             }
@@ -2827,9 +2880,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onText(text: CharSequence?) {
         cancelLongPress()
         if (magicEditMode && text != null) {
-            // 魔法编辑模式：追加文字到缓冲区
-            magicEditBuffer.append(text)
-            updateStatus("✏️ $magicEditBuffer")
+            // 魔法编辑模式：如果 Rime 正在 composing，追加选词到缓冲区并清空 Rime
+            if (rimeEngine.isComposing) {
+                magicEditBuffer.append(text)
+                rimeEngine.clear()
+                updateMagicEditStatus()
+            } else {
+                // 非 composing 状态直接追加
+                magicEditBuffer.append(text)
+                updateMagicEditStatus()
+            }
             return
         }
         currentInputConnection?.commitText(text, 1)
