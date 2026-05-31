@@ -168,6 +168,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private val clipboardFavorites = mutableMapOf<String, Boolean>()
     private val clipboardHistory = mutableListOf<String>()
     private val maxClipboardHistory = 50
+    // 剪贴板弹窗引用（搜索编辑模式需要刷新 adapter）
+    private var clipboardPopupView: android.view.View? = null
+    private var clipboardAdapter: android.widget.BaseAdapter? = null
+    private var clipboardItems = mutableListOf<ClipboardItem>()
+    private var clipboardFilteredItems = mutableListOf<ClipboardItem>()
+    private var clipboardSearchFilter = ""
+    private fun applyClipboardFilter() {
+        clipboardFilteredItems.clear()
+        if (clipboardSearchFilter.isEmpty()) {
+            clipboardFilteredItems.addAll(clipboardItems)
+        } else {
+            clipboardFilteredItems.addAll(clipboardItems.filter { it.text.contains(clipboardSearchFilter, ignoreCase = true) })
+        }
+        clipboardAdapter?.notifyDataSetChanged()
+        clipboardPopupView?.findViewById<TextView>(R.id.tv_clipboard_empty)?.visibility =
+            if (clipboardFilteredItems.isEmpty()) View.VISIBLE else View.GONE
+    }
 
     // 初始化标志
     private var isViewInitialized = false
@@ -2132,76 +2149,46 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         sendKeyRunnable = null
     }
 
+    private var clipboardSearchEditMode = false
+    private var clipboardSearchBuffer = StringBuilder()
+
     /**
-     * 剪贴板管理器弹窗 — 两列风格，支持分词/收藏/锁定/删除/搜索/关闭/长按编辑
+     * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
      */
     private fun showClipboardManagerPopup() {
         try {
             val inflater2 = android.view.LayoutInflater.from(this)
-            val popupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
+            clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
+            val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
-            val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
+            val btnSearch = popupView.findViewById<TextView>(R.id.btn_clipboard_search)
+            val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
             val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
+            val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
+            val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
+            val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
-            // 加载剪贴板历史
+            // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
             val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            val items = mutableListOf<ClipboardItem>()
-            var searchFilter = ""
+            loadClipboardHistoryToClassMembers(clipboardMgr)
 
-            fun loadClipboardHistory() {
-                clipboardHistory.clear()
-                clipboardFavorites.clear()
-                try {
-                    if (clipboardMgr?.hasPrimaryClip() == true) {
-                        val clip = clipboardMgr.primaryClip ?: return
-                        for (i in 0 until clip.itemCount) {
-                            val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
-                            if (text.isNotEmpty() && text.length <= 500) {
-                                items.add(ClipboardItem(text = text, isPinned = false))
-                            }
-                        }
-                        // 从 SharedPreferences 读取持久化的收藏
-                        val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
-                        val favStr = prefs.getString("favorites", "") ?: ""
-                        if (favStr.isNotEmpty()) {
-                            for (fav in favStr.split("\n").filter { it.isNotEmpty() }) {
-                                items.removeAll { it.text == fav }
-                                items.add(0, ClipboardItem(text = fav, isPinned = true))
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-                if (items.isEmpty()) {
-                    items.add(ClipboardItem(text = "(剪贴板为空)", isPinned = true, isEmpty = true))
-                }
+            // 初始化过滤
+            clipboardSearchFilter = ""
+            applyClipboardFilter()
+
+            // 搜索按钮：进入搜索编辑模式
+            btnSearch.setOnClickListener {
+                clipboardSearchEditMode = true
+                clipboardSearchBuffer.clear()
+                tvSearchHint.text = "✏️ 输入搜索关键词...（按发送键确认）"
+                tvSearchHint.visibility = View.VISIBLE
+                btnSearch.text = "🔍 点击搜索..."
+                btnSearch.setTextColor(0xFF999999.toInt())
             }
-            loadClipboardHistory()
 
-            val filteredItems = mutableListOf<ClipboardItem>()
-
-            fun applyFilter() {
-                filteredItems.clear()
-                if (searchFilter.isEmpty()) {
-                    filteredItems.addAll(items)
-                } else {
-                    filteredItems.addAll(items.filter { it.text.contains(searchFilter, ignoreCase = true) })
-                }
-                tvEmpty.visibility = if (filteredItems.isEmpty()) View.VISIBLE else View.GONE
-                (gvClipboard.adapter as? ClipboardAdapter)?.notifyDataSetChanged()
-            }
-            applyFilter()
-
-            etSearch.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-                override fun afterTextChanged(s: android.text.Editable?) {
-                    searchFilter = s?.toString() ?: ""
-                    applyFilter()
-                }
-            })
-
-            gvClipboard.adapter = ClipboardAdapter(inflater2, filteredItems, this)
+            clipboardAdapter = ClipboardAdapter(inflater2, clipboardFilteredItems, this)
+            gvClipboard.adapter = clipboardAdapter
 
             val keyboardWidth = keyboardView.width
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
@@ -2216,43 +2203,144 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
-                val item = filteredItems.getOrNull(position) ?: return@setOnItemClickListener
+                if (clipboardSearchEditMode) return@setOnItemClickListener
+                val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemClickListener
                 if (item.isEmpty) return@setOnItemClickListener
                 currentInputConnection?.commitText(item.text, 1)
                 popup.dismiss()
             }
 
-            // 长按：操作菜单（收藏/锁定/删除/编辑/分词）
+            // 长按：操作菜单（置顶/删除/编辑/分词）
             gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
-                val item = filteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
+                if (clipboardSearchEditMode) return@setOnItemLongClickListener true
+                val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
                 if (item.isEmpty) return@setOnItemLongClickListener true
-                showClipboardItemActions(item, items) { loadClipboardHistory(); applyFilter() }
+                showClipboardItemActions(item, clipboardItems) { loadClipboardHistoryToClassMembers(clipboardMgr); applyClipboardFilter() }
                 true
             }
 
-            btnClose.setOnClickListener { popup.dismiss() }
+            // 关闭按钮
+            btnClose.setOnClickListener {
+                if (clipboardSearchEditMode) {
+                    clipboardSearchEditMode = false
+                    clipboardSearchBuffer.clear()
+                    clipboardSearchFilter = ""
+                    tvSearchHint.visibility = View.GONE
+                    updateClipboardSearchBtn(btnSearch)
+                    applyClipboardFilter()
+                } else {
+                    popup.dismiss()
+                }
+            }
+
+            // 完成按钮
+            btnDone.setOnClickListener { popup.dismiss() }
+
+            // 置顶按钮
+            btnPin.setOnClickListener {
+                val realItems = clipboardItems.filter { !it.isEmpty }
+                if (realItems.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnPin)
+                for (r in realItems) {
+                    val title = "${if (r.isPinned) "📌 " else "○ "}${r.text.take(18)}"
+                    popupMenu.menu.add(0, r.text.hashCode(), 0, title)
+                }
+                popupMenu.setOnMenuItemClickListener { menuItem ->
+                    val target = realItems.find { it.text.hashCode() == menuItem.itemId }
+                    if (target != null) {
+                        clipboardItems.removeAll { it.text == target.text }
+                        clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            // 删除按钮
+            btnDelete.setOnClickListener {
+                val realItems = clipboardItems.filter { !it.isEmpty }
+                if (realItems.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnDelete)
+                for (r in realItems) {
+                    popupMenu.menu.add(0, r.text.hashCode(), 0, "🗑️ ${r.text.take(18)}")
+                }
+                popupMenu.setOnMenuItemClickListener { menuItem ->
+                    val target = realItems.find { it.text.hashCode() == menuItem.itemId }
+                    if (target != null) {
+                        clipboardItems.removeAll { it.text == target.text }
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
 
-            // 保存到历史
-            if (clipboardMgr?.hasPrimaryClip() == true) {
-                try {
-                    val clip = clipboardMgr.primaryClip ?: return@showClipboardManagerPopup
-                    for (i in 0 until clip.itemCount) {
-                        val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
-                        if (text.isNotEmpty()) {
-                            clipboardHistory.remove(text)
-                            clipboardHistory.add(0, text)
-                        }
-                    }
-                    while (clipboardHistory.size > maxClipboardHistory) {
-                        clipboardHistory.removeAt(clipboardHistory.size - 1)
-                    }
-                } catch (_: Exception) {}
-            }
+            // 持久化保存
+            saveClipboardHistoryFromClassMembers()
+
         } catch (e: Exception) {
             updateStatus("❌ 剪贴板管理器异常: ${e.message}")
         }
+    }
+
+    private fun updateClipboardSearchBtn(btnSearch: TextView) {
+        if (clipboardSearchFilter.isNotEmpty()) {
+            btnSearch.text = "🔍 $clipboardSearchFilter"
+            btnSearch.setTextColor(0xFF1565C0.toInt())
+        } else {
+            btnSearch.text = "🔍 点击搜索..."
+            btnSearch.setTextColor(0xFF999999.toInt())
+        }
+    }
+
+    private fun loadClipboardHistoryToClassMembers(clipboardMgr: android.content.ClipboardManager?) {
+        clipboardItems.clear()
+        try {
+            // 1. 从 SharedPreferences 读取持久化历史
+            val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
+            val historyStr = prefs.getString("history", "") ?: ""
+            val favStr = prefs.getString("favorites", "") ?: ""
+            val favSet = if (favStr.isNotEmpty()) favStr.split("\n").toSet() else emptySet()
+            
+            // 2. 先加载持久化历史（置顶在前）
+            if (historyStr.isNotEmpty()) {
+                for (text in historyStr.split("\n")) {
+                    if (text.isNotEmpty()) {
+                        clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text)))
+                    }
+                }
+            }
+            
+            // 3. 再加载系统剪贴板（去重追加）
+            if (clipboardMgr?.hasPrimaryClip() == true) {
+                val clip = clipboardMgr.primaryClip ?: return
+                for (i in 0 until clip.itemCount) {
+                    val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
+                    if (text.isNotEmpty() && text.length <= 500 && clipboardItems.none { it.text == text }) {
+                        clipboardItems.add(0, ClipboardItem(text = text, isPinned = favSet.contains(text)))
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        if (clipboardItems.isEmpty()) {
+            clipboardItems.add(ClipboardItem(text = "(剪贴板为空)", isPinned = true, isEmpty = true))
+        }
+    }
+
+    /** 保存剪贴板历史到 SharedPreferences（全部历史 + 收藏标记） */
+    private fun saveClipboardHistoryFromClassMembers() {
+        val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
+        val allTexts = clipboardItems.filter { !it.isEmpty }.map { it.text }
+        val favTexts = clipboardItems.filter { it.isPinned && !it.isEmpty }.map { it.text }
+        prefs.edit()
+            .putString("history", allTexts.joinToString("\n"))
+            .putString("favorites", favTexts.joinToString("\n"))
+            .apply()
     }
 
     private fun showClipboardItemActions(
@@ -2501,6 +2589,87 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     rimeEngine.clear()
                     magicEditBuffer.append(primaryCode.toChar())
                     updateMagicEditStatus()
+                    return
+                }
+            }
+        }
+
+        // ======================== 剪贴板搜索编辑模式拦截 ========================
+        if (clipboardSearchEditMode) {
+            when (primaryCode) {
+                // 发送键/回车键：确认搜索并退出搜索模式
+                -200, 10 -> {
+                    clipboardSearchFilter = clipboardSearchBuffer.toString()
+                    clipboardSearchEditMode = false
+                    clipboardPopupView?.findViewById<TextView>(R.id.tv_search_edit_hint)?.visibility = View.GONE
+                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    applyClipboardFilter()
+                    return
+                }
+                // 返回键/关闭：取消搜索模式
+                KeyEvent.KEYCODE_BACK -> {
+                    clipboardSearchEditMode = false
+                    clipboardSearchBuffer.clear()
+                    clipboardSearchFilter = ""
+                    applyClipboardFilter()
+                    return
+                }
+                // 退格：删除搜索缓冲区最后一个字符
+                -5, Keyboard.KEYCODE_DELETE -> {
+                    if (clipboardSearchBuffer.isNotEmpty()) {
+                        clipboardSearchBuffer.deleteCharAt(clipboardSearchBuffer.length - 1)
+                    }
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ ${if (display.isEmpty()) "输入搜索关键词..." else display}")
+                    return
+                }
+                // 字母键 a-z：走 Rime 引擎
+                in 97..122 -> {
+                    rimeEngine.processKey(primaryCode.toChar())
+                    val comp = rimeEngine.composingText
+                    val display = clipboardSearchBuffer.toString() + comp
+                    updateStatus("✏️ $display")
+                    return
+                }
+                // 数字键 0-9：选词或追加
+                in 48..57 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                        val cands = rimeEngine.candidates
+                        if (index < cands.size) {
+                            val selected = rimeEngine.selectCandidate(index)
+                            if (selected.isNotEmpty()) {
+                                clipboardSearchBuffer.append(selected)
+                                rimeEngine.clear()
+                            }
+                        }
+                    } else {
+                        clipboardSearchBuffer.append(primaryCode.toChar())
+                    }
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ $display")
+                    return
+                }
+                // 空格：选首词或追加空格
+                32 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val selected = rimeEngine.selectCandidate(0)
+                        if (selected.isNotEmpty()) {
+                            clipboardSearchBuffer.append(selected)
+                            rimeEngine.clear()
+                        }
+                    } else {
+                        clipboardSearchBuffer.append(' ')
+                    }
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ $display")
+                    return
+                }
+                // 标点追加
+                44, 46, 59, 33, 63 -> {
+                    rimeEngine.clear()
+                    clipboardSearchBuffer.append(primaryCode.toChar())
+                    updateStatus("✏️ ${clipboardSearchBuffer}")
                     return
                 }
             }
@@ -2871,6 +3040,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     override fun onText(text: CharSequence?) {
         cancelLongPress()
+        if (clipboardSearchEditMode && text != null) {
+            // 剪贴板搜索编辑模式：追加选词到搜索缓冲区
+            clipboardSearchBuffer.append(text)
+            rimeEngine.clear()
+            updateStatus("✏️ ${clipboardSearchBuffer}")
+            return
+        }
         if (magicEditMode && text != null) {
             // 魔法编辑模式：如果 Rime 正在 composing，追加选词到缓冲区并清空 Rime
             if (rimeEngine.isComposing) {
