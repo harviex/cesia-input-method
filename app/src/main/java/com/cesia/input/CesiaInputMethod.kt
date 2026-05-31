@@ -175,6 +175,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 清屏键长按标志
     private var deleteLongPressTriggered = false
 
+    // ======================== 魔法编辑模式 ========================
+    // 当用户点击"➕ 新增"后进入此模式，键盘输入直接写入魔法指令缓冲区
+    private var magicEditMode = false
+    private var magicEditBuffer = StringBuilder()
+    private var magicEditMgr: MagicHistoryManager? = null  // 新增完成后保存用
+
     // 主题
     private var isDarkTheme = false
     private var apiUrl = "https://openrouter.ai/api/v1/chat/completions"
@@ -1149,7 +1155,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     et.setOnEditorActionListener(null)
 
                     if (isEmptySlot) {
-                        tv.text = "➕ 长按新增魔法"
+                        tv.text = "➕ 点击新增魔法"
                         tv.setTextColor(0xFF999999.toInt())
                         tv.setTypeface(null, android.graphics.Typeface.ITALIC)
                         tv.textSize = 12f
@@ -1168,10 +1174,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // ===== 单击：非空槽=打钩+装载+执行+关闭；空槽=无操作 =====
+        // ===== 单击：非空槽=打钩+装载+执行+关闭；空槽=进入魔法编辑模式 =====
         gridView.setOnItemClickListener { _, _, position, _ ->
             val record = items[position]
-            if (record.id == SLOT_EMPTY_ID) return@setOnItemClickListener
+            if (record.id == SLOT_EMPTY_ID) {
+                // 空槽：进入魔法编辑模式
+                dialog.dismiss()
+                enterMagicEditMode(mgr)
+                return@setOnItemClickListener
+            }
             currentMagicPrompt = record.instruction
             dialog.dismiss()
             executeSelectedMagic(record.instruction)
@@ -1283,6 +1294,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         dialog.show()
     }
+
+    // ======================== 魔法编辑模式 ========================
+
+    /** 进入魔法编辑模式：关闭弹窗，清空缓冲区，等待键盘输入 */
+    private fun enterMagicEditMode(mgr: MagicHistoryManager) {
+        magicEditMode = true
+        magicEditBuffer.clear()
+        magicEditMgr = mgr
+        updateStatus("✏️ 输入魔法指令...（按发送键保存）")
+    }
+
+    /** 退出魔法编辑模式 */
+    private fun exitMagicEditMode(save: Boolean = false) {
+        if (save && magicEditBuffer.isNotEmpty() && magicEditMgr != null) {
+            val text = magicEditBuffer.toString().trim()
+            if (text.isNotEmpty()) {
+                magicEditMgr!!.addRecord(text)
+                currentMagicPrompt = text
+                updateStatus("✅ 已保存魔法：${text.take(20)}")
+            }
+        } else {
+            if (magicEditMode) updateStatus("❌ 已取消新增魔法")
+        }
+        magicEditMode = false
+        magicEditBuffer.clear()
+        magicEditMgr = null
+    }
+
 
     /** 保存编辑中的魔法 */
     private fun saveEditing(
@@ -1718,6 +1757,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun switchToKeyboard(mode: KeyboardMode) {
+        // 切换键盘时退出魔法编辑模式
+        if (magicEditMode) exitMagicEditMode(save = false)
         // 记录进入符号键盘前的模式，用于返回
         // 只在从非符号键盘进入符号键盘时记录，符号↔符号切换不更新
         if ((mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN)
@@ -2413,6 +2454,54 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
+        // ======================== 魔法编辑模式拦截 ========================
+        if (magicEditMode) {
+            when {
+                // 发送键/回车键：保存魔法并退出编辑模式
+                primaryCode == -200 || primaryCode == 10 -> {
+                    exitMagicEditMode(save = true)
+                    return
+                }
+                // 返回键：取消并退出编辑模式
+                primaryCode == KeyEvent.KEYCODE_BACK -> {
+                    exitMagicEditMode(save = false)
+                    return
+                }
+                // 退格键：删除缓冲区最后一个字符
+                primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE -> {
+                    if (magicEditBuffer.isNotEmpty()) {
+                        magicEditBuffer.deleteCharAt(magicEditBuffer.length - 1)
+                    }
+                    updateStatus("✏️ ${magicEditBuffer.toString().ifEmpty { "输入魔法指令..." }}")
+                    return
+                }
+                // 字母/数字/符号：追加到缓冲区
+                primaryCode > 0 && primaryCode.toChar().isLetterOrDigit() -> {
+                    magicEditBuffer.append(primaryCode.toChar())
+                    updateStatus("✏️ ${magicEditBuffer}")
+                    return
+                }
+                // 空格
+                primaryCode == 32 -> {
+                    magicEditBuffer.append(' ')
+                    updateStatus("✏️ ${magicEditBuffer}")
+                    return
+                }
+                // 标点符号也追加
+                primaryCode in listOf(44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124) -> {
+                    magicEditBuffer.append(primaryCode.toChar())
+                    updateStatus("✏️ ${magicEditBuffer}")
+                    return
+                }
+                // 中文标点（Unicode）
+                primaryCode in listOf(65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217) -> {
+                    magicEditBuffer.append(primaryCode.toChar())
+                    updateStatus("✏️ ${magicEditBuffer}")
+                    return
+                }
+            }
+        }
+
         val ic = currentInputConnection
         val composing = rimeEngine.isComposing
         val hasCands = rimeEngine.hasCandidates
@@ -2778,6 +2867,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     override fun onText(text: CharSequence?) {
         cancelLongPress()
+        if (magicEditMode && text != null) {
+            // 魔法编辑模式：追加文字到缓冲区
+            magicEditBuffer.append(text)
+            updateStatus("✏️ $magicEditBuffer")
+            return
+        }
         currentInputConnection?.commitText(text, 1)
     }
 
