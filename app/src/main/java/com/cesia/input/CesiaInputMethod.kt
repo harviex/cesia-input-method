@@ -93,6 +93,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var isRecording = false
     private var keyboardMode = KeyboardMode.NUMBER  // 默认 T9 数字键盘
     private var prevKeyboardMode = KeyboardMode.NUMBER  // 进入符号键盘前的键盘模式（用于返回）
+    private var currentRimeSchema = "t9_pinyin"  // 当前 Rime schema，用于避免不必要的 reload
     private var isCapsLock = false
     private var isProcessingResult = false
     private var isWaitingForChoice = false
@@ -874,8 +875,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val fullText = extracted + extractedAfter
 
         if (fullText.isEmpty()) {
-            updateStatus("⚠️ 输入框无文字，无法修改")
-            return
+            // 文本框为空时先插入一个空格，让语音修改可以继续
+            ic.commitText(" ", 1)
+            Log.d("Cesia", "startMagicMode: 空文本自动补空格")
         }
 
         magicOriginalText = fullText
@@ -994,7 +996,47 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 生成类魔法允许空文本，修改类魔法要求有文本
         if (fullText.isEmpty() && !isGenerationMagic(instruction)) {
-            updateStatus("⚠️ 输入框无文字，无法执行修改类魔法")
+            // 文本框为空时先插入一个空格，避免"无法修改"错误
+            ic.commitText(" ", 1)
+            val newText = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
+            val newAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
+            val paddedText = newText + newAfter
+            Log.d("Cesia", "executeSelectedMagic: 空文本自动补空格，新文本长度=${paddedText.length}")
+            // 使用补空格后的文本继续执行
+            isAiProcessing = true
+            updateStatus("✨ 正在施展魔法...")
+            setStatusDot("processing")
+            val prompt = buildMagicPrompt(paddedText, instruction)
+            val polishService = typelessEngine?.getPolishService()
+            Thread {
+                try {
+                    val result = polishService?.polishWithPrompt(prompt)
+                    Handler(Looper.getMainLooper()).post {
+                        isAiProcessing = false
+                        if (result.isNullOrEmpty()) {
+                            updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                            setStatusDot("error")
+                        } else {
+                            // 替换：先删除空格再插入结果
+                            try {
+                                ic.deleteSurroundingText(paddedText.length, 0)
+                                ic.commitText(result, 1)
+                                updateStatus("✅ 魔法已完成")
+                                setStatusDot("idle")
+                            } catch (e2: Exception) {
+                                updateStatus("❌ 上屏失败: ${e2.message}")
+                                setStatusDot("error")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Handler(Looper.getMainLooper()).post {
+                        isAiProcessing = false
+                        updateStatus("❌ 魔法失败: ${e.message}")
+                        setStatusDot("error")
+                    }
+                }
+            }.start()
             return
         }
 
@@ -1753,17 +1795,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         t9InputBuffer.clear()
         candidateBar.visibility = View.GONE
         updateStatus("Cesia 已就绪")
-        // UI 立即切换，schema reload 放后台
+        // UI 立即切换，schema switch 放后台（避免卡顿）
         if (keyboardMode == KeyboardMode.NUMBER) {
+            // T9 → 全键盘
             switchToKeyboard(KeyboardMode.QWERTY)
-            Thread { rimeEngine.selectSchema("pinyin"); rimeEngine.reload() }.start()
+            if (currentRimeSchema != "pinyin") {
+                Thread {
+                    rimeEngine.selectSchema("pinyin")
+                    rimeEngine.reload()
+                    currentRimeSchema = "pinyin"
+                }.start()
+            }
         } else {
+            // 全键盘 → T9
             switchToKeyboard(KeyboardMode.NUMBER)
-            Thread {
-                rimeEngine.selectSchema("t9_pinyin")
-                rimeEngine.reload()
-                Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
-            }.start()
+            if (currentRimeSchema != "t9_pinyin") {
+                Thread {
+                    rimeEngine.selectSchema("t9_pinyin")
+                    rimeEngine.reload()
+                    currentRimeSchema = "t9_pinyin"
+                    Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
+                }.start()
+            }
         }
     }
 
@@ -1850,21 +1903,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun toggleNumberKeyboard() {
         if (keyboardMode == KeyboardMode.NUMBER) {
-            // T9 → QWERTY：切换 schema 到 pinyin（需要 reload 使新 schema 生效）
+            // T9 → QWERTY
             switchToKeyboard(KeyboardMode.QWERTY)
-            rimeEngine.selectSchema("pinyin")
-            rimeEngine.reload()
+            if (currentRimeSchema != "pinyin") {
+                rimeEngine.selectSchema("pinyin")
+                rimeEngine.reload()
+                currentRimeSchema = "pinyin"
+            }
             // reload() 会重置 Rime 内部状态，需重新应用 shift 锁定
             if (qwertyShiftLock) {
                 isAsciiMode = true
                 rimeEngine.setAsciiMode(true)
             }
         } else {
-            // QWERTY → T9：切换 schema 到 t9_pinyin（需要 reload 使新 schema 生效）
+            // QWERTY → T9
             switchToKeyboard(KeyboardMode.NUMBER)
-            rimeEngine.selectSchema("t9_pinyin")
-            rimeEngine.reload()
-            resetNumberKeyboardState()  // 清除 T9 shift 状态（已在 switchToKeyboard NUMBER 分支清除）
+            if (currentRimeSchema != "t9_pinyin") {
+                rimeEngine.selectSchema("t9_pinyin")
+                rimeEngine.reload()
+                currentRimeSchema = "t9_pinyin"
+            }
+            resetNumberKeyboardState()
         }
     }
 
@@ -2146,6 +2205,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            // 发送键高亮
+            btnSend.animate().scaleX(1.08f).scaleY(1.08f).setDuration(150).withEndAction {
+                btnSend.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            }.start()
             showClipboardManagerPopup()
         }.also {
             sendKeyHandler.postDelayed(it, 500)
@@ -2169,12 +2232,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
-            val btnSearch = popupView.findViewById<TextView>(R.id.btn_clipboard_search)
+            val btnSearch = popupView.findViewById<ImageButton>(R.id.btn_clipboard_search)
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
-            val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
+            val btnDone = popupView.findViewById<ImageButton>(R.id.btn_clipboard_done)
+            val btnPin = popupView.findViewById<ImageButton>(R.id.btn_clipboard_pin)
+            val btnDelete = popupView.findViewById<ImageButton>(R.id.btn_clipboard_delete)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
@@ -2191,8 +2253,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 clipboardSearchBuffer.clear()
                 tvSearchHint.text = "✏️ 输入搜索关键词...（按发送键确认）"
                 tvSearchHint.visibility = View.VISIBLE
-                btnSearch.text = "🔍 点击搜索..."
-                btnSearch.setTextColor(0xFF999999.toInt())
+                btnSearch.contentDescription = "搜索中..."
+                btnSearch.setColorFilter(0xFF999999.toInt())
             }
 
             clipboardAdapter = ClipboardAdapter(inflater2, clipboardFilteredItems, this)
@@ -2227,22 +2289,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 true
             }
 
-            // 关闭按钮
-            btnClose.setOnClickListener {
+            // 关闭按钮（原 btnClose 逻辑合并到 btnDone）
+            // btnDone 仅用于关闭弹窗，搜索模式退出也走这里
+            btnDone.setOnClickListener {
                 if (clipboardSearchEditMode) {
                     clipboardSearchEditMode = false
                     clipboardSearchBuffer.clear()
                     clipboardSearchFilter = ""
                     tvSearchHint.visibility = View.GONE
-                    updateClipboardSearchBtn(btnSearch)
+                    popupView.findViewById<TextView>(R.id.btn_clipboard_search)?.let { v ->
+                        updateClipboardSearchBtn(v as android.widget.ImageButton)
+                    }
                     applyClipboardFilter()
                 } else {
                     popup.dismiss()
                 }
             }
-
-            // 完成按钮
-            btnDone.setOnClickListener { popup.dismiss() }
 
             // 置顶按钮
             btnPin.setOnClickListener {
@@ -2296,13 +2358,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    private fun updateClipboardSearchBtn(btnSearch: TextView) {
+    private fun updateClipboardSearchBtn(btnSearch: android.widget.ImageButton) {
         if (clipboardSearchFilter.isNotEmpty()) {
-            btnSearch.text = "🔍 $clipboardSearchFilter"
-            btnSearch.setTextColor(0xFF1565C0.toInt())
+            btnSearch.setColorFilter(0xFF1565C0.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
         } else {
-            btnSearch.text = "🔍 点击搜索..."
-            btnSearch.setTextColor(0xFF999999.toInt())
+            btnSearch.setColorFilter(0xFF999999.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
         }
     }
 
@@ -2610,7 +2670,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     clipboardSearchFilter = clipboardSearchBuffer.toString()
                     clipboardSearchEditMode = false
                     clipboardPopupView?.findViewById<TextView>(R.id.tv_search_edit_hint)?.visibility = View.GONE
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<ImageButton>(R.id.btn_clipboard_search) ?: return)
                     applyClipboardFilter()
                     return
                 }
