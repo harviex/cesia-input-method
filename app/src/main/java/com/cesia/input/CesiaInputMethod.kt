@@ -814,7 +814,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         btnClipboard.setOnClickListener { executeMagicOrAiReply() }
-        btnClipboard.setOnLongClickListener { showMagicHistoryPopup(); true }
+        btnClipboard.setOnLongClickListener {
+            // 高亮动画
+            btnClipboard.animate().scaleX(1.05f).scaleY(1.05f).setDuration(150).withEndAction {
+                btnClipboard.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            }.start()
+            showMagicHistoryPopup(); true
+        }
 
         btnMagic.setOnClickListener { toggleMagicMode() }
         btnMagic.setOnLongClickListener { true }
@@ -881,6 +887,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
         btnMagic.setTextColor(0xFFFFFFFF.toInt())
         btnMagic.elevation = 6f
+        btnMagic.pivotX = btnMagic.width / 2f
+        btnMagic.pivotY = btnMagic.height / 2f
         btnMagic.animate().scaleX(1.08f).scaleY(1.08f).setDuration(200).start()
 
         updateStatus("🎤 请说出修改指令...（再次点击✨停止）")
@@ -1109,10 +1117,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         rebuildItems()
 
-        val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
+        val btnAdd = popupView.findViewById<ImageButton>(R.id.btn_add_magic)
         val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-        val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
-        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
+        val btnDelete = popupView.findViewById<ImageButton>(R.id.btn_delete_manage)
+        val btnClose = popupView.findViewById<ImageButton>(R.id.btn_close_magic)
 
         // 追踪当前编辑状态
         var editingPosition = -1

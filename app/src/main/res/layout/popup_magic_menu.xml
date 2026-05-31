@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 魔法语句列表 - 1列布局 -->
+    <!-- 魔法语句列表 -->
     <GridView
         android:id="@+id/gv_magic_items"
         android:layout_width="match_parent"
@@ -28,15 +28,15 @@
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
-        <TextView
+        <!-- 新增：系统 add 图标 -->
+        <ImageButton
             android:id="@+id/btn_add_magic"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="➕ 新增"
-            android:textSize="14sp"
-            android:textColor="#1565C0"
+            android:src="@android:drawable/ic_menu_add"
+            android:scaleType="centerInside"
+            android:tint="#1565C0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="新增魔法" />
 
@@ -46,6 +46,7 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
+        <!-- 置顶：emoji 图针改为 pushpin 字符 -->
         <TextView
             android:id="@+id/btn_pin_manage"
             android:layout_width="0dp"
@@ -53,8 +54,8 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="📌"
-            android:textSize="15sp"
-            android:textColor="#333333"
+            android:textSize="13sp"
+            android:textColor="#555555"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="置顶" />
 
@@ -64,15 +65,15 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <TextView
+        <!-- 删除：系统 delete 图标 -->
+        <ImageButton
             android:id="@+id/btn_delete_manage"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="🗑️"
-            android:textSize="15sp"
-            android:textColor="#333333"
+            android:src="@android:drawable/ic_menu_delete"
+            android:scaleType="centerInside"
+            android:tint="#C62828"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
 
@@ -82,15 +83,15 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <TextView
+        <!-- 关闭：系统 revert/undo 图标 -->
+        <ImageButton
             android:id="@+id/btn_close_magic"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="↩️"
-            android:textSize="15sp"
-            android:textColor="#333333"
+            android:src="@android:drawable/ic_menu_revert"
+            android:scaleType="centerInside"
+            android:tint="#555555"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="关闭" />
 
