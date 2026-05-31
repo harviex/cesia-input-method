@@ -277,34 +277,38 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // ======================== 简繁转换（从 assets 加载完整映射表）=======================
-    private var simpTradMap: HashMap<Char, Char>? = null
+    // ======================== 简繁转换映射表（候选词上屏时转换）=======================
+    private val SIMP_TRAD: Map<Char, Char> = mapOf(
+        '国' to '國', '会' to '會', '来' to '來', '时' to '時', '个' to '個',
+        '们' to '們', '说' to '說', '这' to '這', '为' to '為', '过' to '過',
+        '对' to '對', '还' to '還', '发' to '發', '经' to '經', '长' to '長',
+        '问' to '問', '开' to '開', '学' to '學', '动' to '動', '进' to '進',
+        '种' to '種', '应' to '應', '头' to '頭', '现' to '現', '实' to '實',
+        '点' to '點', '业' to '業', '关' to '關', '机' to '機', '认' to '認',
+        '让' to '讓', '东' to '東', '当' to '當', '没' to '沒', '产' to '產',
+        '车' to '車', '见' to '見', '电' to '電', '里' to '裡', '两' to '兩',
+        '场' to '場', '从' to '從', '无' to '無', '万' to '萬', '亚' to '亞',
+        '着' to '著', '处' to '處', '将' to '將', '书' to '書', '许' to '許',
+        '总' to '總', '听' to '聽', '员' to '員', '难' to '難', '结' to '結',
+        '极' to '極', '义' to '義', '记' to '記', '务' to '務', '战' to '戰',
+        '图' to '圖', '报' to '報', '类' to '類', '条' to '條', '统' to '統',
+        '办' to '辦', '华' to '華', '变' to '變', '运' to '運', '达' to '達',
+        '传' to '傳', '该' to '該', '众' to '眾', '写' to '寫', '军' to '軍',
+        '门' to '門', '语' to '語', '选' to '選', '区' to '區', '级' to '級',
+        '转' to '轉', '杀' to '殺', '范' to '範', '风' to '風', '虽' to '雖',
+        '举' to '舉', '销' to '銷', '独' to '獨', '资' to '資', '养' to '養',
+        '节' to '節', '价' to '價', '权' to '權', '苏' to '蘇', '刘' to '劉',
+        '孙' to '孫', '陈' to '陳', '杨' to '楊', '赵' to '趙', '张' to '張',
+        '罗' to '羅', '郑' to '鄭', '韩' to '韓', '钱' to '錢', '给' to '給',
+        '纳' to '納', '龙' to '龍', '刚' to '剛', '过' to '過', '边' to '邊',
+        '网' to '網', '飞' to '飛', '还' to '還', '系' to '係', '计' to '計',
+        '让' to '讓'
+    )
 
-    /** 从 assets 加载简繁映射表（首次使用时懒加载） */
-    private fun loadSimpTradMap() {
-        if (simpTradMap != null) return
-        try {
-            val map = HashMap<Char, Char>(5000)
-            assets.open("rime/simp_trad_map.txt").bufferedReader().useLines { lines ->
-                for (line in lines) {
-                    if (line.length >= 2) {
-                        map[line[0]] = line[1]
-                    }
-                }
-            }
-            simpTradMap = map
-            Log.i("Cesia", "简繁映射表加载完成: ${map.size} 条")
-        } catch (e: Exception) {
-            Log.e("Cesia", "加载简繁映射表失败", e)
-            simpTradMap = hashMapOf()
-        }
-    }
-
-    /** 简→繁转换（查表替换）*/
+    /** 简→繁转换（逐字替换）*/
     private fun toTraditional(text: String): String {
-        val map = simpTradMap ?: return text
-        val sb = StringBuilder(text.length)
-        for (ch in text) { sb.append(map[ch] ?: ch) }
+        val sb = StringBuilder(text.length * 2)
+        for (ch in text) { sb.append(SIMP_TRAD[ch] ?: ch) }
         return sb.toString()
     }
 
@@ -693,8 +697,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         val allCands = rimeEngine.getAllCandidates()
-        // 繁体模式：候选词列表转繁体
-        val displayCands = if (isTraditional) allCands.map { toTraditional(it) } else allCands
 
         // 没有输入时恢复初始状态
         if (!composing && pinyin.isEmpty()) {
@@ -715,15 +717,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         // 更新候选词列表
         // 更新候选词列表
-        candidateAdapter?.updateData(displayCands)
-        btnCandidateExpand.visibility = if (displayCands.size > 4) View.VISIBLE else View.GONE
+        candidateAdapter?.updateData(allCands)
+        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            val panelCands = displayCands
+            val allCandsPanel = rimeEngine.getAllCandidates()
             panelAdapter?.clear()
-            panelAdapter?.addAll(panelCands)
+            panelAdapter?.addAll(allCandsPanel)
             panelAdapter?.notifyDataSetChanged()
         }
     }
@@ -1467,7 +1469,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 简繁切换：通过 Rime 原生 OpenCC 转换（候选词和输出均自动转换） */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
-        if (isTraditional) loadSimpTradMap()  // 首次切繁体时加载映射表
         rimeEngine.setTraditional(isTraditional)
         updateStatus(if (isTraditional) "✅ 已切换为繁体输出" else "✅ 已切换为简体输出")
         updateTraditionalButton()
@@ -1476,10 +1477,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateCandidateBar()
     }
 
-    /** 候选词选中上屏（繁体模式时转换为繁体） */
+    /** 候选词选中上屏（Rime 原生已处理简繁转换，直接上屏） */
     private fun commitCandidateText(text: String) {
-        val out = if (isTraditional) toTraditional(text) else text
-        currentInputConnection?.commitText(out, 1)
+        currentInputConnection?.commitText(text, 1)
     }
 
     private fun updateTraditionalButton() {
