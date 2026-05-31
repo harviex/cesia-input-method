@@ -28,15 +28,17 @@
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
-        <!-- 新增：系统 add 图标 -->
-        <ImageButton
+        <!-- 新增：+ 符号 -->
+        <TextView
             android:id="@+id/btn_add_magic"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:src="@android:drawable/ic_menu_add"
-            android:scaleType="centerInside"
-            android:tint="#1565C0"
+            android:gravity="center"
+            android:text="＋"
+            android:textSize="20sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="新增魔法" />
 
@@ -46,16 +48,16 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 置顶：emoji 图针改为 pushpin 字符 -->
+        <!-- 置顶：⤒ 向上箭头到横线（非Emoji图钉） -->
         <TextView
             android:id="@+id/btn_pin_manage"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="📌"
-            android:textSize="13sp"
-            android:textColor="#555555"
+            android:text="⤒"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="置顶" />
 
@@ -65,15 +67,16 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 删除：系统 delete 图标 -->
-        <ImageButton
+        <!-- 删除：清空符号 ⊗ -->
+        <TextView
             android:id="@+id/btn_delete_manage"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:src="@android:drawable/ic_menu_delete"
-            android:scaleType="centerInside"
-            android:tint="#C62828"
+            android:gravity="center"
+            android:text="⊗"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
 
@@ -83,15 +86,16 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 关闭：系统 revert/undo 图标 -->
-        <ImageButton
+        <!-- 关闭：⨯ -->
+        <TextView
             android:id="@+id/btn_close_magic"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:src="@android:drawable/ic_menu_revert"
-            android:scaleType="centerInside"
-            android:tint="#555555"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="关闭" />
 

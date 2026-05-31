@@ -132,6 +132,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var sendKeyLongPressTriggered = false
     private var sendKeyHandler = Handler(Looper.getMainLooper())
     private var sendKeyRunnable: Runnable? = null
+    private var sendButtonGlowRunnable: Runnable? = null
+    private var sendButtonGlowing = false
+
+    // 魔法书键长按检测
+    private var magicBookLongPressTriggered = false
+    private var magicBookHandler = Handler(Looper.getMainLooper())
+    private var magicBookRunnable: Runnable? = null
+    private var magicBookGlowRunnable: Runnable? = null
+    private var magicBookGlowing = false
 
     // 剪贴板键长按
     private var clipboardPasteRunnable: Runnable? = null
@@ -843,12 +852,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         btnClipboard.setOnClickListener { executeMagicOrAiReply() }
-        btnClipboard.setOnLongClickListener {
-            // 高亮动画
-            btnClipboard.animate().scaleX(1.05f).scaleY(1.05f).setDuration(150).withEndAction {
-                btnClipboard.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
-            }.start()
-            showMagicHistoryPopup(); true
+        btnClipboard.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    magicBookLongPressTriggered = false
+                    startMagicBookLongPress()
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    cancelMagicBookLongPress()
+                    if (!magicBookLongPressTriggered) {
+                        v.performClick()
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    cancelMagicBookLongPress()
+                    true
+                }
+                else -> false
+            }
         }
 
         btnMagic.setOnClickListener { toggleMagicMode() }
@@ -874,9 +897,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
         // 发送键长按：剪贴板管理器
-        btnSend.setOnLongClickListener {
-            showClipboardManagerPopup()
-            true
+        btnSend.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    sendKeyLongPressTriggered = false
+                    startSendKeyLongPress()
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    cancelSendKeyLongPress()
+                    if (!sendKeyLongPressTriggered) {
+                        v.performClick()
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    cancelSendKeyLongPress()
+                    true
+                }
+                else -> false
+            }
         }
     }
 
@@ -1146,10 +1186,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         rebuildItems()
 
-        val btnAdd = popupView.findViewById<ImageButton>(R.id.btn_add_magic)
+        val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
         val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-        val btnDelete = popupView.findViewById<ImageButton>(R.id.btn_delete_manage)
-        val btnClose = popupView.findViewById<ImageButton>(R.id.btn_close_magic)
+        val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
 
         // 追踪当前编辑状态
         var editingPosition = -1
@@ -1201,7 +1241,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     val isActive = record.instruction == currentMagicPrompt
                     val prefix = if (isActive) "✓ " else if (record.isPinned) "📌 " else ""
                     tv.text = "${prefix}${record.instruction}"
-                    tv.setTextColor(if (isActive) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+                    tv.setTextColor(if (isActive) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
                     tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                     tv.textSize = 13f
                     tv.maxLines = 2
@@ -1318,6 +1358,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 显示在键盘View正上方
         popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
+
+        popup.setOnDismissListener {
+            cancelSendKeyLongPress()
+            cancelMagicBookLongPress()
+        }
     }
 
     // ======================== 魔法编辑模式 ========================
@@ -2171,6 +2216,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
+        // 立即高亮发送按钮
+        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
+        btnSend.elevation = 6f
+        startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -2180,9 +2229,73 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
+    private fun startSendButtonGlow() {
+        sendButtonGlowing = true
+        val pulse = ScaleAnimation(
+            1.0f, 1.15f, 1.0f, 1.15f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+        ).apply {
+            duration = 600
+            repeatMode = ScaleAnimation.REVERSE
+            repeatCount = ScaleAnimation.INFINITE
+        }
+        btnSend.startAnimation(pulse)
+    }
+
+    private fun stopSendButtonGlow() {
+        sendButtonGlowing = false
+        btnSend.clearAnimation()
+        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+        btnSend.elevation = 0f
+    }
+
+    private fun startMagicBookLongPress() {
+        cancelMagicBookLongPress()
+        // 立即高亮魔法书按钮
+        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
+        btnClipboard.elevation = 6f
+        startMagicBookGlow()
+        magicBookRunnable = Runnable {
+            magicBookLongPressTriggered = true
+            keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            showMagicHistoryPopup()
+        }.also {
+            magicBookHandler.postDelayed(it, 500)
+        }
+    }
+
+    private fun startMagicBookGlow() {
+        magicBookGlowing = true
+        val pulse = ScaleAnimation(
+            1.0f, 1.15f, 1.0f, 1.15f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+        ).apply {
+            duration = 600
+            repeatMode = ScaleAnimation.REVERSE
+            repeatCount = ScaleAnimation.INFINITE
+        }
+        btnClipboard.startAnimation(pulse)
+    }
+
+    private fun stopMagicBookGlow() {
+        magicBookGlowing = false
+        btnClipboard.clearAnimation()
+        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+        btnClipboard.elevation = 0f
+    }
+
     private fun cancelSendKeyLongPress() {
         sendKeyRunnable?.let { sendKeyHandler.removeCallbacks(it) }
         sendKeyRunnable = null
+        stopSendButtonGlow()
+    }
+
+    private fun cancelMagicBookLongPress() {
+        magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
+        magicBookRunnable = null
+        stopMagicBookGlow()
     }
 
     private var clipboardSearchEditMode = false
@@ -2316,6 +2429,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
 
+            popup.setOnDismissListener {
+                cancelSendKeyLongPress()
+                cancelMagicBookLongPress()
+            }
+
             // 持久化保存
             saveClipboardHistoryFromClassMembers()
 
@@ -2327,7 +2445,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun updateClipboardSearchBtn(btnSearch: TextView) {
         if (clipboardSearchFilter.isNotEmpty()) {
             btnSearch.text = "🔍 $clipboardSearchFilter"
-            btnSearch.setTextColor(0xFF1565C0.toInt())
+            btnSearch.setTextColor(0xFF81D8D0.toInt())
         } else {
             btnSearch.text = "🔍 点击搜索..."
             btnSearch.setTextColor(0xFF999999.toInt())
