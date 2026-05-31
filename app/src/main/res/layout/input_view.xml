@@ -179,11 +179,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="#E8E8E8"
+        android:paddingLeft="0dp"
+        android:paddingRight="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
         android:keyTextColor="#333333"
         android:keyBackground="@drawable/key_background"
         android:keyTextSize="13sp"
-        android:verticalGap="4dp"
-        android:horizontalGap="2dp" />
+        android:verticalGap="0dp"
+        android:horizontalGap="0dp" />
 
     <!-- 底部功能按钮栏 -->
     <LinearLayout
@@ -210,6 +214,7 @@
             android:stateListAnimator="@null"
             android:insetTop="0dp"
             android:insetBottom="0dp"
+            android:layout_marginTop="20dp"
             android:layout_marginStart="6dp"
             android:layout_marginEnd="6dp"
             app:cornerRadius="20dp" />

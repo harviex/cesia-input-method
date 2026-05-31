@@ -2053,8 +2053,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
         currentLongPressKey = key
         longPressRunnable = Runnable {
+            val code = key.codes?.firstOrNull() ?: 0
             val popup = key.popupCharacters
-            if (!popup.isNullOrEmpty()) {
+            if (isShiftMode && code in 97..122) {
+                // Shift模式下长按字母键 → 输出大写字母
+                val upper = (code - 32).toChar().toString()
+                currentInputConnection?.commitText(upper, 1)
+                keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                longPressTriggered = true
+                longPressConsumed = false
+            } else if (!popup.isNullOrEmpty()) {
+                // 非Shift模式或功能键 → 输出副字符
                 val symbol = popup[0].toString()
                 currentInputConnection?.commitText(symbol, 1)
                 keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
