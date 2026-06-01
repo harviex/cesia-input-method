@@ -3045,8 +3045,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
                 if (!isAsciiMode && composing) {
                     // 直接上屏当前拼音字母（不转换成汉字）
-                    val pinyinText = rimeEngine.composingText
-                    if (pinyinText.isNotEmpty()) {
+                    val pinyinText = rimeEngine.composingText?.replace(" ", "")
+                    if (!pinyinText.isNullOrEmpty()) {
                         ic?.commitText(pinyinText, 1)
                     } else if (hasCands) {
                         val selected = rimeEngine.selectCandidate(0)
