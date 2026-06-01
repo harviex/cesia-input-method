@@ -192,6 +192,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var clipboardItems = mutableListOf<ClipboardItem>()
     private var clipboardFilteredItems = mutableListOf<ClipboardItem>()
     private var clipboardSearchFilter = ""
+    private var clipboardFilterScheduled = false  // 防抖：避免高频按键重复过滤
+
+    // 防抖调度：连续按键只触发最后一次过滤
+    private fun scheduleClipboardFilter(et: android.widget.EditText) {
+        clipboardSearchFilter = et.text.toString().trim()
+        if (!clipboardFilterScheduled) {
+            clipboardFilterScheduled = true
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                clipboardFilterScheduled = false
+                applyClipboardFilter()
+            }, 50)  // 50ms 防抖
+        }
+    }
     private fun applyClipboardFilter() {
         clipboardFilteredItems.clear()
         if (clipboardSearchFilter.isEmpty()) {
@@ -2574,9 +2587,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
 
+            // 自动聚焦搜索框，弹出软键盘
+            etSearch.post {
+                etSearch.requestFocus()
+                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                imm?.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }
+
             popup.setOnDismissListener {
                 cancelSendKeyLongPress()
                 cancelMagicBookLongPress()
+                // 退出时清除搜索编辑模式
+                clipboardSearchEditMode = false
             }
 
             // 持久化保存
@@ -2830,63 +2852,35 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     -5, Keyboard.KEYCODE_DELETE -> {
                         val buf = searchEt.text.toString()
                         if (buf.isNotEmpty()) {
-                            val newBuf = buf.dropLast(1)
-                            searchEt.setText(newBuf)
-                            searchEt.setSelection(newBuf.length)
+                            searchEt.setText(buf.dropLast(1))
+                            searchEt.setSelection(searchEt.text.length)
                         }
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
+                        scheduleClipboardFilter(searchEt)
                         return
                     }
-                    // 空格（直接追加空格）
+                    // 空格
                     32 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + " ")
+                        searchEt.setText(searchEt.text.toString() + " ")
                         searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
+                        scheduleClipboardFilter(searchEt)
                         return
                     }
-                    // 字母键 a-z：追加字符
-                    in 97..122 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
+                    // 字母 a-z / A-Z / 数字 0-9 / 可打印符号 → 直接追加字符
+                    in 32..126 -> {
+                        searchEt.setText(searchEt.text.toString() + primaryCode.toChar().toString())
                         searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
+                        scheduleClipboardFilter(searchEt)
                         return
                     }
-                    // 大写字母 A-Z
-                    in 65..90 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().lowercase())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 数字键 0-9：直接追加数字
-                    in 48..57 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他可打印符号直接追加
-                    in 33..47, in 58..64, in 91..96, in 123..126 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他按键（shift/ctrl等）忽略
-                    else -> return
+                    // 其他按键（shift/ctrl/alt等）忽略，不吞掉事件
+                    else -> { /* 不 return，让事件继续传递 */ }
                 }
             }
+        }
+
+        // 搜索编辑模式下，非字符按键也需要拦截，防止触发其他功能
+        if (clipboardSearchEditMode) {
+            return
         }
 
         // ======================== 魔法编辑模式拦截 ========================
