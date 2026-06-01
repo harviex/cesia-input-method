@@ -56,15 +56,15 @@
         android:gravity="center"
         android:paddingTop="6dp">
 
-        <!-- 全选粘贴 -->
+        <!-- 全选 -->
         <TextView
-            android:id="@+id/btn_split_paste_all"
+            android:id="@+id/btn_split_select_all"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="📋 全部粘贴"
-            android:textSize="13sp"
+            android:text="⊞ 全选"
+            android:textSize="12sp"
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground" />
 
@@ -74,16 +74,55 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 全部分享 -->
+        <!-- 复制选中 -->
+        <TextView
+            android:id="@+id/btn_split_copy"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="📋 复制"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:enabled="false"
+            android:background="?attr/selectableItemBackground" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 分享选中 -->
         <TextView
             android:id="@+id/btn_split_share_all"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="📤 全部分享"
-            android:textSize="13sp"
+            android:text="📤 分享"
+            android:textSize="12sp"
             android:textColor="#81D8D0"
+            android:enabled="false"
+            android:background="?attr/selectableItemBackground" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 搜索选中 -->
+        <TextView
+            android:id="@+id/btn_split_search"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="🔍 搜索"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:enabled="false"
             android:background="?attr/selectableItemBackground" />
 
         <View

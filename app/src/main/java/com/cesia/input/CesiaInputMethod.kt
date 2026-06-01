@@ -2690,156 +2690,231 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .apply()
     }
 
+    // ======================== 长按操作菜单（PopupWindow 版，避免 AlertDialog 在 IME 中崩溃） ========================
     private fun showClipboardItemActions(
         item: ClipboardItem,
         allItems: MutableList<ClipboardItem>,
         onUpdate: () -> Unit
     ) {
-        val actions = mutableListOf<String>()
-        if (!item.isEmpty) {
-            actions.add("📋 插入文本")
-            actions.add(if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏")
-            actions.add(if (clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删")
-            actions.add("✂️ 分词处理")
-            actions.add("✏️ 编辑文本")
-            actions.add("🔍 搜索文本")
-            actions.add("🗑️ 删除条目")
-            actions.add("📤 分享文本")
+        if (item.isEmpty) return
+        val inflater = android.view.LayoutInflater.from(this)
+        val popupView = inflater.inflate(R.layout.popup_clipboard_actions, null)
+
+        val tvTitle = popupView.findViewById<TextView>(R.id.tv_action_title)
+        val actionPaste = popupView.findViewById<TextView>(R.id.action_paste)
+        val actionPin = popupView.findViewById<TextView>(R.id.action_pin)
+        val actionLock = popupView.findViewById<TextView>(R.id.action_lock)
+        val actionSegment = popupView.findViewById<TextView>(R.id.action_segment)
+        val actionEdit = popupView.findViewById<TextView>(R.id.action_edit)
+        val actionSearch = popupView.findViewById<TextView>(R.id.action_search)
+        val actionDelete = popupView.findViewById<TextView>(R.id.action_delete)
+        val actionShare = popupView.findViewById<TextView>(R.id.action_share)
+
+        tvTitle.text = item.text.take(30) + if (item.text.length > 30) "…" else ""
+        actionPin.text = if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏"
+        actionLock.text = if (clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删"
+
+        val popup = PopupWindow(popupView, (200 * resources.displayMetrics.density).toInt(), android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            isOutsideTouchable = true
+            elevation = 8f
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(item.text.take(30) + if (item.text.length > 30) "…" else "")
-            .setItems(actions.toTypedArray()) { _, which ->
-                when (which) {
-                    0 -> currentInputConnection?.commitText(item.text, 1) // 插入
-                    1 -> { // 置顶
-                        allItems.remove(item)
-                        val toggled = item.copy(isPinned = !item.isPinned)
-                        if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
-                        updateClipboardFavorites(); onUpdate()
-                    }
-                    2 -> { // 锁定
-                        val key = item.text
-                        if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
-                        else clipboardFavorites[key] = true
-                        updateClipboardFavorites(); onUpdate()
-                    }
-                    3 -> { // 分词 — 弹出分词界面
-                        showWordSplitPopup(item.text)
-                    }
-                    4 -> { // 编辑
-                        showClipboardEditDialog(item.text) { newText ->
-                            allItems.remove(item)
-                            allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
-                            updateClipboardFavorites(); onUpdate()
-                        }
-                    }
-                    5 -> { // 搜索
-                        try {
-                            Intent(Intent.ACTION_WEB_SEARCH).apply {
-                                putExtra("query", item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(this)
-                            }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动搜索")
-                        }
-                    }
-                    6 -> { // 删除
-                        if (clipboardFavorites[item.text] == false) {
-                            allItems.remove(item)
-                            updateClipboardFavorites(); onUpdate()
-                        } else {
-                            updateStatus("⚠️ 已锁定，无法删除")
-                        }
-                    }
-                    7 -> { // 分享
-                        try {
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(Intent.createChooser(this, "分享"))
-                            }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动分享")
-                        }
-                    }
-                }
+
+        // 关闭弹窗的辅助函数
+        fun dismissAndUpdate() { popup.dismiss(); onUpdate() }
+        fun dismissPopup() { popup.dismiss() }
+
+        actionPaste.setOnClickListener {
+            currentInputConnection?.commitText(item.text, 1)
+            dismissPopup()
+        }
+        actionPin.setOnClickListener {
+            allItems.remove(item)
+            val toggled = item.copy(isPinned = !item.isPinned)
+            if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
+            updateClipboardFavorites(); dismissAndUpdate()
+        }
+        actionLock.setOnClickListener {
+            val key = item.text
+            if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
+            else clipboardFavorites[key] = true
+            updateClipboardFavorites(); dismissAndUpdate()
+        }
+        actionSegment.setOnClickListener {
+            // 先关闭操作菜单，再弹分词弹窗
+            popup.dismiss()
+            showWordSplitPopup(item.text)
+        }
+        actionEdit.setOnClickListener {
+            dismissPopup()
+            showClipboardEditDialog(item.text) { newText ->
+                allItems.remove(item)
+                allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
+                updateClipboardFavorites(); onUpdate()
             }
-            .setNegativeButton("取消", null)
-            .create()
-        try { dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT) } catch (_: Exception) {}
-        dialog.show()
+        }
+        actionSearch.setOnClickListener {
+            dismissPopup()
+            try {
+                Intent(Intent.ACTION_WEB_SEARCH).apply {
+                    putExtra("query", item.text)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(this)
+                }
+            } catch (_: Exception) { updateStatus("❌ 无法启动搜索") }
+        }
+        actionDelete.setOnClickListener {
+            if (clipboardFavorites[item.text] == false) {
+                allItems.remove(item)
+                updateClipboardFavorites(); dismissAndUpdate()
+            } else {
+                updateStatus("⚠️ 已锁定，无法删除")
+                dismissPopup()
+            }
+        }
+        actionShare.setOnClickListener {
+            // 先关闭操作菜单，再启动分享
+            popup.dismiss()
+            launchTextSharing(item.text)
+        }
+
+        // 相对于 GridView 显示
+        popup.showAtLocation(keyboardView, android.view.Gravity.CENTER, 0, 0)
     }
 
-    // ======================== 分词弹窗 ========================
+    private fun launchTextSharing(text: String) {
+        try {
+            val target = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            val chooser = Intent.createChooser(target, null).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(chooser)
+        } catch (_: Exception) {
+            updateStatus("❌ 无法分享")
+        }
+    }
+
+    // ======================== 分词弹窗（参考 Trime SegmentsWindow：多选+工具栏） ========================
     private fun showWordSplitPopup(text: String) {
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_word_split, null)
 
         val tvOriginal = popupView.findViewById<TextView>(R.id.tv_split_original)
         val gvWords = popupView.findViewById<GridView>(R.id.gv_words)
-        val btnPasteAll = popupView.findViewById<TextView>(R.id.btn_split_paste_all)
-        val btnShareAll = popupView.findViewById<TextView>(R.id.btn_split_share_all)
+        val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_split_select_all)
+        val btnCopy = popupView.findViewById<TextView>(R.id.btn_split_copy)
+        val btnShare = popupView.findViewById<TextView>(R.id.btn_split_share_all)
+        val btnSearch = popupView.findViewById<TextView>(R.id.btn_split_search)
         val btnClose = popupView.findViewById<TextView>(R.id.btn_split_close)
 
         // 分词
         val words = splitWords(text)
         tvOriginal.text = "原文：${text.take(60)}${if (text.length > 60) "…" else ""}"
 
-        // 词列表 adapter
+        // 多选状态
+        val selectedIndices = mutableSetOf<Int>()
+
+        // 词列表 adapter（带选中高亮）
         val adapter = object : android.widget.BaseAdapter() {
             override fun getCount() = words.size
             override fun getItem(p: Int) = words[p]
             override fun getItemId(p: Int) = words[p].hashCode().toLong()
             override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                 val v = cv ?: inflater.inflate(R.layout.item_word_split, parent, false)
-                v.findViewById<TextView>(R.id.tv_word_item).text = words[p]
+                val tv = v.findViewById<TextView>(R.id.tv_word_item)
+                tv.text = words[p]
+                // 选中高亮
+                if (selectedIndices.contains(p)) {
+                    tv.setBackgroundColor(0xFFE0F7FA.toInt())  // Tiffany蓝背景
+                    tv.setTextColor(0xFF0097A7.toInt())
+                    tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                } else {
+                    tv.setBackgroundColor(0xFFFFFFFF.toInt())
+                    tv.setTextColor(0xFF333333.toInt())
+                    tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                }
                 return v
             }
         }
         gvWords.adapter = adapter
 
-        // 单击词：插入单个词
-        gvWords.setOnItemClickListener { _, _, pos, _ ->
-            val word = words.getOrNull(pos) ?: return@setOnItemClickListener
-            currentInputConnection?.commitText(word, 1)
-            updateStatus("✂️ 已插入「${word.take(15)}」")
+        // 更新工具栏按钮状态
+        fun updateToolbar() {
+            val hasSelection = selectedIndices.isNotEmpty()
+            btnCopy.isEnabled = hasSelection
+            btnShare.isEnabled = hasSelection
+            btnSearch.isEnabled = hasSelection
+            btnCopy.alpha = if (hasSelection) 1f else 0.4f
+            btnShare.alpha = if (hasSelection) 1f else 0.4f
+            btnSearch.alpha = if (hasSelection) 1f else 0.4f
+            btnSelectAll.text = if (selectedIndices.size == words.size) "⊗ 取消全选" else "⊞ 全选"
         }
 
-        // 长按词：分享单个词
+        // 获取选中文字
+        fun getSelectedText(): String {
+            if (selectedIndices.isEmpty()) return ""
+            return words.filterIndexed { i, _ -> selectedIndices.contains(i) }.joinToString("")
+        }
+
+        // 单击词：切换选中
+        gvWords.setOnItemClickListener { _, _, pos, _ ->
+            if (selectedIndices.contains(pos)) selectedIndices.remove(pos)
+            else selectedIndices.add(pos)
+            adapter.notifyDataSetChanged()
+            updateToolbar()
+        }
+
+        // 长按词：直接插入单个词
         gvWords.setOnItemLongClickListener { _, _, pos, _ ->
             val word = words.getOrNull(pos) ?: return@setOnItemLongClickListener true
-            try {
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, word)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(Intent.createChooser(this, "分享「${word.take(15)}」"))
-                }
-            } catch (_: Exception) { updateStatus("❌ 无法分享") }
+            currentInputConnection?.commitText(word, 1)
+            updateStatus("✂️ 已插入「${word.take(15)}」")
             true
         }
 
-        // 全部粘贴
-        btnPasteAll.setOnClickListener {
-            currentInputConnection?.commitText(words.joinToString(" "), 1)
-            updateStatus("✂️ 已插入全部 ${words.size} 个词")
+        // 全选 / 取消全选
+        btnSelectAll.setOnClickListener {
+            if (selectedIndices.size == words.size) selectedIndices.clear()
+            else selectedIndices.addAll(words.indices)
+            adapter.notifyDataSetChanged()
+            updateToolbar()
         }
 
-        // 全部分享
-        btnShareAll.setOnClickListener {
-            try {
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(Intent.createChooser(this, "全部分享"))
-                }
-            } catch (_: Exception) { updateStatus("❌ 无法分享") }
+        // 复制选中
+        btnCopy.setOnClickListener {
+            val selected = getSelectedText()
+            if (selected.isNotEmpty()) {
+                currentInputConnection?.commitText(selected, 1)
+                updateStatus("✂️ 已插入选中 ${selectedIndices.size} 个词")
+            }
+        }
+
+        // 分享选中
+        btnShare.setOnClickListener {
+            val selected = getSelectedText()
+            if (selected.isNotEmpty()) launchTextSharing(selected)
+        }
+
+        // 搜索选中
+        btnSearch.setOnClickListener {
+            val selected = getSelectedText()
+            if (selected.isNotEmpty()) {
+                try {
+                    Intent(Intent.ACTION_WEB_SEARCH).apply {
+                        putExtra("query", selected)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(this)
+                    }
+                } catch (_: Exception) { updateStatus("❌ 无法搜索") }
+            }
         }
 
         btnClose.setOnClickListener { /* dismiss by outside touch */ }
+
+        updateToolbar()
 
         // 显示弹窗
         val kw = keyboardView.width.let { if (it > 0) it else resources.displayMetrics.widthPixels }
