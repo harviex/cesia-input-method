@@ -36,7 +36,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="＋"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textColor="#81D8D0"
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"

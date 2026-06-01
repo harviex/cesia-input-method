@@ -142,6 +142,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicBookGlowRunnable: Runnable? = null
     private var magicBookGlowing = false
 
+    // 魔法修改按键发光状态
+    private var magicModeGlowing = false
+
+    // 正体字按键发光状态
+    private var traditionalGlowing = false
+
     // 剪贴板键长按
     private var clipboardPasteRunnable: Runnable? = null
     private var clipboardCutRunnable: Runnable? = null
@@ -951,14 +957,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicMode = true
         typelessEngine?.magicMode = true
 
-        // 高亮按钮表示正在录音
+        // 高亮按钮表示正在录音 + 脉冲发光动画
         magicIsWaitingForVoice = true
+        magicModeGlowing = true
         btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
         btnMagic.setTextColor(0xFFFFFFFF.toInt())
         btnMagic.elevation = 6f
-        btnMagic.pivotX = btnMagic.width / 2f
-        btnMagic.pivotY = btnMagic.height / 2f
-        btnMagic.animate().scaleX(1.08f).scaleY(1.08f).setDuration(200).start()
+        startMagicButtonGlow()
 
         updateStatus("🎤 请说出修改指令...（再次点击✨停止）")
         setStatusDot("recording")
@@ -970,12 +975,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun resetMagicHighlight() {
         magicIsWaitingForVoice = false
+        magicModeGlowing = false
+        stopMagicButtonGlow()
         try {
             btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
             btnMagic.setTextColor(0xFF888888.toInt())
             btnMagic.elevation = 0f
-            btnMagic.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
         } catch (_: Exception) {}
+    }
+
+    private fun startMagicButtonGlow() {
+        val pulse = android.view.animation.ScaleAnimation(
+            1.0f, 1.15f, 1.0f, 1.15f,
+            android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+            android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+        ).apply {
+            duration = 600
+            repeatMode = android.view.animation.ScaleAnimation.REVERSE
+            repeatCount = android.view.animation.ScaleAnimation.INFINITE
+        }
+        btnMagic.startAnimation(pulse)
+    }
+
+    private fun stopMagicButtonGlow() {
+        btnMagic.clearAnimation()
     }
 
     private fun handleMagicResult(recognizedText: String) {
@@ -1239,7 +1262,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     et.setOnEditorActionListener(null)
 
                     val isActive = record.instruction == currentMagicPrompt
-                    val prefix = if (isActive) "✓ " else if (record.isPinned) "📌 " else ""
+                    val prefix = if (isActive) "✓ " else if (record.isPinned) "⤒ " else ""
                     tv.text = "${prefix}${record.instruction}"
                     tv.setTextColor(if (isActive) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
                     tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
@@ -1310,7 +1333,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (realItems.isEmpty()) return@setOnClickListener
             val popupMenu = android.widget.PopupMenu(this, btnPin)
             for (r in realItems) {
-                val title = "${if (r.isPinned) "📌 " else "○ "}${r.instruction.take(18)}"
+                val title = "${if (r.isPinned) "⤒ " else "○ "}${r.instruction.take(18)}"
                 popupMenu.menu.add(0, r.id.toInt(), 0, title)
             }
             popupMenu.setOnMenuItemClickListener { item ->
@@ -1319,7 +1342,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     mgr.togglePin(record.id)
                     rebuildItems()
                     notifyChanged()
-                    updateStatus(if (!record.isPinned) "📌 已置顶" else "取消置顶")
+                    updateStatus(if (!record.isPinned) "⤒ 已置顶" else "取消置顶")
                 }
                 true
             }
@@ -1624,6 +1647,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (::btnTraditional.isInitialized) {
             btnTraditional.setTextColor(if (isTraditional) 0xFF81D8D0.toInt() else 0xFF888888.toInt())
             btnTraditional.setBackgroundColor(if (isTraditional) 0x2281D8D0.toInt() else 0x00000000)
+            if (isTraditional && !traditionalGlowing) {
+                traditionalGlowing = true
+                val pulse = android.view.animation.ScaleAnimation(
+                    1.0f, 1.12f, 1.0f, 1.12f,
+                    android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+                    android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+                ).apply {
+                    duration = 800
+                    repeatMode = android.view.animation.ScaleAnimation.REVERSE
+                    repeatCount = android.view.animation.ScaleAnimation.INFINITE
+                }
+                btnTraditional.startAnimation(pulse)
+            } else if (!isTraditional && traditionalGlowing) {
+                traditionalGlowing = false
+                btnTraditional.clearAnimation()
+            }
         }
     }
 
@@ -2191,6 +2230,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun startLongPressDetection(key: Keyboard.Key) {
         cancelLongPress()
         currentLongPressKey = key
+        keyboardView.currentPopupKey = key
+        keyboardView.invalidateKey(key)
         longPressRunnable = Runnable {
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
@@ -2200,6 +2241,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 longPressTriggered = true
                 longPressConsumed = false
             }
+            keyboardView.currentPopupKey = null
+            keyboardView.invalidateKey(key)
             currentLongPressKey = null
         }.also {
             longPressHandler.postDelayed(it, 500)
@@ -2209,9 +2252,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun cancelLongPress() {
         longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
         longPressRunnable = null
+        val prevKey = currentLongPressKey
         currentLongPressKey = null
         longPressTriggered = false
         longPressConsumed = false
+        keyboardView.currentPopupKey = null
+        if (prevKey != null) keyboardView.invalidateKey(prevKey)
     }
 
     private fun startSendKeyLongPress() {
@@ -2312,7 +2358,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val btnSearch = popupView.findViewById<TextView>(R.id.btn_clipboard_search)
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
@@ -2326,14 +2371,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             clipboardSearchFilter = ""
             applyClipboardFilter()
 
-            // 搜索按钮：进入搜索编辑模式
+            // 搜索按钮：进入/退出搜索编辑模式
             btnSearch.setOnClickListener {
-                clipboardSearchEditMode = true
-                clipboardSearchBuffer.clear()
-                tvSearchHint.text = "✏️ 输入搜索关键词...（按发送键确认）"
-                tvSearchHint.visibility = View.VISIBLE
-                btnSearch.text = "🔍 点击搜索..."
-                btnSearch.setTextColor(0xFF999999.toInt())
+                if (clipboardSearchEditMode) {
+                    // 退出搜索编辑模式
+                    clipboardSearchEditMode = false
+                    clipboardSearchBuffer.clear()
+                    clipboardSearchFilter = ""
+                    tvSearchHint.visibility = View.GONE
+                    updateClipboardSearchBtn(btnSearch)
+                    applyClipboardFilter()
+                } else {
+                    // 进入搜索编辑模式
+                    clipboardSearchEditMode = true
+                    clipboardSearchBuffer.clear()
+                    tvSearchHint.text = "✏️ 输入搜索关键词...（按发送键确认，再点🔍退出）"
+                    tvSearchHint.visibility = View.VISIBLE
+                    btnSearch.text = "🔍 点击搜索..."
+                    btnSearch.setTextColor(0xFF999999.toInt())
+                }
             }
 
             clipboardAdapter = ClipboardAdapter(inflater2, clipboardFilteredItems, this)
@@ -2368,21 +2424,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 true
             }
 
-            // 关闭按钮
-            btnClose.setOnClickListener {
-                if (clipboardSearchEditMode) {
-                    clipboardSearchEditMode = false
-                    clipboardSearchBuffer.clear()
-                    clipboardSearchFilter = ""
-                    tvSearchHint.visibility = View.GONE
-                    updateClipboardSearchBtn(btnSearch)
-                    applyClipboardFilter()
-                } else {
-                    popup.dismiss()
-                }
-            }
 
-            // 完成按钮
             btnDone.setOnClickListener { popup.dismiss() }
 
             // 置顶按钮
@@ -2391,7 +2433,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (realItems.isEmpty()) return@setOnClickListener
                 val popupMenu = android.widget.PopupMenu(this, btnPin)
                 for (r in realItems) {
-                    val title = "${if (r.isPinned) "📌 " else "○ "}${r.text.take(18)}"
+                    val title = "${if (r.isPinned) "⤒ " else "○ "}${r.text.take(18)}"
                     popupMenu.menu.add(0, r.text.hashCode(), 0, title)
                 }
                 popupMenu.setOnMenuItemClickListener { menuItem ->
@@ -2505,7 +2547,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val actions = mutableListOf<String>()
         if (!item.isEmpty) {
             actions.add("📋 插入文本")
-            actions.add(if (item.isPinned) "📌 取消置顶" else "📌 置顶收藏")
+            actions.add(if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏")
             actions.add(if (clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删")
             actions.add("✂️ 分词处理")
             actions.add("✏️ 编辑文本")

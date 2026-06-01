@@ -37,6 +37,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
     // Shift 锁定状态（用于绘制不同图标）
     var isShiftLocked = false
 
+    // 当前长按中的按键（用于高亮绘制）
+    var currentPopupKey: Keyboard.Key? = null
+
     // 手势检测：左右滑动切换全键盘/T9，防止误触
     private var gestureStartX = 0f
     private var gestureStartY = 0f
@@ -113,6 +116,20 @@ class CesiaKeyboardView @JvmOverloads constructor(
         invalidateAllKeys()
     }
 
+    /** 重绘单个按键（用于长按高亮） */
+    fun invalidateKey(key: Keyboard.Key) {
+        // 标记当前长按的按键，触发重绘
+        currentPopupKey = key
+        // 只重绘该按键区域
+        invalidate(key.x, key.y, key.x + key.width, key.y + key.height)
+    }
+
+    // 长按高亮画笔
+    private val longPressHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x4081D8D0.toInt()
+        style = Paint.Style.FILL
+    }
+
     override fun onDraw(canvas: Canvas) {
         // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写
         val kb = this.keyboard
@@ -153,6 +170,15 @@ class CesiaKeyboardView @JvmOverloads constructor(
         t9MainPaint.textSize = t9MainSpSize
 
         val keys = this.keyboard?.keys ?: return
+        // 长按高亮：在 super.onDraw 之前绘制高亮背景
+        val popupKey = currentPopupKey
+        if (popupKey != null) {
+            canvas.drawRect(
+                popupKey.x.toFloat(), popupKey.y.toFloat(),
+                (popupKey.x + popupKey.width).toFloat(), (popupKey.y + popupKey.height).toFloat(),
+                longPressHighlightPaint
+            )
+        }
         for (key in keys) {
             val code = key.codes?.firstOrNull() ?: continue
             if (key.label == null) continue
@@ -206,7 +232,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(label, cx, cy, grayPaint)
             }
 
-            // ===== 4. Shift 锁定红色圆点（半径8f，距右30px，距上10px） =====
+            // ===== 4. Shift 锁定圆点（脉冲发光效果） =====
             // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
             if ((code == -104 || code == -1) && isShiftLocked) {
                 val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -215,7 +241,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
                 val dotX = key.x + key.width - 30f
                 val dotY = key.y + 10f + 8f
-                canvas.drawCircle(dotX, dotY, 8f, dotPaint)
+                // 脉冲半径：8f ~ 12f，基于系统时间
+                val pulse = (System.currentTimeMillis() % 800) / 800f
+                val radius = 8f + 4f * kotlin.math.sin(pulse * 2 * kotlin.math.PI).toFloat()
+                canvas.drawCircle(dotX, dotY, radius, dotPaint)
+                // 触发持续重绘以实现动画
+                if (isShiftLocked) {
+                    postInvalidateDelayed(50)
+                }
             }
 
             // ===== 5. (剪贴板字符已合并到 section 3) =====
