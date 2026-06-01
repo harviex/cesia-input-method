@@ -54,7 +54,7 @@
 
     <!-- ===== 第4行：序号/特殊/控制（10键） ===== -->
     <Row>
-        <Key android:codes="-104" android:keyLabel="⇧" android:isSticky="true" android:keyEdgeFlags="left" />
+        <Key android:codes="8226" android:keyLabel="•" android:popupCharacters="‣" android:keyEdgeFlags="left" />
         <Key android:codes="167" android:keyLabel="§" android:popupCharacters="&#x00B6;" />
         <Key android:codes="169" android:keyLabel="©" android:popupCharacters="&#x24B8;" />
         <Key android:codes="174" android:keyLabel="®" android:popupCharacters="&#x24C7;" />
