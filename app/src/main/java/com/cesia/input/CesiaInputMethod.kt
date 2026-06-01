@@ -2447,17 +2447,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
             etSearch.setOnFocusChangeListener { _, hasFocus ->
+                clipboardSearchEditMode = hasFocus
                 if (hasFocus) {
                     tvSearchHint.visibility = View.VISIBLE
                     tvSearchHint.text = "输入搜索关键词..."
+                    etSearch.hint = ""
+                } else {
+                    tvSearchHint.visibility = View.GONE
+                    etSearch.hint = "🔍 点击搜索..."
                 }
             }
             etSearch.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: android.text.Editable?) {
-                    clipboardSearchFilter = s?.toString()?.trim() ?: ""
-                    applyClipboardFilter()
+                    // 搜索编辑模式下，TextWatcher 不做任何事（由 onKey 拦截处理过滤）
+                    // 非搜索编辑模式下（如直接粘贴），才由 TextWatcher 触发过滤
+                    if (!clipboardSearchEditMode) {
+                        clipboardSearchFilter = s?.toString()?.trim() ?: ""
+                        applyClipboardFilter()
+                    }
                 }
             })
             etSearch.setOnEditorActionListener { _, actionId, _ ->
@@ -2795,7 +2804,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
-        // ======================== 剪贴板搜索编辑模式：手动写入 EditText =======================
+        // ======================== 剪贴板搜索编辑模式：手动写入 EditText ========================
         if (clipboardSearchEditMode) {
             val searchEt = this.etSearch
             if (searchEt != null) {
@@ -2805,21 +2814,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         clipboardSearchFilter = searchEt.text.toString().trim()
                         applyClipboardFilter()
                         searchEt.clearFocus()
+                        clipboardSearchEditMode = false
                         return
                     }
-                    // 返回键：取消搜索，退出编辑模式
-                    KeyEvent.KEYCODE_BACK -> {
+                    // 返回键/ESC：取消搜索，清空并退出编辑模式
+                    KeyEvent.KEYCODE_BACK, 27 -> {
                         searchEt.setText("")
                         clipboardSearchFilter = ""
                         applyClipboardFilter()
                         searchEt.clearFocus()
+                        clipboardSearchEditMode = false
                         return
                     }
                     // 退格键
                     -5, Keyboard.KEYCODE_DELETE -> {
-                        if (rimeEngine.isComposing) {
-                            rimeEngine.processKey("BackSpace")
-                        }
                         val buf = searchEt.text.toString()
                         if (buf.isNotEmpty()) {
                             val newBuf = buf.dropLast(1)
@@ -2830,64 +2838,52 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         applyClipboardFilter()
                         return
                     }
-                    // 字母键 a-z
-                    in 97..122 -> {
-                        rimeEngine.processKey(primaryCode.toChar())
-                        val comp = rimeEngine.composingText
+                    // 空格（直接追加空格）
+                    32 -> {
                         val buf = searchEt.text.toString()
-                        searchEt.setText(buf + comp)
+                        searchEt.setText(buf + " ")
                         searchEt.setSelection(searchEt.text.length)
                         clipboardSearchFilter = searchEt.text.toString().trim()
                         applyClipboardFilter()
                         return
                     }
-                    // 数字键 0-9：选词或追加
+                    // 字母键 a-z：追加字符
+                    in 97..122 -> {
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + primaryCode.toChar().toString())
+                        searchEt.setSelection(searchEt.text.length)
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 大写字母 A-Z
+                    in 65..90 -> {
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + primaryCode.toChar().lowercase())
+                        searchEt.setSelection(searchEt.text.length)
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 数字键 0-9：直接追加数字
                     in 48..57 -> {
-                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                            val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                            val cands = rimeEngine.candidates
-                            if (index < cands.size) {
-                                val selected = rimeEngine.selectCandidate(index)
-                                if (selected.isNotEmpty()) {
-                                    val buf = searchEt.text.toString()
-                                    val comp = rimeEngine.composingText
-                                    val newBuf = buf.dropLast(comp.length) + selected
-                                    searchEt.setText(newBuf)
-                                    searchEt.setSelection(newBuf.length)
-                                    rimeEngine.clear()
-                                }
-                            }
-                        } else {
-                            val buf = searchEt.text.toString()
-                            searchEt.setText(buf + primaryCode.toChar().toString())
-                            searchEt.setSelection(searchEt.text.length)
-                        }
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + primaryCode.toChar().toString())
+                        searchEt.setSelection(searchEt.text.length)
                         clipboardSearchFilter = searchEt.text.toString().trim()
                         applyClipboardFilter()
                         return
                     }
-                    // 空格：选首词或追加空格
-                    32 -> {
-                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                            val selected = rimeEngine.selectCandidate(0)
-                            if (selected.isNotEmpty()) {
-                                val buf = searchEt.text.toString()
-                                val comp = rimeEngine.composingText
-                                val newBuf = buf.dropLast(comp.length) + selected
-                                searchEt.setText(newBuf)
-                                searchEt.setSelection(newBuf.length)
-                                rimeEngine.clear()
-                            }
-                        } else {
-                            val buf = searchEt.text.toString()
-                            searchEt.setText(buf + " ")
-                            searchEt.setSelection(searchEt.text.length)
-                        }
+                    // 其他可打印符号直接追加
+                    in 33..47, in 58..64, in 91..96, in 123..126 -> {
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + primaryCode.toChar().toString())
+                        searchEt.setSelection(searchEt.text.length)
                         clipboardSearchFilter = searchEt.text.toString().trim()
                         applyClipboardFilter()
                         return
                     }
-                    // 其他按键忽略
+                    // 其他按键（shift/ctrl等）忽略
                     else -> return
                 }
             }
