@@ -2535,7 +2535,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            popup.setFocusable(false)
+            popup.setFocusable(true)  // 允许内部 EditText 获得焦点
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
@@ -2611,11 +2611,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
 
             // 自动聚焦搜索框，弹出软键盘
-            etSearch.post {
+            etSearch.postDelayed({
                 etSearch.requestFocus()
+                // 把光标移到已有文字末尾
+                etSearch.setSelection(etSearch.text.length)
                 val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
                 imm?.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-            }
+                clipboardSearchEditMode = true
+            }, 100)
 
             popup.setOnDismissListener {
                 cancelSendKeyLongPress()
@@ -2720,15 +2723,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         else clipboardFavorites[key] = true
                         updateClipboardFavorites(); onUpdate()
                     }
-                    3 -> { // 分词 — 用空格分词后逐段插入
-                        val words = item.text.split(Regex("""[\s,，。；;:：！!？?、]+"""))
-                            .filter { it.isNotEmpty() }
-                        if (words.size > 1) {
-                            currentInputConnection?.commitText(words.joinToString(" "), 1)
-                        } else {
-                            updateStatus("✂️ 已单段插入")
-                            currentInputConnection?.commitText(item.text, 1)
-                        }
+                    3 -> { // 分词 — 弹出分词界面
+                        showWordSplitPopup(item.text)
                     }
                     4 -> { // 编辑
                         showClipboardEditDialog(item.text) { newText ->
@@ -2776,6 +2772,115 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         dialog.show()
     }
 
+    // ======================== 分词弹窗 ========================
+    private fun showWordSplitPopup(text: String) {
+        val inflater = android.view.LayoutInflater.from(this)
+        val popupView = inflater.inflate(R.layout.popup_word_split, null)
+
+        val tvOriginal = popupView.findViewById<TextView>(R.id.tv_split_original)
+        val gvWords = popupView.findViewById<GridView>(R.id.gv_words)
+        val btnPasteAll = popupView.findViewById<TextView>(R.id.btn_split_paste_all)
+        val btnShareAll = popupView.findViewById<TextView>(R.id.btn_split_share_all)
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_split_close)
+
+        // 分词
+        val words = splitWords(text)
+        tvOriginal.text = "原文：${text.take(60)}${if (text.length > 60) "…" else ""}"
+
+        // 词列表 adapter
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = words.size
+            override fun getItem(p: Int) = words[p]
+            override fun getItemId(p: Int) = words[p].hashCode().toLong()
+            override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                val v = cv ?: inflater.inflate(R.layout.item_word_split, parent, false)
+                v.findViewById<TextView>(R.id.tv_word_item).text = words[p]
+                return v
+            }
+        }
+        gvWords.adapter = adapter
+
+        // 单击词：插入单个词
+        gvWords.setOnItemClickListener { _, _, pos, _ ->
+            val word = words.getOrNull(pos) ?: return@setOnItemClickListener
+            currentInputConnection?.commitText(word, 1)
+            updateStatus("✂️ 已插入「${word.take(15)}」")
+        }
+
+        // 长按词：分享单个词
+        gvWords.setOnItemLongClickListener { _, _, pos, _ ->
+            val word = words.getOrNull(pos) ?: return@setOnItemLongClickListener true
+            try {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, word)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(Intent.createChooser(this, "分享「${word.take(15)}」"))
+                }
+            } catch (_: Exception) { updateStatus("❌ 无法分享") }
+            true
+        }
+
+        // 全部粘贴
+        btnPasteAll.setOnClickListener {
+            currentInputConnection?.commitText(words.joinToString(" "), 1)
+            updateStatus("✂️ 已插入全部 ${words.size} 个词")
+        }
+
+        // 全部分享
+        btnShareAll.setOnClickListener {
+            try {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(Intent.createChooser(this, "全部分享"))
+                }
+            } catch (_: Exception) { updateStatus("❌ 无法分享") }
+        }
+
+        btnClose.setOnClickListener { /* dismiss by outside touch */ }
+
+        // 显示弹窗
+        val kw = keyboardView.width.let { if (it > 0) it else resources.displayMetrics.widthPixels }
+        val ph = (resources.displayMetrics.heightPixels * 0.5f).toInt()
+        val popup = PopupWindow(popupView, kw, ph, true).apply {
+            isOutsideTouchable = true
+            elevation = 8f
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        }
+        popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -ph)
+    }
+
+    // 分词逻辑：CJK 逐字 + 英文数字连续 + 标点分隔
+    private fun splitWords(text: String): List<String> {
+        val words = mutableListOf<String>()
+        val sb = StringBuilder()
+        var lastWasCjk = false
+        for (ch in text) {
+            val isCjk = ch.code in 0x4E00..0x9FFF || ch.code in 0x3400..0x4DBF
+            val isAlnum = ch.isLetterOrDigit()
+            val isSep = ch.isWhitespace() || ch in "，。、；：！？…—・｜\"'（）【】"
+            if (isSep) {
+                if (sb.isNotEmpty()) { words.add(sb.toString()); sb.clear() }
+                lastWasCjk = false
+            } else if (isCjk) {
+                if (!lastWasCjk && sb.isNotEmpty()) { words.add(sb.toString()); sb.clear() }
+                if (lastWasCjk && sb.isNotEmpty()) { words.add(sb.toString()); sb.clear() }
+                sb.append(ch); lastWasCjk = true
+            } else if (isAlnum) {
+                if (lastWasCjk && sb.isNotEmpty()) { words.add(sb.toString()); sb.clear() }
+                sb.append(ch); lastWasCjk = false
+            } else {
+                if (sb.isNotEmpty()) { words.add(sb.toString()); sb.clear() }
+                lastWasCjk = false
+            }
+        }
+        if (sb.isNotEmpty()) words.add(sb.toString())
+        return words.filter { it.isNotBlank() }
+    }
+
+    // ======================== 编辑弹窗 ========================
     private fun showClipboardEditDialog(original: String, onSave: (String) -> Unit) {
         val editText = android.widget.EditText(this).apply {
             setText(original)
