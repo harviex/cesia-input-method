@@ -2440,8 +2440,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             dialog.setOnDismissListener {
                 showClipboardManagerPopup()
             }
-            try { dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT) } catch (_: Exception) {}
-            // 延迟弹出软键盘，等 Dialog 显示后
+            // IME 服务弹出的 Dialog，不设置特殊窗口类型，让系统自动处理
             dialog.show()
             editText.requestFocus()
             editText.postDelayed({
