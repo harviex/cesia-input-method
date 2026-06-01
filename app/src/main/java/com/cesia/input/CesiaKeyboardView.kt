@@ -91,7 +91,23 @@ class CesiaKeyboardView @JvmOverloads constructor(
         for (key in kb.keys) {
             key.pressed = false
         }
+        // 取消 KeyboardView 内部的长按检测（防止滑动起点按键弹出副字符）
+        cancelKeyboardViewLongPress()
         invalidateAllKeys()
+    }
+
+    /** 取消 KeyboardView 内部的长按 runnable（通过反射） */
+    private fun cancelKeyboardViewLongPress() {
+        try {
+            // KeyboardView 内部用 Handler 延迟触发长按，取消它
+            val handlerField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mHandler")
+            handlerField.isAccessible = true
+            val handler = handlerField.get(this) as? android.os.Handler
+            // 移除所有 pending 的 runnable（包括长按检测）
+            handler?.removeCallbacksAndMessages(null)
+        } catch (_: Exception) {
+            // 反射失败不影响核心功能
+        }
     }
 
     // T9 主字符映射（数字码 → 字母标签）
