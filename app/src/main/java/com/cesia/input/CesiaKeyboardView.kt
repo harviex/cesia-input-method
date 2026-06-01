@@ -57,7 +57,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
             android.view.MotionEvent.ACTION_DOWN -> {
                 // 滑动冷却期内禁止按键输入
                 if (System.currentTimeMillis() < swipeLockUntil) {
-                    return true  // 吃掉事件，不传给 KeyboardView
+                    return true
                 }
                 gestureStartX = me.x
                 gestureStartY = me.y
@@ -68,12 +68,12 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     val dx = me.x - gestureStartX
                     val dy = kotlin.math.abs(me.y - gestureStartY)
                     val adx = kotlin.math.abs(dx)
-                    // 水平滑动超过阈值且垂直偏移不大 → 判定为滑动切键盘
                     if (adx > swipeThreshold && dy < swipeMaxYDrift) {
                         isSwipeDetected = true
                         swipeLockUntil = System.currentTimeMillis() + swipeLockDuration
+                        // 清除所有按键按下状态，防止滑动起点按键触发副字符/功能
+                        clearAllKeysPressed()
                         if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
-                        // 消耗后续所有事件，不触发按键
                         return true
                     }
                 }
@@ -83,6 +83,15 @@ class CesiaKeyboardView @JvmOverloads constructor(
             }
         }
         return super.onTouchEvent(me)
+    }
+
+    /** 清除所有按键按下状态（滑动切换时调用，防止起点按键误触发） */
+    private fun clearAllKeysPressed() {
+        val kb = keyboard ?: return
+        for (key in kb.keys) {
+            key.pressed = false
+        }
+        invalidateAllKeys()
     }
 
     // T9 主字符映射（数字码 → 字母标签）

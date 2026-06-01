@@ -1860,23 +1860,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 左右滑动循环切换全键盘 ↔ T9 */
     private fun toggleBySwipe() {
+        // 取消可能正在进行的长按检测（防止滑动起点按键触发副字符）
+        cancelLongPress()
         // 清除输入状态，防止切换后残留
         rimeEngine.clear()
         t9InputBuffer.clear()
         candidateBar.visibility = View.GONE
         updateStatus("Cesia 已就绪")
-        // UI 立即切换，schema 切换放后台（不再 rebuild，秒开）
+        // UI 立即切换，schema 切换放后台（轻量 reload，保留 build 缓存）
         if (keyboardMode == KeyboardMode.NUMBER) {
             switchToKeyboard(KeyboardMode.QWERTY)
             Thread {
                 rimeEngine.selectSchema("pinyin")
-                rimeEngine.clearSession()
+                rimeEngine.reload()
             }.start()
         } else {
             switchToKeyboard(KeyboardMode.NUMBER)
             Thread {
                 rimeEngine.selectSchema("t9_pinyin")
-                rimeEngine.clearSession()
+                rimeEngine.reload()
                 Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
             }.start()
         }
@@ -1968,7 +1970,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // T9 → QWERTY：切换 schema 到 pinyin
             switchToKeyboard(KeyboardMode.QWERTY)
             rimeEngine.selectSchema("pinyin")
-            rimeEngine.clearSession()
+            rimeEngine.reload()
             if (qwertyShiftLock) {
                 isAsciiMode = true
                 rimeEngine.setAsciiMode(true)
@@ -1977,7 +1979,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // QWERTY → T9：切换 schema 到 t9_pinyin
             switchToKeyboard(KeyboardMode.NUMBER)
             rimeEngine.selectSchema("t9_pinyin")
-            rimeEngine.clearSession()
+            rimeEngine.reload()
             resetNumberKeyboardState()
         }
     }
