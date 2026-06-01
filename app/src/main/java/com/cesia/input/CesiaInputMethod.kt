@@ -613,6 +613,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             engine.initialize(getOpenRouterApiKey())
+            // 同步语音语言设置
+            val settingsPrefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+            engine.voiceLanguage = settingsPrefs.getString("voice_language", "zh") ?: "zh"
         }
 
         loadSettings()
@@ -1726,7 +1729,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBar.visibility = View.GONE
         voiceStartTime = System.currentTimeMillis()
         updateStatus("🎤 正在收听，请说话...")
-        typelessEngine?.startListening(continuous = true)
+
+        // 根据设置选择语音引擎
+        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        val engine = prefs.getString("voice_engine", "auto") ?: "auto"
+        val useWhisper = when (engine) {
+            "whisper" -> true
+            "google" -> false
+            else -> typelessEngine?.isWhisperAvailable == true  // auto
+        }
+        if (useWhisper) {
+            typelessEngine?.startWhisperListening(continuous = true)
+        } else {
+            typelessEngine?.startListening(continuous = true)
+        }
         showAiChoiceButtons()
     }
 
@@ -1772,7 +1788,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun stopRecordingAndWait() {
         isRecording = false
         stopVoiceWave()
-        typelessEngine?.stopListening()
+        typelessEngine?.stopListening()  // 同时停止 Fallback 和 Whisper
         setStatusDot("processing")
     }
 

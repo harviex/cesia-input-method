@@ -29,10 +29,11 @@ import java.util.*
 
 /**
  * Cesia 输入法设置页面
- * 配置润色 API、测试连接、OTA 更新、词库管理、主题切换
+ * 配置润色 API、测试连接、OTA 更新、词库管理、主题切换、语音设置
  */
 class SettingsActivity : AppCompatActivity() {
 
+    // ── API 设置 ──
     private lateinit var etApiUrl: TextInputEditText
     private lateinit var etApiKey: TextInputEditText
     private lateinit var etModelId: TextInputEditText
@@ -42,7 +43,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnTestApi: MaterialButton
     private lateinit var tvStatus: TextView
     private lateinit var tvLog: TextView
+
+    // ── 版本 ──
     private lateinit var tvVersion: TextView
+
+    // ── 统计 ──
     private var tvStatVoiceTime: TextView? = null
     private var tvStatSavedTime: TextView? = null
     private var tvStatVoiceSpeed: TextView? = null
@@ -51,20 +56,27 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvStatCount: TextView
     private lateinit var btnHistory: Button
     private lateinit var statsManager: PolishStatsManager
-    private lateinit var dictManager: PinyinDictManager
 
-    // 主题
+    // ── 主题 ──
     private lateinit var btnThemeToggle: Button
     private lateinit var tvThemeLabel: TextView
 
-    // 词库管理
+    // ── 词库管理 ──
     private lateinit var btnDownloadDict: Button
     private lateinit var btnImportDict: Button
     private lateinit var btnExportDict: Button
     private lateinit var btnCloudBackup: Button
     private lateinit var tvDictInfo: TextView
+    private lateinit var spinnerDictSource: Spinner
+    private lateinit var tvDictSourceDesc: TextView
+    private lateinit var dictManager: PinyinDictManager
 
-    // 检查更新
+    // ── 语音设置 ──
+    private lateinit var spinnerVoiceLanguage: Spinner
+    private lateinit var spinnerVoiceEngine: Spinner
+    private lateinit var tvVoiceEngineDesc: TextView
+
+    // ── 检查更新 ──
     private lateinit var btnCheckUpdate: Button
     private lateinit var vUpdateDot: View
 
@@ -85,12 +97,15 @@ class SettingsActivity : AppCompatActivity() {
         const val THEME_DARK = 1
         const val IMPORT_DICT_REQUEST = 2001
         const val IMPORT_PHRASES_REQUEST = 2002
+
+        // 语音引擎选项
+        const val VOICE_ENGINE_WHISPER = "whisper"
+        const val VOICE_ENGINE_GOOGLE = "google"
+        const val VOICE_ENGINE_AUTO = "auto"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // 应用主题
         applyTheme()
-
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings)
         setTitle("Cesia 输入法设置")
@@ -104,10 +119,10 @@ class SettingsActivity : AppCompatActivity() {
         refreshStats()
         refreshDictInfo()
         updateThemeUI()
+        setupDictSpinner()
+        setupVoiceSpinners()
 
         checkAndRequestPermission()
-
-        // 每天自动检查一次更新
         checkUpdateDaily()
     }
 
@@ -121,6 +136,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
+        // API 设置
         etApiUrl = findViewById(R.id.et_api_url)
         etApiKey = findViewById(R.id.et_openrouter_key)
         etModelId = findViewById(R.id.et_model_id)
@@ -131,6 +147,8 @@ class SettingsActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tv_api_status)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
+
+        // 统计
         try {
             tvStatVoiceTime = findViewById(R.id.tv_stat_voice_time)
             tvStatSavedTime = findViewById(R.id.tv_stat_saved_time)
@@ -141,7 +159,7 @@ class SettingsActivity : AppCompatActivity() {
         tvStatCount = findViewById(R.id.tv_stat_count)
         btnHistory = findViewById(R.id.btn_history)
 
-        // 主题切换
+        // 主题
         try {
             btnThemeToggle = findViewById(R.id.btn_theme_toggle)
             tvThemeLabel = findViewById(R.id.tv_theme_label)
@@ -154,6 +172,15 @@ class SettingsActivity : AppCompatActivity() {
             btnExportDict = findViewById(R.id.btn_export_dict)
             btnCloudBackup = findViewById(R.id.btn_cloud_backup)
             tvDictInfo = findViewById(R.id.tv_dict_info)
+            spinnerDictSource = findViewById(R.id.spinner_dict_source)
+            tvDictSourceDesc = findViewById(R.id.tv_dict_source_desc)
+        } catch (_: Exception) {}
+
+        // 语音设置
+        try {
+            spinnerVoiceLanguage = findViewById(R.id.spinner_voice_language)
+            spinnerVoiceEngine = findViewById(R.id.spinner_voice_engine)
+            tvVoiceEngineDesc = findViewById(R.id.tv_voice_engine_desc)
         } catch (_: Exception) {}
 
         // 检查更新
@@ -163,8 +190,108 @@ class SettingsActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    // ═══════════════════════════════════════════════════
+    //  词库选择
+    // ═══════════════════════════════════════════════════
+
+    private fun setupDictSpinner() {
+        val dictSources = PinyinDictManager.AVAILABLE_DICTS
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item,
+            dictSources.map { "${it.nameZh} [${it.language.uppercase()}]" })
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerDictSource?.adapter = adapter
+
+        // 设置当前选中
+        val activeId = dictManager.getActiveDictSource().id
+        val activeIndex = dictSources.indexOfFirst { it.id == activeId }
+        if (activeIndex >= 0) spinnerDictSource?.setSelection(activeIndex)
+
+        spinnerDictSource?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val source = dictSources[position]
+                tvDictSourceDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
+                // 如果切换了词库源，更新激活词库
+                if (source.id != dictManager.getActiveDictSource().id) {
+                    dictManager.setActiveDict(source.id)
+                    refreshDictInfo()
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // 初始化描述
+        if (dictSources.isNotEmpty()) {
+            val source = dictManager.getActiveDictSource()
+            tvDictSourceDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  语音设置
+    // ═══════════════════════════════════════════════════
+
+    private fun setupVoiceSpinners() {
+        // 语音语言
+        val languages = listOf("中文 (zh)", "English (en)")
+        val langAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, languages)
+        langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerVoiceLanguage?.adapter = langAdapter
+
+        val currentLang = dictManager.getVoiceLanguage()
+        spinnerVoiceLanguage?.setSelection(if (currentLang == "en") 1 else 0)
+
+        spinnerVoiceLanguage?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val lang = if (position == 1) "en" else "zh"
+                dictManager.setVoiceLanguage(lang)
+                appendLog("🎤 语音语言切换为: ${if (lang == "zh") "中文" else "English"}")
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // 语音引擎
+        val engines = listOf("Whisper API (推荐)", "Google 语音识别", "自动选择")
+        val engineAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, engines)
+        engineAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerVoiceEngine?.adapter = engineAdapter
+
+        val currentEngine = prefs.getString("voice_engine", VOICE_ENGINE_AUTO) ?: VOICE_ENGINE_AUTO
+        spinnerVoiceEngine?.setSelection(when (currentEngine) {
+            VOICE_ENGINE_WHISPER -> 0
+            VOICE_ENGINE_GOOGLE -> 1
+            else -> 2
+        })
+
+        spinnerVoiceEngine?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val engine = when (position) {
+                    0 -> VOICE_ENGINE_WHISPER
+                    1 -> VOICE_ENGINE_GOOGLE
+                    else -> VOICE_ENGINE_AUTO
+                }
+                prefs.edit().putString("voice_engine", engine).apply()
+                updateVoiceEngineDesc(engine)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        updateVoiceEngineDesc(currentEngine)
+    }
+
+    private fun updateVoiceEngineDesc(engine: String) {
+        val desc = when (engine) {
+            VOICE_ENGINE_WHISPER -> "使用 Whisper API 进行语音识别，不依赖 Google 服务。需要配置 API Key。"
+            VOICE_ENGINE_GOOGLE -> "使用 Android 系统内置的 Google 语音识别。需要 Google Play 服务且可能需要科学上网。"
+            else -> "优先使用 Whisper API，如果不可用则回退到 Google 语音识别。"
+        }
+        tvVoiceEngineDesc?.text = desc
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  版本信息
+    // ═══════════════════════════════════════════════════
+
     private fun showVersion() {
-        // 直接从已安装APK读取版本号
         val displayVersion = try {
             val pInfo = if (Build.VERSION.SDK_INT >= 33) {
                 packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
@@ -181,7 +308,6 @@ class SettingsActivity : AppCompatActivity() {
             "版本: 开发版"
         }
         tvVersion.text = versionText
-        Log.d("SettingsActivity", "显示版本: $displayVersion, versionCode: ${try { val p = packageManager.getPackageInfo(packageName, 0); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong() } catch(_:Exception){0L}}")
         fetchGitHubVersion()
     }
 
@@ -213,6 +339,10 @@ class SettingsActivity : AppCompatActivity() {
         }.start()
     }
 
+    // ═══════════════════════════════════════════════════
+    //  权限
+    // ═══════════════════════════════════════════════════
+
     private fun checkAndRequestPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
@@ -234,6 +364,10 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
     }
+
+    // ═══════════════════════════════════════════════════
+    //  设置加载/保存
+    // ═══════════════════════════════════════════════════
 
     private fun loadSettings() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
@@ -275,29 +409,31 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
 
-        // 主题切换
-        btnThemeToggle?.setOnClickListener {
-            toggleTheme()
-        }
+        btnThemeToggle?.setOnClickListener { toggleTheme() }
 
         // 词库管理
         btnDownloadDict?.setOnClickListener { downloadDict() }
-        btnImportDict?.setOnClickListener { showImportDialog() }
-        btnExportDict?.setOnClickListener { exportDict() }
+        btnImportDict?.setOnClickListener {
+            Toast.makeText(this, "请使用词库选择器切换词库", Toast.LENGTH_SHORT).show()
+        }
+        btnExportDict?.setOnClickListener {
+            Toast.makeText(this, "词库导出功能暂未开放", Toast.LENGTH_SHORT).show()
+        }
         btnCloudBackup?.setOnClickListener { showCloudBackupDialog() }
 
         // 检查更新
         btnCheckUpdate?.setOnClickListener { checkForUpdates() }
     }
 
-    // ======================== 主题切换 ========================
+    // ═══════════════════════════════════════════════════
+    //  主题切换
+    // ═══════════════════════════════════════════════════
 
     private fun toggleTheme() {
         val currentTheme = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
         val newTheme = if (currentTheme == THEME_LIGHT) THEME_DARK else THEME_LIGHT
         prefs.edit().putInt(PREF_THEME_MODE, newTheme).apply()
         updateThemeUI()
-        // 重启Activity以应用新主题
         recreate()
     }
 
@@ -312,7 +448,9 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ======================== 词库管理 ========================
+    // ═══════════════════════════════════════════════════
+    //  词库管理
+    // ═══════════════════════════════════════════════════
 
     private fun refreshDictInfo() {
         val info = dictManager.getDictInfo()
@@ -326,29 +464,46 @@ class SettingsActivity : AppCompatActivity() {
             info.dictSize < 1024 * 1024 -> "${info.dictSize / 1024}KB"
             else -> "${info.dictSize / 1024 / 1024}MB"
         }
-        val statusText = if (info.downloaded) {
-            "词库: $sizeStr | 词条: ${info.dictCount} 条\n来源: ${info.source}\n同步: $syncTime"
-        } else {
-            "词库: 使用内置精简版 (~1000字)\n提示: 可下载完整词库获得更好的输入体验\n来源: 内置"
+        val langLabel = if (info.voiceLanguage == "en") "English" else "中文"
+        val statusText = buildString {
+            appendLine("当前词库: ${info.activeDictName}")
+            appendLine("词条: ${info.dictCount} 条 | 大小: $sizeStr")
+            if (info.downloaded) {
+                appendLine("来源: ${info.source}")
+                appendLine("同步: $syncTime")
+            }
+            appendLine("语音语言: $langLabel")
         }
-        tvDictInfo?.text = statusText
-        // 更新按钮文字
-        if (info.downloaded) {
+        tvDictInfo?.text = statusText.trim()
+
+        // 更新下载按钮文字
+        val activeSource = dictManager.getActiveDictSource()
+        if (activeSource.url.isEmpty()) {
+            btnDownloadDict?.text = "✅ 内置词库"
+            btnDownloadDict?.isEnabled = false
+        } else if (dictManager.isDictDownloaded(activeSource.id)) {
             btnDownloadDict?.text = "🔄 更新词库"
+            btnDownloadDict?.isEnabled = true
         } else {
             btnDownloadDict?.text = "📥 下载词库"
+            btnDownloadDict?.isEnabled = true
         }
     }
 
     private fun downloadDict() {
+        val source = dictManager.getActiveDictSource()
+        if (source.url.isEmpty()) {
+            Toast.makeText(this, "内置词库无需下载", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         btnDownloadDict?.isEnabled = false
         btnDownloadDict?.text = "下载中..."
-        tvStatus.text = "⏳ 正在下载词库..."
-        appendLog("📥 开始下载雾凇拼音词库（~16MB）...")
-        appendLog("📋 词库来源：rime-ice (iDvel/rime-ice)")
-        appendLog("⚖️  许可证：GPL-3.0（词库数据，不影响本应用）")
+        tvStatus.text = "⏳ 正在下载..."
+        appendLog("📥 开始下载 ${source.nameZh} (${source.size})...")
 
-        dictManager.downloadRimeDict(
+        dictManager.downloadDict(
+            dictId = source.id,
             onProgress = { msg ->
                 runOnUiThread {
                     tvStatus.text = msg
@@ -363,11 +518,10 @@ class SettingsActivity : AppCompatActivity() {
                     appendLog(msg)
                     refreshDictInfo()
                     if (success) {
-                        // 触发 Rime 重新部署词库
                         try {
                             val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
                             rimeEngine.redeploy()
-                            Toast.makeText(this, "词库下载完成！已自动部署，切换一下输入法即可使用", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this, "词库下载完成！已自动部署", Toast.LENGTH_LONG).show()
                         } catch (e: Exception) {
                             Toast.makeText(this, "词库下载完成！重启输入法后生效", Toast.LENGTH_LONG).show()
                         }
@@ -377,58 +531,9 @@ class SettingsActivity : AppCompatActivity() {
         )
     }
 
-    private fun showImportDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("导入词库")
-            .setMessage("当前版本已改用在线下载词库，不再支持本地导入。\n请使用「下载词库」按钮获取完整词库。")
-            .setPositiveButton("确定", null)
-            .show()
-    }
-
-    private fun openFilePicker(requestCode: Int, title: String) {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "application/json"
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        try {
-            startActivityForResult(Intent.createChooser(intent, title), requestCode)
-        } catch (e: Exception) {
-            Toast.makeText(this, "无法打开文件选择器", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        // 文件导入已废弃，不再处理
-    }
-
-    private fun getRealPathFromUri(uri: Uri): String? {
-        try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val idx = cursor.getColumnIndex("_data")
-                if (idx >= 0 && cursor.moveToFirst()) {
-                    return cursor.getString(idx)
-                }
-            }
-        } catch (_: Exception) {}
-        // fallback: copy to cache
-        try {
-            val tempFile = java.io.File(cacheDir, "import_temp_${System.currentTimeMillis()}.json")
-            contentResolver.openInputStream(uri)?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            return tempFile.absolutePath
-        } catch (e: Exception) {
-            appendLog("文件读取失败: ${e.message}")
-        }
-        return null
-    }
-
-    private fun exportDict() {
-        Toast.makeText(this, "当前版本已改用在线下载词库，不再支持本地导出", Toast.LENGTH_SHORT).show()
-    }
+    // ═══════════════════════════════════════════════════
+    //  云端备份
+    // ═══════════════════════════════════════════════════
 
     private fun showCloudBackupDialog() {
         val options = arrayOf("上传到云端备份", "从云端恢复")
@@ -445,24 +550,18 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun cloudUpload() {
-        // 使用 GitHub Gist 作为简易云端备份
         val dictFile = java.io.File(filesDir, PinyinDictManager.LOCAL_DICT_FILE)
         val phrasesFile = java.io.File(filesDir, PinyinDictManager.LOCAL_PHRASES_FILE)
-
         if (!dictFile.exists() && !phrasesFile.exists()) {
             Toast.makeText(this, "没有可备份的词库", Toast.LENGTH_SHORT).show()
             return
         }
-
         tvStatus.text = "⏳ 正在上传到云端..."
         appendLog("开始云端备份...")
-
-        // 提示用户需要配置 GitHub Token
         val editText = EditText(this).apply {
             hint = "请输入 GitHub Personal Access Token"
             setText(prefs.getString("github_token", ""))
         }
-
         AlertDialog.Builder(this)
             .setTitle("云端备份到 GitHub Gist")
             .setMessage("需要 GitHub Token 才能上传。Token 只会保存在本地。")
@@ -485,50 +584,42 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val json = JSONObject()
                 val files = JSONObject()
-
                 if (dictFile.exists()) {
                     val content = JSONObject()
                     content.put("content", dictFile.readText())
                     files.put("pinyin_dict.json", content)
                 }
-
                 if (phrasesFile.exists()) {
                     val content = JSONObject()
                     content.put("content", phrasesFile.readText())
                     files.put("pinyin_phrases.json", content)
                 }
-
                 json.put("files", files)
-                json.put("description", "Cesia 输入法词库备份 ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())}")
+                json.put("description", "Cesia IME dict backup ${SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())}")
 
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-
+                val body = json.toString().toRequestBody("application/json".toMediaType())
                 val request = Request.Builder()
                     .url("https://api.github.com/gists")
+                    .post(body)
                     .addHeader("Authorization", "token $token")
-                    .post(json.toString().toRequestBody("application/json".toMediaType()))
+                    .addHeader("User-Agent", "CesiaIME/1.0")
                     .build()
 
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-
+                val response = testClient.newCall(request).execute()
                 runOnUiThread {
                     if (response.isSuccessful) {
-                        val gistUrl = JSONObject(body).optString("html_url", "")
-                        tvStatus.text = "✅ 备份成功！"
-                        appendLog("云端备份成功: $gistUrl")
-                        Toast.makeText(this, "备份成功！\nGist: $gistUrl", Toast.LENGTH_LONG).show()
+                        tvStatus.text = "✅ 云端备份成功"
+                        appendLog("✅ 云端备份成功")
+                        Toast.makeText(this, "备份成功！", Toast.LENGTH_SHORT).show()
                     } else {
                         tvStatus.text = "❌ 备份失败: ${response.code}"
-                        appendLog("云端备份失败: ${response.code} $body")
+                        appendLog("❌ 备份失败: ${response.code}")
                     }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvStatus.text = "❌ 备份异常"
-                    appendLog("云端备份异常: ${e.message}")
+                    tvStatus.text = "❌ 备份失败: ${e.message}"
+                    appendLog("❌ 备份失败: ${e.message}")
                 }
             }
         }.start()
@@ -536,417 +627,232 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun cloudDownload() {
         val editText = EditText(this).apply {
-            hint = "请输入 Gist URL 或 ID"
+            hint = "请输入 Gist ID"
         }
-
         AlertDialog.Builder(this)
             .setTitle("从云端恢复")
-            .setMessage("输入之前备份的 Gist URL 或 ID")
+            .setMessage("请输入备份时获得的 Gist ID")
             .setView(editText)
             .setPositiveButton("恢复") { _, _ ->
-                val gistInput = editText.text.toString().trim()
-                if (gistInput.isEmpty()) {
-                    Toast.makeText(this, "请输入 Gist URL 或 ID", Toast.LENGTH_SHORT).show()
+                val gistId = editText.text.toString().trim()
+                if (gistId.isEmpty()) {
+                    Toast.makeText(this, "Gist ID 不能为空", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                performCloudDownload(gistInput)
+                performCloudDownload(gistId)
             }
             .setNegativeButton("取消", null)
             .show()
     }
 
-    private fun performCloudDownload(gistInput: String) {
-        tvStatus.text = "⏳ 正在从云端恢复..."
-        appendLog("开始云端恢复...")
-
+    private fun performCloudDownload(gistId: String) {
         Thread {
             try {
-                // 提取 Gist ID
-                val gistId = if (gistInput.contains("gist.github.com")) {
-                    gistInput.split("/").last()
-                } else {
-                    gistInput
-                }
-
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-
                 val request = Request.Builder()
                     .url("https://api.github.com/gists/$gistId")
+                    .addHeader("User-Agent", "CesiaIME/1.0")
                     .get()
                     .build()
 
-                val response = client.newCall(request).execute()
+                val response = testClient.newCall(request).execute()
                 val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val files = json.optJSONObject("files") ?: JSONObject()
+                    val rimeDir = java.io.File(filesDir, "rime")
+                    rimeDir.mkdirs()
 
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        tvStatus.text = "❌ 恢复失败: ${response.code}"
-                        appendLog("云端恢复失败: ${response.code}")
+                    val dictJson = files.optJSONObject("pinyin_dict.json")
+                    if (dictJson != null) {
+                        java.io.File(rimeDir, PinyinDictManager.LOCAL_DICT_FILE)
+                            .writeText(dictJson.optString("content", ""))
                     }
-                    return@Thread
-                }
+                    val phrasesJson = files.optJSONObject("pinyin_phrases.json")
+                    if (phrasesJson != null) {
+                        java.io.File(rimeDir, PinyinDictManager.LOCAL_PHRASES_FILE)
+                            .writeText(phrasesJson.optString("content", ""))
+                    }
 
-                val json = JSONObject(body)
-                val files = json.getJSONObject("files")
-
-                var imported = false
-
-                if (files.has("pinyin_dict.json")) {
-                    val content = files.getJSONObject("pinyin_dict.json").getString("content")
-                    java.io.File(filesDir, PinyinDictManager.LOCAL_DICT_FILE).writeText(content)
-                    imported = true
-                }
-
-                if (files.has("pinyin_phrases.json")) {
-                    val content = files.getJSONObject("pinyin_phrases.json").getString("content")
-                    java.io.File(filesDir, PinyinDictManager.LOCAL_PHRASES_FILE).writeText(content)
-                    imported = true
-                }
-
-                runOnUiThread {
-                    if (imported) {
-                        tvStatus.text = "✅ 恢复成功！"
-                        appendLog("云端恢复成功")
+                    runOnUiThread {
+                        tvStatus.text = "✅ 云端恢复成功"
+                        appendLog("✅ 云端恢复成功")
                         refreshDictInfo()
                         Toast.makeText(this, "恢复成功！重启输入法后生效", Toast.LENGTH_LONG).show()
-                    } else {
-                        tvStatus.text = "❌ Gist 中未找到词库文件"
-                        appendLog("Gist 中未找到词库文件")
+                    }
+                } else {
+                    runOnUiThread {
+                        tvStatus.text = "❌ 恢复失败: ${response.code}"
+                        appendLog("❌ 恢复失败: ${response.code}")
                     }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvStatus.text = "❌ 恢复异常"
-                    appendLog("云端恢复异常: ${e.message}")
+                    tvStatus.text = "❌ 恢复失败: ${e.message}"
+                    appendLog("❌ 恢复失败: ${e.message}")
                 }
             }
         }.start()
     }
 
-    // ======================== API 测试 ========================
+    // ═══════════════════════════════════════════════════
+    //  API 测试
+    // ═══════════════════════════════════════════════════
 
     private fun testApiConnection() {
-        val inputText = etTestText.text?.toString()?.trim() ?: ""
-        if (inputText.isEmpty()) {
-            Toast.makeText(this, "请先在文本框中输入要润色的文字", Toast.LENGTH_SHORT).show()
+        val url = etApiUrl.text?.toString()?.trim() ?: DEFAULT_API_URL
+        val apiKey = etApiKey.text?.toString()?.trim() ?: ""
+        val modelId = etModelId.text?.toString()?.trim() ?: DEFAULT_MODEL_ID
+        val testText = etTestText.text?.toString()?.trim() ?: "你好"
+
+        if (apiKey.isEmpty()) {
+            tvStatus.text = "❌ 请先设置 API Key"
+            appendLog("❌ API Key 为空")
             return
         }
 
-        btnTestApi.isEnabled = false
-        btnTestApi.text = "测试中..."
-        tvStatus.text = "🔄 正在润色..."
+        tvStatus.text = "⏳ 正在测试..."
+        appendLog("🧪 测试 API 连接...")
 
         Thread {
             try {
-                val apiUrl = etApiUrl.text?.toString()?.trim() ?: DEFAULT_API_URL
-                val isOr = apiUrl.contains("openrouter.ai")
-
-                val request = if (isOr) {
-                    // OpenRouter 格式
-                    val messages = JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("role", "system")
-                            put("content", "你是一个中文文本润色助手。请将用户输入的口语化文字润色为通顺、简洁的书面语。只输出润色后的文字，不要解释。")
-                        })
-                        put(JSONObject().apply {
-                            put("role", "user")
-                            put("content", inputText)
-                        })
-                    }
-                    val json = JSONObject().apply {
-                        put("model", etModelId.text?.toString()?.trim() ?: DEFAULT_MODEL_ID)
-                        put("messages", messages)
-                        put("temperature", 0.3)
-                        put("max_tokens", 512)
-                    }
-                    val apiKey = etApiKey.text?.toString()?.trim() ?: ""
-                    Request.Builder()
-                        .url(apiUrl)
-                        .post(json.toString().toRequestBody("application/json".toMediaType()))
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Authorization", "Bearer $apiKey")
-                        .addHeader("HTTP-Referer", "https://github.com/harviex/cesia-input-method")
-                        .build()
-                } else {
-                    // 自定义 API 格式
-                    val json = JSONObject().apply {
-                        put("text", inputText)
-                        put("language", "zh")
-                    }
-                    Request.Builder()
-                        .url(apiUrl)
-                        .post(json.toString().toRequestBody("application/json".toMediaType()))
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("User-Agent", "CesiaIME/1.0")
-                        .build()
+                val messages = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", "你是输入法助手，直接回复用户输入的内容，不要解释。")
+                    })
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", testText)
+                    })
                 }
+                val json = JSONObject().apply {
+                    put("model", modelId)
+                    put("messages", messages)
+                    put("max_tokens", 128)
+                }
+                val body = json.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("HTTP-Referer", "https://github.com/harviex/cesia-input-method")
+                    .addHeader("X-Title", "Cesia Input Method")
+                    .build()
 
                 val response = testClient.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-                val respCode = response.code
+                val respBody = response.body?.string() ?: ""
 
                 runOnUiThread {
-                    if (respCode in 200..299) {
+                    if (response.isSuccessful) {
                         try {
-                            val respJson = JSONObject(body)
-                            val polished = if (isOr) {
-                                // OpenRouter 响应格式
-                                val choices = respJson.optJSONArray("choices")
-                                if (choices != null && choices.length() > 0) {
-                                    choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
-                                } else ""
-                            } else {
-                                // 自定义 API 响应格式
-                                respJson.optString("polished_text", "")
-                            }
-                            if (polished.isNotEmpty() && polished != inputText) {
-                                etTestText.setText(polished)
-                                tvStatus.text = "✅ API 润色成功"
-                                appendLog("润色成功: $polished")
-                            } else {
-                                tvStatus.text = "⚠️ API 返回但内容无变化"
-                                appendLog("API 返回无变化: ${body.take(200)}")
-                            }
+                            val respJson = JSONObject(respBody)
+                            val choices = respJson.optJSONArray("choices")
+                            val reply = if (choices != null && choices.length() > 0) {
+                                choices.getJSONObject(0).optJSONObject("message")?.optString("content", "") ?: ""
+                            } else ""
+                            tvStatus.text = "✅ 连接成功"
+                            appendLog("✅ 测试成功！回复: ${reply.take(50)}")
                         } catch (e: Exception) {
-                            tvStatus.text = "✅ API 成功 (原始响应)"
-                            appendLog("API 响应: ${body.take(200)}")
+                            tvStatus.text = "✅ 连接成功（响应解析异常）"
+                            appendLog("✅ 连接成功")
                         }
                     } else {
-                        tvStatus.text = "❌ API 错误 $respCode"
-                        appendLog("API 失败 ($respCode): ${body.take(200)}")
+                        tvStatus.text = "❌ 连接失败: ${response.code}"
+                        appendLog("❌ HTTP ${response.code}: ${respBody.take(100)}")
                     }
-                    btnTestApi.isEnabled = true
-                    btnTestApi.text = "📡 测试 API 润色"
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvStatus.text = "❌ 网络错误: ${e.message ?: "未知"}"
-                    appendLog("API 测试异常: ${e.message}")
-                    btnTestApi.isEnabled = true
-                    btnTestApi.text = "📡 测试 API 润色"
+                    tvStatus.text = "❌ 网络错误"
+                    appendLog("❌ ${e.message}")
                 }
             }
         }.start()
     }
-    // ======================== 统计 & 日志 ========================
 
-    override fun onResume() {
-        super.onResume()
-        refreshStats()
-        refreshDictInfo()
-    }
+    // ═══════════════════════════════════════════════════
+    //  统计
+    // ═══════════════════════════════════════════════════
 
     private fun refreshStats() {
-        tvStatInputChars.text = statsManager.totalInputChars.toString()
-        tvStatOutputChars.text = statsManager.totalOutputChars.toString()
-        tvStatCount.text = statsManager.totalPolishCount.toString()
-        refreshVoiceStats()
+        val records = statsManager.getRecords()
+        val totalInput = records.sumOf { it.inputChars.toLong() }
+        val totalOutput = records.sumOf { it.outputChars.toLong() }
+        val totalVoiceTime = records.sumOf { it.voiceDurationMs }
+        tvStatInputChars?.text = "输入: ${totalInput} 字"
+        tvStatOutputChars?.text = "输出: ${totalOutput} 字"
+        tvStatCount?.text = "次数: ${records.size} 次"
+        tvStatVoiceTime?.text = "语音: ${totalVoiceTime / 1000}s"
+        tvStatSavedTime?.text = "节省: ${totalVoiceTime / 2000}s"
+        tvStatVoiceSpeed?.text = "提速: ${if (totalVoiceTime > 0) (totalInput * 1000 / totalVoiceTime) else 0} 字/分"
     }
 
-    private fun refreshVoiceStats() {
-        try {
-            val voiceTimeMin = statsManager.totalVoiceDurationMs / 60000
-            val savedTimeMin = statsManager.savedTimeSeconds / 60
-            val speed = statsManager.voiceSpeedPerMinute
-
-            tvStatVoiceTime?.text = "${voiceTimeMin}分钟"
-            tvStatSavedTime?.text = "${savedTimeMin}分钟"
-            tvStatVoiceSpeed?.text = "${speed}字/分"
-        } catch (_: Exception) {}
-    }
-
-    private fun appendLog(msg: String) {
-        runOnUiThread {
-            val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                .format(System.currentTimeMillis())
-            val current = tvLog.text?.toString() ?: ""
-            val newLog = (current + "\n[$timestamp] $msg").lines().takeLast(50).joinToString("\n")
-            tvLog.text = newLog
-        }
-    }
-
-    // ======================== 检查更新 ========================
+    // ═══════════════════════════════════════════════════
+    //  检查更新
+    // ═══════════════════════════════════════════════════
 
     private fun checkUpdateDaily() {
         val lastCheck = prefs.getLong("last_update_check", 0)
         val now = System.currentTimeMillis()
-        if (now - lastCheck > 24 * 60 * 60 * 1000L) {
+        if (now - lastCheck > 24 * 60 * 60 * 1000) {
+            prefs.edit().putLong("last_update_check", now).apply()
             checkForUpdates()
         }
     }
 
     private fun checkForUpdates() {
-        prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
-        btnCheckUpdate?.isEnabled = false
-        btnCheckUpdate?.text = "检查中..."
-        appendLog("🔍 检查更新...")
-
         Thread {
             try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
                 val request = Request.Builder()
                     .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
                     .addHeader("User-Agent", "CesiaIME/1.0")
                     .get()
                     .build()
-                val response = client.newCall(request).execute()
+                val response = testClient.newCall(request).execute()
                 val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val tagName = json.optString("tag_name", "").removePrefix("v")
+                    val htmlUrl = json.optString("html_url", "")
+                    val bodyText = json.optString("body", "")
 
-                runOnUiThread {
-                    btnCheckUpdate?.isEnabled = true
-                    btnCheckUpdate?.text = "检查更新"
-                }
+                    val currentVersion = try {
+                        val pInfo = packageManager.getPackageInfo(packageName, 0)
+                        pInfo.versionName ?: ""
+                    } catch (_: Exception) { "" }
 
-                if (!response.isSuccessful) {
-                    appendLog("❌ 检查更新失败: ${response.code}")
-                    return@Thread
-                }
-
-                val json = JSONObject(body)
-                val latestVersionName = json.optString("tag_name", "").removePrefix("v")
-                val releaseUrl = json.optString("html_url", "")
-                val releaseNotes = json.optString("body", "")
-                // 从 release body 或 assets 中获取 APK 下载链接
-                val apkUrl = try {
-                    val assets = json.optJSONArray("assets")
-                    if (assets != null && assets.length() > 0) {
-                        assets.getJSONObject(0).optString("browser_download_url", "")
-                    } else ""
-                } catch (_: Exception) { "" }
-
-                // 版本比较：用 versionCode 数值比较
-                val currentVersionCode = try {
-                    val pInfo = packageManager.getPackageInfo(packageName, 0)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode
-                    else @Suppress("DEPRECATION") pInfo.versionCode.toLong()
-                } catch (_: Exception) { 0L }
-
-                // 从 tag_name 解析最新版本的 versionCode (格式: 1.1.X -> X)
-                val latestVersionCode = try {
-                    val parts = latestVersionName.split(".")
-                    if (parts.size >= 3) parts[2].toLong() else 0L
-                } catch (_: Exception) { 0L }
-
-                val currentVersionName = try {
-                    val pInfo = packageManager.getPackageInfo(packageName, 0)
-                    pInfo.versionName ?: "开发版"
-                } catch (_: Exception) { "开发版" }
-
-                // 本地versionCode >= 最新版本versionCode 表示已是最新
-                val isUpToDate = currentVersionCode > 0 && currentVersionCode >= latestVersionCode
-
-                appendLog("本地: $currentVersionName($currentVersionCode), 最新: $latestVersionName($latestVersionCode), isUpToDate=$isUpToDate")
-
-                runOnUiThread {
-                    showVersion()
-                    if (!isUpToDate && latestVersionCode > 0) {
-                        vUpdateDot?.visibility = View.VISIBLE
-                        showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
-                    } else {
-                        vUpdateDot?.visibility = View.GONE
-                        tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
-                        appendLog("✅ 已是最新版本")
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    btnCheckUpdate?.isEnabled = true
-                    btnCheckUpdate?.text = "检查更新"
-                    appendLog("❌ 检查更新异常: ${e.message}")
-                }
-            }
-        }.start()
-    }
-
-    private fun showUpdateDialog(version: String, url: String, notes: String, apkUrl: String) {
-        try {
-            AlertDialog.Builder(this)
-                .setTitle("🎉 发现新版本 $version")
-                .setMessage("当前版本已不是最新。\n\n更新内容:\n${notes.take(500)}")
-                .setPositiveButton("立即更新") { _, _ ->
-                    downloadAndInstallApk(apkUrl, version)
-                }
-                .setNegativeButton("稍后", null)
-                .show()
-        } catch (_: Exception) {}
-    }
-
-    private fun downloadAndInstallApk(apkUrl: String, version: String) {
-        if (apkUrl.isEmpty()) {
-            // 没有直接的APK链接，尝试构造
-            Toast.makeText(this, "无法获取下载链接，请手动到GitHub下载", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        tvStatus.text = "⏳ 正在下载 v$version..."
-        appendLog("开始下载: $apkUrl")
-
-        Thread {
-            try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val request = Request.Builder().url(apkUrl).get().build()
-                val response = client.newCall(request).execute()
-
-                if (!response.isSuccessful) {
                     runOnUiThread {
-                        tvStatus.text = "❌ 下载失败: ${response.code}"
-                        appendLog("下载失败: ${response.code}")
-                    }
-                    return@Thread
-                }
-
-                // 保存到缓存目录
-                val apkFile = java.io.File(cacheDir, "cesia-update.apk")
-                response.body?.byteStream()?.use { input ->
-                    apkFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-
-                runOnUiThread {
-                    tvStatus.text = "✅ 下载完成，正在安装..."
-                    appendLog("APK下载完成: ${apkFile.absolutePath}")
-                }
-
-                // 触发安装
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                            // Android 7+ 使用 FileProvider
-                            val uri = androidx.core.content.FileProvider.getUriForFile(
-                                this@SettingsActivity,
-                                "${packageName}.fileprovider",
-                                apkFile
-                            )
-                            setDataAndType(uri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        if (tagName.isNotEmpty() && tagName != currentVersion) {
+                            vUpdateDot?.visibility = View.VISIBLE
+                            AlertDialog.Builder(this)
+                                .setTitle("发现新版本: $tagName")
+                                .setMessage(bodyText.take(500))
+                                .setPositiveButton("前往下载") { _, _ ->
+                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(htmlUrl)))
+                                }
+                                .setNegativeButton("稍后", null)
+                                .show()
                         } else {
-                            setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
+                            vUpdateDot?.visibility = View.GONE
+                            Toast.makeText(this, "已是最新版本", Toast.LENGTH_SHORT).show()
                         }
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(intent)
-                    appendLog("已触发安装")
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        tvStatus.text = "❌ 安装失败: ${e.message}"
-                        appendLog("安装失败: ${e.message}")
-                        Toast.makeText(this, "安装失败，请手动安装: ${apkFile.absolutePath}", Toast.LENGTH_LONG).show()
                     }
                 }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    tvStatus.text = "❌ 下载异常: ${e.message}"
-                    appendLog("下载异常: ${e.message}")
-                }
-            }
+            } catch (_: Exception) {}
         }.start()
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  工具方法
+    // ═══════════════════════════════════════════════════
+
+    private fun appendLog(msg: String) {
+        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        tvLog.text = "[$time] $msg\n${tvLog.text}"
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }
