@@ -13,55 +13,70 @@ import java.util.concurrent.TimeUnit
  * 支持多词库下载、切换、中英文词库
  *
  * 词库来源：
- * - 中文：rime-ice (iDvel/rime-ice)，GPL-3.0
- * - 英文：使用内置小词库 + 可选下载完整词库
+ * - rime-ice: 雾凇拼音 (iDvel/rime-ice)，GPL-3.0，~14MB
+ * - rime-list: 雾凇+搜狗增强 (hantang/rime-list)，Mixed，~90MB，~220万词条
+ * - terra-pinyin: 地球拼音，LGPL-3.0，~8MB
+ * - pinyin-simp: 简拼基础，LGPL-3.0，~4MB
+ * - en-basic/en-full: 内置英文词库
  *
  * 用户需在设置页点击下载，不随 APK 分发
  */
 class PinyinDictManager(private val context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("cesia_dict", Context.MODE_PRIVATE)
-    private val settingsPrefs: SharedPreferences = context.getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("cesia_dict", Context.MODE_PRIVATE)
+    private val settingsPrefs: SharedPreferences =
+        context.getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .build()
 
+    // ─── 词库源定义（放在 class 内部、companion 外部，方便外部访问） ───
+
+    data class DictSource(
+        val id: String,
+        val name: String,
+        val nameZh: String,
+        val url: String,
+        val language: String,
+        val size: String,
+        val license: String,
+        val description: String
+    )
+
     companion object {
         private const val TAG = "RimeDictManager"
 
-        // 设置 key
-        const val PREF_ACTIVE_DICT = "active_dict"          // 当前激活的词库 ID
-        const val PREF_VOICE_LANGUAGE = "voice_language"    // 语音识别语言 zh/en
-
-        // 词库源定义
-        data class DictSource(
-            val id: String,
-            val name: String,
-            val nameZh: String,
-            val url: String,
-            val language: String,       // "zh" / "en"
-            val size: String,           // 预估大小
-            val license: String,
-            val description: String
-        )
+        const val PREF_ACTIVE_DICT = "active_dict"
+        const val PREF_VOICE_LANGUAGE = "voice_language"
 
         // 可用词库列表
         val AVAILABLE_DICTS = listOf(
             // ── 中文词库 ──
             DictSource(
                 id = "rime-ice",
-                name = "Rime Ice (雾凇)",
+                name = "Rime Ice",
                 nameZh = "雾凇拼音（推荐）",
                 url = "https://github.com/iDvel/rime-ice/releases/download/nightly/cn_dicts.zip",
                 language = "zh",
                 size = "~14MB",
                 license = "GPL-3.0",
-                description = "社区维护的简体中文词库，词条丰富，支持大量常用词组"
+                description = "社区维护的简体中文词库，词条丰富，全拼/双拼兼容"
+            ),
+            DictSource(
+                id = "rime-list",
+                name = "Rime List (雾凇+搜狗)",
+                nameZh = "雾凇+搜狗增强（220万词）",
+                url = "https://github.com/hantang/rime-list/releases/latest/download/cn_dicts.zip",
+                language = "zh",
+                size = "~90MB",
+                license = "Mixed",
+                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。文件较大，建议在 WiFi 下下载"
             ),
             DictSource(
                 id = "terra-pinyin",
-                name = "Terra Pinyin (地球拼音)",
+                name = "Terra Pinyin",
                 nameZh = "地球拼音词库",
                 url = "https://github.com/rime/rime-terra-pinyin/releases/download/terra-pinyin-0.2/terra_pinyin.dict.yaml",
                 language = "zh",
@@ -77,18 +92,18 @@ class PinyinDictManager(private val context: Context) {
                 language = "zh",
                 size = "~4MB",
                 license = "LGPL-3.0",
-                description = "Rime 官方简体中文基础词库，精简但常用词齐全"
+                description = "Rime 官方简体中文基础词库"
             ),
             // ── 英文词库 ──
             DictSource(
                 id = "en-basic",
                 name = "English Basic",
-                nameZh = "英文基础词库（内置）",
+                nameZh = "英文基础（内置）",
                 url = "",
                 language = "en",
                 size = "~200KB",
                 license = "Built-in",
-                description = "内置英文基础词库（~5000常用词），无需下载"
+                description = "英文基础词库（~5000常用词），无需下载"
             ),
             DictSource(
                 id = "en-full",
@@ -102,11 +117,10 @@ class PinyinDictManager(private val context: Context) {
             )
         )
 
-        // 内部文件 key
         const val PREF_DICT_VERSION = "dict_version"
         const val PREF_DICT_SOURCE = "dict_source"
         const val PREF_LAST_SYNC = "last_sync"
-        const val PREF_DICT_DOWNLOADED = "dict_downloaded"  // 已废弃，改用 per-dict 标记
+        const val PREF_DICT_DOWNLOADED = "dict_downloaded"
 
         const val LOCAL_DICT_FILE = "pinyin.dict.yaml"
         const val LOCAL_BASE_FILE = "base.dict.yaml"
@@ -116,30 +130,23 @@ class PinyinDictManager(private val context: Context) {
 
     // ─── 词库信息 ───
 
-    /** 获取当前激活的词库源 */
     fun getActiveDictSource(): DictSource {
         val activeId = prefs.getString(PREF_ACTIVE_DICT, "rime-ice") ?: "rime-ice"
         return AVAILABLE_DICTS.find { it.id == activeId } ?: AVAILABLE_DICTS.first()
     }
 
-    /** 设置当前激活的词库 */
     fun setActiveDict(dictId: String) {
         prefs.edit().putString(PREF_ACTIVE_DICT, dictId).apply()
         Log.i(TAG, "词库切换为: $dictId")
     }
 
-    /** 获取语音识别语言 */
-    fun getVoiceLanguage(): String {
-        return settingsPrefs.getString(PREF_VOICE_LANGUAGE, "zh") ?: "zh"
-    }
+    fun getVoiceLanguage(): String = settingsPrefs.getString(PREF_VOICE_LANGUAGE, "zh") ?: "zh"
 
-    /** 设置语音识别语言 */
     fun setVoiceLanguage(lang: String) {
         settingsPrefs.edit().putString(PREF_VOICE_LANGUAGE, lang).apply()
         Log.i(TAG, "语音语言切换为: $lang")
     }
 
-    /** 获取词库统计信息 */
     fun getDictInfo(): DictInfo {
         val rimeDir = File(context.filesDir, "rime")
         val mergedFile = File(rimeDir, LOCAL_DICT_FILE)
@@ -148,60 +155,53 @@ class PinyinDictManager(private val context: Context) {
         val active = getActiveDictSource()
 
         val dictCount = countDictEntries(mergedFile)
-        val baseCount = countDictEntries(baseFile)
         val word8105Count = countDictEntries(dict8105File)
         val totalSize = mergedFile.length() + baseFile.length() + dict8105File.length()
-
-        val dictVersion = prefs.getString(PREF_DICT_VERSION, "内置") ?: "内置"
-        val dictSource = prefs.getString(PREF_DICT_SOURCE, "内置") ?: "内置"
-        val lastSync = prefs.getLong(PREF_LAST_SYNC, 0)
-        val downloaded = prefs.getBoolean(PREF_DICT_DOWNLOADED, false)
 
         return DictInfo(
             dictCount = dictCount,
             word8105Count = word8105Count,
             dictSize = totalSize,
-            version = dictVersion,
-            source = dictSource,
-            lastSync = lastSync,
-            downloaded = downloaded,
+            version = prefs.getString(PREF_DICT_VERSION, "内置") ?: "内置",
+            source = prefs.getString(PREF_DICT_SOURCE, "内置") ?: "内置",
+            lastSync = prefs.getLong(PREF_LAST_SYNC, 0),
+            downloaded = prefs.getBoolean(PREF_DICT_DOWNLOADED, false),
             activeDictId = active.id,
             activeDictName = active.nameZh,
             voiceLanguage = getVoiceLanguage()
         )
     }
 
-    /** 检查指定词库是否已下载 */
     fun isDictDownloaded(dictId: String): Boolean {
-        if (dictId == "en-basic") return true  // 内置词库
+        if (dictId == "en-basic") return true
         return prefs.getBoolean("dict_downloaded_$dictId", false)
     }
 
-    /** 检查是否有任何外部词库已下载（兼容旧版） */
-    fun hasDownloadedDict(): Boolean {
-        return AVAILABLE_DICTS.any { isDictDownloaded(it.id) }
-    }
+    fun hasDownloadedDict(): Boolean = AVAILABLE_DICTS.any { isDictDownloaded(it.id) }
 
     // ─── 词库下载 ───
 
-    /**
-     * 下载指定词库
-     */
     fun downloadDict(
         dictId: String = getActiveDictSource().id,
+        customUrl: String? = null,
         onProgress: (String) -> Unit,
         onComplete: (Boolean, String) -> Unit
     ) {
-        val source = AVAILABLE_DICTS.find { it.id == dictId }
+        var source = AVAILABLE_DICTS.find { it.id == dictId }
         if (source == null) {
             onComplete(false, "未知词库: $dictId")
             return
         }
 
-        // 内置词库不需要下载
-        if (source.url.isEmpty()) {
+        val downloadUrl = if (!customUrl.isNullOrEmpty()) customUrl else source.url
+        if (downloadUrl.isEmpty()) {
             onComplete(true, "${source.nameZh} 为内置词库，无需下载")
             return
+        }
+
+        // 如果有自定义 URL，创建一个临时 source 用自定义 URL
+        if (!customUrl.isNullOrEmpty()) {
+            source = source.copy(url = customUrl)
         }
 
         Thread {
@@ -210,14 +210,19 @@ class PinyinDictManager(private val context: Context) {
                 rimeDir.mkdirs()
 
                 onProgress("正在下载 ${source.nameZh} (${source.size})...")
-                Log.i(TAG, "开始下载: ${source.url}")
+                Log.i(TAG, "开始下载: $downloadUrl")
 
                 val dlClient = OkHttpClient.Builder()
                     .connectTimeout(120, TimeUnit.SECONDS)
                     .readTimeout(300, TimeUnit.SECONDS)
                     .build()
 
-                val request = Request.Builder().url(source.url).get().build()
+                val request = Request.Builder()
+                    .url(downloadUrl)
+                    .get()
+                    .header("User-Agent", "CesiaIME/1.0")
+                    .build()
+
                 val response = dlClient.newCall(request).execute()
 
                 if (!response.isSuccessful) {
@@ -231,15 +236,13 @@ class PinyinDictManager(private val context: Context) {
                     return@Thread
                 }
 
-                // 处理 zip 文件
-                if (source.url.endsWith(".zip")) {
+                if (downloadUrl.endsWith(".zip")) {
                     extractZipToDict(rimeDir, body, source, onProgress, onComplete)
                 } else {
-                    // 单文件直接保存
                     val outFile = File(rimeDir, "${source.id}.dict.yaml")
                     outFile.writeBytes(body)
                     markDictDownloaded(source)
-                    onComplete(true, "${source.nameZh} 下载完成")
+                    onComplete(true, "${source.nameZh} 下载完成 (${outFile.length() / 1024}KB)")
                 }
 
             } catch (e: Exception) {
@@ -268,7 +271,6 @@ class PinyinDictManager(private val context: Context) {
                 val entry = entries.nextElement()
                 if (entry.isDirectory) continue
                 val name = entry.name.substringAfterLast("/")
-                // 提取我们需要的文件
                 if (name == LOCAL_BASE_FILE || name == LOCAL_8105_FILE ||
                     name == "ext.dict.yaml" || name.endsWith(".dict.yaml")) {
                     val outFile = File(rimeDir, name)
@@ -287,14 +289,14 @@ class PinyinDictManager(private val context: Context) {
             if (extractedCount > 0) {
                 onProgress("正在合并词库...")
                 mergeDicts(rimeDir)
-                markDictDownloaded(source)
                 val mergedFile = File(rimeDir, LOCAL_DICT_FILE)
                 val entryCount = countDictEntries(mergedFile)
+                markDictDownloaded(source, dictCount = entryCount)
                 onComplete(true, "词库下载完成！共 $entryCount 条词条")
             } else {
-                // 如果没有标准文件，直接把完整 zip 内容当作词库
-                markDictDownloaded(source)
-                onComplete(true, "词库下载完成（已保存原始文件）")
+                // 没有标准文件，尝试其他文件名
+                onProgress("未找到标准词库文件，尝试其他格式...")
+                extractAllDictFiles(rimeDir, zipBytes, source, onProgress, onComplete)
             }
         } catch (e: Exception) {
             Log.e(TAG, "解压词库失败", e)
@@ -302,11 +304,61 @@ class PinyinDictManager(private val context: Context) {
         }
     }
 
-    private fun markDictDownloaded(source: DictSource) {
+    private fun extractAllDictFiles(
+        rimeDir: File,
+        zipBytes: ByteArray,
+        source: DictSource,
+        onProgress: (String) -> Unit,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        // 对于超大词库（如 rime-list），可能包含很多 .dict.yaml 文件
+        try {
+            val tempZip = File(rimeDir, "download_${source.id}.zip")
+            tempZip.writeBytes(zipBytes)
+
+            val zipFile = java.util.zip.ZipFile(tempZip)
+            val entries = zipFile.entries()
+            var extractedCount = 0
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (entry.isDirectory) continue
+                val name = entry.name.substringAfterLast("/")
+                if (name.endsWith(".dict.yaml")) {
+                    val outFile = File(rimeDir, name)
+                    zipFile.getInputStream(entry).use { input ->
+                        outFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    extractedCount++
+                }
+            }
+            zipFile.close()
+            tempZip.delete()
+
+            if (extractedCount > 0) {
+                onProgress("正在合并 $extractedCount 个词库文件...")
+                mergeDicts(rimeDir)
+                val mergedFile = File(rimeDir, LOCAL_DICT_FILE)
+                val entryCount = countDictEntries(mergedFile)
+                markDictDownloaded(source, dictCount = entryCount)
+                onComplete(true, "词库下载完成！共 $entryCount 条词条")
+            } else {
+                markDictDownloaded(source)
+                onComplete(true, "词库下载完成（已保存原始文件）")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "解压失败", e)
+            onComplete(false, "解压失败: ${e.message}")
+        }
+    }
+
+    private fun markDictDownloaded(source: DictSource, dictCount: Int = 0) {
         prefs.edit()
             .putBoolean("dict_downloaded_${source.id}", true)
             .putBoolean(PREF_DICT_DOWNLOADED, true)
-            .putString(PREF_DICT_VERSION, "${source.id}-${System.currentTimeMillis()}")
+            .putString(PREF_DICT_VERSION,
+                if (dictCount > 0) "${source.id}-v${dictCount}w" else "${source.id}-${System.currentTimeMillis()}")
             .putString(PREF_DICT_SOURCE, "${source.nameZh} (${source.license})")
             .putLong(PREF_LAST_SYNC, System.currentTimeMillis())
             .apply()
@@ -317,56 +369,36 @@ class PinyinDictManager(private val context: Context) {
     private fun mergeDicts(rimeDir: File) {
         val merged = LinkedHashMap<String, String>()
 
+        // 1. 加载 base.dict.yaml (最高优先级)
         val baseFile = File(rimeDir, LOCAL_BASE_FILE)
         if (baseFile.exists()) {
-            baseFile.bufferedReader().useLines { lines ->
-                lines.forEach { line ->
-                    val trimmed = line.trim()
-                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#") &&
-                        !trimmed.startsWith("---") && !trimmed.startsWith("...") &&
-                        !trimmed.startsWith("name:") && !trimmed.startsWith("version:") &&
-                        !trimmed.startsWith("sort:") && trimmed.contains("\t")) {
-                        val parts = trimmed.split("\t")
-                        if (parts.size >= 3) {
-                            merged[parts[0]] = "${parts[1]}\t${parts[2]}"
-                        } else if (parts.size == 2) {
-                            merged[parts[0]] = "${parts[1]}\t100"
-                        }
-                    }
-                }
-            }
+            loadDictFile(baseFile, merged, preferExisting = true)
         }
 
+        // 2. 加载 8105.dict.yaml (字频)
         val dict8105File = File(rimeDir, LOCAL_8105_FILE)
         if (dict8105File.exists()) {
-            dict8105File.bufferedReader().useLines { lines ->
-                lines.forEach { line ->
-                    val trimmed = line.trim()
-                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#") &&
-                        !trimmed.startsWith("---") && !trimmed.startsWith("...") &&
-                        !trimmed.startsWith("name:") && !trimmed.startsWith("version:") &&
-                        !trimmed.startsWith("sort:") && trimmed.contains("\t")) {
-                        val parts = trimmed.split("\t")
-                        if (parts.size >= 2) {
-                            val hanzi = parts[0]
-                            if (!merged.containsKey(hanzi)) {
-                                val pinyin = parts[1]
-                                val weight = if (parts.size >= 3) parts[2] else "50"
-                                merged[hanzi] = "$pinyin\t$weight"
-                            }
-                        }
-                    }
-                }
+            loadDictFile(dict8105File, merged, preferExisting = true)
+        }
+
+        // 3. 加载所有其他 .dict.yaml 文件
+        rimeDir.listFiles()?.forEach { file ->
+            if (file.name.endsWith(".dict.yaml") &&
+                file.name != LOCAL_DICT_FILE &&
+                file.name != LOCAL_BASE_FILE &&
+                file.name != LOCAL_8105_FILE) {
+                loadDictFile(file, merged, preferExisting = false)
+                Log.i(TAG, "合并附加词库: ${file.name}")
             }
         }
 
+        // 4. 写入合并文件
         val outFile = File(rimeDir, LOCAL_DICT_FILE)
         val sb = StringBuilder()
-        sb.appendLine("# Rime dictionary — Cesia输入法")
-        sb.appendLine("# 词库来源：rime-ice (iDvel/rime-ice)，GPL-3.0")
+        sb.appendLine("# Rime dictionary - Cesia输入法")
         sb.appendLine("---")
         sb.appendLine("name: pinyin")
-        sb.appendLine("version: \"1.1.1\"")
+        sb.appendLine("version: \"1.1.4\"")
         sb.appendLine("sort: by_weight")
         sb.appendLine("...")
         sb.appendLine()
@@ -374,7 +406,28 @@ class PinyinDictManager(private val context: Context) {
             sb.appendLine("$hanzi\t$value")
         }
         outFile.writeText(sb.toString())
-        Log.i(TAG, "合并词库: ${merged.size} 条 → ${outFile.absolutePath}")
+        Log.i(TAG, "合并词库: ${merged.size} 条 -> ${outFile.absolutePath}")
+    }
+
+    private fun loadDictFile(file: File, merged: LinkedHashMap<String, String>, preferExisting: Boolean) {
+        file.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isNotEmpty() && !trimmed.startsWith("#") &&
+                    !trimmed.startsWith("---") && !trimmed.startsWith("...") &&
+                    !trimmed.startsWith("name:") && !trimmed.startsWith("version:") &&
+                    !trimmed.startsWith("sort:") && trimmed.contains("\t")) {
+                    val parts = trimmed.split("\t")
+                    if (parts.size >= 2) {
+                        val hanzi = parts[0]
+                        val pinyin = parts[1]
+                        val weight = if (parts.size >= 3) parts[2] else "50"
+                        if (preferExisting && merged.containsKey(hanzi)) return@forEach
+                        merged[hanzi] = "$pinyin\t$weight"
+                    }
+                }
+            }
+        }
     }
 
     private fun countDictEntries(file: File): Int {

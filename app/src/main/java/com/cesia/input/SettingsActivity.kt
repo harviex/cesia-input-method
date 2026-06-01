@@ -19,6 +19,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.engine.PinyinDictManager
+import com.cesia.input.recognizer.WhisperRecognizer
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -68,13 +69,20 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnCloudBackup: Button
     private lateinit var tvDictInfo: TextView
     private lateinit var spinnerDictSource: Spinner
-    private lateinit var tvDictSourceDesc: TextView
+    private lateinit var tvDictDesc: TextView
+    private var etCustomDictUrl: TextInputEditText? = null
     private lateinit var dictManager: PinyinDictManager
 
     // ── 语音设置 ──
     private lateinit var spinnerVoiceLanguage: Spinner
     private lateinit var spinnerVoiceEngine: Spinner
     private lateinit var tvVoiceEngineDesc: TextView
+    private var etWhisperUrl: TextInputEditText? = null
+    private var etWhisperApiKey: TextInputEditText? = null
+    private var etWhisperModel: TextInputEditText? = null
+    private var spinnerWhisperMode: Spinner? = null
+    private var tvWhisperStatus: TextView? = null
+    private var btnTestWhisper: Button? = null
 
     // ── 检查更新 ──
     private lateinit var btnCheckUpdate: Button
@@ -173,7 +181,8 @@ class SettingsActivity : AppCompatActivity() {
             btnCloudBackup = findViewById(R.id.btn_cloud_backup)
             tvDictInfo = findViewById(R.id.tv_dict_info)
             spinnerDictSource = findViewById(R.id.spinner_dict_source)
-            tvDictSourceDesc = findViewById(R.id.tv_dict_source_desc)
+            tvDictDesc = findViewById(R.id.tv_dict_desc)
+            etCustomDictUrl = findViewById(R.id.et_custom_dict_url)
         } catch (_: Exception) {}
 
         // 语音设置
@@ -181,6 +190,12 @@ class SettingsActivity : AppCompatActivity() {
             spinnerVoiceLanguage = findViewById(R.id.spinner_voice_language)
             spinnerVoiceEngine = findViewById(R.id.spinner_voice_engine)
             tvVoiceEngineDesc = findViewById(R.id.tv_voice_engine_desc)
+            etWhisperUrl = findViewById(R.id.et_whisper_url)
+            etWhisperApiKey = findViewById(R.id.et_whisper_api_key)
+            etWhisperModel = findViewById(R.id.et_whisper_model)
+            spinnerWhisperMode = findViewById(R.id.spinner_whisper_mode)
+            tvWhisperStatus = findViewById(R.id.tv_whisper_status)
+            btnTestWhisper = findViewById(R.id.btn_test_whisper)
         } catch (_: Exception) {}
 
         // 检查更新
@@ -209,7 +224,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerDictSource?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val source = dictSources[position]
-                tvDictSourceDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
+                tvDictDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
                 // 如果切换了词库源，更新激活词库
                 if (source.id != dictManager.getActiveDictSource().id) {
                     dictManager.setActiveDict(source.id)
@@ -222,7 +237,7 @@ class SettingsActivity : AppCompatActivity() {
         // 初始化描述
         if (dictSources.isNotEmpty()) {
             val source = dictManager.getActiveDictSource()
-            tvDictSourceDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
+            tvDictDesc?.text = "${source.description}\n大小: ${source.size} | 许可: ${source.license}"
         }
     }
 
@@ -276,6 +291,74 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         updateVoiceEngineDesc(currentEngine)
+
+        // ── Whisper 配置 ──
+        setupWhisperConfig()
+    }
+
+    private fun setupWhisperConfig() {
+        // Whisper 模式选择
+        val modes = listOf("远程 API", "本地模型")
+        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes)
+        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerWhisperMode?.adapter = modeAdapter
+
+        val currentMode = prefs.getString(WhisperRecognizer.PREF_WHISPER_MODE, WhisperRecognizer.DEFAULT_WHISPER_MODE)
+        spinnerWhisperMode?.setSelection(if (currentMode == "local") 1 else 0)
+
+        spinnerWhisperMode?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val mode = if (position == 1) "local" else "api"
+                prefs.edit().putString(WhisperRecognizer.PREF_WHISPER_MODE, mode).apply()
+                updateWhisperConfigVisibility(mode)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // 加载已保存的配置
+        etWhisperUrl?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_URL, WhisperRecognizer.DEFAULT_WHISPER_API_URL))
+        etWhisperApiKey?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_KEY, ""))
+        etWhisperModel?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_MODEL, WhisperRecognizer.DEFAULT_WHISPER_MODEL))
+
+        // 测试按钮
+        btnTestWhisper?.setOnClickListener { testWhisperConnection() }
+
+        // 根据当前模式显示/隐藏配置
+        updateWhisperConfigVisibility(currentMode ?: "api")
+    }
+
+    private fun updateWhisperConfigVisibility(mode: String) {
+        val isApi = mode == "api"
+        etWhisperUrl?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
+        etWhisperApiKey?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
+        etWhisperModel?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
+    }
+
+    private fun testWhisperConnection() {
+        val url = etWhisperUrl?.text?.toString()?.trim() ?: ""
+        if (url.isEmpty()) {
+            tvWhisperStatus?.text = "❌ 请输入 API 地址"
+            return
+        }
+
+        tvWhisperStatus?.text = "⏳ 测试中..."
+        Thread {
+            try {
+                // 发送一个空的测试请求，检查服务器是否可达
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val request = Request.Builder().url(url).head().build()
+                val response = client.newCall(request).execute()
+                runOnUiThread {
+                    tvWhisperStatus?.text = "✅ 连接成功 (${response.code})"
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvWhisperStatus?.text = "❌ 连接失败: ${e.message}"
+                }
+            }
+        }.start()
     }
 
     private fun updateVoiceEngineDesc(engine: String) {
@@ -389,6 +472,9 @@ class SettingsActivity : AppCompatActivity() {
                 .putString(PREF_API_URL, url)
                 .putString("openrouter_api_key", apiKey)
                 .putString(PREF_MODEL_ID, modelId)
+                .putString(WhisperRecognizer.PREF_WHISPER_API_URL, etWhisperUrl?.text?.toString()?.trim() ?: "")
+                .putString(WhisperRecognizer.PREF_WHISPER_API_KEY, etWhisperApiKey?.text?.toString()?.trim() ?: "")
+                .putString(WhisperRecognizer.PREF_WHISPER_MODEL, etWhisperModel?.text?.toString()?.trim() ?: "whisper-1")
                 .apply()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")
@@ -492,6 +578,15 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun downloadDict() {
         val source = dictManager.getActiveDictSource()
+
+        // 检查是否有自定义 URL
+        val customUrl = etCustomDictUrl?.text?.toString()?.trim() ?: ""
+        if (customUrl.isNotEmpty() && source.url.isNotEmpty()) {
+            // 使用自定义 URL 下载
+            downloadCustomDict(customUrl, source)
+            return
+        }
+
         if (source.url.isEmpty()) {
             Toast.makeText(this, "内置词库无需下载", Toast.LENGTH_SHORT).show()
             return
@@ -504,6 +599,47 @@ class SettingsActivity : AppCompatActivity() {
 
         dictManager.downloadDict(
             dictId = source.id,
+            onProgress = { msg ->
+                runOnUiThread {
+                    tvStatus.text = msg
+                    appendLog(msg)
+                }
+            },
+            onComplete = { success, msg ->
+                runOnUiThread {
+                    btnDownloadDict?.isEnabled = true
+                    btnDownloadDict?.text = if (success) "🔄 更新词库" else "📥 重新下载"
+                    tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
+                    appendLog(msg)
+                    refreshDictInfo()
+                    if (success) {
+                        try {
+                            val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
+                            rimeEngine.redeploy()
+                            Toast.makeText(this, "词库下载完成！已自动部署", Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(this, "词库下载完成！重启输入法后生效", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    private fun downloadCustomDict(customUrl: String, source: PinyinDictManager.DictSource) {
+        if (!customUrl.startsWith("http://") && !customUrl.startsWith("https://")) {
+            Toast.makeText(this, "URL 必须以 http:// 或 https:// 开头", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        btnDownloadDict?.isEnabled = false
+        btnDownloadDict?.text = "下载中..."
+        tvStatus.text = "⏳ 从自定义地址下载..."
+        appendLog("📥 自定义下载: $customUrl")
+
+        dictManager.downloadDict(
+            dictId = source.id,
+            customUrl = customUrl,
             onProgress = { msg ->
                 runOnUiThread {
                     tvStatus.text = msg
