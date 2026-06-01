@@ -44,8 +44,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
     private var gestureStartX = 0f
     private var gestureStartY = 0f
     private var isSwipeDetected = false
-    private val swipeThreshold = 60f       // 最小水平滑动距离（px）
+    private var swipeLockUntil = 0L   // 滑动后锁定按键输入的时间戳
+    private val swipeThreshold = 100f       // 最小水平滑动距离（px），增大防误触
     private val swipeMaxYDrift = 80f       // 最大垂直偏移（防止上下滑动误触）
+    private val swipeLockDuration = 300L   // 滑动后锁定按键输入的冷却时间（ms）
 
     var onSwipeLeft: (() -> Unit)? = null
     var onSwipeRight: (() -> Unit)? = null
@@ -53,6 +55,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
     override fun onTouchEvent(me: android.view.MotionEvent): Boolean {
         when (me.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
+                // 滑动冷却期内禁止按键输入
+                if (System.currentTimeMillis() < swipeLockUntil) {
+                    return true  // 吃掉事件，不传给 KeyboardView
+                }
                 gestureStartX = me.x
                 gestureStartY = me.y
                 isSwipeDetected = false
@@ -65,11 +71,15 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     // 水平滑动超过阈值且垂直偏移不大 → 判定为滑动切键盘
                     if (adx > swipeThreshold && dy < swipeMaxYDrift) {
                         isSwipeDetected = true
+                        swipeLockUntil = System.currentTimeMillis() + swipeLockDuration
                         if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
                         // 消耗后续所有事件，不触发按键
                         return true
                     }
                 }
+            }
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                isSwipeDetected = false
             }
         }
         return super.onTouchEvent(me)
