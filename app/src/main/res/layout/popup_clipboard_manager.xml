@@ -30,58 +30,18 @@
             android:focusable="true" />
     </LinearLayout>
 
-    <!-- 搜索编辑状态提示栏 + 候选栏 -->
-    <LinearLayout
-        android:id="@+id/ll_search_edit_bar"
+    <!-- 搜索编辑状态提示栏 -->
+    <TextView
+        android:id="@+id/tv_search_edit_hint"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/tv_search_edit_hint"
-            android:layout_width="match_parent"
-            android:layout_height="24dp"
-            android:gravity="center_vertical"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:textSize="11sp"
-            android:textColor="#81D8D0"
-            android:background="#E0F7FA" />
-
-        <!-- 搜索候选栏：显示拼音输入的候选词 -->
-        <LinearLayout
-            android:id="@+id/ll_search_candidates"
-            android:layout_width="match_parent"
-            android:layout_height="36dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="#FAFAFA">
-
-            <TextView
-                android:id="@+id/tv_search_composing"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center_vertical"
-                android:paddingStart="8dp"
-                android:paddingEnd="4dp"
-                android:textSize="13sp"
-                android:textColor="#81D8D0"
-                android:textStyle="bold" />
-
-            <android.widget.ListView
-                android:id="@+id/rv_search_candidates"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:clipToPadding="false"
-                android:paddingEnd="4dp"
-                android:divider="@null"
-                android:dividerHeight="0dp" />
-
-        </LinearLayout>
-
-    </LinearLayout>
+        android:layout_height="28dp"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:textSize="12sp"
+        android:textColor="#81D8D0"
+        android:background="#E0F7FA"
+        android:visibility="gone" />
 
     <!-- 空状态提示 -->
     <TextView

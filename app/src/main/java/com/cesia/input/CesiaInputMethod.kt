@@ -761,15 +761,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 直接按位置选词（用于搜索候选栏点击） */
-    private fun selectCandidateByPosition(index: Int): String {
-        val selected = rimeEngine.selectCandidate(index)
-        if (selected.isNotEmpty()) {
-            updateCandidateBar()
-        }
-        return selected
-    }
-
     private fun updateCandidateBar() {
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
@@ -2331,6 +2322,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
+        // 立即高亮发送按钮
+        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
+        btnSend.elevation = 6f
+        startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -2357,10 +2352,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun stopSendButtonGlow() {
         sendButtonGlowing = false
         btnSend.clearAnimation()
+        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+        btnSend.elevation = 0f
     }
 
     private fun startMagicBookLongPress() {
         cancelMagicBookLongPress()
+        // 立即高亮魔法书按钮
+        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
+        btnClipboard.elevation = 6f
+        startMagicBookGlow()
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -2387,6 +2388,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun stopMagicBookGlow() {
         magicBookGlowing = false
         btnClipboard.clearAnimation()
+        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+        btnClipboard.elevation = 0f
     }
 
     private fun cancelSendKeyLongPress() {
@@ -2403,18 +2406,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private var clipboardSearchEditMode = false
     private var clipboardSearchBuffer = StringBuilder()
-    private var searchCandidateAdapter: ArrayAdapter<String>? = null
-    private val searchCandidates = mutableListOf<String>()
-
-    /** 更新搜索候选栏（搜索编辑模式下调用） */
-    private fun updateSearchCandidates() {
-        val comp = rimeEngine.composingText
-        val cands = rimeEngine.candidates
-        clipboardPopupView?.findViewById<TextView>(R.id.tv_search_composing)?.text = comp
-        searchCandidates.clear()
-        searchCandidates.addAll(cands)
-        searchCandidateAdapter?.notifyDataSetChanged()
-    }
 
     /**
      * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
@@ -2426,61 +2417,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val btnSearch = popupView.findViewById<TextView>(R.id.btn_clipboard_search)
-            val llSearchEditBar = popupView.findViewById<LinearLayout>(R.id.ll_search_edit_bar)
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val tvSearchComposing = popupView.findViewById<TextView>(R.id.tv_search_composing)
-            val rvSearchCandidates = popupView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rv_search_candidates)
             val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
-
-            // 初始化搜索候选栏 RecyclerView
-            searchCandidateAdapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, searchCandidates) {
-                override fun getView(position: Int, cv: android.view.View?, parent: android.view.ViewGroup): android.view.View {
-                    val tv = super.getView(position, cv, parent) as TextView
-                    tv.textSize = 13f
-                    tv.setTextColor(0xFF333333.toInt())
-                    tv.setPadding(8, 0, 8, 0)
-                    tv.gravity = android.view.Gravity.CENTER_VERTICAL
-                    tv.maxLines = 1
-                    tv.ellipsize = android.text.TextUtils.TruncateAt.END
-                    // 点击选词
-                    tv.setOnClickListener {
-                        if (position < searchCandidates.size) {
-                            val selected = selectCandidateByPosition(position)
-                            if (selected.isNotEmpty()) {
-                                clipboardSearchBuffer.append(selected)
-                                rimeEngine.clear()
-                                updateSearchCandidates()
-                                updateClipboardSearchBtn(btnSearch)
-                            }
-                        }
-                    }
-                    // 高亮首项
-                    if (position == 0) {
-                        tv.setTextColor(0xFF81D8D0.toInt())
-                        tv.setTypeface(null, android.graphics.Typeface.BOLD)
-                    } else {
-                        tv.setTypeface(null, android.graphics.Typeface.NORMAL)
-                    }
-                    return tv
-                }
-            }
-            // 用 ListView 替代 RecyclerView 来显示搜索候选（更简单，兼容 ArrayAdapter）
-            val lvSearchCandidates = popupView.findViewById<android.widget.ListView>(R.id.rv_search_candidates)
-            lvSearchCandidates?.adapter = searchCandidateAdapter
-            lvSearchCandidates?.setOnItemClickListener { _, _, position, _ ->
-                if (position < searchCandidates.size) {
-                    val selected = selectCandidateByPosition(position)
-                    if (selected.isNotEmpty()) {
-                        clipboardSearchBuffer.append(selected)
-                        rimeEngine.clear()
-                        updateSearchCandidates()
-                        updateClipboardSearchBtn(btnSearch)
-                    }
-                }
-            }
 
             // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
             val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -2497,19 +2438,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     clipboardSearchEditMode = false
                     clipboardSearchBuffer.clear()
                     clipboardSearchFilter = ""
-                    llSearchEditBar?.visibility = View.GONE
-                    rimeEngine.clear()
+                    tvSearchHint.visibility = View.GONE
                     updateClipboardSearchBtn(btnSearch)
                     applyClipboardFilter()
                 } else {
                     // 进入搜索编辑模式
                     clipboardSearchEditMode = true
                     clipboardSearchBuffer.clear()
-                    tvSearchHint?.text = "✏️ 输入搜索关键词...（按发送键确认，再点🔍退出）"
-                    llSearchEditBar?.visibility = View.VISIBLE
-                    tvSearchComposing?.text = ""
-                    searchCandidates.clear()
-                    searchCandidateAdapter?.notifyDataSetChanged()
+                    tvSearchHint.text = "✏️ 输入搜索关键词...（按发送键确认，再点🔍退出）"
+                    tvSearchHint.visibility = View.VISIBLE
                     btnSearch.text = "🔍 点击搜索..."
                     btnSearch.setTextColor(0xFF999999.toInt())
                 }
@@ -2608,11 +2545,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun updateClipboardSearchBtn(btnSearch: TextView) {
-        val display = clipboardSearchBuffer.toString()
-        if (display.isNotEmpty()) {
-            btnSearch.text = "🔍 $display"
-            btnSearch.setTextColor(0xFF81D8D0.toInt())
-        } else if (clipboardSearchFilter.isNotEmpty()) {
+        if (clipboardSearchFilter.isNotEmpty()) {
             btnSearch.text = "🔍 $clipboardSearchFilter"
             btnSearch.setTextColor(0xFF81D8D0.toInt())
         } else {
@@ -2924,11 +2857,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 -200, 10 -> {
                     clipboardSearchFilter = clipboardSearchBuffer.toString()
                     clipboardSearchEditMode = false
-                    val llBar = clipboardPopupView?.findViewById<LinearLayout>(R.id.ll_search_edit_bar)
-                    llBar?.visibility = View.GONE
-                    rimeEngine.clear()
-                    searchCandidates.clear()
-                    searchCandidateAdapter?.notifyDataSetChanged()
+                    clipboardPopupView?.findViewById<TextView>(R.id.tv_search_edit_hint)?.visibility = View.GONE
                     updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
                     applyClipboardFilter()
                     return
@@ -2938,31 +2867,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     clipboardSearchEditMode = false
                     clipboardSearchBuffer.clear()
                     clipboardSearchFilter = ""
-                    rimeEngine.clear()
-                    searchCandidates.clear()
-                    searchCandidateAdapter?.notifyDataSetChanged()
-                    val llBar = clipboardPopupView?.findViewById<LinearLayout>(R.id.ll_search_edit_bar)
-                    llBar?.visibility = View.GONE
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
                     applyClipboardFilter()
                     return
                 }
-                // 退格：删除搜索缓冲区最后一个字符，或删除 Rime composing
+                // 退格：删除搜索缓冲区最后一个字符
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    if (rimeEngine.isComposing) {
-                        rimeEngine.processKey("BackSpace")
-                        updateSearchCandidates()
-                    } else if (clipboardSearchBuffer.isNotEmpty()) {
+                    if (clipboardSearchBuffer.isNotEmpty()) {
                         clipboardSearchBuffer.deleteCharAt(clipboardSearchBuffer.length - 1)
                     }
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ ${if (display.isEmpty()) "输入搜索关键词..." else display}")
                     return
                 }
                 // 字母键 a-z：走 Rime 引擎
                 in 97..122 -> {
                     rimeEngine.processKey(primaryCode.toChar())
-                    updateSearchCandidates()
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    val comp = rimeEngine.composingText
+                    val display = clipboardSearchBuffer.toString() + comp
+                    updateStatus("✏️ $display")
                     return
                 }
                 // 数字键 0-9：选词或追加
@@ -2975,13 +2897,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             if (selected.isNotEmpty()) {
                                 clipboardSearchBuffer.append(selected)
                                 rimeEngine.clear()
-                                updateSearchCandidates()
                             }
                         }
                     } else {
                         clipboardSearchBuffer.append(primaryCode.toChar())
                     }
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ $display")
                     return
                 }
                 // 空格：选首词或追加空格
@@ -2991,12 +2913,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         if (selected.isNotEmpty()) {
                             clipboardSearchBuffer.append(selected)
                             rimeEngine.clear()
-                            updateSearchCandidates()
                         }
                     } else {
                         clipboardSearchBuffer.append(' ')
                     }
-                    updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+                    val display = clipboardSearchBuffer.toString()
+                    updateStatus("✏️ $display")
                     return
                 }
                 // 标点追加
@@ -3399,8 +3321,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 剪贴板搜索编辑模式：追加选词到搜索缓冲区
             clipboardSearchBuffer.append(text)
             rimeEngine.clear()
-            updateSearchCandidates()
-            updateClipboardSearchBtn(clipboardPopupView?.findViewById<TextView>(R.id.btn_clipboard_search) ?: return)
+            updateStatus("✏️ ${clipboardSearchBuffer}")
             return
         }
         if (magicEditMode && text != null) {
