@@ -2405,6 +2405,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     // ====== 剪贴板搜索状态 =======
+    private var clipboardSearchEditMode = false
+    private var etSearch: android.widget.EditText? = null
 
     /**
      * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
@@ -2416,6 +2418,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.btn_clipboard_search)
+            this.etSearch = etSearch
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
             val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
@@ -2759,6 +2762,104 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         cancelLongPress()
         if (wasLongPressed) {
             return  // 上一次按键的长按被消耗，跳过本次短按
+        }
+
+        // ======================== 剪贴板搜索编辑模式：手动写入 EditText =======================
+        if (clipboardSearchEditMode) {
+            val searchEt = this.etSearch
+            if (searchEt != null) {
+                when (primaryCode) {
+                    // 发送键/回车键：确认搜索，退出编辑模式
+                    -200, 10 -> {
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        searchEt.clearFocus()
+                        return
+                    }
+                    // 返回键：取消搜索，退出编辑模式
+                    KeyEvent.KEYCODE_BACK -> {
+                        searchEt.setText("")
+                        clipboardSearchFilter = ""
+                        applyClipboardFilter()
+                        searchEt.clearFocus()
+                        return
+                    }
+                    // 退格键
+                    -5, Keyboard.KEYCODE_DELETE -> {
+                        if (rimeEngine.isComposing) {
+                            rimeEngine.processKey("BackSpace")
+                        }
+                        val buf = searchEt.text.toString()
+                        if (buf.isNotEmpty()) {
+                            val newBuf = buf.dropLast(1)
+                            searchEt.setText(newBuf)
+                            searchEt.setSelection(newBuf.length)
+                        }
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 字母键 a-z
+                    in 97..122 -> {
+                        rimeEngine.processKey(primaryCode.toChar())
+                        val comp = rimeEngine.composingText
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + comp)
+                        searchEt.setSelection(searchEt.text.length)
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 数字键 0-9：选词或追加
+                    in 48..57 -> {
+                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                            val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                            val cands = rimeEngine.candidates
+                            if (index < cands.size) {
+                                val selected = rimeEngine.selectCandidate(index)
+                                if (selected.isNotEmpty()) {
+                                    val buf = searchEt.text.toString()
+                                    val comp = rimeEngine.composingText
+                                    val newBuf = buf.dropLast(comp.length) + selected
+                                    searchEt.setText(newBuf)
+                                    searchEt.setSelection(newBuf.length)
+                                    rimeEngine.clear()
+                                }
+                            }
+                        } else {
+                            val buf = searchEt.text.toString()
+                            searchEt.setText(buf + primaryCode.toChar().toString())
+                            searchEt.setSelection(searchEt.text.length)
+                        }
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 空格：选首词或追加空格
+                    32 -> {
+                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                            val selected = rimeEngine.selectCandidate(0)
+                            if (selected.isNotEmpty()) {
+                                val buf = searchEt.text.toString()
+                                val comp = rimeEngine.composingText
+                                val newBuf = buf.dropLast(comp.length) + selected
+                                searchEt.setText(newBuf)
+                                searchEt.setSelection(newBuf.length)
+                                rimeEngine.clear()
+                            }
+                        } else {
+                            val buf = searchEt.text.toString()
+                            searchEt.setText(buf + " ")
+                            searchEt.setSelection(searchEt.text.length)
+                        }
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        return
+                    }
+                    // 其他按键忽略
+                    else -> return
+                }
+            }
         }
 
         // ======================== 魔法编辑模式拦截 ========================
