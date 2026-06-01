@@ -3001,10 +3001,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // ======================== 空格键 ========================
             32 -> {
                 if (keyboardMode == KeyboardMode.NUMBER) {
-                    // 数字键盘空格：T9模式下输入空格分隔拼音，否则直接上屏
-                    if (t9ShiftTemp) {
-                        // Shift模式直接上屏空格
-                        ic?.commitText(" ", 1)
+                    // 数字键盘空格：shift模式下输出0，否则正常空格
+                    if (t9ShiftTemp || t9ShiftLocked) {
+                        // Shift模式：输出 0
+                        ic?.commitText("0", 1)
+                        // 临时shift：自动退回；锁定shift：保持
+                        if (!t9ShiftLocked) {
+                            t9ShiftTemp = false
+                            updateShiftIndicator()
+                        }
                     } else if (t9InputBuffer.isNotEmpty()) {
                         // T9模式：空格 = 选择首候选上屏
                         val cands = rimeEngine.candidates
