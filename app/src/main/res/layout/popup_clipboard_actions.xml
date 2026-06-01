@@ -30,7 +30,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="📋 插入文本" />
 
     <TextView
@@ -42,7 +42,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="⤒ 置顶收藏" />
 
     <TextView
@@ -54,7 +54,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="🔒 锁定防删" />
 
     <TextView
@@ -66,7 +66,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="✂️ 分词处理" />
 
     <TextView
@@ -78,7 +78,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="✏️ 编辑文本" />
 
     <TextView
@@ -90,7 +90,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="🔍 搜索文本" />
 
     <TextView
@@ -102,7 +102,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="🗑️ 删除条目" />
 
     <TextView
@@ -114,7 +114,7 @@
         android:paddingEnd="12dp"
         android:textSize="14sp"
         android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/item_click_bg"
         android:text="📤 分享文本" />
 
 </LinearLayout>
