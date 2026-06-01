@@ -2331,8 +2331,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
-        // 立即高亮发送按钮 + 发光动画
-        startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -2344,44 +2342,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun startSendButtonGlow() {
         sendButtonGlowing = true
-        // 背景高亮
-        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-        btnSend.imageTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-        btnSend.elevation = 8f
-        // 缩放脉冲
         val pulse = ScaleAnimation(
-            1.0f, 1.18f, 1.0f, 1.18f,
+            1.0f, 1.15f, 1.0f, 1.15f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f
         ).apply {
-            duration = 500
+            duration = 600
             repeatMode = ScaleAnimation.REVERSE
             repeatCount = ScaleAnimation.INFINITE
         }
-        // alpha呼吸（模拟发光）
-        val breathe = android.view.animation.AlphaAnimation(0.7f, 1.0f).apply {
-            duration = 500
-            repeatMode = android.view.animation.AlphaAnimation.REVERSE
-            repeatCount = android.view.animation.AlphaAnimation.INFINITE
-        }
-        val set = android.view.animation.AnimationSet(false)
-        set.addAnimation(pulse)
-        set.addAnimation(breathe)
-        btnSend.startAnimation(set)
+        btnSend.startAnimation(pulse)
     }
 
     private fun stopSendButtonGlow() {
         sendButtonGlowing = false
         btnSend.clearAnimation()
-        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-        btnSend.imageTintList = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-        btnSend.elevation = 0f
     }
 
     private fun startMagicBookLongPress() {
         cancelMagicBookLongPress()
-        // 立即高亮魔法书按钮 + 发光动画
-        startMagicBookGlow()
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -2393,38 +2372,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun startMagicBookGlow() {
         magicBookGlowing = true
-        // 背景高亮
-        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-        btnClipboard.imageTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-        btnClipboard.elevation = 8f
-        // 缩放脉冲
         val pulse = ScaleAnimation(
-            1.0f, 1.18f, 1.0f, 1.18f,
+            1.0f, 1.15f, 1.0f, 1.15f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
             ScaleAnimation.RELATIVE_TO_SELF, 0.5f
         ).apply {
-            duration = 500
+            duration = 600
             repeatMode = ScaleAnimation.REVERSE
             repeatCount = ScaleAnimation.INFINITE
         }
-        // alpha呼吸（模拟发光）
-        val breathe = android.view.animation.AlphaAnimation(0.7f, 1.0f).apply {
-            duration = 500
-            repeatMode = android.view.animation.AlphaAnimation.REVERSE
-            repeatCount = android.view.animation.AlphaAnimation.INFINITE
-        }
-        val set = android.view.animation.AnimationSet(false)
-        set.addAnimation(pulse)
-        set.addAnimation(breathe)
-        btnClipboard.startAnimation(set)
+        btnClipboard.startAnimation(pulse)
     }
 
     private fun stopMagicBookGlow() {
         magicBookGlowing = false
         btnClipboard.clearAnimation()
-        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-        btnClipboard.imageTintList = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-        btnClipboard.elevation = 0f
     }
 
     private fun cancelSendKeyLongPress() {
