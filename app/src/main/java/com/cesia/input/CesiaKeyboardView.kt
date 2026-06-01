@@ -79,7 +79,11 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
             }
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                isSwipeDetected = false
+                // 如果之前检测到滑动，吞掉 ACTION_UP，防止起点按键触发 onKey/onRelease
+                if (isSwipeDetected) {
+                    isSwipeDetected = false
+                    return true
+                }
             }
         }
         return super.onTouchEvent(me)

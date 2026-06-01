@@ -1860,8 +1860,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 左右滑动循环切换全键盘 ↔ T9 */
     private fun toggleBySwipe() {
-        // 取消可能正在进行的长按检测（防止滑动起点按键触发副字符）
-        cancelLongPress()
+        // 取消所有可能正在进行的长按检测（防止滑动起点按键触发副字符/功能）
+        cancelAllLongPressActions()
+        // 结束 composing 状态，清除输入框中的高亮/下划线残留
+        try { currentInputConnection?.finishComposingText() } catch (_: Exception) {}
         // 清除输入状态，防止切换后残留
         rimeEngine.clear()
         t9InputBuffer.clear()
@@ -2262,6 +2264,33 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         longPressConsumed = false
         keyboardView.currentPopupKey = null
         if (prevKey != null) keyboardView.invalidateKey(prevKey)
+    }
+
+    /** 取消所有长按相关的 runnable（滑动切换时调用，彻底防止误触发） */
+    private fun cancelAllLongPressActions() {
+        cancelLongPress()
+        // 取消功能键长按
+        functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        functionalLongPressRunnable = null
+        // 取消剪贴板粘贴长按
+        clipboardPasteRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        clipboardPasteRunnable = null
+        // 取消剪贴板剪切长按
+        clipboardCutRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        clipboardCutRunnable = null
+        // 取消 Shift 长按
+        shiftLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        shiftLongPressRunnable = null
+        // 取消回车长按
+        enterLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        enterLongPressRunnable = null
+        // 取消退格长按
+        backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
+        backspaceRunnable = null
+        // 取消发送键长按
+        cancelSendKeyLongPress()
+        // 重置短按标志，防止 runnable 中的 !shortPressHandled 判断泄漏
+        shortPressHandled = true
     }
 
     private fun startSendKeyLongPress() {
