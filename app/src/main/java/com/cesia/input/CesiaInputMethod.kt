@@ -2407,6 +2407,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var clipboardSearchEditMode = false
     private var clipboardSearchBuffer = StringBuilder()
 
+    /** 更新搜索 hint 栏：显示已确认文字 + Rime 拼音 + 候选词 */
+    private fun updateSearchHintDisplay() {
+        val hintView = clipboardPopupView?.findViewById<TextView>(R.id.tv_search_edit_hint) ?: return
+        val comp = rimeEngine.composingText
+        val cands = rimeEngine.candidates
+        val buf = clipboardSearchBuffer.toString()
+        val sb = StringBuilder()
+        if (buf.isNotEmpty()) sb.append("已选: $buf")
+        if (comp.isNotEmpty()) {
+            if (sb.isNotEmpty()) sb.append(" | ")
+            sb.append("拼音: $comp")
+        }
+        if (cands.isNotEmpty()) {
+            if (sb.isNotEmpty()) sb.append(" | ")
+            sb.append("候选: ").append(cands.take(4).joinToString(" "))
+        }
+        if (sb.isEmpty()) {
+            hintView.text = "✏️ 输入搜索关键词...（按发送键确认，再点🔍退出）"
+        } else {
+            hintView.text = sb.toString()
+        }
+    }
+
     /**
      * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
      */
@@ -2870,21 +2893,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     applyClipboardFilter()
                     return
                 }
-                // 退格：删除搜索缓冲区最后一个字符
+                // 退格：先删 Rime composing，再删缓冲区
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    if (clipboardSearchBuffer.isNotEmpty()) {
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.processKey("BackSpace")
+                    } else if (clipboardSearchBuffer.isNotEmpty()) {
                         clipboardSearchBuffer.deleteCharAt(clipboardSearchBuffer.length - 1)
                     }
-                    val display = clipboardSearchBuffer.toString()
-                    updateStatus("✏️ ${if (display.isEmpty()) "输入搜索关键词..." else display}")
+                    updateSearchHintDisplay()
                     return
                 }
-                // 字母键 a-z：走 Rime 引擎
+                // 字母键 a-z：走 Rime 引擎，候选词显示在 hint 栏
                 in 97..122 -> {
                     rimeEngine.processKey(primaryCode.toChar())
-                    val comp = rimeEngine.composingText
-                    val display = clipboardSearchBuffer.toString() + comp
-                    updateStatus("✏️ $display")
+                    updateSearchHintDisplay()
                     return
                 }
                 // 数字键 0-9：选词或追加
@@ -2902,8 +2924,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     } else {
                         clipboardSearchBuffer.append(primaryCode.toChar())
                     }
-                    val display = clipboardSearchBuffer.toString()
-                    updateStatus("✏️ $display")
+                    updateSearchHintDisplay()
                     return
                 }
                 // 空格：选首词或追加空格
@@ -2917,15 +2938,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     } else {
                         clipboardSearchBuffer.append(' ')
                     }
-                    val display = clipboardSearchBuffer.toString()
-                    updateStatus("✏️ $display")
+                    updateSearchHintDisplay()
                     return
                 }
                 // 标点追加
                 44, 46, 59, 33, 63 -> {
                     rimeEngine.clear()
                     clipboardSearchBuffer.append(primaryCode.toChar())
-                    updateStatus("✏️ ${clipboardSearchBuffer}")
+                    updateSearchHintDisplay()
                     return
                 }
             }
@@ -3321,7 +3341,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 剪贴板搜索编辑模式：追加选词到搜索缓冲区
             clipboardSearchBuffer.append(text)
             rimeEngine.clear()
-            updateStatus("✏️ ${clipboardSearchBuffer}")
+            updateSearchHintDisplay()
             return
         }
         if (magicEditMode && text != null) {
