@@ -2404,43 +2404,58 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         stopMagicBookGlow()
     }
 
-    /** 弹出剪贴板搜索输入框（AlertDialog + EditText）*/
+    /** 弹出剪贴板搜索输入框（Dialog + EditText）*/
     private fun showClipboardSearchDialog() {
         try {
+            val dialog = android.app.Dialog(this, android.R.style.Theme_Material_Light_Dialog_Alert)
             val editText = android.widget.EditText(this).apply {
                 setHint("输入搜索关键词...")
                 setSingleLine(true)
                 setMaxLines(1)
                 textSize = 16f
-                setPadding(24, 8, 24, 8)
+                setPadding(32, 16, 32, 16)
             }
-            val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setTitle("🔍 搜索剪贴板")
-                .setView(editText)
-                .setPositiveButton("搜索") { d, _ ->
+            val searchBtn = android.widget.Button(this).apply {
+                text = "搜索"
+                setOnClickListener {
                     val text = editText.text.toString().trim()
                     if (text.isNotEmpty()) {
                         clipboardSearchFilter = text
                         applyClipboardFilter()
                         updateStatus("🔍 搜索：$text")
                     }
-                    d.dismiss()
+                    dialog.dismiss()
                 }
-                .setNegativeButton("取消") { d, _ ->
+            }
+            val cancelBtn = android.widget.Button(this).apply {
+                text = "取消"
+                setOnClickListener {
                     clipboardSearchFilter = ""
                     applyClipboardFilter()
-                    d.dismiss()
+                    dialog.dismiss()
                 }
-                .setOnCancelListener {
-                    clipboardSearchFilter = ""
-                    applyClipboardFilter()
-                }
-                .create()
-            // 对话框关闭后重新打开剪贴板弹窗
+            }
+            val btnLayout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.END
+                setPadding(0, 0, 16, 8)
+                addView(cancelBtn)
+                addView(searchBtn)
+            }
+            val layout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                addView(editText)
+                addView(btnLayout)
+            }
+            dialog.setTitle("🔍 搜索剪贴板")
+            dialog.setContentView(layout)
+            dialog.setOnCancelListener {
+                clipboardSearchFilter = ""
+                applyClipboardFilter()
+            }
             dialog.setOnDismissListener {
                 showClipboardManagerPopup()
             }
-            // IME 服务弹出的 Dialog，不设置特殊窗口类型，让系统自动处理
             dialog.show()
             editText.requestFocus()
             editText.postDelayed({
