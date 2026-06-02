@@ -4,31 +4,9 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
-// === 版本号：强制从 APK_VERSION 环境变量读取，CI workflow 中设置 ===
-// 去掉本地 git 计数和 fallback，遭遇空值直接报错，防止 build 出 1.1.1 的假象
-def getVersionCode() {
-    def envVer = System.getenv("APK_VERSION")
-    if (envVer == null || envVer.trim().isEmpty()) {
-        throw new GradleException("APK_VERSION 环境变量未设置。CI workflow 应在 build 前设置 APK_VERSION=1.1.N")
-    }
-    def parts = envVer.split("\\.")
-    if (parts.length < 3) {
-        throw new GradleException("APK_VERSION 格式错误: '${envVer}'，应为 x.y.z")
-    }
-    return parts[2].toInteger()
-}
-
-def getVersionName() {
-    def envVer = System.getenv("APK_VERSION")
-    if (envVer == null || envVer.trim().isEmpty()) {
-        throw new GradleException("APK_VERSION 环境变量未设置。CI workflow 应在 build 前设置 APK_VERSION=1.1.N")
-    }
-    return envVer
-}
-
-// 统一版本变量，避免解析多次导致空值
-def verCode = getVersionCode()
-def verName = getVersionName()
+// 从 gradle.properties 读版本号（由 CI workflow 写入 apkVersion=1.1.N）
+def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION")
+def apkVer = apkVerRaw?.trim()
 
 android {
     namespace 'com.cesia.input'
@@ -38,8 +16,18 @@ android {
         applicationId "com.cesia.input"
         minSdk 24
         targetSdk 34
-        versionCode verCode
-        versionName verName
+
+        // 版本号解析（配置期执行，gradle.properties 已在进程启动时加载）
+        if (apkVer && apkVer.matches("\\d+\\.\\d+\\.\\d+")) {
+            def parts = apkVer.split("\\.")
+            versionCode parts[2].toInteger()
+            versionName apkVer
+        } else {
+            versionCode 1
+            versionName "1.1.1"
+            println "⚠ 版本号未配置 (apkVer=${apkVer})，使用默认 1.1.1"
+        }
+
         ndk {
             abiFilters "arm64-v8a"
         }
@@ -65,9 +53,9 @@ android {
         buildConfig true
     }
 
-    // BuildConfig 直接写版本号，运行期绝不依赖 PackageManager
-    buildConfigField "int", "VERSION_CODE", "${verCode}"
-    buildConfigField "String", "VERSION_NAME", "\"${verName}\""
+    // BuildConfig 写版本号，运行时直接读，不依赖 PackageManager
+    buildConfigField "int", "VERSION_CODE", "${android.defaultConfig.versionCode}"
+    buildConfigField "String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\""
 
     kotlinOptions {
         jvmTarget = '17'
@@ -81,42 +69,31 @@ android {
 
 dependencies {
     implementation project(':rime-engine')
-
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-
-    // OkHttp for HTTP
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-
-    // Gson for JSON
     implementation 'com.google.code.gson:gson:2.10.1'
-
-    // Coroutines for async
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
 }
 
-// APK 重命名：assembleDebug 后重命名为 Cesia-{versionName}-debug.apk
+// APK 重命名
+def verName = android.defaultConfig.versionName
 def cesiaApkName = "Cesia-${verName}-debug.apk"
 tasks.register("renameDebugApk") {
     def debugApkDir = file("$buildDir/outputs/apk/debug")
-    def sourceGlob = fileTree(dir: debugApkDir, include: "*.apk")
-    inputs.files(sourceGlob)
+    inputs.files(fileTree(dir: debugApkDir, include: "*.apk"))
     outputs.file("$debugApkDir/$cesiaApkName")
     doLast {
-        def apkFile = debugApkDir.listFiles().find { f ->
-            f.name.endsWith(".apk") && f.name.contains("debug") && !f.name.startsWith("Cesia-")
+        def apkFile = debugApkDir.listFiles()?.find { f ->
+            f.name.endsWith(".apk") && !f.name.startsWith("Cesia-")
         }
-        if (apkFile == null) {
-            throw new GradleException("Debug APK not found in $debugApkDir for rename")
-        }
-        def targetFile = file("$debugApkDir/$cesiaApkName")
-        if (!apkFile.renameTo(targetFile)) {
-            throw new GradleException("Failed to rename ${apkFile.name} -> $cesiaApkName")
-        }
-        println "Renamed APK -> ${targetFile.name}"
+        if (apkFile == null) throw new GradleException("Debug APK not found for rename")
+        def target = file("$debugApkDir/$cesiaApkName")
+        if (!apkFile.renameTo(target)) throw new GradleException("Rename failed: ${apkFile.name} -> $cesiaApkName")
+        println "✅ Renamed APK -> ${target.name}"
     }
 }
 afterEvaluate {

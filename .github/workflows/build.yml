@@ -50,13 +50,20 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "APK_VERSION=$VERSION" >> $GITHUB_ENV
+          # 写入 gradle.properties，确保 Gradle 配置期能读到
+          echo "apkVersion=$VERSION" > gradle.properties.tmp
+          # 保留原有属性，追加版本号
+          grep -v "^apkVersion=" gradle.properties >> gradle.properties.tmp 2>/dev/null || true
+          mv gradle.properties.tmp gradle.properties
           echo "✅ Version: $VERSION (commit count: $COUNT)"
+          echo "--- gradle.properties ---"
+          cat gradle.properties
 
       - name: Build APK with Gradle
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon -PapkVersion=${{ steps.version.outputs.version }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v5
