@@ -373,6 +373,30 @@
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
+        <!-- 词库选择 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="选择词库"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinner_dict_source"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="4dp"
+            android:background="@android:drawable/btn_dropdown" />
+
+        <TextView
+            android:id="@+id/tv_dict_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:layout_marginBottom="8dp" />
+
         <TextView
             android:id="@+id/tv_dict_info"
             android:layout_width="match_parent"
@@ -384,11 +408,27 @@
             android:padding="10dp"
             android:layout_marginBottom="8dp" />
 
-        <!-- 词库按钮：一行四个 -->
+        <!-- 词库自定义地址 -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="自定义词库地址（可选）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_custom_dict_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:textSize="12sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- 词库按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp">
 
             <Button
@@ -399,29 +439,7 @@
                 android:text="📥下载"
                 android:textSize="11sp"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_marginEnd="2dp" />
-
-            <Button
-                android:id="@+id/btn_import_dict"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📂导入"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_marginStart="2dp"
-                android:layout_marginEnd="2dp" />
-
-            <Button
-                android:id="@+id/btn_export_dict"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📤导出"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_marginStart="2dp"
-                android:layout_marginEnd="2dp" />
+                android:layout_marginEnd="4dp" />
 
             <Button
                 android:id="@+id/btn_cloud_backup"
@@ -431,13 +449,184 @@
                 android:text="☁️备份"
                 android:textSize="11sp"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_marginStart="2dp" />
+                android:layout_marginStart="4dp" />
         </LinearLayout>
+
+        <!-- 已废弃的按钮占位（代码中需要 but never shown） -->
+        <Button
+            android:id="@+id/btn_import_dict"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+        <Button
+            android:id="@+id/btn_export_dict"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
 
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ==================== 语音设置 ==================== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎤 语音设置"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 语音语言 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="语音识别语言"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinner_voice_language"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp"
+            android:background="@android:drawable/btn_dropdown" />
+
+        <!-- 语音引擎 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="语音识别引擎"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinner_voice_engine"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="4dp"
+            android:background="@android:drawable/btn_dropdown" />
+
+        <TextView
+            android:id="@+id/tv_voice_engine_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Whisper 模式 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Whisper 模式"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinner_whisper_mode"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:background="@android:drawable/btn_dropdown" />
+
+        <!-- Whisper API 配置（固定使用 Groq API） -->
+        <!-- Groq API 地址（固定，不可编辑） -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="API 地址"
+            android:textSize="12sp"
+            android:textColor="#888888" />
+
+        <TextView
+            android:id="@+id/tv_whisper_api_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="https://api.groq.com/openai/v1/audio/transcriptions"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:background="#F5F5F5"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Groq API Key（必填）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_whisper_api_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Groq 免费模型 -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="模型（Groq 免费）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_whisper_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:text="whisper-large-v3-turbo"
+                android:enabled="false" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 whisper-large-v3-turbo — Groq 免费模型，支持中英文，速度极快"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 测试连接 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btn_test_whisper"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔌 测试连接"
+                android:textSize="12sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+            <TextView
+                android:id="@+id/tv_whisper_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textSize="12sp"
+                android:textColor="#888888"
+                android:text="未测试" />
+        </LinearLayout>
+
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginTop="16dp"
             android:layout_marginBottom="16dp" />
 
         <!-- ==================== 操作按钮 ==================== -->

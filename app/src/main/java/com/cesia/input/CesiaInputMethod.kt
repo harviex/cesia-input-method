@@ -192,6 +192,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var clipboardItems = mutableListOf<ClipboardItem>()
     private var clipboardFilteredItems = mutableListOf<ClipboardItem>()
     private var clipboardSearchFilter = ""
+
+
     private fun applyClipboardFilter() {
         clipboardFilteredItems.clear()
         if (clipboardSearchFilter.isEmpty()) {
@@ -611,6 +613,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             engine.initialize(getOpenRouterApiKey())
+            // 同步语音语言设置
+            val settingsPrefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+            engine.voiceLanguage = settingsPrefs.getString("voice_language", "zh") ?: "zh"
         }
 
         loadSettings()
@@ -1724,7 +1729,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBar.visibility = View.GONE
         voiceStartTime = System.currentTimeMillis()
         updateStatus("🎤 正在收听，请说话...")
-        typelessEngine?.startListening(continuous = true)
+
+        // 根据设置选择语音引擎
+        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        val engine = prefs.getString("voice_engine", "auto") ?: "auto"
+        val useWhisper = when (engine) {
+            "whisper" -> true
+            "google" -> false
+            else -> typelessEngine?.isWhisperAvailable == true  // auto
+        }
+        if (useWhisper) {
+            typelessEngine?.startWhisperListening(continuous = true)
+        } else {
+            typelessEngine?.startListening(continuous = true)
+        }
         showAiChoiceButtons()
     }
 
@@ -1770,7 +1788,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun stopRecordingAndWait() {
         isRecording = false
         stopVoiceWave()
-        typelessEngine?.stopListening()
+        typelessEngine?.stopListening()  // 同时停止 Fallback 和 Whisper
         setStatusDot("processing")
     }
 
@@ -2425,11 +2443,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     // ====== 剪贴板搜索状态 =======
-    private var clipboardSearchEditMode = false
     private var etSearch: android.widget.EditText? = null
 
     /**
-     * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
+     * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭
      */
     private fun showClipboardManagerPopup() {
         try {
@@ -2447,13 +2464,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
             etSearch.setOnFocusChangeListener { _, hasFocus ->
-                clipboardSearchEditMode = hasFocus
                 if (hasFocus) {
-                    tvSearchHint.visibility = View.VISIBLE
-                    tvSearchHint.text = "输入搜索关键词..."
+                    tvSearchHint?.visibility = View.VISIBLE
+                    tvSearchHint?.text = "输入搜索关键词..."
                     etSearch.hint = ""
                 } else {
-                    tvSearchHint.visibility = View.GONE
+                    tvSearchHint?.visibility = View.GONE
                     etSearch.hint = "🔍 点击搜索..."
                 }
             }
@@ -2461,22 +2477,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: android.text.Editable?) {
-                    // 搜索编辑模式下，TextWatcher 不做任何事（由 onKey 拦截处理过滤）
-                    // 非搜索编辑模式下（如直接粘贴），才由 TextWatcher 触发过滤
-                    if (!clipboardSearchEditMode) {
-                        clipboardSearchFilter = s?.toString()?.trim() ?: ""
-                        applyClipboardFilter()
-                    }
+                    clipboardSearchFilter = s?.toString()?.trim() ?: ""
+                    applyClipboardFilter()
                 }
             })
             etSearch.setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
-                    // 搜索动作：清除焦点，隐藏软键盘
+                    // 只隐藏键盘，不关闭菜单
                     etSearch.clearFocus()
                     val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
                     imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
                     true
                 } else false
+            }
+            // 点击搜索框时阻止事件向上传递，避免触发 PopupWindow 关闭
+            etSearch.setOnClickListener {
+                it.requestFocus()
+                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                imm?.showSoftInput(it, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }
 
             // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
@@ -2494,12 +2512,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
             val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
 
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, false)
             popup.isOutsideTouchable = false
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
+            popup.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
@@ -2509,14 +2528,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 popup.dismiss()
             }
 
-            // 长按：操作菜单（置顶/删除/编辑/分词）
-            gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
-                val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
-                if (item.isEmpty) return@setOnItemLongClickListener true
-                showClipboardItemActions(item, clipboardItems) { loadClipboardHistoryToClassMembers(clipboardMgr); applyClipboardFilter() }
-                true
-            }
-
+            // 长按：暂不处理
+            gvClipboard.setOnItemLongClickListener { _, _, _, _ -> true }
 
             btnDone.setOnClickListener { popup.dismiss() }
 
@@ -2573,6 +2586,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
+
+            // 自动聚焦搜索框，弹出软键盘
+            etSearch.postDelayed({
+                etSearch.requestFocus()
+                // 把光标移到已有文字末尾
+                etSearch.setSelection(etSearch.text.length)
+                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                imm?.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }, 100)
 
             popup.setOnDismissListener {
                 cancelSendKeyLongPress()
@@ -2642,114 +2664,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .apply()
     }
 
-    private fun showClipboardItemActions(
-        item: ClipboardItem,
-        allItems: MutableList<ClipboardItem>,
-        onUpdate: () -> Unit
-    ) {
-        val actions = mutableListOf<String>()
-        if (!item.isEmpty) {
-            actions.add("📋 插入文本")
-            actions.add(if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏")
-            actions.add(if (clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删")
-            actions.add("✂️ 分词处理")
-            actions.add("✏️ 编辑文本")
-            actions.add("🔍 搜索文本")
-            actions.add("🗑️ 删除条目")
-            actions.add("📤 分享文本")
-        }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(item.text.take(30) + if (item.text.length > 30) "…" else "")
-            .setItems(actions.toTypedArray()) { _, which ->
-                when (which) {
-                    0 -> currentInputConnection?.commitText(item.text, 1) // 插入
-                    1 -> { // 置顶
-                        allItems.remove(item)
-                        val toggled = item.copy(isPinned = !item.isPinned)
-                        if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
-                        updateClipboardFavorites(); onUpdate()
-                    }
-                    2 -> { // 锁定
-                        val key = item.text
-                        if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
-                        else clipboardFavorites[key] = true
-                        updateClipboardFavorites(); onUpdate()
-                    }
-                    3 -> { // 分词 — 用空格分词后逐段插入
-                        val words = item.text.split(Regex("""[\s,，。；;:：！!？?、]+"""))
-                            .filter { it.isNotEmpty() }
-                        if (words.size > 1) {
-                            currentInputConnection?.commitText(words.joinToString(" "), 1)
-                        } else {
-                            updateStatus("✂️ 已单段插入")
-                            currentInputConnection?.commitText(item.text, 1)
-                        }
-                    }
-                    4 -> { // 编辑
-                        showClipboardEditDialog(item.text) { newText ->
-                            allItems.remove(item)
-                            allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
-                            updateClipboardFavorites(); onUpdate()
-                        }
-                    }
-                    5 -> { // 搜索
-                        try {
-                            Intent(Intent.ACTION_WEB_SEARCH).apply {
-                                putExtra("query", item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(this)
-                            }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动搜索")
-                        }
-                    }
-                    6 -> { // 删除
-                        if (clipboardFavorites[item.text] == false) {
-                            allItems.remove(item)
-                            updateClipboardFavorites(); onUpdate()
-                        } else {
-                            updateStatus("⚠️ 已锁定，无法删除")
-                        }
-                    }
-                    7 -> { // 分享
-                        try {
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(Intent.createChooser(this, "分享"))
-                            }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动分享")
-                        }
-                    }
-                }
-            }
-            .setNegativeButton("取消", null)
-            .create()
-        try { dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT) } catch (_: Exception) {}
-        dialog.show()
-    }
-
-    private fun showClipboardEditDialog(original: String, onSave: (String) -> Unit) {
-        val editText = android.widget.EditText(this).apply {
-            setText(original)
-            setSelection(original.length)
-        }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("✏️ 编辑文本")
-            .setView(editText)
-            .setPositiveButton("保存") { _, _ ->
-                val newText = editText.text.toString().trim()
-                if (newText.isNotEmpty()) onSave(newText)
-                else updateStatus("⚠️ 文本为空，未保存")
-            }
-            .setNegativeButton("取消", null)
-            .create()
-        try { dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT) } catch (_: Exception) {}
-        dialog.show()
-    }
-
+    // ======================== 编辑弹窗 ========================
     private fun updateClipboardFavorites() {
         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
         // 持久化：收藏+锁定条目
@@ -2804,91 +2719,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
-        // ======================== 剪贴板搜索编辑模式：手动写入 EditText ========================
-        if (clipboardSearchEditMode) {
-            val searchEt = this.etSearch
-            if (searchEt != null) {
-                when (primaryCode) {
-                    // 发送键/回车键：确认搜索，退出编辑模式
-                    -200, 10 -> {
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        searchEt.clearFocus()
-                        clipboardSearchEditMode = false
-                        return
-                    }
-                    // 返回键/ESC：取消搜索，清空并退出编辑模式
-                    KeyEvent.KEYCODE_BACK, 27 -> {
-                        searchEt.setText("")
-                        clipboardSearchFilter = ""
-                        applyClipboardFilter()
-                        searchEt.clearFocus()
-                        clipboardSearchEditMode = false
-                        return
-                    }
-                    // 退格键
-                    -5, Keyboard.KEYCODE_DELETE -> {
-                        val buf = searchEt.text.toString()
-                        if (buf.isNotEmpty()) {
-                            val newBuf = buf.dropLast(1)
-                            searchEt.setText(newBuf)
-                            searchEt.setSelection(newBuf.length)
-                        }
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 空格（直接追加空格）
-                    32 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + " ")
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 字母键 a-z：追加字符
-                    in 97..122 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 大写字母 A-Z
-                    in 65..90 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().lowercase())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 数字键 0-9：直接追加数字
-                    in 48..57 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他可打印符号直接追加
-                    in 33..47, in 58..64, in 91..96, in 123..126 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他按键（shift/ctrl等）忽略
-                    else -> return
-                }
-            }
-        }
-
+        // ======================== 剪贴板搜索编辑模式：拼音输入 + 手动写入 EditText ========================
         // ======================== 魔法编辑模式拦截 ========================
         if (magicEditMode) {
             when (primaryCode) {
