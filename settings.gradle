@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "CesiaInputMethod"
 include ':app'
 include ':rime-engine'
+include ':ai-engine'
