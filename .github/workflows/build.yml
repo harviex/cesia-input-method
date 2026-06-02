@@ -53,9 +53,6 @@ jobs:
           echo "✅ Version: $VERSION (commit count: $COUNT)"
 
       - name: Build APK with Gradle
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-          APK_VERSION: ${{ steps.version.outputs.version }}
         run: |
           echo "JAVA_HOME=$JAVA_HOME"
           java -version
