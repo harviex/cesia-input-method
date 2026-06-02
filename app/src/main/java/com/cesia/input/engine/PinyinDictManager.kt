@@ -68,21 +68,21 @@ class PinyinDictManager(private val context: Context) {
                 id = "rime-list",
                 name = "Rime List (雾凇+搜狗)",
                 nameZh = "雾凇+搜狗增强（220万词）",
-                url = "https://github.com/hantang/rime-list/releases/latest/download/cn_dicts.zip",
+                url = "",
                 language = "zh",
                 size = "~90MB",
                 license = "Mixed",
-                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。文件较大，建议在 WiFi 下下载"
+                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。⚠️ 需手动下载：github.com/hantang/rime-list 仓库提供生成脚本，请按 README 生成 cn_dicts.zip 后通过自定义词库地址导入"
             ),
             DictSource(
                 id = "rime-fast-xhup",
                 name = "Rime Fast XHUP",
                 nameZh = "快速·徐鹤朋词库（150万词）",
-                url = "https://github.com/lotem/rime-fast-xhup/releases/latest/download/cn_dicts.zip",
+                url = "",
                 language = "zh",
                 size = "~60MB",
                 license = "Apache-2.0",
-                description = "目前最大的 Rime 中文词库之一，约 150 万词条，覆盖极广。基于徐鹤朋词库优化，适合需要极致覆盖率的场景"
+                description = "目前最大的 Rime 中文词库之一，约 150 万词条（小鹤双拼+鹤形）。⚠️ 需手动下载 cn_dicts 目录打包为 zip，通过自定义词库地址导入。github.com/boomker/rime-fast-xhup"
             ),
             DictSource(
                 id = "terra-pinyin",

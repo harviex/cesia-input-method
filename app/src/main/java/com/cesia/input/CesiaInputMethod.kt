@@ -194,6 +194,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var clipboardSearchFilter = ""
 
 
+    // 防抖调度：连续按键只触发最后一次过滤
+    private fun scheduleClipboardFilter(et: android.widget.EditText) {
+        clipboardSearchFilter = et.text.toString().trim()
+        if (!clipboardFilterScheduled) {
+            clipboardFilterScheduled = true
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                clipboardFilterScheduled = false
+                applyClipboardFilter()
+            }, 50)  // 50ms 防抖
+        }
+    }
+
+    // 更新搜索框显示：已确认文字 + composingText（拼音）
+    private fun updateSearchEtDisplay(searchEt: android.widget.EditText, confirmedLen: Int) {
+        val confirmed = searchEt.text.toString().take(confirmedLen)
+        val comp = rimeEngine.composingText
+        val newText = confirmed + comp
+        searchEt.setText(newText)
+        searchEt.setSelection(newText.length)
+        searchComposingStart = confirmedLen
+        scheduleClipboardFilter(searchEt)
+    }
+
     private fun applyClipboardFilter() {
         clipboardFilteredItems.clear()
         if (clipboardSearchFilter.isEmpty()) {
@@ -2444,6 +2467,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ====== 剪贴板搜索状态 =======
     private var etSearch: android.widget.EditText? = null
+    private var clipboardSearchEditMode = false
+    private var searchComposingStart = 0  // composing 部分在 EditText 中的起始位置
+    private var clipboardFilterScheduled = false  // 防抖：避免高频按键重复过滤
 
     /**
      * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭
@@ -2464,33 +2490,55 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
             etSearch.setOnFocusChangeListener { _, hasFocus ->
+                clipboardSearchEditMode = hasFocus
                 if (hasFocus) {
                     tvSearchHint?.visibility = View.VISIBLE
                     tvSearchHint?.text = "输入搜索关键词..."
                     etSearch.hint = ""
+                    // 进入搜索模式：重置 Rime composing 状态
+                    searchComposingStart = 0
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.clear()
+                    }
                 } else {
                     tvSearchHint?.visibility = View.GONE
                     etSearch.hint = "🔍 点击搜索..."
+                    // 退出搜索模式：清理 Rime 状态
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.clear()
+                    }
+                    searchComposingStart = 0
                 }
             }
             etSearch.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: android.text.Editable?) {
-                    clipboardSearchFilter = s?.toString()?.trim() ?: ""
-                    applyClipboardFilter()
+                    // 搜索编辑模式下，TextWatcher 不做任何事（由 onKey 拦截处理过滤）
+                    // 非搜索编辑模式下（如直接粘贴），才由 TextWatcher 触发过滤
+                    if (!clipboardSearchEditMode) {
+                        clipboardSearchFilter = s?.toString()?.trim() ?: ""
+                        applyClipboardFilter()
+                    }
                 }
             })
             etSearch.setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
-                    // 只隐藏键盘，不关闭菜单
+                    // 搜索动作：确认拼音并退出编辑模式
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.commit()
+                    }
+                    clipboardSearchFilter = etSearch.text.toString().trim()
+                    applyClipboardFilter()
                     etSearch.clearFocus()
+                    clipboardSearchEditMode = false
+                    searchComposingStart = 0
                     val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
                     imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
                     true
                 } else false
             }
-            // 点击搜索框时阻止事件向上传递，避免触发 PopupWindow 关闭
+            // 点击搜索框时获得焦点
             etSearch.setOnClickListener {
                 it.requestFocus()
                 val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
@@ -2512,13 +2560,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
             val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
 
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, false)
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
-            popup.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
@@ -2720,6 +2767,118 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // ======================== 剪贴板搜索编辑模式：拼音输入 + 手动写入 EditText ========================
+        if (clipboardSearchEditMode) {
+            val searchEt = this.etSearch
+            if (searchEt != null) {
+                when (primaryCode) {
+                    // 发送键/回车键：确认当前拼音（如有）并退出编辑模式
+                    -200, 10 -> {
+                        if (rimeEngine.isComposing) {
+                            rimeEngine.commit()
+                        }
+                        clipboardSearchFilter = searchEt.text.toString().trim()
+                        applyClipboardFilter()
+                        searchEt.clearFocus()
+                        clipboardSearchEditMode = false
+                        searchComposingStart = 0
+                        return
+                    }
+                    // 返回键/ESC：取消搜索，清空拼音和编辑框
+                    KeyEvent.KEYCODE_BACK, 27 -> {
+                        if (rimeEngine.isComposing) {
+                            rimeEngine.clear()
+                        }
+                        searchEt.setText("")
+                        clipboardSearchFilter = ""
+                        applyClipboardFilter()
+                        searchEt.clearFocus()
+                        clipboardSearchEditMode = false
+                        searchComposingStart = 0
+                        return
+                    }
+                    // 退格键：先在 Rime 中删拼音字符，Rime 不 composing 时再删已确认文字
+                    -5, Keyboard.KEYCODE_DELETE -> {
+                        if (rimeEngine.isComposing) {
+                            rimeEngine.processKey("BackSpace")
+                            if (rimeEngine.isComposing) {
+                                // 还有拼音：更新显示
+                                updateSearchEtDisplay(searchEt, searchComposingStart)
+                            } else {
+                                // 拼音清空了：移除 composing 部分
+                                val confirmed = searchEt.text.toString().take(searchComposingStart)
+                                searchEt.setText(confirmed)
+                                searchEt.setSelection(confirmed.length)
+                                scheduleClipboardFilter(searchEt)
+                            }
+                        } else {
+                            // 没有拼音：直接删末尾字符
+                            val buf = searchEt.text.toString()
+                            if (buf.isNotEmpty()) {
+                                val newBuf = buf.dropLast(1)
+                                searchEt.setText(newBuf)
+                                searchEt.setSelection(newBuf.length)
+                                scheduleClipboardFilter(searchEt)
+                            }
+                        }
+                        return
+                    }
+                    // 空格：选首词上屏
+                    32 -> {
+                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                            val selected = rimeEngine.selectCandidate(0)
+                            if (selected.isNotEmpty()) {
+                                searchComposingStart += selected.length
+                                updateSearchEtDisplay(searchEt, searchComposingStart)
+                            }
+                        } else {
+                            // 无候选词：追加空格
+                            val buf = searchEt.text.toString()
+                            searchEt.setText(buf + " ")
+                            searchEt.setSelection(searchEt.text.length)
+                            scheduleClipboardFilter(searchEt)
+                        }
+                        return
+                    }
+                    // 数字键 1-9：选候选词上屏，0 选第10个
+                    in 48..57 -> {
+                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                            val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                            if (index < rimeEngine.candidates.size) {
+                                val selected = rimeEngine.selectCandidate(index)
+                                if (selected.isNotEmpty()) {
+                                    searchComposingStart += selected.length
+                                    updateSearchEtDisplay(searchEt, searchComposingStart)
+                                }
+                            }
+                        } else {
+                            // 无拼音：直接追加数字
+                            val buf = searchEt.text.toString()
+                            searchEt.setText(buf + primaryCode.toChar().toString())
+                            searchEt.setSelection(searchEt.text.length)
+                            scheduleClipboardFilter(searchEt)
+                        }
+                        return
+                    }
+                    // 字母键 a-z：走 Rime 引擎输入拼音
+                    in 97..122 -> {
+                        rimeEngine.processKey(primaryCode.toChar())
+                        updateSearchEtDisplay(searchEt, searchComposingStart)
+                        return
+                    }
+                    // 其他可打印符号：直接追加（不走 Rime）
+                    in 33..47, in 58..64, in 91..96, in 123..126 -> {
+                        val buf = searchEt.text.toString()
+                        searchEt.setText(buf + primaryCode.toChar().toString())
+                        searchEt.setSelection(searchEt.text.length)
+                        scheduleClipboardFilter(searchEt)
+                        return
+                    }
+                    // shift/ctrl/alt 等修饰键忽略
+                    else -> return
+                }
+            }
+        }
+
         // ======================== 魔法编辑模式拦截 ========================
         if (magicEditMode) {
             when (primaryCode) {
