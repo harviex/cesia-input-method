@@ -77,7 +77,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var spinnerVoiceLanguage: Spinner
     private lateinit var spinnerVoiceEngine: Spinner
     private lateinit var tvVoiceEngineDesc: TextView
-    private var etWhisperUrl: TextInputEditText? = null
     private var etWhisperApiKey: TextInputEditText? = null
     private var etWhisperModel: TextInputEditText? = null
     private var spinnerWhisperMode: Spinner? = null
@@ -190,7 +189,6 @@ class SettingsActivity : AppCompatActivity() {
             spinnerVoiceLanguage = findViewById(R.id.spinner_voice_language)
             spinnerVoiceEngine = findViewById(R.id.spinner_voice_engine)
             tvVoiceEngineDesc = findViewById(R.id.tv_voice_engine_desc)
-            etWhisperUrl = findViewById(R.id.et_whisper_url)
             etWhisperApiKey = findViewById(R.id.et_whisper_api_key)
             etWhisperModel = findViewById(R.id.et_whisper_model)
             spinnerWhisperMode = findViewById(R.id.spinner_whisper_mode)
@@ -297,61 +295,48 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupWhisperConfig() {
-        // Whisper 模式选择
-        val modes = listOf("远程 API", "本地模型")
-        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes)
-        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerWhisperMode?.adapter = modeAdapter
+        // Whisper 模式选择（隐藏，固定为 API 模式）
+        spinnerWhisperMode?.visibility = View.GONE
 
-        val currentMode = prefs.getString(WhisperRecognizer.PREF_WHISPER_MODE, WhisperRecognizer.DEFAULT_WHISPER_MODE)
-        spinnerWhisperMode?.setSelection(if (currentMode == "local") 1 else 0)
+        // 固定使用 Groq API 地址
+        val groqUrl = WhisperRecognizer.DEFAULT_WHISPER_API_URL
+        prefs.edit().putString(WhisperRecognizer.PREF_WHISPER_API_URL, groqUrl).apply()
 
-        spinnerWhisperMode?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val mode = if (position == 1) "local" else "api"
-                prefs.edit().putString(WhisperRecognizer.PREF_WHISPER_MODE, mode).apply()
-                updateWhisperConfigVisibility(mode)
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // 加载已保存的配置
-        etWhisperUrl?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_URL, WhisperRecognizer.DEFAULT_WHISPER_API_URL))
+        // 加载已保存的 API Key 和模型
         etWhisperApiKey?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_KEY, ""))
         etWhisperModel?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_MODEL, WhisperRecognizer.DEFAULT_WHISPER_MODEL))
 
         // 测试按钮
         btnTestWhisper?.setOnClickListener { testWhisperConnection() }
-
-        // 根据当前模式显示/隐藏配置
-        updateWhisperConfigVisibility(currentMode ?: "api")
-    }
-
-    private fun updateWhisperConfigVisibility(mode: String) {
-        val isApi = mode == "api"
-        etWhisperUrl?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
-        etWhisperApiKey?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
-        etWhisperModel?.parent?.parent?.let { (it as View).visibility = if (isApi) View.VISIBLE else View.GONE }
     }
 
     private fun testWhisperConnection() {
-        val url = etWhisperUrl?.text?.toString()?.trim() ?: ""
-        if (url.isEmpty()) {
-            tvWhisperStatus?.text = "❌ 请输入 API 地址"
+        val url = WhisperRecognizer.DEFAULT_WHISPER_API_URL
+        val apiKey = etWhisperApiKey?.text?.toString()?.trim() ?: ""
+
+        if (apiKey.isEmpty()) {
+            tvWhisperStatus?.text = "❌ 请输入 Groq API Key"
             return
         }
 
         tvWhisperStatus?.text = "⏳ 测试中..."
         Thread {
             try {
-                // 发送一个空的测试请求，检查服务器是否可达
                 val client = OkHttpClient.Builder()
-                    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
-                val request = Request.Builder().url(url).head().build()
+                // 用 GET 请求测试 API 可达性（Groq 需要 Authorization header）
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .head()
+                    .build()
                 val response = client.newCall(request).execute()
                 runOnUiThread {
-                    tvWhisperStatus?.text = "✅ 连接成功 (${response.code})"
+                    tvWhisperStatus?.text = when (response.code) {
+                        200, 401 -> "✅ 连接成功 (${response.code})"
+                        else -> "⚠️ 连接异常: HTTP ${response.code}"
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -472,9 +457,9 @@ class SettingsActivity : AppCompatActivity() {
                 .putString(PREF_API_URL, url)
                 .putString("openrouter_api_key", apiKey)
                 .putString(PREF_MODEL_ID, modelId)
-                .putString(WhisperRecognizer.PREF_WHISPER_API_URL, etWhisperUrl?.text?.toString()?.trim() ?: "")
+                .putString(WhisperRecognizer.PREF_WHISPER_API_URL, WhisperRecognizer.DEFAULT_WHISPER_API_URL)
                 .putString(WhisperRecognizer.PREF_WHISPER_API_KEY, etWhisperApiKey?.text?.toString()?.trim() ?: "")
-                .putString(WhisperRecognizer.PREF_WHISPER_MODEL, etWhisperModel?.text?.toString()?.trim() ?: "whisper-1")
+                .putString(WhisperRecognizer.PREF_WHISPER_MODEL, etWhisperModel?.text?.toString()?.trim() ?: WhisperRecognizer.DEFAULT_WHISPER_MODEL)
                 .apply()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")

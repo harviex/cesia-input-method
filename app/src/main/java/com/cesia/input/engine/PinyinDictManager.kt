@@ -75,6 +75,16 @@ class PinyinDictManager(private val context: Context) {
                 description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。文件较大，建议在 WiFi 下下载"
             ),
             DictSource(
+                id = "rime-fast-xhup",
+                name = "Rime Fast XHUP",
+                nameZh = "快速·徐鹤朋词库（150万词）",
+                url = "https://github.com/lotem/rime-fast-xhup/releases/latest/download/cn_dicts.zip",
+                language = "zh",
+                size = "~60MB",
+                license = "Apache-2.0",
+                description = "目前最大的 Rime 中文词库之一，约 150 万词条，覆盖极广。基于徐鹤朋词库优化，适合需要极致覆盖率的场景"
+            ),
+            DictSource(
                 id = "terra-pinyin",
                 name = "Terra Pinyin",
                 nameZh = "地球拼音词库",

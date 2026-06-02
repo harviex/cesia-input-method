@@ -41,10 +41,10 @@ class WhisperRecognizer(
         const val PREF_WHISPER_API_KEY = "whisper_api_key"     // API Key（可选）
         const val PREF_WHISPER_MODEL = "whisper_model"         // 模型名
 
-        // 默认值
+        // 默认值 — Groq API（免费，whisper-large-v3-turbo）
         const val DEFAULT_WHISPER_MODE = "api"
-        const val DEFAULT_WHISPER_API_URL = "http://192.168.1.100:9000/asr"
-        const val DEFAULT_WHISPER_MODEL = "whisper-1"
+        const val DEFAULT_WHISPER_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+        const val DEFAULT_WHISPER_MODEL = "whisper-large-v3-turbo"
 
         // 本地模型路径（预留）
         const val LOCAL_MODEL_DIR = "whisper_models"

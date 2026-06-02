@@ -2465,11 +2465,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
             etSearch.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
-                    tvSearchHint.visibility = View.VISIBLE
-                    tvSearchHint.text = "输入搜索关键词..."
+                    tvSearchHint?.visibility = View.VISIBLE
+                    tvSearchHint?.text = "输入搜索关键词..."
                     etSearch.hint = ""
                 } else {
-                    tvSearchHint.visibility = View.GONE
+                    tvSearchHint?.visibility = View.GONE
                     etSearch.hint = "🔍 点击搜索..."
                 }
             }
@@ -2483,11 +2483,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             })
             etSearch.setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                    // 只隐藏键盘，不关闭菜单
                     etSearch.clearFocus()
                     val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
                     imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
                     true
                 } else false
+            }
+            // 点击搜索框时阻止事件向上传递，避免触发 PopupWindow 关闭
+            etSearch.setOnClickListener {
+                it.requestFocus()
+                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                imm?.showSoftInput(it, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }
 
             // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
@@ -2505,12 +2512,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
             val totalHeight = (resources.displayMetrics.heightPixels * 0.5f).toInt()
 
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, false)
             popup.isOutsideTouchable = false
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            popup.setFocusable(true)
+            popup.setFocusable(false)
+            popup.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
             // 单击：插入文本（非空条目）
             gvClipboard.setOnItemClickListener { _, _, position, _ ->

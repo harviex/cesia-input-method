@@ -535,26 +535,31 @@
             android:layout_marginBottom="8dp"
             android:background="@android:drawable/btn_dropdown" />
 
-        <!-- Whisper API 配置（仅 API 模式显示） -->
+        <!-- Whisper API 配置（固定使用 Groq API） -->
+        <!-- Groq API 地址（固定，不可编辑） -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="API 地址"
+            android:textSize="12sp"
+            android:textColor="#888888" />
+
+        <TextView
+            android:id="@+id/tv_whisper_api_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="https://api.groq.com/openai/v1/audio/transcriptions"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:background="#F5F5F5"
+            android:layout_marginBottom="8dp" />
+
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Whisper API 地址（如 http://192.168.1.100:9000/asr）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_whisper_url"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textUri"
-                android:text="http://192.168.1.100:9000/asr" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="API Key（可选，自建服务器可能不需要）"
+            android:hint="Groq API Key（必填）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -564,11 +569,12 @@
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Groq 免费模型 -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="模型名（如 whisper-1）"
+            android:hint="模型（Groq 免费）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -576,8 +582,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="text"
-                android:text="whisper-1" />
+                android:text="whisper-large-v3-turbo"
+                android:enabled="false" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 whisper-large-v3-turbo — Groq 免费模型，支持中英文，速度极快"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp" />
 
         <!-- 测试连接 -->
         <LinearLayout
@@ -604,6 +620,7 @@
                 android:textColor="#888888"
                 android:text="未测试" />
         </LinearLayout>
+
 
         <View
             android:layout_width="match_parent"
