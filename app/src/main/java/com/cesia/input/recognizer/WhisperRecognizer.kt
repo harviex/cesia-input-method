@@ -253,14 +253,18 @@ class WhisperRecognizer(
 
     private suspend fun recognizeRemote(wavData: ByteArray): String = withContext(Dispatchers.IO) {
         try {
-            // 构建 multipart 请求
-            val multipartBody = MultipartBody.Builder()
+            val builder = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("file", "audio.wav", wavData.toRequestBody("audio/wav".toMediaType()))
                 .addFormDataPart("model", modelName)
-                .addFormDataPart("language", language)
                 .addFormDataPart("response_format", "json")
-                .build()
+
+            // 只在非 auto 时传 language 参数
+            if (language != "auto" && language.isNotEmpty()) {
+                builder.addFormDataPart("language", language)
+            }
+
+            val multipartBody = builder.build()
 
             val requestBuilder = Request.Builder()
                 .url(apiUrl)
@@ -271,7 +275,7 @@ class WhisperRecognizer(
                 requestBuilder.addHeader("Authorization", "Bearer $apiKey")
             }
 
-            Log.d(TAG, "Whisper API 请求: url=$apiUrl, model=$modelName, lang=$language, size=${wavData.size}")
+            Log.d(TAG, "Whisper API 请求: url=$apiUrl, model=$modelName, lang=${if (language == "auto") "自动检测" else language}, size=${wavData.size}")
 
             client.newCall(requestBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful) {

@@ -244,20 +244,29 @@ class SettingsActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════
 
     private fun setupVoiceSpinners() {
-        // 语音语言
-        val languages = listOf("中文 (zh)", "English (en)")
+        // 语音语言：自动检测 + 中文 + English
+        val languages = listOf("自动检测 (auto)", "中文 (zh)", "English (en)"]
         val langAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, languages)
         langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerVoiceLanguage?.adapter = langAdapter
 
-        val currentLang = dictManager.getVoiceLanguage()
-        spinnerVoiceLanguage?.setSelection(if (currentLang == "en") 1 else 0)
+        // 默认选中自动检测
+        val currentLang = prefs.getString("voice_language", "auto") ?: "auto"
+        spinnerVoiceLanguage?.setSelection(when (currentLang) {
+            "en" -> 2
+            "zh" -> 1
+            else -> 0  // auto
+        })
 
         spinnerVoiceLanguage?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val lang = if (position == 1) "en" else "zh"
-                dictManager.setVoiceLanguage(lang)
-                appendLog("🎤 语音语言切换为: ${if (lang == "zh") "中文" else "English"}")
+                val lang = when (position) {
+                    2 -> "en"
+                    1 -> "zh"
+                    else -> "auto"
+                }
+                prefs.edit().putString("voice_language", lang).apply()
+                appendLog("🎤 语音语言切换为: ${when(lang) { "zh" -> "中文"; "en" -> "English"; else -> "自动检测" }}")
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -325,17 +334,19 @@ class SettingsActivity : AppCompatActivity() {
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
-                // 用 GET 请求测试 API 可达性（Groq 需要 Authorization header）
+                // 用 GET 请求测试 API 可达性（Groq audio transcriptions 端点用 GET 返回 405 代表可达）
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $apiKey")
-                    .head()
+                    .get()
                     .build()
                 val response = client.newCall(request).execute()
                 runOnUiThread {
-                    tvWhisperStatus?.text = when (response.code) {
-                        200, 401 -> "✅ 连接成功 (${response.code})"
-                        else -> "⚠️ 连接异常: HTTP ${response.code}"
+                    tvWhisperStatus?.text = when {
+                        response.code == 200 -> "✅ 连接成功"
+                        response.code == 401 -> "⚠️ API Key 无效 (401)"
+                        response.code == 405 -> "✅ 连接成功 (405 Method Not Allowed 是正常的)"  // Groq audio 端点 GET 返回 405
+                        else -> "⚠️ HTTP ${response.code}"
                     }
                 }
             } catch (e: Exception) {
@@ -360,51 +371,20 @@ class SettingsActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════
 
     private fun showVersion() {
-        val displayVersion = try {
-            val pInfo = if (Build.VERSION.SDK_INT >= 33) {
-                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                packageManager.getPackageInfo(packageName, 0)
-            }
-            pInfo.versionName ?: "开发版"
-        } catch (_: Exception) { "开发版" }
+        // 使用 BuildConfig.VERSION_NAME（构建时从 gradle 硬写入）
+        val versionName = try {
+            com.cesia.input.BuildConfig.VERSION_NAME
+        } catch (_: Exception) { "未知" }
 
-        val versionText = if (displayVersion.isNotEmpty() && displayVersion != "null") {
-            "版本: $displayVersion"
+        val displayVersion = if (versionName.isNotEmpty() && versionName != "null") {
+            versionName
         } else {
-            "版本: 开发版"
+            "开发版"
         }
-        tvVersion.text = versionText
-        fetchGitHubVersion()
-    }
 
-    private fun fetchGitHubVersion() {
-        Thread {
-            try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val request = Request.Builder()
-                    .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
-                    .addHeader("User-Agent", "CesiaIME/1.0")
-                    .get()
-                    .build()
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-                if (response.isSuccessful) {
-                    val json = JSONObject(body)
-                    val tagName = json.optString("tag_name", "").removePrefix("v")
-                    if (tagName.isNotEmpty()) {
-                        prefs.edit().putString("github_version_name", tagName).apply()
-                        runOnUiThread {
-                            tvVersion.text = "版本: $tagName"
-                            Log.d("SettingsActivity", "从GitHub获取版本号: $tagName")
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-        }.start()
+        tvVersion.text = "版本: $displayVersion"
+        // 每次进入设置页都检查更新
+        checkForUpdates()
     }
 
     // ═══════════════════════════════════════════════════
@@ -914,54 +894,173 @@ class SettingsActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════
 
     private fun checkUpdateDaily() {
-        val lastCheck = prefs.getLong("last_update_check", 0)
-        val now = System.currentTimeMillis()
-        if (now - lastCheck > 24 * 60 * 60 * 1000) {
-            prefs.edit().putLong("last_update_check", now).apply()
-            checkForUpdates()
+        // 已由 showVersion() 中直接调用 checkForUpdates()，此方法保留兼容
+        checkForUpdates()
+    }
+
+    // 版本号比较：取数字部分比较，如 "1.1.340" → 340, "1.1.341" → 341
+    private fun parseVersionNum(versionName: String): Int {
+        // 取最后一个 . 后面的数字
+        val parts = versionName.split(".")
+        return if (parts.size >= 3) {
+            parts[2].toIntOrNull() ?: 0
+        } else {
+            versionName.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
         }
     }
 
     private fun checkForUpdates() {
         Thread {
             try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
                 val request = Request.Builder()
                     .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
                     .addHeader("User-Agent", "CesiaIME/1.0")
                     .get()
                     .build()
-                val response = testClient.newCall(request).execute()
+                val response = client.newCall(request).execute()
                 val body = response.body?.string() ?: ""
                 if (response.isSuccessful) {
                     val json = JSONObject(body)
                     val tagName = json.optString("tag_name", "").removePrefix("v")
                     val htmlUrl = json.optString("html_url", "")
                     val bodyText = json.optString("body", "")
+                    // 获取 APK 下载链接（从 assets 中找 .apk）
+                    val assets = json.optJSONArray("assets")
+                    var apkUrl = ""
+                    if (assets != null) {
+                        for (i in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(i)
+                            val name = asset.optString("name", "")
+                            if (name.endsWith(".apk")) {
+                                apkUrl = asset.optString("browser_download_url", "")
+                                break
+                            }
+                        }
+                    }
+                    // fallback：如果 release 没有附件 APK，用源码包
+                    if (apkUrl.isEmpty()) {
+                        apkUrl = "https://github.com/harviex/cesia-input-method/releases/download/v${tagName}/cesia-input-${tagName}.apk"
+                    }
 
+                    // 当前版本号（构建时硬写入 BuildConfig.VERSION_NAME）
                     val currentVersion = try {
-                        val pInfo = packageManager.getPackageInfo(packageName, 0)
-                        pInfo.versionName ?: ""
-                    } catch (_: Exception) { "" }
+                        com.cesia.input.BuildConfig.VERSION_NAME
+                    } catch (_: Exception) { "0" }
+
+                    val currentNum = parseVersionNum(currentVersion)
+                    val remoteNum = parseVersionNum(tagName)
 
                     runOnUiThread {
-                        if (tagName.isNotEmpty() && tagName != currentVersion) {
+                        Log.d("SettingsActivity", "版本检查: 本地=$currentVersion($currentNum) 远程=$tagName($remoteNum)")
+                        if (remoteNum > currentNum && tagName.isNotEmpty()) {
                             vUpdateDot?.visibility = View.VISIBLE
-                            AlertDialog.Builder(this)
-                                .setTitle("发现新版本: $tagName")
-                                .setMessage(bodyText.take(500))
-                                .setPositiveButton("前往下载") { _, _ ->
-                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(htmlUrl)))
-                                }
-                                .setNegativeButton("稍后", null)
-                                .show()
+                            showUpdateDialog(currentVersion, tagName, bodyText, apkUrl, htmlUrl)
                         } else {
                             vUpdateDot?.visibility = View.GONE
-                            Toast.makeText(this, "已是最新版本", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.e("SettingsActivity", "检查更新失败: ${e.message}")
+            }
         }.start()
+    }
+
+    private fun showUpdateDialog(
+        currentVersion: String,
+        newVersion: String,
+        changelog: String,
+        apkUrl: String,
+        releaseUrl: String
+    ) {
+        AlertDialog.Builder(this)
+            .setTitle("发现新版本: $newVersion (当前: $currentVersion)")
+            .setMessage("${changelog.take(300)}\n\n是否下载更新？")
+            .setPositiveButton("⬇️ 下载更新") { _, _ ->
+                downloadAndInstallApk(apkUrl, newVersion)
+            }
+            .setNeutralButton("查看详情") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)))
+            }
+            .setNegativeButton("稍后", null)
+            .show()
+    }
+
+    private fun downloadAndInstallApk(apkUrl: String, version: String) {
+        appendLog("⬇️ 开始下载 $version...")
+        tvStatus.text = "⏳ 下载中..."
+
+        val downloadClient = OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        Thread {
+            try {
+                val request = Request.Builder().url(apkUrl).get().build()
+                val response = downloadClient.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        tvStatus.text = "❌ 下载失败: HTTP ${response.code}"
+                        appendLog("❌ 下载失败: HTTP ${response.code}")
+                    }
+                    return@Thread
+                }
+
+                val cacheDir = cacheDir
+                val apkFile = java.io.File(cacheDir, "cesia-input-${version}.apk")
+                val body = response.body ?: run {
+                    runOnUiThread { tvStatus.text = "❌ 下载失败: 空响应" }
+                    return@Thread
+                }
+
+                // 写入文件
+                body.byteStream().use { input ->
+                    apkFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                runOnUiThread {
+                    tvStatus.text = "✅ 下载完成"
+                    appendLog("✅ 下载完成: ${apkFile.absolutePath}")
+                    // 弹出安装
+                    installApk(apkFile)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvStatus.text = "❌ 下载失败: ${e.message}"
+                    appendLog("❌ 下载失败: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun installApk(apkFile: java.io.File) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    // Android 7+ 使用 FileProvider
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@SettingsActivity,
+                        "${packageName}.fileprovider",
+                        apkFile
+                    )
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } else {
+                    setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            appendLog("❌ 安装失败: ${e.message}")
+            Toast.makeText(this, "安装失败: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     // ═══════════════════════════════════════════════════

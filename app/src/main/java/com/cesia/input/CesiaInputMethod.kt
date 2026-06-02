@@ -615,7 +615,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             engine.initialize(getOpenRouterApiKey())
             // 同步语音语言设置
             val settingsPrefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
-            engine.voiceLanguage = settingsPrefs.getString("voice_language", "zh") ?: "zh"
+            engine.voiceLanguage = settingsPrefs.getString("voice_language", "auto") ?: "auto"
         }
 
         loadSettings()

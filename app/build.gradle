@@ -63,6 +63,8 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            debuggable true
         }
         release {
             minifyEnabled false
@@ -71,6 +73,14 @@ android {
         }
     }
     
+    // APK 输出文件名：cesia-input-1.1.XXX.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            def versionName = variant.versionName
+            outputFileName = "cesia-input-${versionName}.apk"
+        }
+    }
+
     // 移除externalNativeBuild - WeNet库自带native代码
     
     buildFeatures {
