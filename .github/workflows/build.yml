@@ -65,8 +65,8 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v5
         with:
-          name: cesia-input-method-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: cesia-input-${{ steps.version.outputs.version }}
+          path: app/build/outputs/apk/debug/cesia-input-*.apk
           retention-days: 30
 
       - name: Create GitHub Release
@@ -85,7 +85,7 @@ jobs:
 
             **变更**:
             ${{ github.event.head_commit.message }}
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/debug/cesia-input-*.apk
           draft: false
           prerelease: false
         env:
