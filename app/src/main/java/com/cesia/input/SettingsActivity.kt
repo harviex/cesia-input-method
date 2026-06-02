@@ -245,7 +245,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun setupVoiceSpinners() {
         // 语音语言：自动检测 + 中文 + English
-        val languages = listOf("自动检测 (auto)", "中文 (zh)", "English (en)"]
+        val languages = listOf("自动检测 (auto)", "中文 (zh)", "English (en)")
         val langAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, languages)
         langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerVoiceLanguage?.adapter = langAdapter
