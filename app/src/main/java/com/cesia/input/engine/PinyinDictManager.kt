@@ -480,7 +480,10 @@ class PinyinDictManager(private val context: Context) {
 
     // ─── 兼容旧版 ───
 
-    fun getDictFilePath(): String? = null
+    fun getDictFilePath(): String? {
+        val merged = File(context.filesDir, "rime/$LOCAL_DICT_FILE")
+        return if (merged.exists() && merged.length() > 0) merged.absolutePath else null
+    }
     fun getPhrasesFilePath(): String? = null
 
     // ─── 数据类 ───

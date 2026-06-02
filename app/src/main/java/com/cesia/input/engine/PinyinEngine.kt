@@ -86,18 +86,45 @@ class PinyinEngine(context: Context) {
 
             if (dictPath != null) {
                 try {
-                    val jsonStr = java.io.File(dictPath as String).readText()
-                    val json = org.json.JSONObject(jsonStr)
-                    for (key in json.keys()) {
-                        pinyinMap[key] = json.getString(key)
+                    val dictFile = java.io.File(dictPath as String)
+                    if (dictPath.endsWith(".json")) {
+                        // JSON 格式（旧版兼容）
+                        val jsonStr = dictFile.readText()
+                        val json = org.json.JSONObject(jsonStr)
+                        for (key in json.keys()) {
+                            pinyinMap[key] = json.getString(key)
+                        }
+                    } else {
+                        // .dict.yaml 格式：解析 Tab 分隔的词条行
+                        // 格式：汉字\t拼音\t权重（权重可选）
+                        var headerEnded = false
+                        dictFile.bufferedReader().useLines { lines ->
+                            lines.forEach { line ->
+                                val trimmed = line.trim()
+                                if (!headerEnded) {
+                                    // 跳过 YAML header 和注释行
+                                    if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("...") ||
+                                        trimmed.startsWith("name:") || trimmed.startsWith("version:") || trimmed.startsWith("sort:") ||
+                                        trimmed.startsWith("use_") || trimmed.startsWith("max_") || trimmed.startsWith("min_")) return@forEach
+                                    // 遇到第一个词条行（含 Tab），header 结束
+                                    if (trimmed.contains("\t")) headerEnded = true
+                                    else return@forEach
+                                }
+                                if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.contains("\t")) {
+                                    val parts = trimmed.split("\t")
+                                    if (parts.size >= 2) {
+                                        pinyinMap[parts[0]] = parts[1]
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Log.d("PinyinEngine", "外部拼音字典加载完成: ${pinyinMap.size} 个拼音条目")
+                    Log.d("PinyinEngine", "外部拼音字典加载完成: ${pinyinMap.size} 个拼音条目 (" + dictFile.name + ")")
                     loaded = true
                 } catch (e: Exception) {
                     Log.e("PinyinEngine", "外部拼音字典加载失败", e)
                 }
             }
-
             if (phrasesPath != null) {
                 try {
                     val jsonStr = java.io.File(phrasesPath as String).readText()

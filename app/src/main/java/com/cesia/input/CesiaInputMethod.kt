@@ -2768,6 +2768,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // ======================== 剪贴板搜索编辑模式 ========================
         if (clipboardSearchEditMode) {
+            // 关键：拦截按键时必须标记 shortPressHandled=true
+            // 否则 onPress 中注册的长按 Runnable 会在 500ms 后触发
+            shortPressHandled = true
             val searchEt = this.etSearch
             if (searchEt != null) {
                 // 全键盘(QWERTY)：字母直接追加（不走Rime，避免空格/拼音干扰）
