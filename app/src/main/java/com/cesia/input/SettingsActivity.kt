@@ -320,29 +320,51 @@ class SettingsActivity : AppCompatActivity() {
             info.dictSize < 1024 * 1024 -> "${info.dictSize / 1024}KB"
             else -> "${info.dictSize / 1024 / 1024}MB"
         }
+        val bundleStr = if (info.bundles.isNotEmpty()) info.bundles.joinToString(" + ") else "无"
         val statusText = if (info.downloaded) {
-            "词库: $sizeStr | 词条: ${info.dictCount} 条\n来源: ${info.source}\n同步: $syncTime"
+            "词库: $sizeStr | 词条: ${info.dictCount} 条\n已下载: $bundleStr\n同步: $syncTime"
         } else {
-            "词库: 使用内置精简版 (~1000字)\n提示: 可下载完整词库获得更好的输入体验\n来源: 内置"
+            "词库: 使用内置精简版 (~1000字)\n提示: 点击下载词库按钮获取完整词库\n来源: 内置"
         }
         tvDictInfo?.text = statusText
-        // 更新按钮文字
-        if (info.downloaded) {
-            btnDownloadDict?.text = "🔄 更新词库"
-        } else {
-            btnDownloadDict?.text = "📥 下载词库"
-        }
+        btnDownloadDict?.text = if (info.downloaded) "🔄 更新词库" else "📥 下载词库"
     }
 
     private fun downloadDict() {
+        val bundles = dictManager.getAvailableBundles()
+        val items = bundles.map { "${it.name} (${it.estimatedSize})" }.toTypedArray()
+        val checked = bundles.map { it.recommended }.toBooleanArray()
+        val selected = mutableListOf<String>()
+
+        AlertDialog.Builder(this)
+            .setTitle("选择要下载的词库包")
+            .setMultiChoiceItems(items, checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton("下载") { _, _ ->
+                for (i in bundles.indices) {
+                    if (checked[i]) selected.add(bundles[i].id)
+                }
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "请至少选择一个词库包", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                startDictDownload(selected)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun startDictDownload(selected: List<String>) {
         btnDownloadDict?.isEnabled = false
         btnDownloadDict?.text = "下载中..."
         tvStatus.text = "⏳ 正在下载词库..."
-        appendLog("📥 开始下载雾凇拼音词库（~16MB）...")
+        appendLog("📥 开始下载词库包: ${selected.joinToString(" + ")}")
         appendLog("📋 词库来源：rime-ice (iDvel/rime-ice)")
         appendLog("⚖️  许可证：GPL-3.0（词库数据，不影响本应用）")
 
-        dictManager.downloadRimeDict(
+        dictManager.downloadBundles(
+            bundles = selected,
             onProgress = { msg ->
                 runOnUiThread {
                     tvStatus.text = msg
@@ -352,19 +374,23 @@ class SettingsActivity : AppCompatActivity() {
             onComplete = { success, msg ->
                 runOnUiThread {
                     btnDownloadDict?.isEnabled = true
-                    btnDownloadDict?.text = if (success) "🔄 更新词库" else "📥 重新下载"
-                    tvStatus.text = if (success) "✅ $msg" else "❌ $msg"
-                    appendLog(msg)
                     refreshDictInfo()
                     if (success) {
-                        // 触发 Rime 重新部署词库
+                        tvStatus.text = "✅ $msg"
+                        appendLog("✅ $msg")
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                        // 触发 Rime 重新部署
                         try {
                             val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
                             rimeEngine.redeploy()
-                            Toast.makeText(this, "词库下载完成！已自动部署，切换一下输入法即可使用", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this, "词库已自动部署，切换一下输入法即可使用", Toast.LENGTH_LONG).show()
                         } catch (e: Exception) {
                             Toast.makeText(this, "词库下载完成！重启输入法后生效", Toast.LENGTH_LONG).show()
                         }
+                    } else {
+                        tvStatus.text = "❌ $msg"
+                        appendLog("❌ $msg")
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
