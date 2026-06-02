@@ -334,19 +334,25 @@ class SettingsActivity : AppCompatActivity() {
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
-                // 用 GET 请求测试 API 可达性（Groq audio transcriptions 端点用 GET 返回 405 代表可达）
+                // 用 POST + 空 multipart body 测试 API 可达性
+                val body = okhttp3.MultipartBody.Builder()
+                    .setType(okhttp3.MultipartBody.FORM)
+                    .addFormDataPart("model", WhisperRecognizer.DEFAULT_WHISPER_MODEL)
+                    .build()
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $apiKey")
-                    .get()
+                    .post(body)
                     .build()
                 val response = client.newCall(request).execute()
+                val respBody = response.body?.string() ?: ""
                 runOnUiThread {
                     tvWhisperStatus?.text = when {
-                        response.code == 200 -> "✅ 连接成功"
+                        response.isSuccessful -> "✅ 连接成功"
                         response.code == 401 -> "⚠️ API Key 无效 (401)"
-                        response.code == 405 -> "✅ 连接成功 (405 Method Not Allowed 是正常的)"  // Groq audio 端点 GET 返回 405
-                        else -> "⚠️ HTTP ${response.code}"
+                        response.code == 429 -> "⚠️ 请求过于频繁 (429)"
+                        response.code == 400 -> "✅ 连接成功 (400 = 无音频文件，正常)"
+                        else -> "⚠️ HTTP ${response.code}: ${respBody.take(100)}"
                     }
                 }
             } catch (e: Exception) {

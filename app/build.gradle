@@ -5,9 +5,14 @@ plugins {
 }
 
 // === 动态读取版本号 ===
-// versionName: 1.0.{commit_count}，给用户看的版本号
-// versionCode: commit_count，内部单调递增整数
+// === 版本号：优先从环境变量读取（CI构建时由workflow传入），本地开发时从git计算 ===
 def getVersionCode() {
+    def envVersion = System.getenv("APK_VERSION")
+    if (envVersion != null && !envVersion.isEmpty()) {
+        // 从 "1.1.344" 提取最后一段数字
+        def parts = envVersion.split("\\.")
+        return parts.length >= 3 ? (parts[2].toInteger()) : 1
+    }
     try {
         def stdout = new ByteArrayOutputStream()
         exec {
@@ -16,7 +21,6 @@ def getVersionCode() {
             workingDir = rootDir
         }
         def count = Integer.parseInt(stdout.toString().trim())
-        // 确保至少为1，避免版本号显示为0
         return count > 0 ? count : 1
     } catch (Exception e) {
         return 1
@@ -24,8 +28,11 @@ def getVersionCode() {
 }
 
 def getVersionName() {
-    def count = getVersionCode()
-    return "1.1." + count
+    def envVersion = System.getenv("APK_VERSION")
+    if (envVersion != null && !envVersion.isEmpty()) {
+        return envVersion
+    }
+    return "1.1." + getVersionCode()
 }
 
 android {
@@ -74,10 +81,8 @@ android {
     // APK 输出文件名：cesia-input-1.1.XXX.apk
     android.applicationVariants.all { variant ->
         variant.outputs.all {
-            // 优先使用环境变量（CI构建时由workflow传入），否则从gradle计算
-            def envVersion = System.getenv("APK_VERSION")
-            def vn = envVersion ?: variant.versionName
-            if (vn == null || vn.isEmpty()) {
+            def vn = getVersionName()
+            if (vn == null || vn.isEmpty() || vn == "null") {
                 vn = "1.1.0"
             }
             outputFileName = "cesia-input-${vn}.apk"

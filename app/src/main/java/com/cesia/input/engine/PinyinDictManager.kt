@@ -14,9 +14,6 @@ import java.util.concurrent.TimeUnit
  *
  * 词库来源：
  * - rime-ice: 雾凇拼音 (iDvel/rime-ice)，GPL-3.0，~14MB
- * - rime-list: 雾凇+搜狗增强 (hantang/rime-list)，Mixed，~90MB，~220万词条
- * - terra-pinyin: 地球拼音，LGPL-3.0，~8MB
- * - pinyin-simp: 简拼基础，LGPL-3.0，~4MB
  * - en-basic/en-full: 内置英文词库
  *
  * 用户需在设置页点击下载，不随 APK 分发
@@ -63,46 +60,6 @@ class PinyinDictManager(private val context: Context) {
                 size = "~14MB",
                 license = "GPL-3.0",
                 description = "社区维护的简体中文词库，词条丰富，全拼/双拼兼容"
-            ),
-            DictSource(
-                id = "rime-list",
-                name = "Rime List (雾凇+搜狗)",
-                nameZh = "雾凇+搜狗增强（220万词）",
-                url = "https://github.com/hantang/rime-list/releases/latest/download/cn_dicts.zip",
-                language = "zh",
-                size = "~90MB",
-                license = "Mixed",
-                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。文件较大，建议在 WiFi 下下载"
-            ),
-            DictSource(
-                id = "rime-fast-xhup",
-                name = "Rime Fast XHUP",
-                nameZh = "快速·徐鹤朋词库（150万词）",
-                url = "https://github.com/lotem/rime-fast-xhup/releases/latest/download/cn_dicts.zip",
-                language = "zh",
-                size = "~60MB",
-                license = "Apache-2.0",
-                description = "目前最大的 Rime 中文词库之一，约 150 万词条，覆盖极广。基于徐鹤朋词库优化，适合需要极致覆盖率的场景"
-            ),
-            DictSource(
-                id = "terra-pinyin",
-                name = "Terra Pinyin",
-                nameZh = "地球拼音词库",
-                url = "https://github.com/rime/rime-terra-pinyin/releases/download/terra-pinyin-0.2/terra_pinyin.dict.yaml",
-                language = "zh",
-                size = "~8MB",
-                license = "LGPL-3.0",
-                description = "地球拼音方案词库，双拼/全拼兼容"
-            ),
-            DictSource(
-                id = "pinyin-simp",
-                name = "Pinyin Simplified",
-                nameZh = "简拼基础词库",
-                url = "https://github.com/rime/rime-pinyin-simp/releases/download/0.2/pinyin_simp.dict.yaml",
-                language = "zh",
-                size = "~4MB",
-                license = "LGPL-3.0",
-                description = "Rime 官方简体中文基础词库"
             ),
             // ── 英文词库 ──
             DictSource(
