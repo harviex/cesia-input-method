@@ -164,16 +164,20 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showVersion() {
-        // 直接从已安装APK读取版本号
+        // 直接从已安装APK读取版本号；IME context 中 packageName 变量可能不是目标包名，直接硬编码
+        val targetPackage = "com.cesia.input"
         val displayVersion = try {
             val pInfo = if (Build.VERSION.SDK_INT >= 33) {
-                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                packageManager.getPackageInfo(targetPackage, PackageManager.PackageInfoFlags.of(0))
             } else {
                 @Suppress("DEPRECATION")
-                packageManager.getPackageInfo(packageName, 0)
+                packageManager.getPackageInfo(targetPackage, 0)
             }
             pInfo.versionName ?: "开发版"
-        } catch (_: Exception) { "开发版" }
+        } catch (e: Exception) {
+            Log.w("SettingsActivity", "读取版本失败: ${e.javaClass.simpleName} ${e.message}", e)
+            "开发版"
+        }
 
         val versionText = if (displayVersion.isNotEmpty() && displayVersion != "null") {
             "版本: $displayVersion"
@@ -181,7 +185,7 @@ class SettingsActivity : AppCompatActivity() {
             "版本: 开发版"
         }
         tvVersion.text = versionText
-        Log.d("SettingsActivity", "显示版本: $displayVersion, versionCode: ${try { val p = packageManager.getPackageInfo(packageName, 0); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) p.longVersionCode else @Suppress("DEPRECATION") p.versionCode.toLong() } catch(_:Exception){0L}}")
+        Log.d("SettingsActivity", "显示版本: $displayVersion, versionCode: ${try { val pInfo2 = if (Build.VERSION.SDK_INT >= 33) packageManager.getPackageInfo(targetPackage, PackageManager.PackageInfoFlags.of(0)) else @Suppress("DEPRECATION") packageManager.getPackageInfo(targetPackage, 0); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo2.longVersionCode else @Suppress("DEPRECATION") pInfo2.versionCode.toLong() } catch(_:Exception){0L}}")
         fetchGitHubVersion()
     }
 
@@ -816,12 +820,13 @@ class SettingsActivity : AppCompatActivity() {
                     } else ""
                 } catch (_: Exception) { "" }
 
-                // 版本比较：用 packageManager 读已安装 APK 的版本
+                // 版本比较：用 packageManager 读已安装 APK 的版本（IME context 中 packageName 可能不正确）
+                val targetPackage = "com.cesia.input"
                 val pkgInfo = if (Build.VERSION.SDK_INT >= 33) {
-                    packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                    packageManager.getPackageInfo(targetPackage, PackageManager.PackageInfoFlags.of(0))
                 } else {
                     @Suppress("DEPRECATION")
-                    packageManager.getPackageInfo(packageName, 0)
+                    packageManager.getPackageInfo(targetPackage, 0)
                 }
                 val currentVersionName = pkgInfo.versionName ?: "开发版"
                 val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -835,7 +840,10 @@ class SettingsActivity : AppCompatActivity() {
                 val latestVersionCode = try {
                     val parts = latestVersionName.split(".")
                     if (parts.size >= 3) parts[2].toLong() else 0L
-                } catch (_: Exception) { 0L }
+                } catch (e: Exception) {
+                    Log.w("SettingsActivity", "解析远端版本失败: ${e.javaClass.simpleName} ${e.message}", e)
+                    0L
+                }
 
                 // 本地versionCode >= 最新版本versionCode 表示已是最新
                 val isUpToDate = currentVersionCode > 0 && currentVersionCode >= latestVersionCode
