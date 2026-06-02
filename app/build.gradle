@@ -43,8 +43,6 @@ android {
         targetSdk 34
         versionCode getVersionCode() ?: 1
         versionName getVersionName() ?: "1.1.1"
-        buildConfigField "int", "VERSION_CODE", "${getVersionCode() ?: 1}"
-        buildConfigField "String", "VERSION_NAME", "\"${getVersionName() ?: "1.1.1"}\""
         ndk {
             abiFilters "arm64-v8a"
         }
@@ -115,3 +113,13 @@ dependencies {
 
 // 注释掉编译时下载，改为运行时下载（已在WenetManager.kt中实现）
 // WeNet模型将在应用首次运行时自动下载
+
+// === APK 重命名：使用 versionName 命名输出 APK ===
+android.applicationVariants.configureEach { variant ->
+    if (variant.buildType.name == "debug") {
+        variant.outputs.each { output ->
+            def versionName = variant.versionName ?: "1.1.1"
+            outputFileName = "Cesia-${versionName}-debug.apk"
+        }
+    }
+}
