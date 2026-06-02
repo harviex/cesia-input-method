@@ -466,10 +466,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun cloudUpload() {
         // 使用 GitHub Gist 作为简易云端备份
-        val dictFile = java.io.File(filesDir, PinyinDictManager.LOCAL_DICT_FILE)
-        val phrasesFile = java.io.File(filesDir, PinyinDictManager.LOCAL_PHRASES_FILE)
+        val dictFile = java.io.File(filesDir, "rime/${PinyinDictManager.LOCAL_DICT_FILE}")
 
-        if (!dictFile.exists() && !phrasesFile.exists()) {
+        if (!dictFile.exists()) {
             Toast.makeText(this, "没有可备份的词库", Toast.LENGTH_SHORT).show()
             return
         }
@@ -615,15 +614,11 @@ class SettingsActivity : AppCompatActivity() {
 
                 if (files.has("pinyin_dict.json")) {
                     val content = files.getJSONObject("pinyin_dict.json").getString("content")
-                    java.io.File(filesDir, PinyinDictManager.LOCAL_DICT_FILE).writeText(content)
+                    java.io.File(filesDir, "rime/${PinyinDictManager.LOCAL_DICT_FILE}").writeText(content)
                     imported = true
                 }
 
-                if (files.has("pinyin_phrases.json")) {
-                    val content = files.getJSONObject("pinyin_phrases.json").getString("content")
-                    java.io.File(filesDir, PinyinDictManager.LOCAL_PHRASES_FILE).writeText(content)
-                    imported = true
-                }
+                // 兼容旧版 pinyin_phrases.json（忽略）
 
                 runOnUiThread {
                     if (imported) {

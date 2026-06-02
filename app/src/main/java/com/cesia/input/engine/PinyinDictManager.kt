@@ -168,7 +168,7 @@ class PinyinDictManager(private val context: Context) {
 
                 // 下载英文词库（随基础包）
                 if (bundles.contains(BUNDLE_BASE)) {
-                    onProgress("正在下载英文词库..."
+                    onProgress("正在下载英文词库...")
                     val enFiles = listOf("en.dict.yaml", "en_ext.dict.yaml", "en_aliases.dict.yaml")
                     totalExtracted += downloadAndExtract(EN_DICTS_URL, rimeDir, enFiles)
                 }
@@ -428,6 +428,26 @@ class PinyinDictManager(private val context: Context) {
     }
 
     /**
+     * 统计词条数
+     */
+    private fun countDictEntries(file: File): Int {
+        if (!file.exists()) return 0
+        var count = 0
+        file.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("---") &&
+                    !trimmed.startsWith("...") && !trimmed.startsWith("name:") &&
+                    !trimmed.startsWith("version:") && !trimmed.startsWith("sort:") &&
+                    trimmed.contains("\t")) {
+                    count++
+                }
+            }
+        }
+        return count
+    }
+
+    /**
      * 检查是否已下载外部词库
      */
     fun hasDownloadedDict(): Boolean = prefs.getBoolean(PREF_DICT_DOWNLOADED, false)
@@ -439,6 +459,16 @@ class PinyinDictManager(private val context: Context) {
         val f = File(context.filesDir, "$RIME_DIR/$LOCAL_DICT_FILE")
         return if (f.exists()) f.absolutePath else null
     }
+
+    /**
+     * 兼容旧版 PinyinEngine：返回合并后的词库路径
+     */
+    fun getDictFilePath(): String? = getMergedDictPath()
+
+    /**
+     * 兼容旧版 PinyinEngine：词库已合并，不再有单独的 phrases 文件
+     */
+    fun getPhrasesFilePath(): String? = null
 
     data class DictInfo(
         val dictCount: Int,
