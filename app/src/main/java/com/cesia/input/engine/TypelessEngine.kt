@@ -5,6 +5,7 @@ import android.inputmethodservice.InputMethodService
 import android.widget.Toast
 import com.cesia.input.polish.PolishService
 import com.cesia.input.recognizer.FallbackRecognizer
+import com.cesia.input.recognizer.WhisperRecognizer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import android.util.Log
@@ -62,47 +63,91 @@ class TypelessEngine(
     // 识别完成回调（新流程：识别完成后等待用户选择 AI+/AI×）
     var onRecognitionComplete: ((String) -> Unit)? = null
 
+    // Whisper 识别器（API 语音识别，不依赖 Google 服务）
+    private var whisperRecognizer: WhisperRecognizer? = null
+    var voiceLanguage: String = "zh"  // 语音识别语言
+
+    /** Whisper 是否可用（有 API Key） */
+    val isWhisperAvailable: Boolean
+        get() = whisperRecognizer?.isAvailable() == true
+
     init {
         // 启动识别结果监听协程
         engineScope.launch {
             while (fallbackRecognizer == null) delay(50)
 
-            fallbackRecognizer?.results?.collect { result ->
-                when (result) {
-                    is FallbackRecognizer.Result.Success -> {
-                        log("📝 识别成功：${result.text.take(50)}")
-                        if (magicMode) {
-                            // 魔法模式：触发回调，不润色上屏
-                            onMagicResult?.invoke(result.text)
-                        } else {
-                            // 新流程：识别完成，通知 UI 等待用户选择
-                            val text = result.text
-                            withContext(Dispatchers.Main) {
-                                onRecognitionComplete?.invoke(text)
-                            }
-                        }
+            // 监听 FallbackRecognizer（Google SpeechRecognizer）
+            launch {
+                fallbackRecognizer?.results?.collect { result ->
+                    handleRecognizerResult(result)
+                }
+            }
+
+            // 监听 WhisperRecognizer（API 语音识别）
+            launch {
+                while (whisperRecognizer == null) delay(50)
+                whisperRecognizer?.results?.collect { result ->
+                    handleRecognizerResult(result)
+                }
+            }
+        }
+    }
+
+    private suspend fun handleRecognizerResult(result: Any) {
+        when (result) {
+            is FallbackRecognizer.Result.Success -> {
+                log("📝 识别成功：${result.text.take(50)}")
+                if (magicMode) {
+                    onMagicResult?.invoke(result.text)
+                } else {
+                    val text = result.text
+                    withContext(Dispatchers.Main) {
+                        onRecognitionComplete?.invoke(text)
                     }
-                    is FallbackRecognizer.Result.Partial -> {
-                        // 实时部分结果，显示在状态栏
-                        log("🎤 ${result.text}")
+                }
+            }
+            is FallbackRecognizer.Result.Partial -> {
+                log("🎤 ${result.text}")
+            }
+            is FallbackRecognizer.Result.Recognizing -> { /* 静默 */ }
+            is FallbackRecognizer.Result.Error -> {
+                log("❌ ${result.message}")
+                _state.value = State.ERROR
+            }
+            is FallbackRecognizer.Result.NoMatch -> {
+                if (magicMode) {
+                    onMagicResult?.invoke("")
+                } else {
+                    withContext(Dispatchers.Main) {
+                        onRecognitionComplete?.invoke("")
                     }
-                    is FallbackRecognizer.Result.Recognizing -> {
-                        // 静默，不显示正在识别状态
+                }
+            }
+            is WhisperRecognizer.Result.Success -> {
+                log("📝 Whisper 识别成功：${result.text.take(50)}")
+                if (magicMode) {
+                    onMagicResult?.invoke(result.text)
+                } else {
+                    val text = result.text
+                    withContext(Dispatchers.Main) {
+                        onRecognitionComplete?.invoke(text)
                     }
-                    is FallbackRecognizer.Result.Error -> {
-                        log("❌ ${result.message}")
-                        _state.value = State.ERROR
-                    }
-                    is FallbackRecognizer.Result.NoMatch -> {
-                        if (magicMode) {
-                            // 魔法模式：无匹配也要触发回调，避免 UI 卡住
-                            onMagicResult?.invoke("")
-                        } else {
-                            // 普通模式：通知 UI 识别结束（即使是空结果）
-                            withContext(Dispatchers.Main) {
-                                onRecognitionComplete?.invoke("")
-                            }
-                        }
+                }
+            }
+            is WhisperRecognizer.Result.Partial -> {
+                log("🎤 Whisper: ${result.text}")
+            }
+            is WhisperRecognizer.Result.Recognizing -> { /* 静默 */ }
+            is WhisperRecognizer.Result.Error -> {
+                log("❌ Whisper: ${result.message}")
+                _state.value = State.ERROR
+            }
+            is WhisperRecognizer.Result.NoMatch -> {
+                if (magicMode) {
+                    onMagicResult?.invoke("")
+                } else {
+                    withContext(Dispatchers.Main) {
+                        onRecognitionComplete?.invoke("")
                     }
                 }
             }
@@ -116,11 +161,18 @@ class TypelessEngine(
             polishService?.updateApiKey(apiKey)
         }
         fallbackRecognizer = FallbackRecognizer(context)
+        whisperRecognizer = WhisperRecognizer(context, voiceLanguage)
 
         if (fallbackRecognizer?.init() == true) {
-            log("✅ Cesia 已就绪")
+            log("✅ FallbackRecognizer 已就绪")
         } else {
-            log("❌ Cesia 初始化失败")
+            log("⚠️ FallbackRecognizer 初始化失败")
+        }
+
+        if (whisperRecognizer?.init() == true) {
+            log("✅ WhisperRecognizer 已就绪")
+        } else {
+            log("⚠️ WhisperRecognizer 初始化失败")
         }
     }
 
@@ -135,9 +187,28 @@ class TypelessEngine(
         }
     }
 
+    /** 使用 Whisper API 开始监听 */
+    fun startWhisperListening(continuous: Boolean = false) {
+        whisperRecognizer?.continuousMode = continuous
+        whisperRecognizer?.setLanguage(voiceLanguage)
+        if (whisperRecognizer?.startListening() == true) {
+            _state.value = State.LISTENING
+        } else {
+            _state.value = State.ERROR
+            showError("Whisper 录音启动失败")
+        }
+    }
+
+    /** 停止 Whisper 监听 */
+    fun stopWhisperListening() {
+        whisperRecognizer?.stopListening()
+        _state.value = State.IDLE
+    }
+
     /** 停止监听 */
     fun stopListening() {
         fallbackRecognizer?.stopListening()
+        whisperRecognizer?.stopListening()
         _state.value = State.IDLE
     }
 
@@ -310,6 +381,8 @@ class TypelessEngine(
     fun destroy() {
         fallbackRecognizer?.destroy()
         fallbackRecognizer = null
+        whisperRecognizer?.destroy()
+        whisperRecognizer = null
         polishService?.shutdown()
         polishService = null
         engineScope.cancel()
