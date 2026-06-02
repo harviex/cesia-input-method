@@ -816,9 +816,20 @@ class SettingsActivity : AppCompatActivity() {
                     } else ""
                 } catch (_: Exception) { "" }
 
-                // 版本比较：用编译时写入的 BuildConfig（永远和 APK 内一致）
-                val currentVersionCode = BuildConfig.VERSION_CODE.toLong()
-                val currentVersionName = BuildConfig.VERSION_NAME
+                // 版本比较：用 packageManager 读已安装 APK 的版本
+                val pkgInfo = if (Build.VERSION.SDK_INT >= 33) {
+                    packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, 0)
+                }
+                val currentVersionName = pkgInfo.versionName ?: "开发版"
+                val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pkgInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    pkgInfo.versionCode.toLong()
+                }
 
                 // 从 tag_name 解析最新版本的 versionCode (格式: 1.1.X -> X)
                 val latestVersionCode = try {
