@@ -45,7 +45,10 @@ class PinyinDictManager(private val context: Context) {
         // === 本地目录 ===
         private const val RIME_DIR = "rime"
         const val LOCAL_DICT_FILE = "pinyin.dict.yaml"
-        const val LOCAL_G_FILE = "gbk.dict.yaml"  // 放在 assets，首次安装释放
+
+        // GBK 字表（内置，从 assets 释放）
+        const val LOCAL_GBK_FILE = "gbk.dict.yaml"
+        const val LOCAL_8105_FILE = "8105.dict.yaml"  // fallback
 
         // === 词包定义 ===
         /**
@@ -137,6 +140,9 @@ class PinyinDictManager(private val context: Context) {
             try {
                 val rimeDir = File(context.filesDir, RIME_DIR)
                 rimeDir.mkdirs()
+
+                // 释放内置 GBK 字表（如果本地不存在）
+                ensureGbkTable(rimeDir)
 
                 var totalExtracted = 0
 
@@ -251,7 +257,9 @@ class PinyinDictManager(private val context: Context) {
         val entries = LinkedHashMap<String, Pair<String, Long>>()
 
         // Step 1: 字表（优先级最低，只填充缺失的字）
-        val charTableFile = File(rimeDir, "8105.dict.yaml")
+        // 优先用 GBK（~21000字），fallback 到 8105（~8000字）
+        val gbkFile = File(rimeDir, LOCAL_GBK_FILE)
+        val charTableFile = if (gbkFile.exists()) gbkFile else File(rimeDir, LOCAL_8105_FILE)
         if (charTableFile.exists()) {
             loadDictEntries(charTableFile, entries, isCharTable = true)
             Log.i(TAG, "加载字表: ${charTableFile.name}, 当前总条目: ${entries.size}")
@@ -398,6 +406,25 @@ class PinyinDictManager(private val context: Context) {
             bundles = bundles,
             lastSync = prefs.getLong(PREF_LAST_SYNC, 0)
         )
+    }
+
+    /**
+     * 确保 GBK 字表存在（从 assets 释放到 rime 目录）
+     */
+    private fun ensureGbkTable(rimeDir: File) {
+        val gbkFile = File(rimeDir, LOCAL_GBK_FILE)
+        if (gbkFile.exists() && gbkFile.length() > 1000) return  // 已存在，跳过
+
+        try {
+            context.assets.open(LOCAL_GBK_FILE).use { input ->
+                gbkFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.i(TAG, "GBK 字表已释放: ${gbkFile.absolutePath} (${gbkFile.length() / 1024}KB)")
+        } catch (e: Exception) {
+            Log.w(TAG, "释放 GBK 字表失败: ${e.message}")
+        }
     }
 
     /**
