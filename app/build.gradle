@@ -31,6 +31,9 @@ android {
         targetSdk 34
         versionCode verCode
         versionName verName
+        // BuildConfig 写版本号，运行时直接读，不依赖 PackageManager
+        buildConfigField "int", "VERSION_CODE", "${verCode}"
+        buildConfigField "String", "VERSION_NAME", "\"${verName}\""
         ndk {
             abiFilters "arm64-v8a"
         }
@@ -55,10 +58,6 @@ android {
         viewBinding true
         buildConfig true
     }
-
-    // BuildConfig 写版本号，运行时直接读，不依赖 PackageManager
-    buildConfigField "int", "VERSION_CODE", "${verCode}"
-    buildConfigField "String", "VERSION_NAME", "\"${verName}\""
 
     kotlinOptions {
         jvmTarget = '17'
