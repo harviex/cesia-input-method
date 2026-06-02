@@ -2766,10 +2766,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
-        // ======================== 剪贴板搜索编辑模式：拼音输入 + 手动写入 EditText ========================
+        // ======================== 剪贴板搜索编辑模式 ========================
         if (clipboardSearchEditMode) {
             val searchEt = this.etSearch
             if (searchEt != null) {
+                // 全键盘(QWERTY)：字母直接追加（不走Rime，避免空格/拼音干扰）
+                // T9数字键盘：数字走Rime拼音，字母直接追加
+                val isQwerty = (keyboardMode == KeyboardMode.QWERTY)
+                val isT9 = (keyboardMode == KeyboardMode.NUMBER)
+
                 when (primaryCode) {
                     // 发送键/回车键：确认当前拼音（如有）并退出编辑模式
                     -200, 10 -> {
@@ -2796,22 +2801,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         searchComposingStart = 0
                         return
                     }
-                    // 退格键：先在 Rime 中删拼音字符，Rime 不 composing 时再删已确认文字
+                    // 退格键
                     -5, Keyboard.KEYCODE_DELETE -> {
-                        if (rimeEngine.isComposing) {
+                        if (isT9 && rimeEngine.isComposing) {
+                            // T9 有拼音：先在 Rime 中删
                             rimeEngine.processKey("BackSpace")
                             if (rimeEngine.isComposing) {
-                                // 还有拼音：更新显示
                                 updateSearchEtDisplay(searchEt, searchComposingStart)
                             } else {
-                                // 拼音清空了：移除 composing 部分
                                 val confirmed = searchEt.text.toString().take(searchComposingStart)
                                 searchEt.setText(confirmed)
                                 searchEt.setSelection(confirmed.length)
                                 scheduleClipboardFilter(searchEt)
                             }
                         } else {
-                            // 没有拼音：直接删末尾字符
+                            // 全键盘或T9无拼音：直接删末尾字符
                             val buf = searchEt.text.toString()
                             if (buf.isNotEmpty()) {
                                 val newBuf = buf.dropLast(1)
@@ -2822,16 +2826,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         return
                     }
-                    // 空格：选首词上屏
+                    // 空格：T9有候选时选首词，否则追加空格
                     32 -> {
-                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        if (isT9 && rimeEngine.isComposing && rimeEngine.hasCandidates) {
                             val selected = rimeEngine.selectCandidate(0)
                             if (selected.isNotEmpty()) {
                                 searchComposingStart += selected.length
                                 updateSearchEtDisplay(searchEt, searchComposingStart)
                             }
                         } else {
-                            // 无候选词：追加空格
                             val buf = searchEt.text.toString()
                             searchEt.setText(buf + " ")
                             searchEt.setSelection(searchEt.text.length)
@@ -2839,19 +2842,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         return
                     }
-                    // 数字键 1-9：选候选词上屏，0 选第10个
+                    // 数字键 1-9, 0：T9走拼音选词，全键盘直接追加
                     in 48..57 -> {
-                        if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                            val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                            if (index < rimeEngine.candidates.size) {
-                                val selected = rimeEngine.selectCandidate(index)
-                                if (selected.isNotEmpty()) {
-                                    searchComposingStart += selected.length
-                                    updateSearchEtDisplay(searchEt, searchComposingStart)
+                        if (isT9) {
+                            // T9：数字走 Rime 拼音输入
+                            if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                                val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                                if (index < rimeEngine.candidates.size) {
+                                    val selected = rimeEngine.selectCandidate(index)
+                                    if (selected.isNotEmpty()) {
+                                        searchComposingStart += selected.length
+                                        updateSearchEtDisplay(searchEt, searchComposingStart)
+                                        return
+                                    }
                                 }
                             }
+                            // T9 且无拼音候选：直接把数字当拼音码送入 Rime
+                            rimeEngine.processKey(primaryCode.toChar())
+                            updateSearchEtDisplay(searchEt, searchComposingStart)
                         } else {
-                            // 无拼音：直接追加数字
+                            // 全键盘：直接追加数字字符
                             val buf = searchEt.text.toString()
                             searchEt.setText(buf + primaryCode.toChar().toString())
                             searchEt.setSelection(searchEt.text.length)
@@ -2859,10 +2869,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         return
                     }
-                    // 字母键 a-z：走 Rime 引擎输入拼音
+                    // 字母键 a-z
                     in 97..122 -> {
-                        rimeEngine.processKey(primaryCode.toChar())
-                        updateSearchEtDisplay(searchEt, searchComposingStart)
+                        if (isT9) {
+                            // T9：字母走 Rime 拼音输入
+                            rimeEngine.processKey(primaryCode.toChar())
+                            updateSearchEtDisplay(searchEt, searchComposingStart)
+                        } else {
+                            // 全键盘：直接追加字母（不走Rime，避免拼音干扰英文输入）
+                            val buf = searchEt.text.toString()
+                            searchEt.setText(buf + primaryCode.toChar().toString())
+                            searchEt.setSelection(searchEt.text.length)
+                            scheduleClipboardFilter(searchEt)
+                        }
                         return
                     }
                     // 其他可打印符号：直接追加（不走 Rime）

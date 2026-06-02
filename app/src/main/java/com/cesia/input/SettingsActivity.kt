@@ -325,16 +325,19 @@ class SettingsActivity : AppCompatActivity() {
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
-                // 用 GET 请求测试 API 可达性（Groq 需要 Authorization header）
+                // 用 GET /models 端点测试（Groq audio 端点只支持 POST，HEAD/GET 会 404）
+                val testUrl = url.replace("/audio/transcriptions", "/models")
                 val request = Request.Builder()
-                    .url(url)
+                    .url(testUrl)
                     .addHeader("Authorization", "Bearer $apiKey")
-                    .head()
+                    .get()
                     .build()
                 val response = client.newCall(request).execute()
                 runOnUiThread {
                     tvWhisperStatus?.text = when (response.code) {
-                        200, 401 -> "✅ 连接成功 (${response.code})"
+                        200 -> "✅ 连接成功，API Key 有效"
+                        401 -> "⚠️ API 可达，但 Key 无效（请检查 Key）"
+                        403 -> "⚠️ API 可达，权限不足"
                         else -> "⚠️ 连接异常: HTTP ${response.code}"
                     }
                 }

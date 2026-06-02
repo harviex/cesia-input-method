@@ -53,7 +53,7 @@ class PinyinDictManager(private val context: Context) {
 
         // 可用词库列表
         val AVAILABLE_DICTS = listOf(
-            // ── 中文词库 ──
+            // ── 中文词库（全部使用已验证可用的 URL）──
             DictSource(
                 id = "rime-ice",
                 name = "Rime Ice",
@@ -65,32 +65,22 @@ class PinyinDictManager(private val context: Context) {
                 description = "社区维护的简体中文词库，词条丰富，全拼/双拼兼容"
             ),
             DictSource(
-                id = "rime-list",
-                name = "Rime List (雾凇+搜狗)",
-                nameZh = "雾凇+搜狗增强（220万词）",
-                url = "",
+                id = "rime-ice-all",
+                name = "Rime Ice (全量)",
+                nameZh = "雾凇拼音全量词库（推荐）",
+                url = "https://github.com/iDvel/rime-ice/releases/download/nightly/all_dicts.zip",
                 language = "zh",
-                size = "~90MB",
-                license = "Mixed",
-                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。⚠️ 需手动下载：github.com/hantang/rime-list 仓库提供生成脚本，请按 README 生成 cn_dicts.zip 后通过自定义词库地址导入"
-            ),
-            DictSource(
-                id = "rime-fast-xhup",
-                name = "Rime Fast XHUP",
-                nameZh = "快速·徐鹤朋词库（150万词）",
-                url = "",
-                language = "zh",
-                size = "~60MB",
-                license = "Apache-2.0",
-                description = "目前最大的 Rime 中文词库之一，约 150 万词条（小鹤双拼+鹤形）。⚠️ 需手动下载 cn_dicts 目录打包为 zip，通过自定义词库地址导入。github.com/boomker/rime-fast-xhup"
+                size = "~15MB",
+                license = "GPL-3.0",
+                description = "雾凇拼音全量版，包含所有扩展词库，覆盖更广"
             ),
             DictSource(
                 id = "terra-pinyin",
                 name = "Terra Pinyin",
                 nameZh = "地球拼音词库",
-                url = "https://github.com/rime/rime-terra-pinyin/releases/download/terra-pinyin-0.2/terra_pinyin.dict.yaml",
+                url = "https://raw.githubusercontent.com/rime/rime-terra-pinyin/master/terra_pinyin.dict.yaml",
                 language = "zh",
-                size = "~8MB",
+                size = "~2MB",
                 license = "LGPL-3.0",
                 description = "地球拼音方案词库，双拼/全拼兼容"
             ),
@@ -98,11 +88,42 @@ class PinyinDictManager(private val context: Context) {
                 id = "pinyin-simp",
                 name = "Pinyin Simplified",
                 nameZh = "简拼基础词库",
-                url = "https://github.com/rime/rime-pinyin-simp/releases/download/0.2/pinyin_simp.dict.yaml",
+                url = "https://raw.githubusercontent.com/rime/rime-pinyin-simp/master/pinyin_simp.dict.yaml",
                 language = "zh",
-                size = "~4MB",
+                size = "~1.2MB",
                 license = "LGPL-3.0",
-                description = "Rime 官方简体中文基础词库"
+                description = "Rime 官方简体中文基础词库，轻量精简"
+            ),
+            DictSource(
+                id = "luna-pinyin",
+                name = "Luna Pinyin",
+                nameZh = "朙月拼音词库",
+                url = "https://raw.githubusercontent.com/rime/rime-luna-pinyin/master/luna_pinyin.dict.yaml",
+                language = "zh",
+                size = "~870KB",
+                license = "LGPL-3.0",
+                description = "朙月拼音词库（ federation 维护），收录现代汉语常用词"
+            ),
+            // ── 超大词库（需手动下载）──
+            DictSource(
+                id = "rime-list",
+                name = "Rime List (雾凇+搜狗)",
+                nameZh = "雾凇+搜狗增强（220万词）",
+                url = "",
+                language = "zh",
+                size = "~90MB",
+                license = "Mixed",
+                description = "以雾凇为基础叠加搜狗词库，总计约 220 万词条。需手动下载：访问 github.com/hantang/rime-list 按 README 生成后通过自定义词库地址导入"
+            ),
+            DictSource(
+                id = "rime-fast-xhup",
+                name = "Rime Fast XHUP",
+                nameZh = "快速·徐鹤朋词库（150万词）",
+                url = "",
+                language = "zh",
+                size = "~26MB",
+                license = "Apache-2.0",
+                description = "目前最大的 Rime 词库之一，约 150 万词条（小鹤双拼+鹤形）。需手动下载 cn_dicts 目录打包为 zip，通过自定义词库地址导入。github.com/boomker/rime-fast-xhup"
             ),
             // ── 英文词库 ──
             DictSource(
