@@ -60,6 +60,7 @@ jobs:
       - name: Build APK with Gradle
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+          APK_VERSION: ${{ steps.version.outputs.version }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK

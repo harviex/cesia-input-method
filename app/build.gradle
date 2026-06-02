@@ -72,10 +72,16 @@ android {
     }
     
     // APK 输出文件名：cesia-input-1.1.XXX.apk
-    applicationVariants.all { variant ->
+    android.applicationVariants.all { variant ->
         variant.outputs.all {
-            def versionName = variant.versionName
-            outputFileName = "cesia-input-${versionName}.apk"
+            // 优先使用环境变量（CI构建时由workflow传入），否则从gradle计算
+            def envVersion = System.getenv("APK_VERSION")
+            def vn = envVersion ?: variant.versionName
+            if (vn == null || vn.isEmpty()) {
+                vn = "1.1.0"
+            }
+            outputFileName = "cesia-input-${vn}.apk"
+            println "📦 APK output: ${outputFileName}"
         }
     }
 
