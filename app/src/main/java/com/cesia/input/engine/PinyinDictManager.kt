@@ -398,67 +398,111 @@ class PinyinDictManager(private val context: Context) {
     // ─── 词库合并 ───
 
     private fun mergeDicts(rimeDir: File) {
-        val merged = LinkedHashMap<String, String>()
+        try {
+            val merged = LinkedHashMap<String, String>()
+            val maxEntries = 800_000  // 最大词条数限制，防止 OOM
 
-        // 1. 加载 base.dict.yaml (最高优先级)
-        val baseFile = File(rimeDir, LOCAL_BASE_FILE)
-        if (baseFile.exists()) {
-            loadDictFile(baseFile, merged, preferExisting = true)
-        }
+            // 1. 加载 base.dict.yaml (最高优先级)
+            val baseFile = File(rimeDir, LOCAL_BASE_FILE)
+            if (baseFile.exists()) {
+                loadDictFile(baseFile, merged, preferExisting = true)
+                Log.i(TAG, "合并 base.dict.yaml: ${merged.size} 条")
+            }
 
-        // 2. 加载 8105.dict.yaml (字频)
-        val dict8105File = File(rimeDir, LOCAL_8105_FILE)
-        if (dict8105File.exists()) {
-            loadDictFile(dict8105File, merged, preferExisting = true)
-        }
+            // 2. 加载 8105.dict.yaml (字频)
+            val dict8105File = File(rimeDir, LOCAL_8105_FILE)
+            if (dict8105File.exists()) {
+                loadDictFile(dict8105File, merged, preferExisting = true)
+                Log.i(TAG, "合并 8105.dict.yaml: ${merged.size} 条")
+            }
 
-        // 3. 加载所有其他 .dict.yaml 文件
-        rimeDir.listFiles()?.forEach { file ->
-            if (file.name.endsWith(".dict.yaml") &&
+            // 3. 加载所有其他 .dict.yaml 文件（按文件大小排序，小的优先）
+            val dictFiles = rimeDir.listFiles()?.filter { file ->
+                file.name.endsWith(".dict.yaml") &&
                 file.name != LOCAL_DICT_FILE &&
                 file.name != LOCAL_BASE_FILE &&
-                file.name != LOCAL_8105_FILE) {
-                loadDictFile(file, merged, preferExisting = false)
-                Log.i(TAG, "合并附加词库: ${file.name}")
-            }
-        }
+                file.name != LOCAL_8105_FILE
+            }?.sortedBy { it.length() } ?: emptyList()
 
-        // 4. 写入合并文件
-        val outFile = File(rimeDir, LOCAL_DICT_FILE)
-        val sb = StringBuilder()
-        sb.appendLine("# Rime dictionary - Cesia输入法")
-        sb.appendLine("---")
-        sb.appendLine("name: pinyin")
-        sb.appendLine("version: \"1.1.4\"")
-        sb.appendLine("sort: by_weight")
-        sb.appendLine("...")
-        sb.appendLine()
-        for ((hanzi, value) in merged) {
-            sb.appendLine("$hanzi\t$value")
+            for (file in dictFiles) {
+                if (merged.size >= maxEntries) {
+                    Log.w(TAG, "词条数已达上限 $maxEntries，跳过: ${file.name}")
+                    break
+                }
+                try {
+                    val before = merged.size
+                    loadDictFile(file, merged, preferExisting = false)
+                    Log.i(TAG, "合并附加词库: ${file.name} (+${merged.size - before} 条，累计 ${merged.size} 条)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "合并词库失败: ${file.name}", e)
+                }
+            }
+
+            // 4. 写入合并文件（分块写入，避免大字符串 OOM）
+            val outFile = File(rimeDir, LOCAL_DICT_FILE)
+            java.io.BufferedWriter(java.io.FileWriter(outFile)).use { writer ->
+                writer.write("# Rime dictionary - Cesia输入法")
+                writer.newLine()
+                writer.write("---")
+                writer.newLine()
+                writer.write("name: pinyin")
+                writer.newLine()
+                writer.write("version: \"1.1.4\"")
+                writer.newLine()
+                writer.write("sort: by_weight")
+                writer.newLine()
+                writer.write("...")
+                writer.newLine()
+                writer.newLine()
+                var count = 0
+                for ((hanzi, value) in merged) {
+                    writer.write(hanzi)
+                    writer.write("\t")
+                    writer.write(value)
+                    writer.newLine()
+                    count++
+                }
+                Log.i(TAG, "合并词库写入完成: $count 条 -> ${outFile.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "合并词库失败", e)
         }
-        outFile.writeText(sb.toString())
-        Log.i(TAG, "合并词库: ${merged.size} 条 -> ${outFile.absolutePath}")
     }
 
     private fun loadDictFile(file: File, merged: LinkedHashMap<String, String>, preferExisting: Boolean) {
+        var lineNum = 0
+        var parseErrors = 0
         file.bufferedReader().useLines { lines ->
             lines.forEach { line ->
-                val trimmed = line.trim()
-                if (trimmed.isNotEmpty() && !trimmed.startsWith("#") &&
-                    !trimmed.startsWith("---") && !trimmed.startsWith("...") &&
-                    !trimmed.startsWith("name:") && !trimmed.startsWith("version:") &&
-                    !trimmed.startsWith("sort:") && trimmed.contains("\t")) {
-                    val parts = trimmed.split("\t")
-                    if (parts.size >= 2) {
-                        val hanzi = parts[0]
-                        val pinyin = parts[1]
-                        val weight = if (parts.size >= 3) parts[2] else "50"
-                        if (preferExisting && merged.containsKey(hanzi)) return@forEach
-                        merged[hanzi] = "$pinyin\t$weight"
+                lineNum++
+                try {
+                    val trimmed = line.trim()
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#") &&
+                        !trimmed.startsWith("---") && !trimmed.startsWith("...") &&
+                        !trimmed.startsWith("name:") && !trimmed.startsWith("version:") &&
+                        !trimmed.startsWith("sort:") && trimmed.contains("	")) {
+                        val parts = trimmed.split("	")
+                        if (parts.size >= 2) {
+                            val hanzi = parts[0]
+                            val pinyin = parts[1]
+                            if (hanzi.isEmpty() || pinyin.isEmpty()) return@forEach
+                            val weight = if (parts.size >= 3) parts[2] else "50"
+                            if (preferExisting && merged.containsKey(hanzi)) return@forEach
+                            merged[hanzi] = "$pinyin	$weight"
+                        }
+                    }
+                } catch (e: Exception) {
+                    parseErrors++
+                    if (parseErrors <= 3) {
+                        Log.w(TAG, "词库解析错误 ${file.name} 第${lineNum}行: ${e.message}")
                     }
                 }
             }
         }
+        if (parseErrors > 0) {
+            Log.w(TAG, "词库 ${file.name} 共 ${lineNum} 行，${parseErrors} 行解析失败")
+        }
+        Log.i(TAG, "词库 ${file.name}: 加载 ${lineNum} 行，合并后共 ${merged.size} 条")
     }
 
     private fun countDictEntries(file: File): Int {
