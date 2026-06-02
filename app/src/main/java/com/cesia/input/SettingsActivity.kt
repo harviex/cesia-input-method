@@ -817,8 +817,8 @@ class SettingsActivity : AppCompatActivity() {
                 } catch (_: Exception) { "" }
 
                 // 版本比较：用编译时写入的 BuildConfig（永远和 APK 内一致）
-                val currentVersionCode = com.cesia.input.BuildConfig.VERSION_CODE.toLong()
-                val currentVersionName = com.cesia.input.BuildConfig.VERSION_NAME
+                val currentVersionCode = BuildConfig.VERSION_CODE.toLong()
+                val currentVersionName = BuildConfig.VERSION_NAME
 
                 // 从 tag_name 解析最新版本的 versionCode (格式: 1.1.X -> X)
                 val latestVersionCode = try {
