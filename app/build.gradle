@@ -41,7 +41,6 @@ android {
         }
     }
 
-    // 签名配置
     signingConfigs {
         debug {
             storeFile file("/tmp/cesia-debug.keystore")
@@ -49,39 +48,26 @@ android {
             keyAlias "cesiadebug"
             keyPassword "cesiacesia"
         }
-        release {
-            storeFile file("cesia-release.keystore")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "cesia2026"
-            keyAlias "cesia"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "cesia2026"
-        }
     }
 
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
-        }
     }
-    
-    // 移除externalNativeBuild - WeNet库自带native代码
-    
+
     buildFeatures {
         viewBinding true
         buildConfig true
     }
-    
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
-    }
-    
-    kotlinOptions {
-        jvmTarget = '17'
     }
 }
 
@@ -104,23 +90,22 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
 }
 
-// 注释掉编译时下载，改为运行时下载（已在WenetManager.kt中实现）
-// WeNet模型将在应用首次运行时自动下载
-
-// === APK 重命名：使用 versionName 命名输出 APK ===
-// 注意：AGP 8.x 已移除 variant.outputs[].outputFileName API
-// 用 assembleDebug finalizedBy 复制的方式实现精确命名
-def cesiaApkName = "Cesia-${versionName ?: '1.1.1'}-debug.apk"
+// === APK 重命名：assembleDebug 后重命名为 Cesia-{versionName}-debug.apk ===
+def cesiaApkName = "Cesia-${versionName}-debug.apk"
 tasks.register("renameDebugApk") {
-    def apkDir = file("$buildDir/outputs/apk/debug/")
-    def apkFile = apkDir.listFiles().find { f ->
-        f.name.endsWith('.apk') && f.name.contains('debug') && !f.name.startsWith('Cesia-')
+    def debugApkDir = file("$buildDir/outputs/apk/debug")
+    def apkFile = debugApkDir.listFiles().find { f ->
+        f.name.endsWith(".apk") && f.name.contains("debug") && !f.name.startsWith("Cesia-")
     }
-    if (apkFile) {
-        inputs.file(apkFile)
-        outputs.file("$apkDir/$cesiaApkName")
-        doLast {
-            apkFile.renameTo(file("$apkDir/$cesiaApkName"))
+    onlyIf { apkFile != null }
+    def targetFile = file("$debugApkDir/$cesiaApkName")
+    inputs.file(apkFile)
+    outputs.file(targetFile)
+    doLast {
+        if (apkFile.renameTo(targetFile)) {
+            println "Renamed APK -> ${targetFile.name}"
+        } else {
+            throw new GradleException("Failed to rename APK to $cesiaApkName")
         }
     }
 }
