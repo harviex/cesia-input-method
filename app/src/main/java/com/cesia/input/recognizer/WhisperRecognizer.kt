@@ -43,8 +43,9 @@ class WhisperRecognizer(
 
         // 默认值
         const val DEFAULT_WHISPER_MODE = "api"
-        const val DEFAULT_WHISPER_API_URL = "http://192.168.1.100:9000/asr"
-        const val DEFAULT_WHISPER_MODEL = "whisper-1"
+        // Groq 免费 Whisper API（whisper-large-v3-turbo，2000次/天免费）
+        const val DEFAULT_WHISPER_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+        const val DEFAULT_WHISPER_MODEL = "whisper-large-v3-turbo"
 
         // 本地模型路径（预留）
         const val LOCAL_MODEL_DIR = "whisper_models"
@@ -251,16 +252,30 @@ class WhisperRecognizer(
     //  远程 API 识别
     // ═══════════════════════════════════════════════════
 
+    // Groq 兼容的 language 参数：auto=自动检测（不传），zh+en=优先中文
+    private fun effectiveLanguage(): String? {
+        return when (language) {
+            "auto", "zh+en" -> null  // auto: Whisper 自行检测；zh+en: 不指定让模型判断
+            else -> language
+        }
+    }
+
     private suspend fun recognizeRemote(wavData: ByteArray): String = withContext(Dispatchers.IO) {
         try {
             // 构建 multipart 请求
-            val multipartBody = MultipartBody.Builder()
+            val multipartBuilder = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("file", "audio.wav", wavData.toRequestBody("audio/wav".toMediaType()))
                 .addFormDataPart("model", modelName)
-                .addFormDataPart("language", language)
                 .addFormDataPart("response_format", "json")
-                .build()
+
+            // 语言参数：auto/zh+en 不传 language，让 Whisper 自行检测
+            val lang = effectiveLanguage()
+            if (lang != null) {
+                multipartBuilder.addFormDataPart("language", lang)
+            }
+
+            val multipartBody = multipartBuilder.build()
 
             val requestBuilder = Request.Builder()
                 .url(apiUrl)

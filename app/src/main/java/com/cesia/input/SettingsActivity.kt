@@ -246,20 +246,35 @@ class SettingsActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════════
 
     private fun setupVoiceSpinners() {
-        // 语音语言
-        val languages = listOf("中文 (zh)", "English (en)")
+        // 语音语言（在自动检测模式下不传 language 参数，让 Whisper 自行判断）
+        val languages = listOf(
+            "中文 (zh)",
+            "English (en)",
+            "自动检测 (auto)",
+            "中英双语 (zh+en)"
+        )
         val langAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, languages)
         langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerVoiceLanguage?.adapter = langAdapter
 
         val currentLang = dictManager.getVoiceLanguage()
-        spinnerVoiceLanguage?.setSelection(if (currentLang == "en") 1 else 0)
+        val langIndex = when (currentLang) {
+            "en" -> 1
+            "zh+en" -> 3
+            else -> 2  // 默认 "auto"（自动检测）
+        }
+        spinnerVoiceLanguage?.setSelection(langIndex)
 
         spinnerVoiceLanguage?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val lang = if (position == 1) "en" else "zh"
+                val lang = when (position) {
+                    1 -> "en"
+                    2 -> "auto"
+                    3 -> "zh+en"
+                    else -> "zh"
+                }
                 dictManager.setVoiceLanguage(lang)
-                appendLog("🎤 语音语言切换为: ${if (lang == "zh") "中文" else "English"}")
+                appendLog("🎤 语音语言切换为: ${getLanguageLabel(lang)}")
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -315,7 +330,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // 加载已保存的配置
+        // 加载已保存的配置（默认 Groq API）
         etWhisperUrl?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_URL, WhisperRecognizer.DEFAULT_WHISPER_API_URL))
         etWhisperApiKey?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_API_KEY, ""))
         etWhisperModel?.setText(prefs.getString(WhisperRecognizer.PREF_WHISPER_MODEL, WhisperRecognizer.DEFAULT_WHISPER_MODEL))
@@ -986,6 +1001,13 @@ class SettingsActivity : AppCompatActivity() {
     private fun appendLog(msg: String) {
         val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         tvLog.text = "[$time] $msg\n${tvLog.text}"
+    }
+
+    private fun getLanguageLabel(lang: String): String = when (lang) {
+        "en" -> "English"
+        "auto" -> "自动检测"
+        "zh+en" -> "中英双语"
+        else -> "中文"
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

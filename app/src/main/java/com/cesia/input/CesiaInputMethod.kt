@@ -2507,7 +2507,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            // 使用 INPUT_METHOD_NOT_NEEDED 避免 PopupWindow 获取焦点时
+            // 系统输入法（Cesia 自身）重新布局导致弹窗关闭
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(true)

@@ -13,8 +13,9 @@ import java.util.concurrent.TimeUnit
  * 支持多词库下载、切换、中英文词库
  *
  * 词库来源：
- * - rime-ice: 雾凇拼音 (iDvel/rime-ice)，GPL-3.0，~14MB
- * - rime-list: 雾凇+搜狗增强 (hantang/rime-list)，Mixed，~90MB，~220万词条
+ * - rime-ice: 雾凇拼音 (iDvel/rime-ice)，GPL-3.0，~14MB，精校~14万词
+ * - rime-fast-xhup: 快速词库 (boomker/rime-fast-xhup)，Mixed，~60MB，~150万词
+ * - rime-dict: 增强合集 (Iorest/rime-dict)，Mixed，~50MB，~180万精品词（无 Release，需手动下载）
  * - terra-pinyin: 地球拼音，LGPL-3.0，~8MB
  * - pinyin-simp: 简拼基础，LGPL-3.0，~4MB
  * - en-basic/en-full: 内置英文词库
@@ -65,14 +66,24 @@ class PinyinDictManager(private val context: Context) {
                 description = "社区维护的简体中文词库，词条丰富，全拼/双拼兼容"
             ),
             DictSource(
-                id = "rime-list",
-                name = "Rime List (雾凇+搜狗)",
-                nameZh = "雾凇+搜狗增强（220万词）",
-                url = "https://github.com/hantang/rime-list/releases/latest/download/cn_dicts.zip",
+                id = "rime-fast-xhup",
+                name = "Rime Fast XHUP",
+                nameZh = "快速词库（推荐，150万词）",
+                url = "https://github.com/boomker/rime-fast-xhup/releases/latest/download/cn_dicts.zip",
                 language = "zh",
-                size = "~90MB",
+                size = "~60MB",
                 license = "Mixed",
-                description = "以雾凇为基础，叠加搜狗词库，总计约 220 万词条。文件较大，建议在 WiFi 下下载"
+                description = "雾凇拼音增强版，精简优化，~150 万词条。官方 Release 可自动下载"
+            ),
+            DictSource(
+                id = "rime-dict",
+                name = "Rime Dict Extended",
+                nameZh = "增强词库合集（180万词）",
+                url = "",
+                language = "zh",
+                size = "~50MB",
+                license = "Mixed",
+                description = "高度优化扩展词库，~180万精品词条，全局去重。无 Release，需手动下载或填写自定义 URL"
             ),
             DictSource(
                 id = "terra-pinyin",
@@ -140,7 +151,7 @@ class PinyinDictManager(private val context: Context) {
         Log.i(TAG, "词库切换为: $dictId")
     }
 
-    fun getVoiceLanguage(): String = settingsPrefs.getString(PREF_VOICE_LANGUAGE, "zh") ?: "zh"
+    fun getVoiceLanguage(): String = settingsPrefs.getString(PREF_VOICE_LANGUAGE, "auto") ?: "auto"
 
     fun setVoiceLanguage(lang: String) {
         settingsPrefs.edit().putString(PREF_VOICE_LANGUAGE, lang).apply()
