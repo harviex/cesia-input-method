@@ -493,13 +493,13 @@ class SettingsActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
                 prefs.edit().putString("github_token", token).apply()
-                performCloudUpload(token, dictFile, phrasesFile)
+                performCloudUpload(token, dictFile)
             }
             .setNegativeButton("取消", null)
             .show()
     }
 
-    private fun performCloudUpload(token: String, dictFile: java.io.File, phrasesFile: java.io.File) {
+    private fun performCloudUpload(token: String, dictFile: java.io.File) {
         Thread {
             try {
                 val json = JSONObject()
@@ -509,12 +509,6 @@ class SettingsActivity : AppCompatActivity() {
                     val content = JSONObject()
                     content.put("content", dictFile.readText())
                     files.put("pinyin_dict.json", content)
-                }
-
-                if (phrasesFile.exists()) {
-                    val content = JSONObject()
-                    content.put("content", phrasesFile.readText())
-                    files.put("pinyin_phrases.json", content)
                 }
 
                 json.put("files", files)
