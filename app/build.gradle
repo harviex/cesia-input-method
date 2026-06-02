@@ -4,33 +4,26 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
-// === 版本号：优先从 APK_VERSION 环境变量读取（CI构建时由 workflow 传入），本地开发时从 git 计算 ===
+// === 版本号：强制从 APK_VERSION 环境变量读取，CI workflow 中设置 ===
+// 去掉本地 git 计数和 fallback，遭遇空值直接报错，防止 build 出 1.1.1 的假象
 def getVersionCode() {
     def envVer = System.getenv("APK_VERSION")
-    if (envVer != null && !envVer.isEmpty()) {
-        def parts = envVer.split("\\.")
-        return parts.length >= 3 ? (parts[2].toInteger()) : 1
+    if (envVer == null || envVer.trim().isEmpty()) {
+        throw new GradleException("APK_VERSION 环境变量未设置。CI workflow 应在 build 前设置 APK_VERSION=1.1.N")
     }
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-list', '--count', 'HEAD'
-            standardOutput = stdout
-            workingDir = rootDir
-        }
-        def count = Integer.parseInt(stdout.toString().trim())
-        return count > 0 ? count : 1
-    } catch (Exception e) {
-        return 1
+    def parts = envVer.split("\\.")
+    if (parts.length < 3) {
+        throw new GradleException("APK_VERSION 格式错误: '${envVer}'，应为 x.y.z")
     }
+    return parts[2].toInteger()
 }
 
 def getVersionName() {
     def envVer = System.getenv("APK_VERSION")
-    if (envVer != null && !envVer.isEmpty()) {
-        return envVer
+    if (envVer == null || envVer.trim().isEmpty()) {
+        throw new GradleException("APK_VERSION 环境变量未设置。CI workflow 应在 build 前设置 APK_VERSION=1.1.N")
     }
-    return "1.1." + getVersionCode()
+    return envVer
 }
 
 android {
@@ -41,8 +34,8 @@ android {
         applicationId "com.cesia.input"
         minSdk 24
         targetSdk 34
-        versionCode getVersionCode() ?: 1
-        versionName getVersionName() ?: "1.1.1"
+        versionCode getVersionCode()
+        versionName getVersionName()
         ndk {
             abiFilters "arm64-v8a"
         }
@@ -116,4 +109,19 @@ dependencies {
 
 // === APK 重命名：使用 versionName 命名输出 APK ===
 // 注意：AGP 8.x 已移除 variant.outputs[].outputFileName API
-// 暂时保持默认命名，以后再补回新的 androidComponents API 方式
+// 用 assembleDebug finalizedBy 复制的方式实现精确命名
+def cesiaApkName = "Cesia-${versionName ?: '1.1.1'}-debug.apk"
+tasks.register("renameDebugApk") {
+    def apkDir = file("$buildDir/outputs/apk/debug/")
+    def apkFile = apkDir.listFiles().find { f ->
+        f.name.endsWith('.apk') && f.name.contains('debug') && !f.name.startsWith('Cesia-')
+    }
+    if (apkFile) {
+        inputs.file(apkFile)
+        outputs.file("$apkDir/$cesiaApkName")
+        doLast {
+            apkFile.renameTo(file("$apkDir/$cesiaApkName"))
+        }
+    }
+}
+tasks.named("assembleDebug").configure { finalizedBy "renameDebugApk" }
