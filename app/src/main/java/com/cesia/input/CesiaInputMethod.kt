@@ -840,6 +840,35 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
+    // ======================== 识别后端可用性检测 ========================
+
+    /**
+     * 检测三个识别后端的可用性
+     * @return 可用后端的列表，按优先级排序：Whisper > Google > Groq
+     */
+    private fun detectAvailableBackends(): List<VoiceChoice> {
+        val available = mutableListOf<VoiceChoice>()
+
+        // Whisper：本地模型已安装
+        if (modelManager.hasVoiceModel()) {
+            available.add(VoiceChoice.LOCAL_WHISPER)
+        }
+
+        // Google：语音识别框架可用
+        try {
+            if (android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+                available.add(VoiceChoice.GOOGLE)
+            }
+        } catch (_: Exception) {}
+
+        // Groq：有 API Key
+        if (getGroqApiKey().isNotEmpty()) {
+            available.add(VoiceChoice.CLOUD_GROQ)
+        }
+
+        return available  // 已按优先级排序：Whisper > Google > Groq
+    }
+
     // ======================== 按钮监听 ========================
 
     private fun setupButtonListeners() {
@@ -851,11 +880,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 return@setOnClickListener
             }
             if (!isRecording && !isWaitingForChoice) {
-                // 长按面板设置过识别方式后，用选择的方式录音
+                // 长按面板设置过识别方式，直接用选择的方式
                 if (currentVoiceChoice != null) {
                     startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
                 } else {
-                    startRecordingImmediately()
+                    // 检测可用后端
+                    val available = detectAvailableBackends()
+                    if (available.isEmpty()) {
+                        // 全部不可用，弹出选择面板
+                        updateStatus("⚠️ 无可用识别后端，请选择")
+                        showVoicePolishSelector()
+                    } else {
+                        // 有可用后端，按优先级选最优
+                        val best = available.first()
+                        startRecordingWithChoice(best, currentPolishChoice)
+                    }
                 }
             } else if (isWaitingForChoice) {
                 updateStatus("请点击 AI+ 或 AI× 选择处理方式")
