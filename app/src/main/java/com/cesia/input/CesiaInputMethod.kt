@@ -636,15 +636,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         resetToIdle()
                     } else {
+                        // pendingAiMode == null，录音结束时用户还未选择
+                        // AI+/AI× 按钮已在 showAiChoiceButtons() 中显示，保持即可
                         if (text.isEmpty()) {
                             updateStatus("⚠️ 未识别到文字，请重试")
                             resetToIdle()
                         } else {
                             isWaitingForChoice = true
                             updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
-                            micButton.visibility = View.GONE
-                            btnMicAi.visibility = View.VISIBLE
-                            btnMicNoAi.visibility = View.VISIBLE
                         }
                     }
                 }
@@ -2109,8 +2108,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 startGoogleRecording(polishChoice)
             }
         }
-        // 用户已通过长按面板做出选择，直接执行，不再显示 AI 选择按钮
-        // 短按时 currentPolishChoice 为上次用户选择（默认 OFF = 直接上屏）
+
+        // 立即显示 AI+ / AI× 按钮
+        showAiChoiceButtons()
     }
 
     /** Google 语音识别（流式，通过 FallbackRecognizer） */
@@ -2197,22 +2197,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         when (voiceEngine.getBackend()) {
             VoiceEngine.Backend.CLOUD_GROQ -> {
-                // 云端 Groq：使用 VoiceEngine 录音并识别
                 updateStatus("🎤 正在收听 (Groq 云端)...")
                 startGroqRecordingAsync()
             }
             VoiceEngine.Backend.LOCAL_WHISPER -> {
                 if (modelManager.hasVoiceModel()) {
-                    // 本地 Whisper：使用 VoiceEngine
                     updateStatus("🎤 正在收听 (本地 Whisper)...")
                     startWhisperRecordingAsync()
                 } else {
-                    // 回退到 Google 语音识别（通过 TypelessEngine/FallbackRecognizer）
                     updateStatus("🎤 正在收听 (Google)...")
                     typelessEngine?.startListening(continuous = true)
                 }
             }
         }
+
+        // 立即显示 AI+ / AI× 按钮（原逻辑）
+        showAiChoiceButtons()
     }
 
     private fun onAiPlusSelected() {
