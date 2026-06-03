@@ -2051,10 +2051,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val hasAiModel = modelManager.hasAiModel()
 
             // 初始状态：先按静态检测设置可用性
-            setOptionState(btnGroq, hasGroqKey, "☁️ Groq 云端", "☁️ Groq (需设置 API Key)")
+            // Key 格式校验：至少看起来像真实的 Key，而不是随意输入的一个字符
+            val groqKeyValid = hasGroqKey && groqKey.length >= 10
+            val orKeyValid = hasOrKey && orKey.length >= 10
+            setOptionState(btnGroq, groqKeyValid, "☁️ Groq 云端", "☁️ Groq (需设置 API Key)")
             setOptionState(btnWhisper, hasWhisperModel, "📱 本地 Whisper", "📱 Whisper (需下载模型)")
             setOptionState(btnGoogle, googleFrameworkOk, "🌍 Google", "🌍 Google (不可用)")
-            setOptionState(btnPolishCloud, hasOrKey, "☁️ 云端润色", "☁️ 云端 (需设置 API Key)")
+            setOptionState(btnPolishCloud, orKeyValid, "☁️ 云端润色", "☁️ 云端 (需设置 API Key)")
             setOptionState(btnPolishLocal, hasAiModel, "📱 本地润色", "📱 本地 (需下载模型)")
             setOptionState(btnPolishOff, true, "❌ 关闭润色", null)
 
@@ -2208,10 +2211,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvLoadingText.text = "正在检测 Google 语音识别..."
                 checkGoogleAsync { ok, err ->
                     googleRealOk = ok
-                    if (!ok) {
-                        setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                    Handler(Looper.getMainLooper()).post {
+                        if (ok) {
+                            // 检测通过，确保按钮亮起
+                            setOptionState(btnGoogle, true, "🌍 Google", "🌍 Google (不可用)")
+                        } else {
+                            setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                        }
+                        onCheckComplete()
                     }
-                    onCheckComplete()
                 }
             }
 
