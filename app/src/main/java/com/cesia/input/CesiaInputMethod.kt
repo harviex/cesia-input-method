@@ -867,7 +867,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 检测 Google：框架存在 + 能实际录音并返回结果 */
+    /** 检测 Google：框架存在 + 能创建识别实例即算可用 */
     private fun checkGoogleAsync(callback: (Boolean, String?) -> Unit) {
         if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
             callback(false, "Google 语音框架不可用")
@@ -880,79 +880,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         try {
+            // 尝试创建 SpeechRecognizer 实例
             val testRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
-            var finished = false
-            testRecognizer.setRecognitionListener(object : android.speech.RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(error: Int) {
-                    if (finished) return
-                    finished = true
-                    try { testRecognizer.destroy() } catch (_: Exception) {}
-                    // 错误码说明：
-                    // 1=NETWORK_TIMEOUT, 2=NETWORK_ERROR, 3=AUDIO, 4=SERVER,
-                    // 5=CLIENT, 6=SPEECH_TIMEOUT, 7=NO_MATCH, 8=RECOGNIZER_BUSY,
-                    // 9=INSUFFICIENT_PERMISSIONS
-                    val errorName = when (error) {
-                        1 -> "网络超时"
-                        2 -> "网络错误"
-                        3 -> "音频录制失败（麦克风被占用或无权限）"
-                        4 -> "服务器错误"
-                        5 -> "客户端错误"
-                        6 -> "语音超时（静音）"
-                        7 -> "无匹配结果（框架正常，只是没听到声音）"
-                        8 -> "识别器忙"
-                        9 -> "权限不足"
-                        else -> "未知错误($error)"
-                    }
-                    // NO_MATCH(7) 和 SPEECH_TIMEOUT(6) 说明框架通了，只是没声音输入
-                    if (error == 7 || error == 6) {
-                        callback(true, "Google 连通（$errorName）")
-                    } else {
-                        callback(false, "Google 检测失败: $errorName")
-                    }
-                }
-                override fun onResults(bundle: Bundle?) {
-                    if (finished) return
-                    finished = true
-                    try { testRecognizer.destroy() } catch (_: Exception) {}
-                    val matches = bundle?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        callback(true, "Google 服务正常")
-                    } else {
-                        // 框架通了但没收到结果（可能是静音），也算连通
-                        callback(true, "Google 连通（静音无输入）")
-                    }
-                }
-                override fun onPartialResults(bundle: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-                putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                // 只录 2 秒做测试
-                putExtra("android.speech.extras.SPEECH_INPUT_COMPLETE_SILENCE_MILLIS", 2000L)
-                putExtra("android.speech.extras.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_MILLIS", 2000L)
-                putExtra("android.speech.extras.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 1000L)
+            if (testRecognizer != null) {
+                // 实例创建成功，说明框架可用
+                try { testRecognizer.destroy() } catch (_: Exception) {}
+                callback(true, "Google 框架可用")
+            } else {
+                callback(false, "Google 识别器创建失败")
             }
-            testRecognizer.startListening(intent)
-
-            // 最多等 3 秒
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (!finished) {
-                    finished = true
-                    try { testRecognizer.destroy() } catch (_: Exception) {}
-                    callback(false, "Google 测试超时（无响应）")
-                }
-            }, 3000)
         } catch (e: Exception) {
-            callback(false, "Google 测试启动失败: ${e.message}")
+            callback(false, "Google 检测异常: ${e.message}")
         }
     }
 
