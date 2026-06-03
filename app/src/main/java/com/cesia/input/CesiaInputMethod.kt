@@ -2153,13 +2153,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             VoiceEngine.Backend.CLOUD_GROQ -> {
                 // 云端 Groq：使用 VoiceEngine 录音并识别
                 updateStatus("🎤 正在收听 (Groq 云端)...")
-                startGroqRecording()
+                startGroqRecordingAsync()
             }
             VoiceEngine.Backend.LOCAL_WHISPER -> {
                 if (modelManager.hasVoiceModel()) {
                     // 本地 Whisper：使用 VoiceEngine
                     updateStatus("🎤 正在收听 (本地 Whisper)...")
-                    startWhisperRecording()
+                    startWhisperRecordingAsync()
                 } else {
                     // 回退到 Google 语音识别（通过 TypelessEngine/FallbackRecognizer）
                     updateStatus("🎤 正在收听 (Google)...")
