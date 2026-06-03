@@ -888,156 +888,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 检测 Google：框架存在 + 有权限 + 网络能连通 Google 语音服务 */
-    private fun checkGoogleAsync(callback: (Boolean, String?) -> Unit) {
-        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
-            callback(false, "Google 语音框架不可用")
-            return
-        }
-        // 先检查录音权限
-        if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
-            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)) {
-            callback(false, "未授予录音权限，请在系统设置中开启")
-            return
-        }
-        // 框架存在后，再发 HTTP 探测 Google 语音服务网络连通性
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(5, TimeUnit.SECONDS)
-                    .readTimeout(5, TimeUnit.SECONDS)
-                    .build()
-                // 探测 Google Speech API 端点
-                val request = okhttp3.Request.Builder()
-                    .url("https://speech.googleapis.com")
-                    .head()
-                    .build()
-                val response = client.newCall(request).execute()
-                withContext(Dispatchers.Main) {
-                    when {
-                        response.code == 404 || response.code == 403 || response.code == 200 -> {
-                            // 404/403/200 都说明服务器可达（只是没带合法请求）
-                            callback(true, "Google 连通")
-                        }
-                        else -> callback(false, "Google 返回 ${response.code}")
-                    }
-                }
-            } catch (e: java.net.UnknownHostException) {
-                withContext(Dispatchers.Main) { callback(false, "无法连接 Google（网络问题）") }
-            } catch (e: java.net.SocketTimeoutException) {
-                withContext(Dispatchers.Main) { callback(false, "Google 连接超时") }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { callback(false, "Google 检测失败: ${e.message}") }
-            }
-        }
-    }
-
-    /** 检测 Groq：发轻量 HTTP 请求测试连通性 */
-    private fun checkGroqAsync(callback: (Boolean, String?) -> Unit) {
-        val key = getGroqApiKey()
-        if (key.isEmpty()) {
-            callback(false, "未配置 API Key")
-            return
-        }
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(5, TimeUnit.SECONDS)
-                    .readTimeout(5, TimeUnit.SECONDS)
-                    .build()
-                // 用 models 端点做轻量检测
-                val request = okhttp3.Request.Builder()
-                    .url("https://api.groq.com/openai/v1/models")
-                    .addHeader("Authorization", "Bearer $key")
-                    .get()
-                    .build()
-                val response = client.newCall(request).execute()
-                withContext(Dispatchers.Main) {
-                    when (response.code) {
-                        200 -> {
-                            // 验证响应里有 data 字段
-                            val body = response.body?.string() ?: ""
-                            if (body.contains("\"data\"")) {
-                                callback(true, "Groq 连通")
-                            } else {
-                                callback(false, "Groq API 返回异常")
-                            }
-                        }
-                        401 -> callback(false, "API Key 无效")
-                        else -> callback(false, "Groq 返回 ${response.code}")
-                    }
-                }
-            } catch (e: java.net.UnknownHostException) {
-                withContext(Dispatchers.Main) { callback(false, "无法连接 Groq（网络问题）") }
-            } catch (e: java.net.SocketTimeoutException) {
-                withContext(Dispatchers.Main) { callback(false, "Groq 连接超时") }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { callback(false, "Groq 检测失败: ${e.message}") }
-            }
-        }
-    }
-
-    /** 检测 OpenRouter：发轻量 HTTP 请求测试连通性 */
-    private fun checkOpenRouterAsync(callback: (Boolean, String?) -> Unit) {
-        val key = getOpenRouterApiKey()
-        if (key.isEmpty()) {
-            callback(false, "未配置 API Key")
-            return
-        }
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(5, TimeUnit.SECONDS)
-                    .readTimeout(5, TimeUnit.SECONDS)
-                    .build()
-                val request = okhttp3.Request.Builder()
-                    .url("https://openrouter.ai/api/v1/models")
-                    .addHeader("Authorization", "Bearer $key")
-                    .get()
-                    .build()
-                val response = client.newCall(request).execute()
-                withContext(Dispatchers.Main) {
-                    when (response.code) {
-                        200 -> {
-                            val body = response.body?.string() ?: ""
-                            if (body.contains("\"data\"")) {
-                                callback(true, "OpenRouter 连通")
-                            } else {
-                                callback(false, "OpenRouter API 返回异常")
-                            }
-                        }
-                        401 -> callback(false, "API Key 无效")
-                        else -> callback(false, "OpenRouter 返回 ${response.code}")
-                    }
-                }
-            } catch (e: java.net.UnknownHostException) {
-                withContext(Dispatchers.Main) { callback(false, "无法连接 OpenRouter（网络问题）") }
-            } catch (e: java.net.SocketTimeoutException) {
-                withContext(Dispatchers.Main) { callback(false, "OpenRouter 连接超时") }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { callback(false, "OpenRouter 检测失败: ${e.message}") }
-            }
-        }
-    }
-
-    /**
-     * 综合检测并返回可用后端列表（按优先级：Whisper > Google > Groq）
-     * 用于单击时的快速判断
-     */
-    private fun detectAvailableBackends(): List<VoiceChoice> {
-        val available = mutableListOf<VoiceChoice>()
-        val (whisperOk, _) = checkWhisperAvailable()
-        if (whisperOk) available.add(VoiceChoice.LOCAL_WHISPER)
-        if (android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
-            available.add(VoiceChoice.GOOGLE)
-        }
-        if (getGroqApiKey().isNotEmpty()) {
-            available.add(VoiceChoice.CLOUD_GROQ)
-        }
-        return available
-    }
-
-    // ======================== 按钮监听 ========================
+    // ======================== 录音（根据当前模式） ========================
 
     private fun setupButtonListeners() {
         // 语音按钮：短按开始录音，长按弹出选择面板
@@ -1968,47 +1819,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 根据 LocalModeManager 模式和模型可用性自动选择语音后端
      *
      * 规则：
-     * - 云端模式（CLOUD_FREE / CLOUD_PAID）→ Groq API（需要 Groq Key）
+     * - 云端模式（CLOUD_FREE）→ Google 语音识别 + OpenRouter 润色
      * - 本地模式 + 已下载 Whisper 模型 → 本地 Whisper
      * - 本地模式 + 未下载模型 → 回退到 Google 语音识别（系统自带）
      */
     private fun updateVoiceBackend() {
         val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
-        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.LOCAL.name)
-            ?: LocalModeManager.RunMode.LOCAL.name
+        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
+            ?: LocalModeManager.RunMode.CLOUD_FREE.name
         val mode = try { LocalModeManager.RunMode.valueOf(modeName) }
-            catch (_: Exception) { LocalModeManager.RunMode.LOCAL }
-        val hasGroqKey = getGroqApiKey().isNotEmpty()
+            catch (_: Exception) { LocalModeManager.RunMode.CLOUD_FREE }
         val hasLocalModel = modelManager.hasVoiceModel()
 
         when (mode) {
             LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                if (hasGroqKey) {
-                    voiceEngine.setBackend(VoiceEngine.Backend.CLOUD_GROQ)
-                    Log.i("Cesia", "语音后端: Groq 云端")
-                } else {
-                    // 云端模式但没有 Groq Key，回退到 Google
-                    voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
-                    Log.i("Cesia", "语音后端: Google (Groq Key 未设置，回退)")
-                }
+                // 云端模式：Google 语音识别（通过 TypelessEngine）
+                // VoiceEngine 不用，直接用 Google
+                Log.i("Cesia", "语音后端: Google 云端")
             }
             LocalModeManager.RunMode.LOCAL -> {
                 if (hasLocalModel) {
                     voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
                     Log.i("Cesia", "语音后端: 本地 Whisper")
                 } else {
-                    // 本地模式但没有模型，回退到 Google
-                    voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
-                    Log.i("Cesia", "语音后端: Google (本地模型未下载，回退)")
+                    // 本地模式但没有模型，提示去下载
+                    Log.i("Cesia", "语音后端: 本地模型未安装")
                 }
             }
         }
-    }
-
-    /** 读取 Groq API Key */
-    private fun getGroqApiKey(): String {
-        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
-        return prefs.getString("groq_api_key", "") ?: ""
     }
 
     private fun getOpenRouterApiKey(): String {
@@ -2021,17 +1859,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     fun getVoiceBackendName(): String {
         val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
-        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.LOCAL.name)
-            ?: LocalModeManager.RunMode.LOCAL.name
+        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
+            ?: LocalModeManager.RunMode.CLOUD_FREE.name
         val mode = try { LocalModeManager.RunMode.valueOf(modeName) }
-            catch (_: Exception) { LocalModeManager.RunMode.LOCAL }
-        val hasGroqKey = getGroqApiKey().isNotEmpty()
+            catch (_: Exception) { LocalModeManager.RunMode.CLOUD_FREE }
         val hasLocalModel = modelManager.hasVoiceModel()
 
         return when (mode) {
-            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                if (hasGroqKey) "Groq 云端" else "Google (回退)"
-            }
+            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> "Google 云端"
             LocalModeManager.RunMode.LOCAL -> {
                 if (hasLocalModel) "本地 Whisper" else "Google (回退)"
             }
@@ -2048,317 +1883,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 长按语音键弹出的选择面板
      * 用户分别选择识别后端和润色后端，点确认后保存配置
      */
-    private fun showVoicePolishSelector() {
-        try {
-            val windowToken = micButton?.windowToken
-            if (windowToken == null) {
-                updateStatus("⚠️ 输入法视图未就绪，请重试")
-                Log.e("Cesia", "showVoicePolishSelector: windowToken is null")
-                return
-            }
-
-            val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_voice_polish_selector, null)
-
-            // RAM 建议
-            val tvRamHint = dialogView.findViewById<TextView>(R.id.tv_ram_hint)
-
-            // 识别选项
-            val btnWhisperSmall = dialogView.findViewById<TextView>(R.id.btn_whisper_small)
-            val btnWhisperLarge = dialogView.findViewById<TextView>(R.id.btn_whisper_large)
-            val btnGoogle = dialogView.findViewById<TextView>(R.id.btn_google)
-            val btnGroqAsr = dialogView.findViewById<TextView>(R.id.btn_groq_asr)
-
-            // 润色选项
-            val btnQwenSmall = dialogView.findViewById<TextView>(R.id.btn_qwen_small)
-            val btnQwenLarge = dialogView.findViewById<TextView>(R.id.btn_qwen_large)
-            val btnOpenRouter = dialogView.findViewById<TextView>(R.id.btn_openrouter)
-            val btnGroqPolish = dialogView.findViewById<TextView>(R.id.btn_groq_polish)
-
-            // 下载按钮
-            val btnDownloadWhisper = dialogView.findViewById<TextView>(R.id.btn_download_whisper)
-            val btnDownloadQwen = dialogView.findViewById<TextView>(R.id.btn_download_qwen)
-
-            // 确定按钮
-            val btnConfirm = dialogView.findViewById<TextView>(R.id.btn_confirm)
-
-            // ====== 初始状态：检测可用性 ======
-            val groqKey = getGroqApiKey()
-            val hasGroqKey = groqKey.isNotEmpty()
-            val orKey = getOpenRouterApiKey()
-            val hasOrKey = orKey.isNotEmpty()
-            val googleFrameworkOk = try {
-                android.speech.SpeechRecognizer.isRecognitionAvailable(this)
-            } catch (_: Exception) { false }
-
-            // 检测本地模型（Whisper small/large 可能是不同的文件）
-            val whisperSmallOk = modelManager.hasVoiceModel()  // 简化：先共用
-            val whisperLargeOk = modelManager.hasVoiceModel()
-            val qwenSmallOk = modelManager.hasAiModel()        // 简化：先共用
-            val qwenLargeOk = modelManager.hasAiModel()
-
-            // 设置初始可用性
-            setCellState(btnWhisperSmall, whisperSmallOk)
-            setCellState(btnWhisperLarge, whisperLargeOk)
-            setCellState(btnGoogle, googleFrameworkOk)
-            setCellState(btnGroqAsr, hasGroqKey)
-            setCellState(btnQwenSmall, qwenSmallOk)
-            setCellState(btnQwenLarge, qwenLargeOk)
-            setCellState(btnOpenRouter, hasOrKey)
-            setCellState(btnGroqPolish, hasGroqKey)
-
-            // RAM 建议
-            val totalRam = try {
-                val actMgr = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-                val memInfo = android.app.ActivityManager.MemoryInfo()
-                actMgr?.getMemoryInfo(memInfo)
-                memInfo.totalMem / (1024 * 1024 * 1024)
-            } catch (_: Exception) { 0 }
-
-            val ramHint = when {
-                totalRam <= 2 -> "⚠️ RAM ${totalRam}GB：建议使用云端模式"
-                totalRam <= 4 -> "💡 RAM ${totalRam}GB：建议本地 small + 云端润色"
-                totalRam <= 6 -> "💡 RAM ${totalRam}GB：可用本地 small 或 large"
-                else -> "✅ RAM ${totalRam}GB：可流畅运行本地 large 模型"
-            }
-            tvRamHint.text = ramHint
-
-            // ====== 记录各选项可用性（检测后更新） ======
-            var whisperSmallReal = whisperSmallOk
-            var whisperLargeReal = whisperLargeOk
-            var googleReal = googleFrameworkOk
-            var groqAsrReal = hasGroqKey
-            var qwenSmallReal = qwenSmallOk
-            var qwenLargeReal = qwenLargeOk
-            var orReal = hasOrKey
-            var groqPolishReal = hasGroqKey
-            var pendingChecks = 0
-
-            fun updateCell(btn: TextView, realOk: Boolean) {
-                setCellState(btn, realOk)
-            }
-
-            fun onCheckComplete() {
-                pendingChecks--
-                if (pendingChecks <= 0) {
-                    // 所有检测完成
-                    updateCell(btnWhisperSmall, whisperSmallReal)
-                    updateCell(btnWhisperLarge, whisperLargeReal)
-                    updateCell(btnGoogle, googleReal)
-                    updateCell(btnGroqAsr, groqAsrReal)
-                    updateCell(btnQwenSmall, qwenSmallReal)
-                    updateCell(btnQwenLarge, qwenLargeReal)
-                    updateCell(btnOpenRouter, orReal)
-                    updateCell(btnGroqPolish, groqPolishReal)
-                }
-            }
-
-            // ====== 创建 dialog（紧贴状态栏顶部） ======
-            val dialog = AlertDialog.Builder(this)
-                .setView(dialogView)
-                .setCancelable(true)
-                .create()
-            dialog.window?.let { window ->
-                window.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-                val attrs = window.attributes ?: android.view.WindowManager.LayoutParams()
-                attrs.token = windowToken
-                attrs.gravity = android.view.Gravity.TOP
-                attrs.y = 0
-                window.attributes = attrs
-            }
-            dialog.setOnDismissListener { longPressActive = false }
-
-            // ====== 按钮点击（单选切换） ======
-
-            // 识别：互斥选择一个
-            var selectedVoiceBtn: TextView? = null
-            var selectedPolishBtn: TextView? = null
-
-            fun selectVoice(btn: TextView) {
-                selectedVoiceBtn?.alpha = if (selectedVoiceBtn!!.isEnabled) 1.0f else 0.4f
-                selectedVoiceBtn = btn
-                btn.alpha = 1.0f
-                btn.setBackgroundColor(0xFF81D8D8.toInt())
-                btn.setTextColor(0xFFFFFFFF.toInt())
-            }
-            fun selectPolish(btn: TextView) {
-                selectedPolishBtn?.alpha = if (selectedPolishBtn!!.isEnabled) 1.0f else 0.4f
-                selectedPolishBtn = btn
-                btn.alpha = 1.0f
-                btn.setBackgroundColor(0xFF81D8D8.toInt())
-                btn.setTextColor(0xFFFFFFFF.toInt())
-            }
-            fun deselectVoice(btn: TextView) {
-                btn.setBackgroundColor(0xFFF0F0F0.toInt())
-                btn.setTextColor(0xFF333333.toInt())
-            }
-            fun deselectPolish(btn: TextView) {
-                btn.setBackgroundColor(0xFFF0F0F0.toInt())
-                btn.setTextColor(0xFF333333.toInt())
-            }
-
-            btnWhisperSmall.setOnClickListener { if (whisperSmallReal) selectVoice(btnWhisperSmall); deselectVoice(btnWhisperLarge); deselectVoice(btnGoogle); deselectVoice(btnGroqAsr) }
-            btnWhisperLarge.setOnClickListener { if (whisperLargeReal) selectVoice(btnWhisperLarge); deselectVoice(btnWhisperSmall); deselectVoice(btnGoogle); deselectVoice(btnGroqAsr) }
-            btnGoogle.setOnClickListener { if (googleReal) selectVoice(btnGoogle); deselectVoice(btnWhisperSmall); deselectVoice(btnWhisperLarge); deselectVoice(btnGroqAsr) }
-            btnGroqAsr.setOnClickListener { if (groqAsrReal) selectVoice(btnGroqAsr); deselectVoice(btnWhisperSmall); deselectVoice(btnWhisperLarge); deselectVoice(btnGoogle) }
-
-            btnQwenSmall.setOnClickListener { if (qwenSmallReal) selectPolish(btnQwenSmall); deselectPolish(btnQwenLarge); deselectPolish(btnOpenRouter); deselectPolish(btnGroqPolish) }
-            btnQwenLarge.setOnClickListener { if (qwenLargeReal) selectPolish(btnQwenLarge); deselectPolish(btnQwenSmall); deselectPolish(btnOpenRouter); deselectPolish(btnGroqPolish) }
-            btnOpenRouter.setOnClickListener { if (orReal) selectPolish(btnOpenRouter); deselectPolish(btnQwenSmall); deselectPolish(btnQwenLarge); deselectPolish(btnGroqPolish) }
-            btnGroqPolish.setOnClickListener { if (groqPolishReal) selectPolish(btnGroqPolish); deselectPolish(btnQwenSmall); deselectPolish(btnQwenLarge); deselectPolish(btnOpenRouter) }
-
-            // 下载按钮
-            btnDownloadWhisper.setOnClickListener {
-                showModelDownloadPrompt("语音", "whisper-small")
-            }
-            btnDownloadQwen.setOnClickListener {
-                showModelDownloadPrompt("AI 润色", "qwen-2b")
-            }
-
-            // 确定按钮
-            btnConfirm.setOnClickListener {
-                if (selectedVoiceBtn == null) {
-                    updateStatus("请先选择一种识别方式")
-                    return@setOnClickListener
-                }
-                // 保存选择
-                currentVoiceChoice = when (selectedVoiceBtn) {
-                    btnWhisperSmall, btnWhisperLarge -> VoiceChoice.LOCAL_WHISPER
-                    btnGoogle -> VoiceChoice.GOOGLE
-                    btnGroqAsr -> VoiceChoice.CLOUD_GROQ
-                    else -> null
-                }
-                currentPolishChoice = when (selectedPolishBtn) {
-                    btnQwenSmall, btnQwenLarge -> PolishChoice.LOCAL_AI
-                    btnOpenRouter -> PolishChoice.CLOUD_OPENROUTER
-                    btnGroqPolish -> PolishChoice.CLOUD_GROQ
-                    else -> PolishChoice.OFF
-                }
-                dialog.dismiss()
-                updateStatus("✓ 已保存识别+润色配置")
-            }
-
-            // ====== 显示 dialog ======
-            dialog.show()
-
-            // ====== 后台异步真实检测 ======
-
-            // 1. 检测 Google（HTTP 探测）
-            if (googleFrameworkOk) {
-                pendingChecks++
-                checkGoogleAsync { ok, err ->
-                    googleReal = ok
-                    Log.d("Cesia", "Google: ok=$ok, err=$err")
-                    Handler(Looper.getMainLooper()).post { onCheckComplete() }
-                }
-            }
-
-            // 2. 检测 Groq 识别
-            if (hasGroqKey) {
-                pendingChecks++
-                checkGroqAsync { ok, err ->
-                    groqAsrReal = ok
-                    Log.d("Cesia", "Groq ASR: ok=$ok, err=$err")
-                    Handler(Looper.getMainLooper()).post { onCheckComplete() }
-                }
-            }
-
-            // 3. 检测 OpenRouter 润色
-            if (hasOrKey) {
-                pendingChecks++
-                checkOpenRouterAsync { ok, err ->
-                    orReal = ok
-                    Log.d("Cesia", "OpenRouter: ok=$ok, err=$err")
-                    Handler(Looper.getMainLooper()).post { onCheckComplete() }
-                }
-            }
-
-            // 4. 检测 Groq 润色（复用同一个 Key，检测和识别一样，只需检测一次）
-            // Groq 润色和识别用同一个 Key，所以 groqPolishReal = groqAsrReal
-            groqPolishReal = groqAsrReal
-            setCellState(btnGroqPolish, groqPolishReal)
-
-        } catch (e: Exception) {
-            Log.e("Cesia", "选择面板异常", e)
-            updateStatus("⚠️ 选择面板异常: ${e.message}")
-        }
-    }
-
-    /** 设置选项可用/不可用状态 */
-    private fun setOptionState(btn: TextView, available: Boolean, enabledText: String, disabledText: String?) {
-        btn.isEnabled = available
-        btn.text = if (available) enabledText else (disabledText ?: enabledText)
-        btn.alpha = if (available) 1.0f else 0.4f
-    }
-
-    /** 高亮当前选中 */
-    private fun highlightSelected(btn: TextView, selected: Boolean) {
-        if (!btn.isEnabled) return
-        if (selected) {
-            btn.setBackgroundColor(0xFF81D8D8.toInt())
-            btn.setTextColor(0xFFFFFFFF.toInt())
-        } else {
-            btn.setBackgroundColor(0xFFF0F0F0.toInt())
-            btn.setTextColor(0xFF333333.toInt())
-        }
-    }
-
-    /** 显示 API Key 设置引导 */
-    private fun showApiKeyPrompt(name: String, url: String) {
-        val windowToken = micButton?.windowToken ?: return
-        try {
-        AlertDialog.Builder(this)
-            .setTitle("需要 $name API Key")
-            .setMessage("请先在设置中配置 $name API Key，或前往 $url 获取。")
-            .setPositiveButton("前往设置") { _, _ ->
-                try {
-                    val intent = Intent(this, com.cesia.input.SettingsActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                } catch (_: Exception) {}
-            }
-            .setNegativeButton("取消", null)
-            .create()
-            .also { d ->
-                d.window?.let { w ->
-                    w.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-                    w.attributes = w.attributes?.apply { token = windowToken }
-                }
-            }
-            .show()
-        } catch (e: Exception) {
-            Log.e("Cesia", "showApiKeyPrompt 异常", e)
-        }
-    }
-
-    /** 显示模型下载引导 */
-    private fun showModelDownloadPrompt(type: String, modelId: String) {
-        val windowToken = micButton?.windowToken ?: return
-        try {
-        AlertDialog.Builder(this)
-            .setTitle("需要下载 $type 模型")
-            .setMessage("本地 $type 模型未安装。是否前往设置下载？")
-            .setPositiveButton("前往下载") { _, _ ->
-                try {
-                    val intent = Intent(this, com.cesia.input.SettingsActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    intent.putExtra("scroll_to_models", true)
-                    startActivity(intent)
-                } catch (_: Exception) {}
-            }
-            .setNegativeButton("取消", null)
-            .create()
-            .also { d ->
-                d.window?.let { w ->
-                    w.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-                    w.attributes = w.attributes?.apply { token = windowToken }
-                }
-            }
-            .show()
-        } catch (e: Exception) {
-            Log.e("Cesia", "showModelDownloadPrompt 异常", e)
-        }
-    }
-
     /** 本地模式录音 */
     private fun startLocalRecording() {
         startRecordingWithChoice(VoiceChoice.LOCAL_WHISPER, PolishChoice.LOCAL_AI)
@@ -2386,10 +1910,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         voiceStartTime = System.currentTimeMillis()
 
         when (voiceChoice) {
-            VoiceChoice.CLOUD_GROQ -> {
-                updateStatus("🎤 正在收听 (Groq 云端)...")
-                startGroqRecordingAsync()
-            }
             VoiceChoice.LOCAL_WHISPER -> {
                 updateStatus("🎤 正在收听 (本地 Whisper)...")
                 startWhisperRecordingAsync()
@@ -2407,24 +1927,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** Google 语音识别（流式，通过 FallbackRecognizer） */
     private fun startGoogleRecording(polishChoice: PolishChoice) {
         typelessEngine?.startListening(continuous = true)
-    }
-
-    /** Groq 云端录音+识别 */
-    private fun startGroqRecordingAsync() {
-        voiceEngineScope.launch {
-            try {
-                val text = voiceEngine.recordAndTranscribe(30000)
-                withContext(Dispatchers.Main) {
-                    handleCloudVoiceResult(text)
-                }
-            } catch (e: Exception) {
-                Log.e("Cesia", "Groq 录音失败", e)
-                withContext(Dispatchers.Main) {
-                    updateStatus("❌ 语音识别失败: ${e.message}")
-                    resetToIdle()
-                }
-            }
-        }
     }
 
     /** 本地 Whisper 录音+识别 */
@@ -2448,7 +1950,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 处理 Groq/Whisper 识别结果 → 显示 AI+/AI× 按钮 */
+    /** 处理云端/本地识别结果 → 显示 AI+/AI× 按钮 */
     private fun handleCloudVoiceResult(text: String) {
         if (!isRecording && recognizedText.isEmpty()) return
         isRecording = false
@@ -2487,10 +1989,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateVoiceBackend()
 
         when (voiceEngine.getBackend()) {
-            VoiceEngine.Backend.CLOUD_GROQ -> {
-                updateStatus("🎤 正在收听 (Groq 云端)...")
-                startGroqRecordingAsync()
-            }
             VoiceEngine.Backend.LOCAL_WHISPER -> {
                 if (modelManager.hasVoiceModel()) {
                     updateStatus("🎤 正在收听 (本地 Whisper)...")
