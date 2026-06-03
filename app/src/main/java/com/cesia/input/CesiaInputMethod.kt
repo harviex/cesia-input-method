@@ -844,7 +844,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 按钮监听 ========================
 
     private fun setupButtonListeners() {
-        // 语音按钮：短按开始录音，长按弹出选择面板
+        // 语音按钮：短按开始录音（首次未设置时弹出选择面板），长按弹出选择面板
         longPressActive = false
         micButton.setOnClickListener {
             if (longPressActive) {
@@ -852,11 +852,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 return@setOnClickListener
             }
             if (!isRecording && !isWaitingForChoice) {
-                // 如果从未通过长按面板选择过识别方式，先弹出选择面板
+                // 首次未设置识别/润色方式时，弹出选择面板（只保存设置，不录音）
                 if (currentVoiceChoice == null) {
-                    showVoicePolishSelector()
+                    showVoicePolishSelector(saveOnly = true)
                 } else {
-                    startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
+                    startRecordingImmediately()
                 }
             } else if (isWaitingForChoice) {
                 updateStatus("请点击 AI+ 或 AI× 选择处理方式")
@@ -876,7 +876,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 true
             } else {
                 longPressActive = true
-                showVoicePolishSelector()
+                showVoicePolishSelector(saveOnly = false)
                 true
             }
         }
@@ -1843,7 +1843,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 长按语音键弹出的选择面板
      * 用户分别选择识别后端和润色后端
      */
-    private fun showVoicePolishSelector() {
+    /**
+     * 长按/首次单击弹出的选择面板
+     * @param saveOnly true=只保存设置不录音（首次单击），false=保存并立即录音（长按）
+     */
+    private fun showVoicePolishSelector(saveOnly: Boolean = false) {
         try {
             // 关键：获取键盘视图的 window token，否则 InputMethodService 无法创建 dialog
             val windowToken = micButton?.windowToken
@@ -1965,6 +1969,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnConfirm = dialogView.findViewById<TextView>(R.id.btn_voice_confirm)
         val btnCancel = dialogView.findViewById<TextView>(R.id.btn_voice_cancel)
 
+        // 首次单击时显示"确定"，长按时显示"开始录音"
+        btnConfirm.text = if (saveOnly) "确定" else "🎤 开始录音"
+
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(true)
@@ -1986,7 +1993,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 return@setOnClickListener
             }
             dialog.dismiss()
-            startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
+            if (saveOnly) {
+                // 首次单击：只保存设置，不录音
+                updateStatus("✅ 已设置识别方式，请再次单击语音键开始录音")
+            } else {
+                // 长按：保存设置并立即开始录音
+                startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
+            }
         }
         btnCancel.setOnClickListener {
             dialog.dismiss()
