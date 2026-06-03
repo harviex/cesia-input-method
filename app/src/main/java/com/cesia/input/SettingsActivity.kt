@@ -26,6 +26,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.lifecycle.lifecycleScope
+import com.cesia.input.ai.AIEngine
+import com.cesia.input.ai.LocalModeManager
+import com.cesia.input.model.ModelDownloadManager
+import com.cesia.input.model.ModelInfo
+import com.cesia.input.model.ModelManager
+import com.cesia.input.voice.VoiceEngine
+import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Cesia 输入法设置页面
@@ -52,6 +61,28 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnHistory: Button
     private lateinit var statsManager: PolishStatsManager
     private lateinit var dictManager: PinyinDictManager
+
+    // === 语音与 AI 本地化 ===
+    private lateinit var localModeManager: LocalModeManager
+    private lateinit var modelManager: ModelManager
+    private lateinit var downloadManager: ModelDownloadManager
+    private var etGroqKey: android.widget.EditText? = null
+    private var tvModeLabel: TextView? = null
+    private var btnToggleMode: Button? = null
+    private var tvHardwareInfo: TextView? = null
+    private var tvVoiceModelStatus: TextView? = null
+    private var tvAiModelStatus: TextView? = null
+    private var btnDownloadWhisperSmall: Button? = null
+    private var btnDownloadWhisperLarge: Button? = null
+    private var btnDownloadQwen08b: Button? = null
+    private var btnDownloadQwen2b: Button? = null
+    private var tvDownloadProgress: TextView? = null
+    private var pbDownload: android.widget.ProgressBar? = null
+    private var switchGpu: androidx.appcompat.widget.SwitchCompat? = null
+    private var isDownloading = false
+
+    // 语音与 AI 本地化设置 helper
+    private lateinit var aiSettingsHelper: VoiceAISettingsHelper
 
     // 主题
     private lateinit var btnThemeToggle: Button
@@ -85,6 +116,9 @@ class SettingsActivity : AppCompatActivity() {
         const val THEME_DARK = 1
         const val IMPORT_DICT_REQUEST = 2001
         const val IMPORT_PHRASES_REQUEST = 2002
+        const val PREF_GROQ_KEY = "groq_api_key"
+        const val PREF_OPENROUTER_KEY = "open_router_api_key"
+        const val PREF_MODE = "run_mode"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,10 +130,23 @@ class SettingsActivity : AppCompatActivity() {
         setTitle("Cesia 输入法设置")
 
         initViews()
+
+        // 语音与 AI 本地化设置 helper
+        aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
+        aiSettingsHelper.bindViews(
+            etGroqKey, tvModeLabel, btnToggleMode, tvHardwareInfo,
+            tvVoiceModelStatus, tvAiModelStatus,
+            btnDownloadWhisperSmall, btnDownloadWhisperLarge,
+            btnDownloadQwen08b, btnDownloadQwen2b,
+            tvDownloadProgress, pbDownload, switchGpu
+        )
+
         statsManager = PolishStatsManager(this)
         dictManager = PinyinDictManager(this)
         loadSettings()
+        aiSettingsHelper.loadSettings()
         setupListeners()
+        aiSettingsHelper.setupListeners()
         showVersion()
         refreshStats()
         refreshDictInfo()
@@ -160,6 +207,23 @@ class SettingsActivity : AppCompatActivity() {
         try {
             btnCheckUpdate = findViewById(R.id.btn_check_update)
             vUpdateDot = findViewById(R.id.v_update_dot)
+        } catch (_: Exception) {}
+
+        // === 语音与 AI 本地化视图 ===
+        try {
+            etGroqKey = findViewById(R.id.et_groq_key)
+            tvModeLabel = findViewById(R.id.tv_mode_label)
+            btnToggleMode = findViewById(R.id.btn_toggle_mode)
+            tvHardwareInfo = findViewById(R.id.tv_hardware_info)
+            tvVoiceModelStatus = findViewById(R.id.tv_voice_model_status)
+            tvAiModelStatus = findViewById(R.id.tv_ai_model_status)
+            btnDownloadWhisperSmall = findViewById(R.id.btn_download_whisper_small)
+            btnDownloadWhisperLarge = findViewById(R.id.btn_download_whisper_large)
+            btnDownloadQwen08b = findViewById(R.id.btn_download_qwen_08b)
+            btnDownloadQwen2b = findViewById(R.id.btn_download_qwen_2b)
+            tvDownloadProgress = findViewById(R.id.tv_download_progress)
+            pbDownload = findViewById(R.id.pb_download)
+            switchGpu = findViewById(R.id.switch_gpu)
         } catch (_: Exception) {}
     }
 
@@ -250,6 +314,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putString("openrouter_api_key", apiKey)
                 .putString(PREF_MODEL_ID, modelId)
                 .apply()
+            aiSettingsHelper.saveSettings()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")
             appendLog("🔑 API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "未设置"}")

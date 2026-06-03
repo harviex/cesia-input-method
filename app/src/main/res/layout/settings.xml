@@ -272,6 +272,22 @@
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Groq API Key (云端语音) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Groq API Key (云端语音识别, gsk_...)"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textInputEditText
+                android:id="@+id/et_groq_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:text="" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- 模型 ID -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
@@ -324,6 +340,187 @@
             android:background="#FFF3E0"
             android:textSize="12sp"
             android:text="API 状态：未测试" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ==================== 语音与 AI 本地化 ==================== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎤 语音与 AI 本地化"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 运行模式 -->
+        <TextView
+            android:id="@+id/tv_mode_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📱 当前模式：本地模式"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_toggle_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 切换到云端模式"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 硬件检测推荐 -->
+        <TextView
+            android:id="@+id/tv_hardware_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="硬件检测中..."
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:background="#F0F7FF"
+            android:padding="10dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 语音模型下载 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="语音识别模型"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tv_voice_model_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="未安装"
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btn_download_whisper_small"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📥Small(~400MB)"
+                android:textSize="10sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginEnd="2dp" />
+
+            <Button
+                android:id="@+id/btn_download_whisper_large"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📥Large(~800MB)"
+                android:textSize="10sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginStart="2dp" />
+        </LinearLayout>
+
+        <!-- AI 模型下载 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AI 润色模型"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tv_ai_model_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="未安装"
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <Button
+                android:id="@+id/btn_download_qwen_08b"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📥Qwen 0.8B(~560MB)"
+                android:textSize="10sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginEnd="2dp" />
+
+            <Button
+                android:id="@+id/btn_download_qwen_2b"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📥Qwen 2B(~1.4GB)"
+                android:textSize="10sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginStart="2dp" />
+        </LinearLayout>
+
+        <!-- 下载进度 -->
+        <TextView
+            android:id="@+id/tv_download_progress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#2196F3"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/pb_download"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
+
+        <!-- GPU 加速开关 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔥 Vulkan GPU 加速"
+                android:textSize="14sp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_gpu"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true" />
+        </LinearLayout>
 
         <View
             android:layout_width="match_parent"
