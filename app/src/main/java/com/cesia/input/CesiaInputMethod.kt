@@ -873,6 +873,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             callback(false, "Google 语音框架不可用")
             return
         }
+        // 先检查录音权限
+        if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)) {
+            callback(false, "未授予录音权限，请在系统设置中开启")
+            return
+        }
         try {
             val testRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
             var finished = false
