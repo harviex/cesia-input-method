@@ -886,7 +886,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     if (finished) return
                     finished = true
                     try { testRecognizer.destroy() } catch (_: Exception) {}
-                    callback(false, "Google 测试录音失败 (错误码: $error)")
+                    // 错误码说明：
+                    // 1=NETWORK_TIMEOUT, 2=NETWORK_ERROR, 3=AUDIO, 4=SERVER,
+                    // 5=CLIENT, 6=SPEECH_TIMEOUT, 7=NO_MATCH, 8=RECOGNIZER_BUSY,
+                    // 9=INSUFFICIENT_PERMISSIONS
+                    val errorName = when (error) {
+                        1 -> "网络超时"
+                        2 -> "网络错误"
+                        3 -> "音频录制失败（麦克风被占用或无权限）"
+                        4 -> "服务器错误"
+                        5 -> "客户端错误"
+                        6 -> "语音超时（静音）"
+                        7 -> "无匹配结果（框架正常，只是没听到声音）"
+                        8 -> "识别器忙"
+                        9 -> "权限不足"
+                        else -> "未知错误($error)"
+                    }
+                    // NO_MATCH(7) 和 SPEECH_TIMEOUT(6) 说明框架通了，只是没声音输入
+                    if (error == 7 || error == 6) {
+                        callback(true, "Google 连通（$errorName）")
+                    } else {
+                        callback(false, "Google 检测失败: $errorName")
+                    }
                 }
                 override fun onResults(bundle: Bundle?) {
                     if (finished) return
@@ -2258,12 +2279,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvLoadingText.text = "正在检测 Google 语音识别..."
                 checkGoogleAsync { ok, err ->
                     googleRealOk = ok
+                    Log.d("Cesia", "Google 检测: ok=$ok, err=$err")
                     Handler(Looper.getMainLooper()).post {
                         if (ok) {
-                            // 检测通过，确保按钮亮起
                             setOptionState(btnGoogle, true, "🌍 Google", "🌍 Google (不可用)")
                         } else {
                             setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                            updateStatus("⚠️ Google: $err")
                         }
                         onCheckComplete()
                     }
@@ -2279,9 +2301,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
                 checkGroqAsync { ok, err ->
                     groqRealOk = ok
+                    Log.d("Cesia", "Groq 检测: ok=$ok, err=$err")
                     Handler(Looper.getMainLooper()).post {
-                        if (!ok) {
-                            setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq ($err)")
+                        if (ok) {
+                            setOptionState(btnGroq, true, "☁️ Groq 云端", "☁️ Groq (需设置 API Key)")
+                        } else {
+                            // 简化错误信息用于按钮显示
+                            val shortErr = when {
+                                err!!.contains("401") || err.contains("无效") -> "Key 无效"
+                                err.contains("超时") -> "超时"
+                                err.contains("网络") -> "网络不通"
+                                err.contains("返回") -> err.substringAfter("返回")
+                                else -> err.take(20)
+                            }
+                            setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq ($shortErr)")
+                            updateStatus("⚠️ Groq: $err")
                         }
                         onCheckComplete()
                     }
