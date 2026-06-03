@@ -2208,10 +2208,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 tvLoadingText.text = "正在检测 Google 语音识别..."
                 checkGoogleAsync { ok, err ->
                     googleRealOk = ok
-                    if (!ok) {
-                        setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                    Handler(Looper.getMainLooper()).post {
+                        if (ok) {
+                            // 检测通过，确保按钮亮起
+                            setOptionState(btnGoogle, true, "🌍 Google", "🌍 Google (不可用)")
+                        } else {
+                            setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                        }
+                        onCheckComplete()
                     }
-                    onCheckComplete()
                 }
             }
 
@@ -2224,10 +2229,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
                 checkGroqAsync { ok, err ->
                     groqRealOk = ok
-                    if (!ok) {
-                        setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq ($err)")
+                    Handler(Looper.getMainLooper()).post {
+                        if (!ok) {
+                            setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq ($err)")
+                        }
+                        onCheckComplete()
                     }
-                    onCheckComplete()
                 }
             }
 
