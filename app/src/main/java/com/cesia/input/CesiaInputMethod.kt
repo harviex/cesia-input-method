@@ -9,9 +9,11 @@ import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import com.cesia.input.CesiaKeyboardView
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import java.util.concurrent.TimeUnit
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
