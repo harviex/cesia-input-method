@@ -17,6 +17,31 @@
         android:gravity="center"
         android:paddingBottom="16dp" />
 
+    <!-- Loading 动画（检测中显示） -->
+    <LinearLayout
+        android:id="@+id/loading_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:indeterminate="true" />
+
+        <TextView
+            android:id="@+id/tv_loading_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="正在检测后端可用性..."
+            android:textSize="13sp"
+            android:textColor="#888888"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+
     <!-- ====== 识别方式 ====== -->
     <TextView
         android:layout_width="match_parent"

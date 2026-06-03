@@ -636,14 +636,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         resetToIdle()
                     } else {
-                        // pendingAiMode == null，录音结束时用户还未选择
-                        // AI+/AI× 按钮已在 showAiChoiceButtons() 中显示，保持即可
                         if (text.isEmpty()) {
                             updateStatus("⚠️ 未识别到文字，请重试")
                             resetToIdle()
                         } else {
                             isWaitingForChoice = true
                             updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
+                            micButton.visibility = View.GONE
+                            btnMicAi.visibility = View.VISIBLE
+                            btnMicNoAi.visibility = View.VISIBLE
                         }
                     }
                 }
@@ -843,30 +844,149 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 识别后端可用性检测 ========================
 
     /**
-     * 检测三个识别后端的可用性
-     * @return 可用后端的列表，按优先级排序：Whisper > Google > Groq
+     * 检测单个后端的真实可用性
+     * 返回 Triple(是否可用, 错误信息, 详细信息)
+     */
+
+    /** 检测 Whisper：模型存在 + 能加载 */
+    private fun checkWhisperAvailable(): Pair<Boolean, String?> {
+        if (!modelManager.hasVoiceModel()) {
+            return false to "模型未安装"
+        }
+        return try {
+            val modelFile = modelManager.getInstalledAiModelFile()
+            if (modelFile?.exists() == true) {
+                true to "模型已就绪"
+            } else {
+                false to "模型文件不存在"
+            }
+        } catch (e: Exception) {
+            false to "模型检查失败: ${e.message}"
+        }
+    }
+
+    /** 检测 Google：框架存在 + 能实际录音并返回结果 */
+    private fun checkGoogleAsync(callback: (Boolean, String?) -> Unit) {
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            callback(false, "Google 语音框架不可用")
+            return
+        }
+        try {
+            val testRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+            var finished = false
+            testRecognizer.setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(error: Int) {
+                    if (finished) return
+                    finished = true
+                    try { testRecognizer.destroy() } catch (_: Exception) {}
+                    callback(false, "Google 测试录音失败 (错误码: $error)")
+                }
+                override fun onResults(bundle: Bundle?) {
+                    if (finished) return
+                    finished = true
+                    try { testRecognizer.destroy() } catch (_: Exception) {}
+                    val matches = bundle?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        callback(true, "Google 服务正常")
+                    } else {
+                        // 框架通了但没收到结果（可能是静音），也算连通
+                        callback(true, "Google 连通（静音无输入）")
+                    }
+                }
+                override fun onPartialResults(bundle: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+                putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                // 只录 2 秒做测试
+                putExtra("android.speech.extras.SPEECH_INPUT_COMPLETE_SILENCE_MILLIS", 2000L)
+                putExtra("android.speech.extras.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_MILLIS", 2000L)
+                putExtra("android.speech.extras.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 1000L)
+            }
+            testRecognizer.startListening(intent)
+
+            // 最多等 3 秒
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!finished) {
+                    finished = true
+                    try { testRecognizer.destroy() } catch (_: Exception) {}
+                    callback(false, "Google 测试超时（无响应）")
+                }
+            }, 3000)
+        } catch (e: Exception) {
+            callback(false, "Google 测试启动失败: ${e.message}")
+        }
+    }
+
+    /** 检测 Groq：发轻量 HTTP 请求测试连通性 */
+    private fun checkGroqAsync(callback: (Boolean, String?) -> Unit) {
+        val key = getGroqApiKey()
+        if (key.isEmpty()) {
+            callback(false, "未配置 API Key")
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(5, TimeUnit.SECONDS)
+                    .readTimeout(5, TimeUnit.SECONDS)
+                    .build()
+                // 用 models 端点做轻量检测
+                val request = okhttp3.Request.Builder()
+                    .url("https://api.groq.com/openai/v1/models")
+                    .addHeader("Authorization", "Bearer $key")
+                    .get()
+                    .build()
+                val response = client.newCall(request).execute()
+                withContext(Dispatchers.Main) {
+                    when (response.code) {
+                        200 -> {
+                            // 验证响应里有 data 字段
+                            val body = response.body?.string() ?: ""
+                            if (body.contains("\"data\"")) {
+                                callback(true, "Groq 连通")
+                            } else {
+                                callback(false, "Groq API 返回异常")
+                            }
+                        }
+                        401 -> callback(false, "API Key 无效")
+                        else -> callback(false, "Groq 返回 ${response.code}")
+                    }
+                }
+            } catch (e: java.net.UnknownHostException) {
+                withContext(Dispatchers.Main) { callback(false, "无法连接 Groq（网络问题）") }
+            } catch (e: java.net.SocketTimeoutException) {
+                withContext(Dispatchers.Main) { callback(false, "Groq 连接超时") }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { callback(false, "Groq 检测失败: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * 综合检测并返回可用后端列表（按优先级：Whisper > Google > Groq）
+     * 用于单击时的快速判断
      */
     private fun detectAvailableBackends(): List<VoiceChoice> {
         val available = mutableListOf<VoiceChoice>()
-
-        // Whisper：本地模型已安装
-        if (modelManager.hasVoiceModel()) {
-            available.add(VoiceChoice.LOCAL_WHISPER)
+        val (whisperOk, _) = checkWhisperAvailable()
+        if (whisperOk) available.add(VoiceChoice.LOCAL_WHISPER)
+        if (android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            available.add(VoiceChoice.GOOGLE)
         }
-
-        // Google：语音识别框架可用
-        try {
-            if (android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
-                available.add(VoiceChoice.GOOGLE)
-            }
-        } catch (_: Exception) {}
-
-        // Groq：有 API Key
         if (getGroqApiKey().isNotEmpty()) {
             available.add(VoiceChoice.CLOUD_GROQ)
         }
-
-        return available  // 已按优先级排序：Whisper > Google > Groq
+        return available
     }
 
     // ======================== 按钮监听 ========================
@@ -1887,7 +2007,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     private fun showVoicePolishSelector() {
         try {
-            // 关键：获取键盘视图的 window token，否则 InputMethodService 无法创建 dialog
             val windowToken = micButton?.windowToken
             if (windowToken == null) {
                 updateStatus("⚠️ 输入法视图未就绪，请重试")
@@ -1897,144 +2016,219 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_voice_polish_selector, null)
 
-        // 识别选项
-        val btnGroq = dialogView.findViewById<TextView>(R.id.btn_voice_groq)
-        val btnWhisper = dialogView.findViewById<TextView>(R.id.btn_voice_whisper)
-        val btnGoogle = dialogView.findViewById<TextView>(R.id.btn_voice_google)
+            // Loading 视图
+            val loadingContainer = dialogView.findViewById<LinearLayout>(R.id.loading_container)
+            val tvLoadingText = dialogView.findViewById<TextView>(R.id.tv_loading_text)
 
-        // 润色选项
-        val btnPolishCloud = dialogView.findViewById<TextView>(R.id.btn_polish_cloud)
-        val btnPolishLocal = dialogView.findViewById<TextView>(R.id.btn_polish_local)
-        val btnPolishOff = dialogView.findViewById<TextView>(R.id.btn_polish_off)
+            // 识别选项
+            val btnGroq = dialogView.findViewById<TextView>(R.id.btn_voice_groq)
+            val btnWhisper = dialogView.findViewById<TextView>(R.id.btn_voice_whisper)
+            val btnGoogle = dialogView.findViewById<TextView>(R.id.btn_voice_google)
 
-        // 提示文字
-        val tvHint = dialogView.findViewById<TextView>(R.id.tv_voice_hint)
+            // 润色选项
+            val btnPolishCloud = dialogView.findViewById<TextView>(R.id.btn_polish_cloud)
+            val btnPolishLocal = dialogView.findViewById<TextView>(R.id.btn_polish_local)
+            val btnPolishOff = dialogView.findViewById<TextView>(R.id.btn_polish_off)
 
-        // 检测可用性并设置状态
-        val groqKey = getGroqApiKey()
-        val hasGroq = groqKey.isNotEmpty()
-        val hasWhisper = modelManager.hasVoiceModel()
-        val googleAvailable = try {
-            android.speech.SpeechRecognizer.isRecognitionAvailable(this)
-        } catch (_: Exception) { false }
-        val orKey = getOpenRouterApiKey()
-        val hasOpenRouter = orKey.isNotEmpty()
-        val hasAiModel = modelManager.hasAiModel()
+            // 提示文字
+            val tvHint = dialogView.findViewById<TextView>(R.id.tv_voice_hint)
 
-        // 识别选项状态
-        setOptionState(btnGroq, hasGroq, "☁️ Groq 云端", "☁️ Groq (需设置 API Key)")
-        setOptionState(btnWhisper, hasWhisper, "📱 本地 Whisper", "📱 Whisper (需下载模型)")
-        setOptionState(btnGoogle, googleAvailable, "🌍 Google", "🌍 Google (不可用)")
+            // 确认/取消按钮
+            val btnConfirm = dialogView.findViewById<TextView>(R.id.btn_voice_confirm)
+            val btnCancel = dialogView.findViewById<TextView>(R.id.btn_voice_cancel)
 
-        // 润色选项状态
-        setOptionState(btnPolishCloud, hasOpenRouter, "☁️ 云端润色", "☁️ 云端 (需设置 API Key)")
-        setOptionState(btnPolishLocal, hasAiModel, "📱 本地润色", "📱 本地 (需下载模型)")
-        setOptionState(btnPolishOff, true, "❌ 关闭润色", null)
+            // ====== 初始状态：静态检测 + 显示 loading ======
+            val groqKey = getGroqApiKey()
+            val hasGroqKey = groqKey.isNotEmpty()
+            val hasWhisperModel = modelManager.hasVoiceModel()
+            val googleFrameworkOk = try {
+                android.speech.SpeechRecognizer.isRecognitionAvailable(this)
+            } catch (_: Exception) { false }
+            val orKey = getOpenRouterApiKey()
+            val hasOrKey = orKey.isNotEmpty()
+            val hasAiModel = modelManager.hasAiModel()
 
-        // 当前选中高亮
-        highlightSelected(btnGroq, currentVoiceChoice == VoiceChoice.CLOUD_GROQ)
-        highlightSelected(btnWhisper, currentVoiceChoice == VoiceChoice.LOCAL_WHISPER)
-        highlightSelected(btnGoogle, currentVoiceChoice == VoiceChoice.GOOGLE)
-        highlightSelected(btnPolishCloud, currentPolishChoice == PolishChoice.CLOUD_OPENROUTER)
-        highlightSelected(btnPolishLocal, currentPolishChoice == PolishChoice.LOCAL_AI)
-        highlightSelected(btnPolishOff, currentPolishChoice == PolishChoice.OFF)
+            // 初始状态：先按静态检测设置可用性
+            setOptionState(btnGroq, hasGroqKey, "☁️ Groq 云端", "☁️ Groq (需设置 API Key)")
+            setOptionState(btnWhisper, hasWhisperModel, "📱 本地 Whisper", "📱 Whisper (需下载模型)")
+            setOptionState(btnGoogle, googleFrameworkOk, "🌍 Google", "🌍 Google (不可用)")
+            setOptionState(btnPolishCloud, hasOrKey, "☁️ 云端润色", "☁️ 云端 (需设置 API Key)")
+            setOptionState(btnPolishLocal, hasAiModel, "📱 本地润色", "📱 本地 (需下载模型)")
+            setOptionState(btnPolishOff, true, "❌ 关闭润色", null)
 
-        // 延迟提示（云端识别+云端润色）
-        fun updateHint() {
-            if (currentVoiceChoice == VoiceChoice.CLOUD_GROQ &&
-                (currentPolishChoice == PolishChoice.CLOUD_OPENROUTER || currentPolishChoice == PolishChoice.LOCAL_AI)) {
-                tvHint.text = "⚠️ 云端识别+润色预计 4~7 秒"
-                tvHint.setTextColor(0xFFFF8800.toInt())
-            } else {
-                tvHint.text = ""
+            // 当前选中高亮
+            highlightSelected(btnGroq, currentVoiceChoice == VoiceChoice.CLOUD_GROQ)
+            highlightSelected(btnWhisper, currentVoiceChoice == VoiceChoice.LOCAL_WHISPER)
+            highlightSelected(btnGoogle, currentVoiceChoice == VoiceChoice.GOOGLE)
+            highlightSelected(btnPolishCloud, currentPolishChoice == PolishChoice.CLOUD_OPENROUTER)
+            highlightSelected(btnPolishLocal, currentPolishChoice == PolishChoice.LOCAL_AI)
+            highlightSelected(btnPolishOff, currentPolishChoice == PolishChoice.OFF)
+
+            // 延迟提示
+            fun updateHint() {
+                if (currentVoiceChoice == VoiceChoice.CLOUD_GROQ &&
+                    (currentPolishChoice == PolishChoice.CLOUD_OPENROUTER || currentPolishChoice == PolishChoice.LOCAL_AI)) {
+                    tvHint.text = "⚠️ 云端识别+润色预计 4~7 秒"
+                    tvHint.setTextColor(0xFFFF8800.toInt())
+                } else {
+                    tvHint.text = ""
+                }
             }
-        }
-        updateHint()
-
-        // 识别点击
-        btnGroq.setOnClickListener {
-            if (hasGroq) {
-                currentVoiceChoice = VoiceChoice.CLOUD_GROQ
-                highlightSelected(btnGroq, true); highlightSelected(btnWhisper, false); highlightSelected(btnGoogle, false)
-                updateHint()
-            } else {
-                showApiKeyPrompt("Groq", "https://console.groq.com")
-            }
-        }
-        btnWhisper.setOnClickListener {
-            if (hasWhisper) {
-                currentVoiceChoice = VoiceChoice.LOCAL_WHISPER
-                highlightSelected(btnGroq, false); highlightSelected(btnWhisper, true); highlightSelected(btnGoogle, false)
-                updateHint()
-            } else {
-                showModelDownloadPrompt("语音", "whisper-small")
-            }
-        }
-        btnGoogle.setOnClickListener {
-            if (googleAvailable) {
-                currentVoiceChoice = VoiceChoice.GOOGLE
-                highlightSelected(btnGroq, false); highlightSelected(btnWhisper, false); highlightSelected(btnGoogle, true)
-                updateHint()
-            }
-        }
-
-        // 润色点击
-        btnPolishCloud.setOnClickListener {
-            if (hasOpenRouter) {
-                currentPolishChoice = PolishChoice.CLOUD_OPENROUTER
-                highlightSelected(btnPolishCloud, true); highlightSelected(btnPolishLocal, false); highlightSelected(btnPolishOff, false)
-                updateHint()
-            } else {
-                showApiKeyPrompt("OpenRouter", "https://openrouter.ai/keys")
-            }
-        }
-        btnPolishLocal.setOnClickListener {
-            if (hasAiModel) {
-                currentPolishChoice = PolishChoice.LOCAL_AI
-                highlightSelected(btnPolishCloud, false); highlightSelected(btnPolishLocal, true); highlightSelected(btnPolishOff, false)
-                updateHint()
-            } else {
-                showModelDownloadPrompt("AI 润色", "qwen-0.8b")
-            }
-        }
-        btnPolishOff.setOnClickListener {
-            currentPolishChoice = PolishChoice.OFF
-            highlightSelected(btnPolishCloud, false); highlightSelected(btnPolishLocal, false); highlightSelected(btnPolishOff, true)
             updateHint()
-        }
 
-        // 确认按钮
-        val btnConfirm = dialogView.findViewById<TextView>(R.id.btn_voice_confirm)
-        val btnCancel = dialogView.findViewById<TextView>(R.id.btn_voice_cancel)
-
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(true)
-            .create()
-        dialog.window?.let { window ->
-            window.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-            // 关键：使用键盘视图的 window token
-            window.attributes = window.attributes?.apply {
-                token = windowToken
+            // ====== 创建 dialog ======
+            val dialog = AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create()
+            dialog.window?.let { window ->
+                window.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
+                window.attributes = window.attributes?.apply { token = windowToken }
             }
-        }
-        dialog.setOnDismissListener {
-            longPressActive = false
-        }
+            dialog.setOnDismissListener { longPressActive = false }
 
-        btnConfirm.setOnClickListener {
-            if (currentVoiceChoice == null) {
-                updateStatus("请先选择一种识别方式")
-                return@setOnClickListener
+            // ====== 按钮点击 ======
+            btnGroq.setOnClickListener {
+                if (hasGroqKey) {
+                    currentVoiceChoice = VoiceChoice.CLOUD_GROQ
+                    highlightSelected(btnGroq, true); highlightSelected(btnWhisper, false); highlightSelected(btnGoogle, false)
+                    updateHint()
+                } else {
+                    showApiKeyPrompt("Groq", "https://console.groq.com")
+                }
             }
-            dialog.dismiss()
-            startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
-        }
-        btnCancel.setOnClickListener {
-            dialog.dismiss()
-        }
+            btnWhisper.setOnClickListener {
+                if (hasWhisperModel) {
+                    currentVoiceChoice = VoiceChoice.LOCAL_WHISPER
+                    highlightSelected(btnGroq, false); highlightSelected(btnWhisper, true); highlightSelected(btnGoogle, false)
+                    updateHint()
+                } else {
+                    showModelDownloadPrompt("语音", "whisper-small")
+                }
+            }
+            btnGoogle.setOnClickListener {
+                if (googleFrameworkOk) {
+                    currentVoiceChoice = VoiceChoice.GOOGLE
+                    highlightSelected(btnGroq, false); highlightSelected(btnWhisper, false); highlightSelected(btnGoogle, true)
+                    updateHint()
+                }
+            }
+            btnPolishCloud.setOnClickListener {
+                if (hasOrKey) {
+                    currentPolishChoice = PolishChoice.CLOUD_OPENROUTER
+                    highlightSelected(btnPolishCloud, true); highlightSelected(btnPolishLocal, false); highlightSelected(btnPolishOff, false)
+                    updateHint()
+                } else {
+                    showApiKeyPrompt("OpenRouter", "https://openrouter.ai/keys")
+                }
+            }
+            btnPolishLocal.setOnClickListener {
+                if (hasAiModel) {
+                    currentPolishChoice = PolishChoice.LOCAL_AI
+                    highlightSelected(btnPolishCloud, false); highlightSelected(btnPolishLocal, true); highlightSelected(btnPolishOff, false)
+                    updateHint()
+                } else {
+                    showModelDownloadPrompt("AI 润色", "qwen-0.8b")
+                }
+            }
+            btnPolishOff.setOnClickListener {
+                currentPolishChoice = PolishChoice.OFF
+                highlightSelected(btnPolishCloud, false); highlightSelected(btnPolishLocal, false); highlightSelected(btnPolishOff, true)
+                updateHint()
+            }
 
-        dialog.show()
+            btnConfirm.setOnClickListener {
+                if (currentVoiceChoice == null) {
+                    updateStatus("请先选择一种识别方式")
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                startRecordingWithChoice(currentVoiceChoice!!, currentPolishChoice)
+            }
+            btnCancel.setOnClickListener { dialog.dismiss() }
+
+            // ====== 显示 dialog ======
+            dialog.show()
+
+            // ====== 后台异步真实检测 ======
+            // 记录哪些后端需要重新检测
+            var pendingChecks = 0
+            var whisperRealOk = hasWhisperModel
+            var googleRealOk = googleFrameworkOk
+            var groqRealOk = hasGroqKey
+
+            fun onCheckComplete() {
+                pendingChecks--
+                if (pendingChecks > 0) return  // 还有检测在进行中
+
+                // 所有检测完成，更新按钮状态
+                loadingContainer.visibility = View.GONE
+
+                // 更新识别按钮
+                if (hasGroqKey && !groqRealOk) {
+                    setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq (连接失败)")
+                }
+                if (hasWhisperModel && !whisperRealOk) {
+                    setOptionState(btnWhisper, false, "📱 本地 Whisper", "📱 Whisper (加载失败)")
+                }
+                if (googleFrameworkOk && !googleRealOk) {
+                    setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google (连接失败)")
+                }
+
+                // 如果当前选中的后端实际不可用，提示用户
+                when (currentVoiceChoice) {
+                    VoiceChoice.CLOUD_GROQ -> if (!groqRealOk) updateStatus("⚠️ Groq 连接失败，请选择其他识别方式")
+                    VoiceChoice.LOCAL_WHISPER -> if (!whisperRealOk) updateStatus("⚠️ Whisper 加载失败，请选择其他识别方式")
+                    VoiceChoice.GOOGLE -> if (!googleRealOk) updateStatus("⚠️ Google 连接失败，请选择其他识别方式")
+                    null -> {}
+                }
+            }
+
+            // 1. 检测 Whisper（同步，很快）
+            if (hasWhisperModel) {
+                pendingChecks++
+                CoroutineScope(Dispatchers.IO).launch {
+                    val (ok, err) = checkWhisperAvailable()
+                    whisperRealOk = ok
+                    withContext(Dispatchers.Main) {
+                        if (!ok) {
+                            setOptionState(btnWhisper, false, "📱 本地 Whisper", "📱 Whisper ($err)")
+                        }
+                        onCheckComplete()
+                    }
+                }
+            }
+
+            // 2. 检测 Google（异步，需要录音测试）
+            if (googleFrameworkOk) {
+                pendingChecks++
+                loadingContainer.visibility = View.VISIBLE
+                tvLoadingText.text = "正在检测 Google 语音识别..."
+                checkGoogleAsync { ok, err ->
+                    googleRealOk = ok
+                    if (!ok) {
+                        setOptionState(btnGoogle, false, "🌍 Google", "🌍 Google ($err)")
+                    }
+                    onCheckComplete()
+                }
+            }
+
+            // 3. 检测 Groq（异步 HTTP）
+            if (hasGroqKey) {
+                pendingChecks++
+                if (pendingChecks > 0) {
+                    loadingContainer.visibility = View.VISIBLE
+                    tvLoadingText.text = "正在检测 Groq 连通性..."
+                }
+                checkGroqAsync { ok, err ->
+                    groqRealOk = ok
+                    if (!ok) {
+                        setOptionState(btnGroq, false, "☁️ Groq 云端", "☁️ Groq ($err)")
+                    }
+                    onCheckComplete()
+                }
+            }
+
         } catch (e: Exception) {
             Log.e("Cesia", "选择面板异常", e)
             updateStatus("⚠️ 选择面板异常: ${e.message}")
