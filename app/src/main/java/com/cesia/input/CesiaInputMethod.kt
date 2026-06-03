@@ -100,7 +100,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var modelManager: ModelManager
     private lateinit var aiEngine: AIEngine
 
-    // ======================== 语音/润色用户选择 ========================
+    // ======================== 语音/润色选择 ========================
+    enum class VoiceChoice { LOCAL_WHISPER, GOOGLE }
+    enum class PolishChoice { LOCAL_AI, CLOUD_OPENROUTER, OFF }
+
     // ======================== 本地/云端模式 ========================
     // true = 本地模式, false = 云端模式（默认）
     private var localModeEnabled = false
@@ -870,23 +873,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 检测单个后端的真实可用性
      * 返回 Triple(是否可用, 错误信息, 详细信息)
      */
-
-    /** 检测 Whisper：模型存在 + 能加载 */
-    private fun checkWhisperAvailable(): Pair<Boolean, String?> {
-        if (!modelManager.hasVoiceModel()) {
-            return false to "模型未安装"
-        }
-        return try {
-            val modelFile = modelManager.getInstalledAiModelFile()
-            if (modelFile?.exists() == true) {
-                true to "模型已就绪"
-            } else {
-                false to "模型文件不存在"
-            }
-        } catch (e: Exception) {
-            false to "模型检查失败: ${e.message}"
-        }
-    }
 
     // ======================== 录音（根据当前模式） ========================
 
