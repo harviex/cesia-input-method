@@ -122,12 +122,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 根据当前模式更新语音键图标 */
     private fun updateMicButtonAppearance() {
         if (localModeEnabled) {
-            // 本地模式：蓝边框 + 话筒
-            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic_local, 0, 0)
+            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic, 0, 0)
             micButton?.text = "🎤"
         } else {
-            // 云端模式：蓝边框 + 话筒 + 云标识
-            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic_cloud, 0, 0)
+            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic, 0, 0)
             micButton?.text = "🎤☁️"
         }
     }
@@ -2040,25 +2038,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun polishRecognizedText(text: String) {
         isProcessingResult = true
-        when (currentPolishChoice) {
-            PolishChoice.CLOUD_OPENROUTER -> {
-                // 云端润色（OpenRouter）
-                typelessEngine?.polishTextAsync(text) { finalText ->
-                    isProcessingResult = false
-                    currentInputConnection?.commitText(finalText, 1)
-                    val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-                    statsManager.addRecord(text, finalText, duration)
-                    resetToIdle()
-                }
-            }
-            PolishChoice.LOCAL_AI -> {
-                // 本地润色（AIEngine / llama.cpp）
-                polishWithLocalAi(text)
-            }
-            PolishChoice.OFF -> {
-                // 不润色，直接上屏（不会走到这里，AI+ 不会在 OFF 时触发）
+        if (localModeEnabled) {
+            // 本地润色（AIEngine / llama.cpp）
+            polishWithLocalAi(text)
+        } else {
+            // 云端润色（OpenRouter）
+            typelessEngine?.polishTextAsync(text) { finalText ->
                 isProcessingResult = false
-                currentInputConnection?.commitText(text, 1)
+                currentInputConnection?.commitText(finalText, 1)
+                val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
+                statsManager.addRecord(text, finalText, duration)
                 resetToIdle()
             }
         }
