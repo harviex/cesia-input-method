@@ -2052,11 +2052,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         when (voiceChoice) {
             VoiceChoice.CLOUD_GROQ -> {
                 updateStatus("🎤 正在收听 (Groq 云端)...")
-                startGroqRecordingAsync(polishChoice)
+                startGroqRecordingAsync()
             }
             VoiceChoice.LOCAL_WHISPER -> {
                 updateStatus("🎤 正在收听 (本地 Whisper)...")
-                startWhisperRecordingAsync(polishChoice)
+                startWhisperRecordingAsync()
             }
             VoiceChoice.GOOGLE -> {
                 updateStatus("🎤 正在收听 (Google)...")
@@ -2073,12 +2073,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /** Groq 云端录音+识别 */
-    private fun startGroqRecordingAsync(polishChoice: PolishChoice) {
+    private fun startGroqRecordingAsync() {
         voiceEngineScope.launch {
             try {
                 val text = voiceEngine.recordAndTranscribe(30000)
                 withContext(Dispatchers.Main) {
-                    handleCloudVoiceResult(text, polishChoice)
+                    handleCloudVoiceResult(text)
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "Groq 录音失败", e)
@@ -2091,7 +2091,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /** 本地 Whisper 录音+识别 */
-    private fun startWhisperRecordingAsync(polishChoice: PolishChoice) {
+    private fun startWhisperRecordingAsync() {
         voiceEngineScope.launch {
             try {
                 if (!voiceEngine.hasLocalModel()) {
@@ -2099,7 +2099,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
                 val text = voiceEngine.recordAndTranscribe(30000)
                 withContext(Dispatchers.Main) {
-                    handleCloudVoiceResult(text, polishChoice)
+                    handleCloudVoiceResult(text)
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "Whisper 录音失败", e)
@@ -2112,7 +2112,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /** 处理 Groq/Whisper 识别结果 → 显示 AI+/AI× 按钮 */
-    private fun handleCloudVoiceResult(text: String, polishChoice: PolishChoice) {
+    private fun handleCloudVoiceResult(text: String) {
         if (!isRecording && recognizedText.isEmpty()) return
         isRecording = false
         stopVoiceWave()
@@ -2167,100 +2167,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
         }
-        showAiChoiceButtons()
-    }
-
-    /** 使用 Groq 云端 API 录音并识别 */
-    private fun startGroqRecording() {
-        // Groq 模式：启动 VoiceEngine 录音
-        // VoiceEngine 需要录音权限，使用 VoiceRecorder 录制后上传
-        voiceEngineScope.launch {
-            try {
-                val text = voiceEngine.recordAndTranscribe(30000) // 最多 30 秒
-                withContext(Dispatchers.Main) {
-                    handleVoiceResult(text)
-                }
-            } catch (e: Exception) {
-                Log.e("Cesia", "Groq 录音失败", e)
-                withContext(Dispatchers.Main) {
-                    updateStatus("❌ 语音识别失败: ${e.message}")
-                    resetToIdle()
-                }
-            }
-        }
-    }
-
-    /** 使用本地 Whisper 录音并识别 */
-    private fun startWhisperRecording() {
-        voiceEngineScope.launch {
-            try {
-                // 确保模型已加载
-                if (!voiceEngine.hasLocalModel()) {
-                    withContext(Dispatchers.Main) {
-                        updateStatus("⚠️ 本地模型未加载，正在加载...")
-                    }
-                    voiceEngine.loadLocalModel()
-                }
-                val text = voiceEngine.recordAndTranscribe(30000)
-                withContext(Dispatchers.Main) {
-                    handleVoiceResult(text)
-                }
-            } catch (e: Exception) {
-                Log.e("Cesia", "Whisper 录音失败", e)
-                withContext(Dispatchers.Main) {
-                    updateStatus("❌ 语音识别失败: ${e.message}")
-                    resetToIdle()
-                }
-            }
-        }
-    }
-
-    /**
-     * 统一处理语音识别结果（来自 Groq / Whisper / Google）
-     */
-    private fun handleVoiceResult(text: String) {
-        // 如果已经被停止（用户点击了停止按钮），忽略结果
-        if (!isRecording && recognizedText.isEmpty()) {
-            Log.d("Cesia", "handleVoiceResult: 已停止，忽略结果")
-            return
-        }
-        isRecording = false
-        stopVoiceWave()
-        recognizedText = text
-
-        if (text.isEmpty()) {
-            updateStatus("⚠️ 未识别到文字，请重试")
-            resetToIdle()
-            return
-        }
-
-        if (pendingAiMode == true) {
-            isWaitingForChoice = false
-            hideAiChoiceButtons()
-            updateStatus("✨ 正在施展魔法...")
-            setStatusDot("processing")
-            isProcessingResult = true
-            polishRecognizedText(text)
-        } else if (pendingAiMode == false) {
-            isWaitingForChoice = false
-            hideAiChoiceButtons()
-            currentInputConnection?.commitText(text, 1)
-            resetToIdle()
-        } else {
-            isWaitingForChoice = true
-            updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
-            micButton.visibility = View.GONE
-            btnMicAi.visibility = View.VISIBLE
-            btnMicNoAi.visibility = View.VISIBLE
-        }
-    }
-
-    private fun showAiChoiceButtons() {
-        animateMicSplit()
-    }
-
-    private fun hideAiChoiceButtons() {
-        animateMicMerge()
     }
 
     private fun onAiPlusSelected() {
@@ -2277,6 +2183,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             pendingAiMode = true
             updateStatus("⏳ 正在识别，识别后自动施展魔法")
         }
+    }
+
+    private fun showAiChoiceButtons() {
+        animateMicSplit()
+    }
+
+    private fun hideAiChoiceButtons() {
+        animateMicMerge()
     }
 
     private fun onAiCrossSelected() {
