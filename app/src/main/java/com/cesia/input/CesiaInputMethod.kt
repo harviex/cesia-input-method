@@ -905,17 +905,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 return@setOnClickListener
             }
             if (!isRecording && !isWaitingForChoice) {
-                // 直接用当前模式开始录音
+                // 根据模型可用性自动选择后端
+                val bridgeLoaded = WhisperEngine.isBridgeLoaded()
+                val hasVoiceModel = modelManager.hasVoiceModel()
+
                 if (localModeEnabled) {
-                    // 本地模式：检查模型是否已安装
-                    if (!modelManager.isLocalFullySetup()) {
+                    // 本地模式：只要求 Whisper 模型
+                    if (!bridgeLoaded) {
+                        updateStatus("⚠️ 无法使用本地语音：native-bridge.so 未加载")
+                        return@setOnClickListener
+                    }
+                    if (!hasVoiceModel) {
                         updateStatus("⚠️ 本地模型未安装，请先到设置中下载")
                         return@setOnClickListener
                     }
                     startLocalRecording()
                 } else {
-                    // 云端模式：Google 识别
-                    startCloudRecording()
+                    // 云端模式：Whisper 可用时自动加速，否则用 Google
+                    if (bridgeLoaded && hasVoiceModel) {
+                        startLocalRecording()
+                    } else {
+                        startCloudRecording()
+                    }
                 }
             } else if (isWaitingForChoice) {
                 updateStatus("请点击 AI+ 或 AI× 选择处理方式")
