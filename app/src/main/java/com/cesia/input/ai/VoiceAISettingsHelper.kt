@@ -274,15 +274,11 @@ class VoiceAISettingsHelper(
                 pbDownload?.visibility = View.GONE
                 if (result.isSuccess) {
                     tvDownloadProgress?.text = "✅ 语音识别模型下载完成"
-                    // 智能切换：语音识别安装成功后，自动切换到本地模式
-                    if (localModeManager.mode != LocalModeManager.RunMode.LOCAL) {
-                        localModeManager.mode = LocalModeManager.RunMode.LOCAL
-                        refreshModeUI()
-                        Toast.makeText(activity,
-                            "已自动切换为本地语音识别", Toast.LENGTH_SHORT).show()
-                    }
+                    // Whisper 已安装，下次录音时会自动替换 Google（由 updateVoiceBackend 处理）
+                    refreshModeUI()
                     refreshModelStatus()
-                    Toast.makeText(activity, "语音识别安装成功", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity,
+                        "语音识别安装成功，已替换 Google 语音", Toast.LENGTH_SHORT).show()
                 } else {
                     tvDownloadProgress?.text =
                         "❌ 下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}"

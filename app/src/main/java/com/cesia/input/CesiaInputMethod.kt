@@ -494,7 +494,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnLocalModeView = view.findViewById<TextView>(R.id.btn_local_mode)
         localModeToggleHelper = LocalModeToggleHelper(
             this, LocalModeManager(this), ModelManager(this)
-        )
+        ) { onLocalModeChanged() }
         localModeToggleHelper.bind(btnLocalModeView)
 
         // 候选词栏
@@ -1817,17 +1817,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         when (mode) {
             LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                // 云端模式：Google 语音识别（通过 TypelessEngine）
-                // VoiceEngine 不用，直接用 Google
-                Log.i("Cesia", "语音后端: Google 云端")
+                // 云端模式：如果 Whisper 已安装则用本地识别（替换 Google），否则用 Google
+                if (hasLocalModel) {
+                    voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
+                    Log.i("Cesia", "语音后端: 本地 Whisper（云端模式下自动替换 Google）")
+                } else {
+                    // Google 语音通过 TypelessEngine/FallbackRecognizer，不需要设置 VoiceEngine
+                    Log.i("Cesia", "语音后端: Google 云端（Whisper 未安装）")
+                }
             }
             LocalModeManager.RunMode.LOCAL -> {
                 if (hasLocalModel) {
                     voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
                     Log.i("Cesia", "语音后端: 本地 Whisper")
                 } else {
-                    // 本地模式但没有模型，提示去下载
-                    Log.i("Cesia", "语音后端: 本地模型未安装")
+                    // 本地模式但没有模型，回退到 Google
+                    Log.w("Cesia", "语音后端: 本地模型未安装，回退到 Google")
                 }
             }
         }
@@ -1918,7 +1923,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         voiceEngineScope.launch {
             try {
                 if (!voiceEngine.hasLocalModel()) {
-                    voiceEngine.loadLocalModel()
+                    // 模型文件不存在，回退 Google
+                    withContext(Dispatchers.Main) {
+                        updateStatus("⚠️ Whisper 模型未安装，回退到 Google...")
+                        startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
+                    }
+                    return@launch
+                }
+                // 确保模型已加载到内存
+                if (!voiceEngine.isModelLoaded()) {
+                    withContext(Dispatchers.Main) {
+                        updateStatus("⏳ 正在加载 Whisper 模型...")
+                    }
+                    val loaded = voiceEngine.loadLocalModel()
+                    if (!loaded) {
+                        withContext(Dispatchers.Main) {
+                            updateStatus("⚠️ Whisper 加载失败，回退到 Google...")
+                            startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
+                        }
+                        return@launch
+                    }
                 }
                 val text = voiceEngine.recordAndTranscribe(30000)
                 withContext(Dispatchers.Main) {
@@ -2043,8 +2067,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun polishRecognizedText(text: String) {
         isProcessingResult = true
-        if (localModeEnabled) {
-            // 本地润色（AIEngine / llama.cpp）
+        // 根据 LocalModeManager 模式和模型实际状态决定润色方式
+        val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
+        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
+            ?: LocalModeManager.RunMode.CLOUD_FREE.name
+        val mode = try { LocalModeManager.RunMode.valueOf(modeName) }
+            catch (_: Exception) { LocalModeManager.RunMode.CLOUD_FREE }
+
+        val useLocalPolish = when (mode) {
+            LocalModeManager.RunMode.LOCAL -> modelManager.hasAiModel() // 本地模式：有 Qwen 才用本地
+            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
+                // 云端模式：有 Qwen 用本地润色，否则用 OpenRouter 云端
+                modelManager.hasAiModel()
+            }
+        }
+
+        if (useLocalPolish) {
             polishWithLocalAi(text)
         } else {
             // 云端润色（OpenRouter）
@@ -3726,9 +3764,33 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     settingsPrefs.edit().putLong("last_dict_reload", System.currentTimeMillis()).apply()
                 }
             }
+            // 每次输入法激活时更新语音后端并预加载模型
+            updateVoiceBackend()
+            preloadWhisperModel()
         } catch (e: Exception) {
             Log.e("Cesia", "onStartInputView 异常(已忽略)", e)
         }
+    }
+
+    /** 预加载 Whisper 模型到内存（如果已安装） */
+    private fun preloadWhisperModel() {
+        if (voiceEngine.getBackend() != VoiceEngine.Backend.LOCAL_WHISPER) return
+        if (!modelManager.hasVoiceModel()) return
+        voiceEngineScope.launch {
+            try {
+                val loaded = voiceEngine.loadLocalModel()
+                Log.i("Cesia", "Whisper 预加载: ${if (loaded) "成功" else "失败"}")
+            } catch (e: Exception) {
+                Log.e("Cesia", "Whisper 预加载失败", e)
+            }
+        }
+    }
+
+    /** 本地/云端模式切换后的回调（由 LocalModeToggleHelper 触发） */
+    private fun onLocalModeChanged() {
+        updateVoiceBackend()
+        preloadWhisperModel()
+        localModeToggleHelper.updateIcon()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

@@ -58,23 +58,22 @@ class LocalModeManager(private val context: Context) {
 
     /**
      * 当前模式是否可用
-     * 如果不可用，返回提示信息
+     * 本地模式：至少安装了语音模型（Whisper）即可（润色可回退到云端）
+     * 云端模式：有 API Key 或没有本地模型时可用
      */
     fun checkAvailability(): Pair<Boolean, String?> {
         return when (mode) {
             RunMode.LOCAL -> {
-                if (isLocalReady()) {
+                // 切换到本地模式：至少需要语音模型
+                if (modelManager.hasVoiceModel()) {
                     true to null
                 } else {
-                    false to "本地模型未安装，请前往设置下载"
+                    false to "本地语音模型未安装，请前往设置下载"
                 }
             }
             RunMode.CLOUD_FREE, RunMode.CLOUD_PAID -> {
-                if (hasCloudKeys()) {
-                    true to null
-                } else {
-                    false to "云端 API Key 未设置，请前往设置配置"
-                }
+                // 切换到云端模式：总是可以（有 key 用 key，没 key 也能用 Google）
+                true to null
             }
         }
     }

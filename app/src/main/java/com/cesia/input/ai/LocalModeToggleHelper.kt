@@ -18,7 +18,8 @@ import com.cesia.input.model.ModelManager
 class LocalModeToggleHelper(
     private val context: Context,
     private val localModeManager: LocalModeManager,
-    private val modelManager: ModelManager
+    private val modelManager: ModelManager,
+    private val onModeChanged: (() -> Unit)? = null
 ) {
     private var btnLocalMode: TextView? = null
 
@@ -46,12 +47,28 @@ class LocalModeToggleHelper(
     // ==================== 点击逻辑 ====================
 
     private fun onToggleClicked() {
-        val (available, reason) = localModeManager.checkAvailability()
+        // 计算切换后的目标模式
+        val targetMode = when (localModeManager.mode) {
+            LocalModeManager.RunMode.LOCAL -> LocalModeManager.RunMode.CLOUD_FREE
+            LocalModeManager.RunMode.CLOUD_FREE -> LocalModeManager.RunMode.LOCAL
+            LocalModeManager.RunMode.CLOUD_PAID -> LocalModeManager.RunMode.LOCAL
+        }
+        // 检查目标模式是否可用
+        val available = when (targetMode) {
+            LocalModeManager.RunMode.LOCAL -> modelManager.hasVoiceModel()
+            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> true
+        }
+        val reason = when (targetMode) {
+            LocalModeManager.RunMode.LOCAL -> "本地语音模型未安装，请前往设置下载"
+            else -> null
+        }
 
         if (available) {
             // 当前模式可用，直接切换
             localModeManager.toggle()
             updateIcon()
+            // 通知外部（更新 VoiceEngine backend）
+            onModeChanged?.invoke()
             // 显示切换提示
             Toast.makeText(context, localModeManager.getModeDisplayName(), Toast.LENGTH_SHORT).show()
         } else {

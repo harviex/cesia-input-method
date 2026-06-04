@@ -257,6 +257,9 @@ class VoiceEngine(private val context: Context) {
         Backend.CLOUD_GROQ -> hasCloudApiKey()
     }
 
+    /** 检查 Whisper 模型是否已加载到内存 */
+    fun isModelLoaded(): Boolean = whisperLoaded
+
     fun release() {
         whisperEngine.nativeFree()
         whisperLoaded = false
