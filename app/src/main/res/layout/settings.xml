@@ -357,6 +357,52 @@
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
+        <!-- ===== 桥梁插件（native-bridge.so）===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔌 语音引擎（桥梁）"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tv_bridge_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="检测中..."
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:background="#FFF8E1"
+            android:padding="10dp"
+            android:layout_marginBottom="4dp" />
+
+        <Button
+            android:id="@+id/btn_download_bridge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⬇ 下载语音引擎（桥梁）"
+            android:textSize="12sp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tv_bridge_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="11sp"
+            android:textColor="#D32F2F"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="8dp" />
+
         <!-- 运行模式 -->
         <TextView
             android:id="@+id/tv_mode_label"

@@ -145,6 +145,12 @@ class SettingsActivity : AppCompatActivity() {
             btnUninstall,
             tvDownloadProgress, pbDownload, switchGpu
         )
+        // 绑定桥梁插件视图
+        aiSettingsHelper.bindBridgeViews(
+            findViewById(R.id.tv_bridge_status),
+            findViewById(R.id.btn_download_bridge),
+            findViewById(R.id.tv_bridge_error)
+        )
 
         statsManager = PolishStatsManager(this)
         dictManager = PinyinDictManager(this)
