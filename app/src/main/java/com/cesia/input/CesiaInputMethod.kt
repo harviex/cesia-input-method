@@ -481,11 +481,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         isDarkTheme = themeMode == THEME_DARK
         setTheme(if (isDarkTheme) R.style.Theme_Cesia_Dark else R.style.Theme_Cesia)
         super.onCreate()
-        // 扫描已有的模型文件（兼容手动放置）
-        val found = modelManager.scanExistingModels()
-        if (found.isNotEmpty()) {
-            Log.i("Cesia", "扫描发现已有模型: $found")
-        }
     }
 
     override fun onCreateInputView(): View {
