@@ -459,7 +459,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onCreateInputView(): View {
         try {
             return createInputViewSafe()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("Cesia", "onCreateInputView 严重崩溃", e)
             return android.widget.TextView(this).apply {
                 text = "Cesia 加载失败\n${e.javaClass.simpleName}: ${e.message}\n请重启输入法"
@@ -3767,7 +3767,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 每次输入法激活时更新语音后端并预加载模型
             updateVoiceBackend()
             preloadWhisperModel()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("Cesia", "onStartInputView 异常(已忽略)", e)
         }
     }
@@ -3780,7 +3780,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             try {
                 val loaded = voiceEngine.loadLocalModel()
                 Log.i("Cesia", "Whisper 预加载: ${if (loaded) "成功" else "失败"}")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("Cesia", "Whisper 预加载失败", e)
             }
         }

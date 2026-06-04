@@ -73,7 +73,7 @@ class VoiceEngine(private val context: Context) {
                 Log.i(TAG, "Whisper model loaded: ${modelFile.name}")
             }
             whisperLoaded
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Failed to load whisper model", e)
             false
         }
