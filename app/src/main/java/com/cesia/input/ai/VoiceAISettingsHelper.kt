@@ -201,11 +201,10 @@ class VoiceAISettingsHelper(
 
     private fun getTotalRamGB(): Long {
         return try {
-            val reader = File("/proc/meminfo").bufferedReader()
-            val memInfo = reader.readLine()
-            reader.close()
-            val kb = memInfo.split("\\s+".toRegex())[1].toLongOrNull() ?: 0L
-            kb / (1024 * 1024)
+            val am = activity.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return 0L
+            val memInfo = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(memInfo)
+            memInfo.totalMem / (1024 * 1024 * 1024)
         } catch (_: Exception) {
             0L
         }
