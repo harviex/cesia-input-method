@@ -33,18 +33,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-
-    // NOTE: externalNativeBuild — native-bridge.so 由 CMake 编译
-    // whisper.cpp/llama.cpp 源码需提前放到 src/main/cpp/ 下
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
 }
 
 dependencies {
+    compileOnly(fileTree(mapOf("dir" to "../app/libs", "include" to listOf("*.aar"))))
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

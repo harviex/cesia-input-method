@@ -61,7 +61,9 @@ class VoiceRecorder {
     fun start() {
         if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
             audioRecord?.startRecording()
-            Log.i(TAG, "Recording started")
+            Log.i(TAG, "Recording started, state=${audioRecord?.recordingState}")
+        } else {
+            Log.e(TAG, "start: AudioRecord not initialized, state=${audioRecord?.state}")
         }
     }
 
@@ -71,7 +73,10 @@ class VoiceRecorder {
      * @return float 数组或 null（如果录制失败）
      */
     fun record(durationMs: Int): FloatArray? {
-        if (!init()) return null
+        if (!init()) {
+            Log.e(TAG, "record: init() failed")
+            return null
+        }
 
         start()
 
@@ -81,24 +86,45 @@ class VoiceRecorder {
         var offset = 0
 
         val startTime = System.currentTimeMillis()
+        var readErrors = 0
+        var totalRead = 0
 
         while (offset < numSamples && (System.currentTimeMillis() - startTime) < durationMs + 500) {
             val toRead = minOf(buffer.size, numSamples - offset)
-            val read = audioRecord?.read(buffer, 0, toRead) ?: break
-            if (read <= 0) break
+            val read = audioRecord?.read(buffer, 0, toRead)
+            if (read == null) {
+                Log.e(TAG, "record: audioRecord.read() returned null")
+                break
+            }
+            if (read < 0) {
+                readErrors++
+                Log.w(TAG, "record: AudioRecord.read() returned $read (error #$readErrors)")
+                if (readErrors > 10) {
+                    Log.e(TAG, "record: too many read errors, aborting")
+                    break
+                }
+                continue
+            }
+            if (read == 0) {
+                // No data available yet, sleep briefly
+                Thread.sleep(10)
+                continue
+            }
 
             for (i in 0 until read) {
-                // PCM16 → float [-1.0, 1.0]
                 audioData[offset + i] = buffer[i] / 32768.0f
             }
             offset += read
+            totalRead += read
         }
+
+        val elapsed = System.currentTimeMillis() - startTime
+        Log.i(TAG, "record: finished, offset=$offset / $numSamples, totalRead=$totalRead, elapsed=${elapsed}ms, errors=$readErrors")
 
         stop()
         release()
 
         return if (offset > 0) {
-            // 如果录制时长不足，裁剪数组
             if (offset < audioData.size) audioData.copyOf(offset) else audioData
         } else null
     }

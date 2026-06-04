@@ -33,7 +33,7 @@ import com.cesia.input.ai.LocalModeManager
 import com.cesia.input.ai.LocalModeToggleHelper
 import com.cesia.input.ai.VoiceAISettingsHelper
 import com.cesia.input.engine.ai.LlamaEngine
-import com.cesia.input.engine.ai.WhisperEngine
+import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.model.ModelDownloadManager
 import com.cesia.input.model.ModelInfo
 import com.cesia.input.model.ModelManager

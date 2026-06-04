@@ -18,7 +18,7 @@ import com.cesia.input.model.ModelDownloadManager
 import com.cesia.input.model.ModelInfo
 import com.cesia.input.model.ModelManager
 import com.cesia.input.model.ModelRegistry
-import com.cesia.input.engine.ai.WhisperEngine
+import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
 import java.io.File
@@ -240,23 +240,23 @@ class VoiceAISettingsHelper(
 
     /** 刷新桥梁状态（仅用于诊断显示） */
     fun refreshBridgeStatus() {
-        val bridgeLoaded = WhisperEngine.isBridgeLoaded()
-        val bridgeError = WhisperEngine.getBridgeLoadError()
+        val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
+        val bridgeError = SherpaOnnxEngine.getLibraryLoadError()
         val voiceModel = modelManager.getInstalledVoiceModelFile()
 
         if (!bridgeLoaded) {
             val reason = bridgeError ?: "未知错误"
-            tvBridgeStatus?.text = "⚠️ native-bridge.so 未加载: $reason"
+            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 库未加载: $reason"
             tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
         } else if (voiceModel == null) {
-            tvBridgeStatus?.text = "⚠️ native-bridge.so 已加载，但 Whisper 模型未安装（请下载或放入模型文件）"
+            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 已加载，但语音模型未安装（请下载模型）"
             tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
         } else {
             val aiModel = modelManager.getInstalledAiModelFile()
             val aiText = if (aiModel != null) "，Qwen: ${aiModel.name}" else "，Qwen: 未安装"
-            tvBridgeStatus?.text = "✅ native-bridge.so 已加载，Whisper: ${voiceModel.name}$aiText"
+            tvBridgeStatus?.text = "✅ Sherpa-onnx 已加载，语音: ${voiceModel.name}$aiText"
             tvBridgeStatus?.setTextColor(0xFF2E7D32.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
         }

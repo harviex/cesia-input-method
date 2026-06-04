@@ -4,7 +4,7 @@ package com.cesia.input.model
  * 模型信息
  */
 data class ModelInfo(
-    val id: String,                  // 唯一标识，如 "whisper-small", "qwen-2b"
+    val id: String,                  // 唯一标识，如 "sherpa-sensevoice", "qwen-2b"
     val name: String,                // 显示名，如 "Whisper Small"
     val description: String,         // 描述
     val downloadUrl: String,         // HuggingFace 下载链接
@@ -20,8 +20,8 @@ data class ModelInfo(
 
     val tier: Tier
         get() = when (id) {
-            "whisper-small", "qwen-0.8b" -> Tier.BASIC
-            "whisper-large-turbo", "qwen-2b" -> Tier.PREMIUM
+            "sherpa-zipformer", "qwen-0.8b" -> Tier.BASIC
+            "sherpa-sensevoice", "sherpa-paraformer", "qwen-2b" -> Tier.PREMIUM
             else -> Tier.BASIC
         }
 }
@@ -36,23 +36,32 @@ object ModelRegistry {
     const val GB = MB * 1024
 
     val ALL_MODELS = listOf(
-        // === 语音识别模型 ===
+        // === 语音识别模型 (Sherpa-onnx) ===
         ModelInfo(
-            id = "whisper-small",
-            name = "Whisper Small",
-            description = "语音识别基础模型（~400MB），准确率高，适合日常使用",
-            downloadUrl = "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_0.bin",
-            fileName = "ggml-small-q5_0.bin",
-            sizeBytes = 466L * MB,
+            id = "sherpa-sensevoice",
+            name = "SenseVoice",
+            description = "多语言语音识别(中/英/日/韩/粤), 内置标点, 离线识别 (~228MB)",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx",
+            fileName = "sherpa-sensevoice-model.onnx",
+            sizeBytes = 228L * MB,
             type = ModelInfo.ModelType.VOICE
         ),
         ModelInfo(
-            id = "whisper-large-turbo",
-            name = "Whisper Large V3 Turbo",
-            description = "语音识别旗舰模型（~800MB），最高精度，适合专业场景",
-            downloadUrl = "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
-            fileName = "ggml-large-v3-turbo-q5_0.bin",
-            sizeBytes = 809L * MB,
+            id = "sherpa-paraformer",
+            name = "Paraformer",
+            description = "中文专精语音识别, 高准确率, 流式识别 (~80MB)",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/main/model.onnx",
+            fileName = "sherpa-paraformer-model.onnx",
+            sizeBytes = 80L * MB,
+            type = ModelInfo.ModelType.VOICE
+        ),
+        ModelInfo(
+            id = "sherpa-zipformer",
+            name = "Zipformer",
+            description = "最轻量语音识别, 中英双语, 流式识别 (~30MB)",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-zipformer-zh-2023-09-14/resolve/main/model.onnx",
+            fileName = "sherpa-zipformer-model.onnx",
+            sizeBytes = 30L * MB,
             type = ModelInfo.ModelType.VOICE
         ),
 

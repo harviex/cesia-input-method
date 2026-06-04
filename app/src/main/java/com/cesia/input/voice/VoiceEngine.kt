@@ -2,9 +2,10 @@ package com.cesia.input.voice
 
 import android.content.Context
 import android.util.Log
-import com.cesia.input.engine.ai.WhisperEngine
+import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.model.ModelManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -16,32 +17,53 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * 语音识别引擎 — 统一本地 Whisper / 云端 Groq API 两种后端
+ * 语音识别引擎 — 统一本地 Sherpa-onnx / 云端 Groq API 两种后端
+ *
+ * 本地模式使用流式识别：边录音边识别，实时返回中间结果
+ * 云端模式使用 Groq API：录音完成后上传识别
  *
  * 使用方式:
  * 1. 创建实例: VoiceEngine(context)
  * 2. 设置后端: setBackend(Backend.LOCAL) 或 setBackend(Backend.CLOUD)
- * 3. 录音: recorder.record(durationMs) → FloatArray
- * 4. 识别: transcribe(floatArray) → String
+ * 3. 流式识别: startStreamingRecognition() → 循环 feedAudio() → stopStreamingRecognition()
+ * 4. 离线识别: recordAndTranscribe(durationMs) → String
  */
 class VoiceEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "VoiceEngine"
         private const val GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+        private const val FEED_INTERVAL_MS = 100L  // 每100ms喂一次音频
     }
 
     enum class Backend {
-        LOCAL_WHISPER,
+        LOCAL_SHERPA,
         CLOUD_GROQ
     }
 
+    enum class ModelType(val displayName: String) {
+        SENSE_VOICE("SenseVoice"),
+        PARAFORMER("Paraformer"),
+        ZIPFORMER("Zipformer")
+    }
+
+    data class RecognitionResult(
+        val text: String,
+        val isFinal: Boolean,
+        val modelType: String = "",
+        val backend: String = ""
+    )
+
     private val modelManager = ModelManager(context)
-    private val whisperEngine = WhisperEngine()
+    private val sherpaEngine = SherpaOnnxEngine()
     private val recorder = VoiceRecorder()
 
-    private var currentBackend = Backend.LOCAL_WHISPER
-    private var whisperLoaded = false
+    private var currentBackend = Backend.LOCAL_SHERPA
+    private var currentModelType = ModelType.PARAFORMER
+    private var recognizer: com.k2fsa.sherpa.onnx.OnlineRecognizer? = null
+    private var stream: com.k2fsa.sherpa.onnx.OnlineStream? = null
+    private var recognizerLoaded = false
+    private var lastErrorMessage: String? = null
 
     private val groqClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -57,69 +79,208 @@ class VoiceEngine(private val context: Context) {
 
     fun getBackend(): Backend = currentBackend
 
-    // ==================== 本地模型 ====================
+    fun setModelType(type: ModelType) {
+        currentModelType = type
+        Log.i(TAG, "Model type set to: $type")
+    }
 
-    private var lastErrorMessage: String? = null
+    fun getModelType(): ModelType = currentModelType
 
     fun getLastErrorMessage(): String? = lastErrorMessage
 
-    /** 加载本地 whisper 模型 */
-    suspend fun loadLocalModel(): Boolean = withContext(Dispatchers.IO) {
-        Log.i(TAG, "loadLocalModel: bridgeLoaded=${WhisperEngine.isBridgeLoaded()}, hasVoiceModel=${modelManager.hasVoiceModel()}")
-        // 首先检查桥梁是否可用
-        if (!WhisperEngine.isBridgeLoaded()) {
-            val bridgeError = WhisperEngine.getBridgeLoadError() ?: "未知错误"
-            lastErrorMessage = "桥梁未加载: $bridgeError。请下载「语音识别引擎（桥梁）」插件"
+    // ==================== 本地模型加载 ====================
+
+    /**
+     * 加载本地 Sherpa-onnx 模型
+     * @param modelType 模型类型（自动推荐或手动指定）
+     * @return 是否加载成功
+     */
+    suspend fun loadLocalModel(modelType: ModelType? = null): Boolean = withContext(Dispatchers.IO) {
+        val type = modelType ?: run {
+            val recommended = sherpaEngine.recommendModelType()
+            Log.i(TAG, "Auto-recommended model: $recommended")
+            when (recommended) {
+                SherpaOnnxEngine.ModelType.SENSE_VOICE -> ModelType.SENSE_VOICE
+                SherpaOnnxEngine.ModelType.PARAFORMER -> ModelType.PARAFORMER
+                SherpaOnnxEngine.ModelType.ZIPFORMER -> ModelType.ZIPFORMER
+            }
+        }
+
+        currentModelType = type
+
+        // 检查库是否可用
+        if (!SherpaOnnxEngine.isLibraryLoaded()) {
+            val err = SherpaOnnxEngine.getLibraryLoadError() ?: "未知错误"
+            lastErrorMessage = "Sherpa-onnx 库未加载: $err"
             Log.e(TAG, lastErrorMessage!!)
             return@withContext false
         }
 
-        val modelFile = modelManager.getInstalledVoiceModelFile()
-        if (modelFile == null) {
-            lastErrorMessage = "模型文件不存在，请下载 Whisper 模型"
-            Log.w(TAG, "No local voice model installed")
-            return@withContext false
-        }
-
-        // 检查模型文件可读
-        if (!modelFile.canRead()) {
-            lastErrorMessage = "模型文件无法读取: ${modelFile.absolutePath}"
-            Log.e(TAG, lastErrorMessage!!)
+        // 根据模型类型确定模型目录
+        val modelDir = getSherpaModelDir(type)
+        if (modelDir == null || !modelDir.exists()) {
+            lastErrorMessage = "模型文件不存在: ${type.displayName}，请下载模型"
+            Log.w(TAG, "No local model installed for $type at $modelDir")
             return@withContext false
         }
 
         try {
-            Log.i(TAG, "Loading whisper model: ${modelFile.absolutePath} (${modelFile.length()} bytes), useGpu=${modelManager.useGpu}")
-            whisperLoaded = whisperEngine.nativeInit(modelFile.absolutePath, modelManager.useGpu)
-            if (whisperLoaded) {
-                lastErrorMessage = null
-                Log.i(TAG, "Whisper model loaded successfully: ${modelFile.name}")
-            } else {
-                lastErrorMessage = "nativeInit 返回 false（模型文件可能损坏、格式不支持或缺少依赖库）"
-                Log.e(TAG, "nativeInit returned false for: ${modelFile.absolutePath}")
+            Log.i(TAG, "Loading Sherpa-onnx model: type=$type, dir=${modelDir.absolutePath}")
+
+            val sherpaType = when (type) {
+                ModelType.SENSE_VOICE -> SherpaOnnxEngine.ModelType.SENSE_VOICE
+                ModelType.PARAFORMER -> SherpaOnnxEngine.ModelType.PARAFORMER
+                ModelType.ZIPFORMER -> SherpaOnnxEngine.ModelType.ZIPFORMER
             }
-            whisperLoaded
+
+            // 释放旧的识别器
+            stream?.let {
+                try { it.release() } catch (_: Exception) {}
+            }
+            recognizer?.let {
+                try { it.release() } catch (_: Exception) {}
+            }
+
+            // 创建新的流式识别器
+            val newRecognizer = sherpaEngine.createStreamingRecognizer(
+                assetManager = null,
+                modelDir = modelDir.absolutePath,
+                modelType = sherpaType,
+                numThreads = 2,
+                provider = "cpu"
+            )
+
+            if (newRecognizer != null) {
+                recognizer = newRecognizer
+                recognizerLoaded = true
+                lastErrorMessage = null
+                Log.i(TAG, "Sherpa-onnx model loaded: $type")
+                true
+            } else {
+                lastErrorMessage = "创建识别器失败: $type"
+                Log.e(TAG, lastErrorMessage!!)
+                false
+            }
         } catch (e: Throwable) {
             lastErrorMessage = "${e.javaClass.simpleName}: ${e.message}"
-            Log.e(TAG, "Failed to load whisper model", e)
+            Log.e(TAG, "Failed to load Sherpa-onnx model", e)
             false
         }
     }
 
-    // ==================== 核心 API ====================
+    fun isLocalModelLoaded(): Boolean = recognizerLoaded
+
+    // ==================== 流式识别 ====================
+
+    /**
+     * 开始流式识别
+     * @return 是否成功启动
+     */
+    fun startStreamingRecognition(): Boolean {
+        val rec = recognizer
+        if (rec == null) {
+            Log.e(TAG, "startStreamingRecognition: recognizer is null")
+            return false
+        }
+        return try {
+            stream?.let {
+                try { it.release() } catch (_: Exception) {}
+            }
+            val newStream = rec.createStream()
+            stream = newStream
+            Log.i(TAG, "Streaming recognition started")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start streaming: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * 喂入音频数据（流式识别）
+     * @param audioData 16kHz 单声道 PCM float[-1.0, 1.0]
+     * @return 当前识别结果
+     */
+    fun feedAudio(audioData: FloatArray): RecognitionResult {
+        val rec = recognizer ?: return RecognitionResult("", false, backend = "none")
+        val str = stream ?: return RecognitionResult("", false, backend = "none")
+
+        return try {
+            sherpaEngine.acceptWaveform(rec, str, audioData)
+            val text = sherpaEngine.getStreamingResult(rec, str)
+            val isEndpoint = sherpaEngine.isEndpoint(rec, str)
+            RecognitionResult(
+                text = text,
+                isFinal = isEndpoint,
+                modelType = currentModelType.displayName,
+                backend = "local"
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "feedAudio error: ${e.message}")
+            RecognitionResult("", false, backend = "local")
+        }
+    }
+
+    /**
+     * 停止流式识别，返回最终结果
+     */
+    fun stopStreamingRecognition(): RecognitionResult {
+        val rec = recognizer ?: return RecognitionResult("", true, backend = "none")
+        val str = stream ?: return RecognitionResult("", true, backend = "none")
+
+        return try {
+            // 标记输入结束
+            str.inputFinished()
+            // 解码剩余数据
+            while (rec.isReady(str)) {
+                rec.decode(str)
+            }
+            val text = rec.getResult(str).text.trim()
+            Log.i(TAG, "Streaming final result: \"$text\"")
+            RecognitionResult(
+                text = text,
+                isFinal = true,
+                modelType = currentModelType.displayName,
+                backend = "local"
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "stopStreaming error: ${e.message}")
+            RecognitionResult("", true, backend = "local")
+        } finally {
+            try { str.release() } catch (_: Exception) {}
+            stream = null
+        }
+    }
+
+    // ==================== 离线识别（录音后识别） ====================
+
+    /**
+     * 录音并识别（一站式，非流式）
+     * 适用于短语音输入
+     */
+    suspend fun recordAndTranscribe(durationMs: Int): String {
+        Log.i(TAG, "recordAndTranscribe: starting record, duration=${durationMs}ms")
+        val audioData = withContext(Dispatchers.IO) {
+            recorder.record(durationMs)
+        }
+        Log.i(TAG, "recordAndTranscribe: record done, audioData=${if (audioData != null) "size=${audioData.size}" else "null"}")
+        return if (audioData != null) {
+            transcribe(audioData)
+        } else {
+            Log.e(TAG, "recordAndTranscribe: audioData is null")
+            ""
+        }
+    }
 
     /**
      * 识别音频数据
-     * @param audioData 16kHz 单声道 PCM float[-1.0, 1.0]
-     * @return 识别文本（失败返回空字符串）
      */
     suspend fun transcribe(audioData: FloatArray): String = withContext(Dispatchers.IO) {
         if (audioData.isEmpty()) return@withContext ""
 
         when (currentBackend) {
-            Backend.LOCAL_WHISPER -> transcribeLocal(audioData)
+            Backend.LOCAL_SHERPA -> transcribeLocal(audioData)
             Backend.CLOUD_GROQ -> {
-                // Groq 需要文件，先保存临时 WAV
                 val tempFile = saveTempWav(audioData)
                 try {
                     transcribeGroq(tempFile)
@@ -130,166 +291,141 @@ class VoiceEngine(private val context: Context) {
         }
     }
 
-    /**
-     * 录音并识别（一站式）
-     * @param durationMs 录音时长
-     * @return 识别文本
-     */
-    suspend fun recordAndTranscribe(durationMs: Int): String {
-        val audioData = withContext(Dispatchers.IO) {
-            recorder.record(durationMs)
-        }
-        return if (audioData != null) {
-            transcribe(audioData)
-        } else ""
-    }
-
-    // ==================== 本地 Whisper ====================
-
     private suspend fun transcribeLocal(audioData: FloatArray): String = withContext(Dispatchers.IO) {
-        if (!whisperLoaded) {
-            loadLocalModel()
-        }
-        if (!whisperLoaded) {
-            Log.e(TAG, "Whisper model not loaded")
-            return@withContext ""
-        }
-
         try {
-            whisperEngine.nativeTranscribe(audioData)
-        } catch (e: Exception) {
-            Log.e(TAG, "Whisper transcribe error", e)
-            ""
-        }
-    }
-
-    // ==================== 云端 Groq ====================
-
-    private fun transcribeGroq(audioFile: File): String {
-        val apiKey = getGroqApiKey()
-        if (apiKey.isEmpty()) {
-            Log.w(TAG, "Groq API key not set")
-            return ""
-        }
-
-        val requestBody = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(
-                "file",
-                audioFile.name,
-                audioFile.asRequestBody("audio/wav".toMediaType())
-            )
-            .addFormDataPart("model", "whisper-large-v3-turbo")
-            .addFormDataPart("language", "zh")
-            .addFormDataPart("response_format", "json")
-            .build()
-
-        val request = Request.Builder()
-            .url(GROQ_API_URL)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .post(requestBody)
-            .build()
-
-        return try {
-            val response = groqClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Groq API error: ${response.code}")
-                return ""
+            val type = when (currentModelType) {
+                ModelType.SENSE_VOICE -> SherpaOnnxEngine.ModelType.SENSE_VOICE
+                ModelType.PARAFORMER -> SherpaOnnxEngine.ModelType.PARAFORMER
+                ModelType.ZIPFORMER -> SherpaOnnxEngine.ModelType.ZIPFORMER
             }
-            val body = response.body?.string() ?: ""
-            JSONObject(body).optString("text", "")
+
+            val modelDir = getSherpaModelDir(currentModelType)
+            if (modelDir == null || !modelDir.exists()) {
+                Log.e(TAG, "Model dir not found for $currentModelType")
+                return@withContext ""
+            }
+
+            val offlineRec = sherpaEngine.createOfflineRecognizer(
+                assetManager = null,
+                modelDir = modelDir.absolutePath,
+                modelType = type,
+                numThreads = 2
+            )
+
+            if (offlineRec == null) {
+                Log.e(TAG, "Failed to create offline recognizer")
+                return@withContext ""
+            }
+
+            val result = sherpaEngine.transcribeOffline(offlineRec, audioData)
+            try { offlineRec.release() } catch (_: Exception) {}
+            result
         } catch (e: Exception) {
-            Log.e(TAG, "Groq request failed", e)
+            Log.e(TAG, "Local transcribe error: ${e.message}", e)
             ""
         }
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== 云端识别 ====================
 
-    /** 临时保存 WAV 文件（用于上传到 Groq） */
+    private suspend fun transcribeGroq(audioFile: File): String = withContext(Dispatchers.IO) {
+        try {
+            val apiKey = modelManager.getGroqApiKey()
+            if (apiKey.isNullOrBlank()) {
+                Log.e(TAG, "Groq API key not configured")
+                return@withContext ""
+            }
+
+            val requestBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", audioFile.name, audioFile.asRequestBody("audio/wav".toMediaType()))
+                .addFormDataPart("model", "whisper-large-v3")
+                .addFormDataPart("language", "zh")
+                .build()
+
+            val request = Request.Builder()
+                .url(GROQ_API_URL)
+                .addHeader("Authorization", "Bearer $apiKey")
+                .post(requestBody)
+                .build()
+
+            val response = groqClient.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string() ?: ""
+                val json = JSONObject(body)
+                json.optString("text", "").trim()
+            } else {
+                Log.e(TAG, "Groq API error: ${response.code} ${response.message}")
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Groq transcribe error: ${e.message}", e)
+            ""
+        }
+    }
+
+    // ==================== 工具方法 ====================
+
+    private fun getSherpaModelDir(type: ModelType): File? {
+        // Sherpa-onnx 模型存放在 models/sherpa/{modelType} 目录下
+        // 需要包含 model.onnx (或 encoder.onnx + decoder.onnx) 和 tokens.txt
+        val modelsDir = File(context.filesDir, "models/sherpa/${type.name.lowercase()}")
+        return if (modelsDir.exists() && modelsDir.isDirectory) {
+            val tokensFile = File(modelsDir, "tokens.txt")
+            if (tokensFile.exists()) modelsDir else null
+        } else {
+            null
+        }
+    }
+
+    // ==================== WAV 写入工具 ====================
+
     private fun saveTempWav(audioData: FloatArray): File {
         val tempFile = File(context.cacheDir, "voice_temp.wav")
-
-        // 简化 WAV 头 + PCM16 数据
-        val pcmData = ByteArray(audioData.size * 2)
-        for (i in audioData.indices) {
-            val sample = (audioData[i] * 32767).toInt().coerceIn(-32768, 32767)
-            pcmData[i * 2] = (sample and 0xFF).toByte()
-            pcmData[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
+        // 简单 WAV 写入：16kHz 单声道 16-bit PCM
+        val byteBuffer = java.io.ByteArrayOutputStream()
+        val dos = java.io.DataOutputStream(byteBuffer)
+        val dataSize = audioData.size * 2
+        // RIFF header
+        dos.writeBytes("RIFF")
+        dos.writeInt(Integer.reverseBytes(36 + dataSize))
+        dos.writeBytes("WAVE")
+        // fmt chunk
+        dos.writeBytes("fmt ")
+        dos.writeInt(Integer.reverseBytes(16)) // chunk size
+        dos.writeShort(java.lang.Short.reverseBytes(1).toInt()) // PCM
+        dos.writeShort(java.lang.Short.reverseBytes(1).toInt()) // mono
+        dos.writeInt(Integer.reverseBytes(16000)) // sample rate
+        dos.writeInt(Integer.reverseBytes(32000)) // byte rate
+        dos.writeShort(java.lang.Short.reverseBytes(2).toInt()) // block align
+        dos.writeShort(java.lang.Short.reverseBytes(16).toInt()) // bits per sample
+        // data chunk
+        dos.writeBytes("data")
+        dos.writeInt(Integer.reverseBytes(dataSize))
+        for (sample in audioData) {
+            val clamped = (sample.coerceIn(-1f, 1f) * 32767).toInt().toShort()
+            dos.writeShort(clamped.toInt().ushr(8) or (clamped.toInt() and 0xFF).shl(8))
         }
-
-        // WAV header
-        val header = ByteArray(44)
-        val byteRate = 16000 * 2  // 16kHz * 16bit mono
-        val dataSize = pcmData.size
-
-        // "RIFF"
-        header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte()
-        header[2] = 'F'.code.toByte(); header[3] = 'F'.code.toByte()
-        // file size - 8
-        val totalSize = dataSize + 36
-        writeInt(header, 4, totalSize)
-        // "WAVE"
-        header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte()
-        header[10] = 'V'.code.toByte(); header[11] = 'E'.code.toByte()
-        // "fmt "
-        header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte()
-        header[14] = 't'.code.toByte(); header[15] = ' '.code.toByte()
-        writeInt(header, 16, 16)       // fmt chunk size
-        writeShort(header, 20, 1)       // PCM format
-        writeShort(header, 22, 1)       // mono
-        writeInt(header, 24, 16000)     // sample rate
-        writeInt(header, 28, byteRate)   // byte rate
-        writeShort(header, 32, 2)       // block align
-        writeShort(header, 34, 16)      // bits per sample
-        // "data"
-        header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte()
-        header[38] = 't'.code.toByte(); header[39] = 'a'.code.toByte()
-        writeInt(header, 40, dataSize)
-
-        tempFile.writeBytes(header + pcmData)
+        dos.flush()
+        tempFile.writeBytes(byteBuffer.toByteArray())
         return tempFile
     }
 
-    private fun writeInt(buf: ByteArray, offset: Int, value: Int) {
-        buf[offset] = (value and 0xFF).toByte()
-        buf[offset + 1] = ((value shr 8) and 0xFF).toByte()
-        buf[offset + 2] = ((value shr 16) and 0xFF).toByte()
-        buf[offset + 3] = ((value shr 24) and 0xFF).toByte()
-    }
-
-    private fun writeShort(buf: ByteArray, offset: Int, value: Int) {
-        buf[offset] = (value and 0xFF).toByte()
-        buf[offset + 1] = ((value shr 8) and 0xFF).toByte()
-    }
-
-    /** 读取 Groq API Key */
-    private fun getGroqApiKey(): String {
-        return context.getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
-            .getString("groq_api_key", "") ?: ""
-    }
-
-    // ==================== 状态查询 ====================
-
-    fun hasLocalModel(): Boolean = modelManager.hasVoiceModel()
-    fun hasCloudApiKey(): Boolean = getGroqApiKey().isNotEmpty()
+    fun getRecorder(): VoiceRecorder = recorder
 
     /**
-     * 当前设置是否可用
-     * 本地 → 需要模型已安装且已加载
-     * 云端 → 需要 API Key 已设置
+     * 释放资源
      */
-    fun isAvailable(): Boolean = when (currentBackend) {
-        Backend.LOCAL_WHISPER -> whisperLoaded
-        Backend.CLOUD_GROQ -> hasCloudApiKey()
-    }
-
-    /** 检查 Whisper 模型是否已加载到内存 */
-    fun isModelLoaded(): Boolean = whisperLoaded
-
     fun release() {
-        whisperEngine.nativeFree()
-        whisperLoaded = false
-        recorder.release()
+        try {
+            stream?.let { try { it.release() } catch (_: Exception) {} }
+            recognizer?.let { try { it.release() } catch (_: Exception) {} }
+            stream = null
+            recognizer = null
+            recognizerLoaded = false
+            Log.i(TAG, "VoiceEngine released")
+        } catch (e: Exception) {
+            Log.e(TAG, "Release error: ${e.message}")
+        }
     }
 }

@@ -43,7 +43,7 @@ import com.cesia.input.model.ModelManager
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
 import com.cesia.input.voice.VoiceEngine
-import com.cesia.input.engine.ai.WhisperEngine
+import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
 
@@ -102,7 +102,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var aiEngine: AIEngine
 
     // ======================== 语音/润色选择 ========================
-    enum class VoiceChoice { LOCAL_WHISPER, GOOGLE }
+    enum class VoiceChoice { LOCAL_SHERPA, GOOGLE }
     enum class PolishChoice { LOCAL_AI, CLOUD_OPENROUTER, OFF }
 
     // ======================== 本地/云端模式 ========================
@@ -113,7 +113,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun toggleLocalCloudMode() {
         if (!localModeEnabled) {
             // 尝试切换到本地模式：必须 Whisper + Qwen 都安装
-            val bridgeLoaded = WhisperEngine.isBridgeLoaded()
+            val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
             val hasVoiceModel = modelManager.hasVoiceModel()
             val hasAiModel = modelManager.hasAiModel()
 
@@ -910,7 +910,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 return@setOnClickListener
             }
             if (!isRecording && !isWaitingForChoice) {
-                val bridgeLoaded = WhisperEngine.isBridgeLoaded()
+                val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
                 val hasVoiceModel = modelManager.hasVoiceModel()
                 Log.i("Cesia", "单击语音键: bridgeLoaded=$bridgeLoaded, hasVoiceModel=$hasVoiceModel, localMode=$localModeEnabled")
 
@@ -920,11 +920,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         updateStatus("⚠️ 本地模式需要 Whisper + Qwen 模型，请先到设置中下载")
                         return@setOnClickListener
                     }
-                    startRecordingWithChoice(VoiceChoice.LOCAL_WHISPER, PolishChoice.LOCAL_AI)
+                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
                 } else {
                     // 云端模式：Whisper 可用时用 Whisper 识别 + 云端润色，否则 Google + 云端润色
                     if (bridgeLoaded && hasVoiceModel) {
-                        startRecordingWithChoice(VoiceChoice.LOCAL_WHISPER, PolishChoice.CLOUD_OPENROUTER)
+                        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.CLOUD_OPENROUTER)
                     } else {
                         startRecordingWithChoice(VoiceChoice.GOOGLE, PolishChoice.CLOUD_OPENROUTER)
                     }
@@ -1841,18 +1841,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 3. 本地模式但 bridge 或模型缺失 → 回退 Google + 状态栏提示
      */
     private fun updateVoiceBackend() {
-        val bridgeLoaded = WhisperEngine.isBridgeLoaded()
+        val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
         val hasLocalModel = modelManager.hasVoiceModel()
         val modelFile = modelManager.getInstalledVoiceModelFile()
         val modelName = modelFile?.name ?: "无"
 
         // 诊断信息
-        val bridgeError = WhisperEngine.getBridgeLoadError()
+        val bridgeError = SherpaOnnxEngine.getLibraryLoadError()
         Log.i("Cesia", "updateVoiceBackend: localMode=$localModeEnabled, bridgeLoaded=$bridgeLoaded, bridgeError=$bridgeError, hasLocalModel=$hasLocalModel, modelName=$modelName")
 
         // bridge + 模型都可用 → Whisper（两种模式下都优先使用本地 Whisper）
         if (bridgeLoaded && hasLocalModel) {
-            voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_WHISPER)
+            voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_SHERPA)
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
             Log.i("Cesia", "语音后端: 本地 Whisper ($modeLabel, $modelName)")
             updateStatus("🎤 语音: 本地 Whisper ✅")
@@ -1912,7 +1912,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     /** 本地模式录音 */
     private fun startLocalRecording() {
-        startRecordingWithChoice(VoiceChoice.LOCAL_WHISPER, PolishChoice.LOCAL_AI)
+        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
     }
 
     /** 云端模式录音 */
@@ -1937,7 +1937,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         voiceStartTime = System.currentTimeMillis()
 
         when (voiceChoice) {
-            VoiceChoice.LOCAL_WHISPER -> {
+            VoiceChoice.LOCAL_SHERPA -> {
                 updateStatus("🎤 正在收听 (本地 Whisper)...")
                 startWhisperRecordingAsync()
             }
@@ -1960,8 +1960,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun startWhisperRecordingAsync() {
         voiceEngineScope.launch {
             try {
-                Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${voiceEngine.hasLocalModel()}, bridgeLoaded=${WhisperEngine.isBridgeLoaded()}")
-                if (!voiceEngine.hasLocalModel()) {
+                Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${modelManager.hasVoiceModel()}, bridgeLoaded=${SherpaOnnxEngine.isLibraryLoaded()}")
+                if (!modelManager.hasVoiceModel()) {
                     // 模型文件不存在，回退 Google
                     withContext(Dispatchers.Main) {
                         updateStatus("⚠️ Whisper 模型未安装，回退到 Google...")
@@ -1970,11 +1970,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     return@launch
                 }
                 // 确保模型已加载到内存
-                if (!voiceEngine.isModelLoaded()) {
+                if (!voiceEngine.isLocalModelLoaded()) {
                     withContext(Dispatchers.Main) {
                         updateStatus("⏳ 正在加载 Whisper 模型...")
                     }
+                    Log.i("Cesia", "startWhisperRecordingAsync: calling loadLocalModel()")
                     val loaded = voiceEngine.loadLocalModel()
+                    Log.i("Cesia", "startWhisperRecordingAsync: loadLocalModel returned=$loaded")
                     if (!loaded) {
                         withContext(Dispatchers.Main) {
                             // 获取详细失败信息
@@ -1989,8 +1991,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     withContext(Dispatchers.Main) {
                         updateStatus("✅ Whisper 模型已加载，请说话...")
                     }
+                    Log.i("Cesia", "startWhisperRecordingAsync: model loaded, about to record")
+                } else {
+                    Log.i("Cesia", "startWhisperRecordingAsync: model already loaded, skipping loadLocalModel")
                 }
+                Log.i("Cesia", "startWhisperRecordingAsync: calling recordAndTranscribe(30000)")
                 val text = voiceEngine.recordAndTranscribe(30000)
+                Log.i("Cesia", "startWhisperRecordingAsync: recordAndTranscribe returned, text='${text.take(50)}'")
                 withContext(Dispatchers.Main) {
                     handleCloudVoiceResult(text)
                 }
@@ -2043,7 +2050,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateVoiceBackend()
 
         when (voiceEngine.getBackend()) {
-            VoiceEngine.Backend.LOCAL_WHISPER -> {
+            VoiceEngine.Backend.LOCAL_SHERPA -> {
                 if (modelManager.hasVoiceModel()) {
                     startWhisperRecordingAsync()
                 } else {
@@ -3821,7 +3828,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 预加载 Whisper 模型到内存（如果已安装） */
     private fun preloadWhisperModel() {
-        if (voiceEngine.getBackend() != VoiceEngine.Backend.LOCAL_WHISPER) return
+        if (voiceEngine.getBackend() != VoiceEngine.Backend.LOCAL_SHERPA) return
         if (!modelManager.hasVoiceModel()) return
         voiceEngineScope.launch {
             try {

@@ -137,7 +137,11 @@ class ModelManager(private val context: Context) {
         }
     }
 
-    /** 获取缺额（已选 tier 但未安装的模型列表） */
+    /** Groq API Key */
+    fun getGroqApiKey(): String? {
+        val prefs = context.getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        return prefs.getString("groq_api_key", null)
+    }
     fun getMissingModels(tier: ModelInfo.Tier): List<ModelInfo> {
         return ModelRegistry.ALL_MODELS
             .filter { it.tier == tier }
