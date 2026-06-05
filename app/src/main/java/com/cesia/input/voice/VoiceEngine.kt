@@ -92,22 +92,16 @@ class VoiceEngine(private val context: Context) {
 
     /**
      * 加载本地 Sherpa-onnx 模型
-     * @param modelType 模型类型（自动推荐或手动指定）
-     * @return 是否加载成功
+     * 自动扫描 models/sherpa/ 目录，根据文件存在情况判断模型类型
+     *
+     * 支持的目录结构：
+     *   models/sherpa/sensevoice/  → model.onnx + tokens.txt (离线识别)
+     *   models/sherpa/paraformer/  → encoder.onnx + decoder.onnx + tokens.txt (流式)
+     *   models/sherpa/zipformer/   → encoder.onnx + decoder.onnx + joiner.onnx + tokens.txt (流式)
+     *
+     * 也支持在 models/sherpa/ 根目录放置文件（自动识别类型）
      */
     suspend fun loadLocalModel(modelType: ModelType? = null): Boolean = withContext(Dispatchers.IO) {
-        val type = modelType ?: run {
-            val recommended = sherpaEngine.recommendModelType()
-            Log.i(TAG, "Auto-recommended model: $recommended")
-            when (recommended) {
-                SherpaOnnxEngine.ModelType.SENSE_VOICE -> ModelType.SENSE_VOICE
-                SherpaOnnxEngine.ModelType.PARAFORMER -> ModelType.PARAFORMER
-                SherpaOnnxEngine.ModelType.ZIPFORMER -> ModelType.ZIPFORMER
-            }
-        }
-
-        currentModelType = type
-
         // 检查库是否可用
         if (!SherpaOnnxEngine.isLibraryLoaded()) {
             val err = SherpaOnnxEngine.getLibraryLoadError() ?: "未知错误"
@@ -116,17 +110,30 @@ class VoiceEngine(private val context: Context) {
             return@withContext false
         }
 
-        // 根据模型类型确定模型目录
-        val modelDir = getSherpaModelDir(type)
-        if (modelDir == null || !modelDir.exists()) {
-            lastErrorMessage = "模型文件不存在: ${type.displayName}，请下载模型"
-            Log.w(TAG, "No local model installed for $type at $modelDir")
-            return@withContext false
+        // 确定模型类型和目录
+        val (type, modelDir) = if (modelType != null) {
+            val dir = findModelDir(modelType)
+            if (dir == null) {
+                lastErrorMessage = "模型目录不存在: models/sherpa/${modelType.name.lowercase()}/"
+                Log.e(TAG, lastErrorMessage!!)
+                return@withContext false
+            }
+            modelType to dir
+        } else {
+            // 自动扫描所有支持的模型目录
+            val found = findAnyModelDir()
+            if (found == null) {
+                lastErrorMessage = "未找到任何语音模型。请下载模型并放入 models/sherpa/{sensevoice|paraformer|zipformer}/ 目录"
+                Log.e(TAG, lastErrorMessage!!)
+                return@withContext false
+            }
+            found
         }
 
-        try {
-            Log.i(TAG, "Loading Sherpa-onnx model: type=$type, dir=${modelDir.absolutePath}")
+        currentModelType = type
+        Log.i(TAG, "Loading Sherpa-onnx model: type=$type, dir=${modelDir.absolutePath}")
 
+        try {
             val sherpaType = when (type) {
                 ModelType.SENSE_VOICE -> SherpaOnnxEngine.ModelType.SENSE_VOICE
                 ModelType.PARAFORMER -> SherpaOnnxEngine.ModelType.PARAFORMER
@@ -134,12 +141,8 @@ class VoiceEngine(private val context: Context) {
             }
 
             // 释放旧的识别器
-            stream?.let {
-                try { it.release() } catch (_: Exception) {}
-            }
-            recognizer?.let {
-                try { it.release() } catch (_: Exception) {}
-            }
+            stream?.let { try { it.release() } catch (_: Exception) {} }
+            recognizer?.let { try { it.release() } catch (_: Exception) {} }
 
             // 创建新的流式识别器
             val newRecognizer = sherpaEngine.createStreamingRecognizer(
@@ -157,7 +160,7 @@ class VoiceEngine(private val context: Context) {
                 Log.i(TAG, "Sherpa-onnx model loaded: $type")
                 true
             } else {
-                lastErrorMessage = "创建识别器失败: $type"
+                lastErrorMessage = "创建识别器失败: $type（模型文件可能损坏或不完整）"
                 Log.e(TAG, lastErrorMessage!!)
                 false
             }
@@ -169,6 +172,93 @@ class VoiceEngine(private val context: Context) {
     }
 
     fun isLocalModelLoaded(): Boolean = recognizerLoaded
+
+    /**
+     * 扫描 models/sherpa/ 目录，找到第一个可用的模型
+     * @return (模型类型, 模型目录) 或 null
+     */
+    private fun findAnyModelDir(): Pair<ModelType, File>? {
+        val sherpaDir = File(context.filesDir, "models/sherpa")
+        if (!sherpaDir.exists() || !sherpaDir.isDirectory) return null
+
+        // 检查各子目录
+        val subdirs = mapOf(
+            ModelType.SENSE_VOICE to "sensevoice",
+            ModelType.PARAFORMER to "paraformer",
+            ModelType.ZIPFORMER to "zipformer"
+        )
+
+        for ((type, dirname) in subdirs) {
+            val dir = File(sherpaDir, dirname)
+            if (dir.exists() && dir.isDirectory && hasRequiredFiles(dir, type)) {
+                Log.i(TAG, "Found model: type=$type, dir=${dir.absolutePath}")
+                return type to dir
+            }
+        }
+
+        // 也检查根目录
+        for (type in ModelType.entries) {
+            if (hasRequiredFiles(sherpaDir, type)) {
+                Log.i(TAG, "Found model in root: type=$type, dir=${sherpaDir.absolutePath}")
+                return type to sherpaDir
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * 查找指定类型的模型目录
+     */
+    private fun findModelDir(type: ModelType): File? {
+        val dir = File(context.filesDir, "models/sherpa/${type.name.lowercase()}")
+        return if (dir.exists() && dir.isDirectory && hasRequiredFiles(dir, type)) dir else null
+    }
+
+    /**
+     * 检查目录是否包含指定类型模型的必需文件
+     */
+    private fun hasRequiredFiles(dir: File, type: ModelType): Boolean {
+        val tokensFile = File(dir, "tokens.txt")
+        return when (type) {
+            ModelType.SENSE_VOICE -> {
+                // SenseVoice: model.onnx + tokens.txt
+                val modelFile = File(dir, "model.onnx")
+                modelFile.exists() && tokensFile.exists()
+            }
+            ModelType.PARAFORMER -> {
+                // Paraformer: encoder.onnx + decoder.onnx + tokens.txt
+                val encoder = File(dir, "encoder.onnx")
+                val decoder = File(dir, "decoder.onnx")
+                encoder.exists() && decoder.exists() && tokensFile.exists()
+            }
+            ModelType.ZIPFORMER -> {
+                // Zipformer: encoder.onnx + decoder.onnx + joiner.onnx + tokens.txt
+                val encoder = File(dir, "encoder.onnx")
+                val decoder = File(dir, "decoder.onnx")
+                val joiner = File(dir, "joiner.onnx")
+                encoder.exists() && decoder.exists() && joiner.exists() && tokensFile.exists()
+            }
+        }
+    }
+
+    /**
+     * 获取模型目录（兼容旧接口）
+     */
+    private fun getSherpaModelDir(type: ModelType): File? = findModelDir(type)
+
+    /**
+     * 检查是否有可用的 Sherpa 模型（供外部调用）
+     */
+    fun hasSherpaModel(): Boolean = findAnyModelDir() != null
+
+    /**
+     * 获取当前检测到的模型名称（供外部显示）
+     */
+    fun getSherpaModelName(): String {
+        val found = findAnyModelDir() ?: return "无"
+        return found.first.displayName
+    }
 
     // ==================== 流式识别 ====================
 
@@ -361,20 +451,6 @@ class VoiceEngine(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Groq transcribe error: ${e.message}", e)
             ""
-        }
-    }
-
-    // ==================== 工具方法 ====================
-
-    private fun getSherpaModelDir(type: ModelType): File? {
-        // Sherpa-onnx 模型存放在 models/sherpa/{modelType} 目录下
-        // 需要包含 model.onnx (或 encoder.onnx + decoder.onnx) 和 tokens.txt
-        val modelsDir = File(context.filesDir, "models/sherpa/${type.name.lowercase()}")
-        return if (modelsDir.exists() && modelsDir.isDirectory) {
-            val tokensFile = File(modelsDir, "tokens.txt")
-            if (tokensFile.exists()) modelsDir else null
-        } else {
-            null
         }
     }
 

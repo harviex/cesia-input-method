@@ -114,15 +114,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (!localModeEnabled) {
             // 尝试切换到本地模式：必须 Whisper + Qwen 都安装
             val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
-            val hasVoiceModel = modelManager.hasVoiceModel()
+            val hasVoiceModel = voiceEngine.hasSherpaModel()
             val hasAiModel = modelManager.hasAiModel()
 
             if (!bridgeLoaded) {
-                updateStatus("⚠️ 无法切换到本地模式：native-bridge.so 未加载")
+                updateStatus("⚠️ 无法切换到本地模式：Sherpa 库未加载")
                 return
             }
             if (!hasVoiceModel) {
-                updateStatus("⚠️ 无法切换到本地模式：Whisper 模型未安装，请先到设置中下载")
+                updateStatus("⚠️ 无法切换到本地模式：语音模型未安装，请先到设置中下载")
                 return
             }
             if (!hasAiModel) {
@@ -1842,20 +1842,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     private fun updateVoiceBackend() {
         val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
-        val hasLocalModel = modelManager.hasVoiceModel()
-        val modelFile = modelManager.getInstalledVoiceModelFile()
-        val modelName = modelFile?.name ?: "无"
+        val hasLocalModel = voiceEngine.hasSherpaModel()
+        val modelName = voiceEngine.getSherpaModelName()
 
         // 诊断信息
         val bridgeError = SherpaOnnxEngine.getLibraryLoadError()
         Log.i("Cesia", "updateVoiceBackend: localMode=$localModeEnabled, bridgeLoaded=$bridgeLoaded, bridgeError=$bridgeError, hasLocalModel=$hasLocalModel, modelName=$modelName")
 
-        // bridge + 模型都可用 → Whisper（两种模式下都优先使用本地 Whisper）
+        // 库 + 模型都可用 → Sherpa-onnx
         if (bridgeLoaded && hasLocalModel) {
             voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_SHERPA)
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
-            Log.i("Cesia", "语音后端: 本地 Whisper ($modeLabel, $modelName)")
-            updateStatus("🎤 语音: 本地 Whisper ✅")
+            Log.i("Cesia", "语音后端: 本地 Sherpa-onnx ($modeLabel, $modelName)")
+            updateStatus("🎤 语音: 本地 Sherpa-onnx ✅")
             return
         }
 
@@ -1863,11 +1862,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (localModeEnabled) {
             if (!bridgeLoaded) {
                 val reason = bridgeError ?: "未知错误"
-                Log.w("Cesia", "语音后端: Google（本地模式但桥梁未加载: $reason）")
-                updateStatus("🎤 语音: Google（⚠️ 桥梁未加载: $reason）")
+                Log.w("Cesia", "语音后端: Google（本地模式但 Sherpa 库未加载: $reason）")
+                updateStatus("🎤 语音: Google（⚠️ Sherpa 库未加载: $reason）")
             } else if (!hasLocalModel) {
-                Log.w("Cesia", "语音后端: Google（本地模式但 Whisper 模型未安装）")
-                updateStatus("🎤 语音: Google（⚠️ Whisper 模型未安装）")
+                Log.w("Cesia", "语音后端: Google（本地模式但 Sherpa 模型未安装）")
+                updateStatus("🎤 语音: Google（⚠️ Sherpa 模型未安装）")
             }
             return
         }
@@ -1938,7 +1937,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         when (voiceChoice) {
             VoiceChoice.LOCAL_SHERPA -> {
-                updateStatus("🎤 正在收听 (本地 Whisper)...")
+                updateStatus("🎤 正在收听 (本地 Sherpa)...")
                 startWhisperRecordingAsync()
             }
             VoiceChoice.GOOGLE -> {
@@ -1960,11 +1959,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun startWhisperRecordingAsync() {
         voiceEngineScope.launch {
             try {
-                Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${modelManager.hasVoiceModel()}, bridgeLoaded=${SherpaOnnxEngine.isLibraryLoaded()}")
-                if (!modelManager.hasVoiceModel()) {
-                    // 模型文件不存在，回退 Google
+                Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${voiceEngine.hasSherpaModel()}, bridgeLoaded=${SherpaOnnxEngine.isLibraryLoaded()}")
+                if (!SherpaOnnxEngine.isLibraryLoaded() || !voiceEngine.hasSherpaModel()) {
+                    // 不可用，回退 Google
                     withContext(Dispatchers.Main) {
-                        updateStatus("⚠️ Whisper 模型未安装，回退到 Google...")
+                        updateStatus("⚠️ 本地语音不可用，回退到 Google...")
                         startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
                     }
                     return@launch
@@ -1972,7 +1971,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 确保模型已加载到内存
                 if (!voiceEngine.isLocalModelLoaded()) {
                     withContext(Dispatchers.Main) {
-                        updateStatus("⏳ 正在加载 Whisper 模型...")
+                        updateStatus("⏳ 正在加载 Sherpa 模型...")
                     }
                     Log.i("Cesia", "startWhisperRecordingAsync: calling loadLocalModel()")
                     val loaded = voiceEngine.loadLocalModel()
@@ -1981,15 +1980,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         withContext(Dispatchers.Main) {
                             // 获取详细失败信息
                             val reason = voiceEngine.getLastErrorMessage() ?: "未知错误"
-                            updateStatus("⚠️ Whisper 加载失败: $reason，回退到 Google...")
-                            Log.e("Cesia", "Whisper 加载失败详情: $reason")
+                            updateStatus("⚠️ Sherpa 加载失败: $reason，回退到 Google...")
+                            Log.e("Cesia", "Sherpa 加载失败详情: $reason")
                             startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
                         }
                         return@launch
                     }
                     // 加载成功，显示确认
                     withContext(Dispatchers.Main) {
-                        updateStatus("✅ Whisper 模型已加载，请说话...")
+                        updateStatus("✅ Sherpa 模型已加载，请说话...")
                     }
                     Log.i("Cesia", "startWhisperRecordingAsync: model loaded, about to record")
                 } else {
@@ -3826,16 +3825,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 预加载 Whisper 模型到内存（如果已安装） */
+    /** 预加载 Sherpa 模型到内存（如果已安装） */
     private fun preloadWhisperModel() {
         if (voiceEngine.getBackend() != VoiceEngine.Backend.LOCAL_SHERPA) return
-        if (!modelManager.hasVoiceModel()) return
+        if (!voiceEngine.hasSherpaModel()) return
         voiceEngineScope.launch {
             try {
                 val loaded = voiceEngine.loadLocalModel()
-                Log.i("Cesia", "Whisper 预加载: ${if (loaded) "成功" else "失败"}")
+                Log.i("Cesia", "Sherpa 预加载: ${if (loaded) "成功" else "失败"}")
             } catch (e: Throwable) {
-                Log.e("Cesia", "Whisper 预加载失败", e)
+                Log.e("Cesia", "Sherpa 预加载失败", e)
             }
         }
     }
