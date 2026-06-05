@@ -60,17 +60,6 @@
             android:scaleType="centerInside"
             android:padding="4dp" />
 
-        <!-- 本地/云端切换按钮 -->
-        <TextView
-            android:id="@+id/btn_local_mode"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:text="📱"
-            android:textSize="16sp"
-            android:gravity="center"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="本地/云端切换" />
-
     </LinearLayout>
 
     <!-- 候选词栏：T9字母区 + 分隔线 + 横向滚动候选词 + 展开按钮 -->

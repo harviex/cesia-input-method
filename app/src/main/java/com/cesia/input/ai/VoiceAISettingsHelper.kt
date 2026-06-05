@@ -34,14 +34,11 @@ class VoiceAISettingsHelper(
 ) {
 
     // 管理器
-    val localModeManager = LocalModeManager(activity)
     val modelManager = ModelManager(activity)
     val downloadManager = ModelDownloadManager(activity)
 
     // 视图引用
     var etGroqKey: EditText? = null
-    var tvModeLabel: TextView? = null
-    var btnToggleMode: Button? = null
     var tvHardwareInfo: TextView? = null
     var tvVoiceModelStatus: TextView? = null
     var tvAiModelStatus: TextView? = null
@@ -60,8 +57,6 @@ class VoiceAISettingsHelper(
     /** 初始化所有视图引用 */
     fun bindViews(
         etGroqKey: EditText?,
-        tvModeLabel: TextView?,
-        btnToggleMode: Button?,
         tvHardwareInfo: TextView?,
         tvVoiceModelStatus: TextView?,
         tvAiModelStatus: TextView?,
@@ -73,8 +68,6 @@ class VoiceAISettingsHelper(
         switchGpu: SwitchCompat?
     ) {
         this.etGroqKey = etGroqKey
-        this.tvModeLabel = tvModeLabel
-        this.btnToggleMode = btnToggleMode
         this.tvHardwareInfo = tvHardwareInfo
         this.tvVoiceModelStatus = tvVoiceModelStatus
         this.tvAiModelStatus = tvAiModelStatus
@@ -103,7 +96,6 @@ class VoiceAISettingsHelper(
         // GPU 开关
         switchGpu?.isChecked = modelManager.useGpu
         // 刷新 UI
-        refreshModeUI()
         refreshModelStatus()
         refreshBridgeStatus()
         detectHardware()
@@ -119,12 +111,6 @@ class VoiceAISettingsHelper(
 
     /** 设置按钮监听 */
     fun setupListeners() {
-        // 模式切换
-        btnToggleMode?.setOnClickListener {
-            localModeManager.toggle()
-            refreshModeUI()
-        }
-
         // GPU 开关
         switchGpu?.setOnCheckedChangeListener { _, checked ->
             modelManager.useGpu = checked
@@ -132,14 +118,25 @@ class VoiceAISettingsHelper(
 
         // 下载语音识别模型（Paraformer 多文件）
         btnDownloadVoice?.setOnClickListener {
-            val model = ModelRegistry.ALL_MODELS.find {
-                it.type == ModelInfo.ModelType.VOICE
+            val installedFile = modelManager.getInstalledVoiceModelFile()
+            if (installedFile != null && installedFile.exists()) {
+                // 已安装 → 显示实际大小
+                val actualSize = if (installedFile.isDirectory) {
+                    installedFile.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                } else {
+                    installedFile.length()
+                }
+                Toast.makeText(activity,
+                    "Paraformer 已安装（${ModelDownloadManager.Formatter.formatSize(actualSize)}）",
+                    Toast.LENGTH_SHORT).show()
+            } else {
+                // 未安装 → 显示预估大小
+                val totalBytes = 80L * 1024 * 1024  // 80MB 预估
+                Toast.makeText(activity,
+                    "将下载 Paraformer 语音识别模型（约 ${ModelDownloadManager.Formatter.formatSize(totalBytes)}，3个文件）",
+                    Toast.LENGTH_SHORT).show()
+                downloadVoiceModel()
             }
-            val sizeStr = model?.let { ModelDownloadManager.Formatter.formatSize(it.sizeBytes) } ?: ""
-            Toast.makeText(activity,
-                "将下载 Paraformer 语音识别模型（$sizeStr，3个文件）",
-                Toast.LENGTH_SHORT).show()
-            downloadVoiceModel()
         }
 
         // 下载 AI 润色模型（Qwen）
@@ -172,24 +169,6 @@ class VoiceAISettingsHelper(
             refreshModelStatus()
             Toast.makeText(activity, "已卸载 $count 个模型文件", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    /** 刷新模式显示 */
-    private fun refreshModeUI() {
-        val mode = localModeManager.mode
-        val modeText = when (mode) {
-            LocalModeManager.RunMode.LOCAL -> "\uD83D\uDCF1 当前模式：本地模式"
-            LocalModeManager.RunMode.CLOUD_FREE -> "\uD83C\uDF10 当前模式：云端免费"
-            LocalModeManager.RunMode.CLOUD_PAID -> "\uD83D\uDCB0 当前模式：云端付费"
-        }
-        tvModeLabel?.text = modeText
-
-        val toggleText = when (mode) {
-            LocalModeManager.RunMode.LOCAL -> "\uD83D\uDD04 切换到云端模式"
-            LocalModeManager.RunMode.CLOUD_FREE,
-            LocalModeManager.RunMode.CLOUD_PAID -> "\uD83D\uDD04 切换到本地模式"
-        }
-        btnToggleMode?.text = toggleText
     }
 
     /** 刷新模型安装状态 */
@@ -329,7 +308,6 @@ class VoiceAISettingsHelper(
                 pbDownload?.visibility = View.GONE
                 if (result.isSuccess) {
                     tvDownloadProgress?.text = "✅ Paraformer 模型下载完成"
-                    refreshModeUI()
                     refreshModelStatus()
                     refreshBridgeStatus()
                     Toast.makeText(activity,

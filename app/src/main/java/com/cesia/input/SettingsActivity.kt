@@ -73,8 +73,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var modelManager: ModelManager
     private lateinit var downloadManager: ModelDownloadManager
     private var etGroqKey: EditText? = null
-    private var tvModeLabel: TextView? = null
-    private var btnToggleMode: Button? = null
     private var tvHardwareInfo: TextView? = null
     private var tvVoiceModelStatus: TextView? = null
     private var tvAiModelStatus: TextView? = null
@@ -139,7 +137,7 @@ class SettingsActivity : AppCompatActivity() {
         // 语音与 AI 本地化设置 helper
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
         aiSettingsHelper.bindViews(
-            etGroqKey, tvModeLabel, btnToggleMode, tvHardwareInfo,
+            etGroqKey, tvHardwareInfo,
             tvVoiceModelStatus, tvAiModelStatus,
             btnDownloadVoice, btnDownloadAi,
             btnUninstall,
@@ -221,8 +219,6 @@ class SettingsActivity : AppCompatActivity() {
         // === 语音与 AI 本地化视图 ===
         try {
             etGroqKey = findViewById(R.id.et_groq_key)
-            tvModeLabel = findViewById(R.id.tv_mode_label)
-            btnToggleMode = findViewById(R.id.btn_toggle_mode)
             tvHardwareInfo = findViewById(R.id.tv_hardware_info)
             tvVoiceModelStatus = findViewById(R.id.tv_voice_model_status)
             tvAiModelStatus = findViewById(R.id.tv_ai_model_status)

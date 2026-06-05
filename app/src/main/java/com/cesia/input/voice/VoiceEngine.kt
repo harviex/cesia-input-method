@@ -171,8 +171,9 @@ class VoiceEngine(private val context: Context) {
         val modelDir = findModelDir() ?: return "无模型"
         val modelId = modelManager.installedVoiceModelId ?: "未知"
         return if (isParaformerModel(modelDir)) {
-            val encSize = File(modelDir, "encoder.onnx").length() / 1024 / 1024
-            "Paraformer 流式 (${encSize}MB)"
+            val totalBytes = modelDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            val totalMB = totalBytes / 1024 / 1024
+            "Paraformer 流式 (${totalMB}MB)"
         } else {
             val onnxFile = modelDir.listFiles()?.firstOrNull { it.name.endsWith(".onnx") }
             val sizeMB = (onnxFile?.length() ?: 0) / 1024 / 1024

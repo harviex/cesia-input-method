@@ -376,24 +376,6 @@
             android:background="#E0E0E0"
             android:layout_marginBottom="8dp" />
 
-        <!-- 运行模式 -->
-        <TextView
-            android:id="@+id/tv_mode_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📱 当前模式：本地模式"
-            android:textSize="13sp"
-            android:textColor="#666666"
-            android:layout_marginBottom="8dp" />
-
-        <Button
-            android:id="@+id/btn_toggle_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🔄 切换到云端模式"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_marginBottom="8dp" />
-
         <!-- 硬件检测推荐 -->
         <TextView
             android:id="@+id/tv_hardware_info"
