@@ -327,20 +327,25 @@ class VoiceEngine(private val context: Context) {
         val accumulatedText = StringBuilder()
 
         try {
+            var totalSamples = 0
+            var nonEmptyResults = 0
+            var endpointCount = 0
             while (System.currentTimeMillis() - startTime < maxDurationMs) {
                 val read = recorder.readChunk(readBuffer.size) ?: break
                 if (read.isEmpty()) {
                     Thread.sleep(50)
                     continue
                 }
+                totalSamples += read.size
 
                 // 喂入音频
                 sherpaEngine.acceptWaveform(onlineRec, stream, read)
 
                 // 获取当前结果
                 val currentResult = sherpaEngine.getStreamingResult(onlineRec, stream)
+                if (currentResult.isNotEmpty()) nonEmptyResults++
                 if (currentResult.isNotEmpty() && currentResult != lastResult) {
-                    Log.i(TAG, "recordStreaming: 中间结果 '$currentResult'")
+                    Log.i(TAG, "recordStreaming: 中间结果 '$currentResult' (samples=$totalSamples)")
                     // 中间结果：只更新显示，不累积
                     onSegmentResult(currentResult, false)
                     lastResult = currentResult
@@ -348,7 +353,9 @@ class VoiceEngine(private val context: Context) {
 
                 // 检查端点（说话结束）
                 if (sherpaEngine.isEndpoint(onlineRec, stream)) {
+                    endpointCount++
                     val endpointText = sherpaEngine.getStreamingResult(onlineRec, stream)
+                    Log.i(TAG, "recordStreaming: 端点检测 #$endpointCount, text='$endpointText'")
                     if (endpointText.isNotEmpty()) {
                         // 端点结果：累积到已确认文本
                         accumulatedText.append(endpointText)
@@ -360,6 +367,7 @@ class VoiceEngine(private val context: Context) {
                     }
                 }
             }
+            Log.i(TAG, "recordStreaming: 循环结束, totalSamples=$totalSamples, nonEmptyResults=$nonEmptyResults, endpoints=$endpointCount, accumulated='${accumulatedText.toString().take(50)}'")
 
             // 录音结束：返回所有累积的文本
             val finalText = accumulatedText.toString()
