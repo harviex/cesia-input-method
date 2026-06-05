@@ -1854,7 +1854,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_SHERPA)
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
             Log.i("Cesia", "语音后端: 本地 Sherpa-onnx ($modeLabel, $modelName)")
-            updateStatus("🎤 语音: 本地 Sherpa-onnx ✅")
+            updateStatus("🎤 语音: 本地 Sherpa-onnx ✅ ($modelName)")
             return
         }
 
@@ -1959,17 +1959,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun startWhisperRecordingAsync() {
         voiceEngineScope.launch {
             try {
-                Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${voiceEngine.hasSherpaModel()}, bridgeLoaded=${SherpaOnnxEngine.isLibraryLoaded()}")
-                if (!SherpaOnnxEngine.isLibraryLoaded() || !voiceEngine.hasSherpaModel()) {
+                val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
+                val hasLocalModel = voiceEngine.hasSherpaModel()
+                val modelName = voiceEngine.getSherpaModelName()
+                val modelId = modelManager.installedVoiceModelId
+                Log.i("Cesia", "startWhisperRecordingAsync: bridgeLoaded=$bridgeLoaded, hasLocalModel=$hasLocalModel, modelName=$modelName, modelId=$modelId")
+                if (!bridgeLoaded || !hasLocalModel) {
                     withContext(Dispatchers.Main) {
-                        updateStatus("⚠️ 本地语音不可用，回退到 Google...")
+                        val reason = when {
+                            !bridgeLoaded -> "Sherpa 库未加载"
+                            !hasLocalModel -> "模型文件未找到"
+                            else -> "未知原因"
+                        }
+                        updateStatus("⚠️ 本地语音不可用（$reason），回退到 Google...")
                         startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
                     }
                     return@launch
                 }
 
                 withContext(Dispatchers.Main) {
-                    updateStatus("🎤 正在收听 (本地 Sherpa)...")
+                    updateStatus("🎤 正在收听 (本地 Sherpa: $modelName)...")
                 }
 
                 val sb = StringBuilder()

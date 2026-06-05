@@ -238,25 +238,38 @@ class VoiceAISettingsHelper(
         btnUninstall?.isEnabled = voiceInstalled != null || aiInstalled != null
     }
 
-    /** 刷新桥梁状态（仅用于诊断显示） */
+    /** 刷新桥梁状态（显示框架+模型的完整连接信息） */
     fun refreshBridgeStatus() {
         val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
         val bridgeError = SherpaOnnxEngine.getLibraryLoadError()
         val voiceModel = modelManager.getInstalledVoiceModelFile()
+        val modelId = modelManager.installedVoiceModelId
 
         if (!bridgeLoaded) {
             val reason = bridgeError ?: "未知错误"
-            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 库未加载: $reason"
+            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 库未加载\n原因: $reason"
             tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
         } else if (voiceModel == null) {
-            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 已加载，但语音模型未安装（请下载模型）"
+            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 已加载，但语音模型未安装\n请下载语音识别模型"
             tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
         } else {
             val aiModel = modelManager.getInstalledAiModelFile()
-            val aiText = if (aiModel != null) "，Qwen: ${aiModel.name}" else "，Qwen: 未安装"
-            tvBridgeStatus?.text = "✅ Sherpa-onnx 已加载，语音: ${voiceModel.name}$aiText"
+            val aiText = if (aiModel != null) "Qwen: ${aiModel.name}" else "Qwen: 未安装"
+            val modelInfo = modelId?.let { id ->
+                ModelRegistry.getById(id)?.let { info ->
+                    "\n模型: ${info.name} (${info.description})"
+                }
+            } ?: ""
+            tvBridgeStatus?.text = buildString {
+                appendLine("✅ Sherpa-onnx 已加载")
+                appendLine("语音: ${voiceModel.name}")
+                append("路径: ${voiceModel.parent}")
+                if (modelInfo.isNotEmpty()) appendLine(modelInfo) else appendLine()
+                appendLine(aiText)
+                append("框架→模型: 已连接")
+            }
             tvBridgeStatus?.setTextColor(0xFF2E7D32.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
         }
