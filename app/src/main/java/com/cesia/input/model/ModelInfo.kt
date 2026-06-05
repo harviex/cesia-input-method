@@ -42,7 +42,7 @@ object ModelRegistry {
             id = "sherpa-paraformer",
             name = "Paraformer",
             description = "中文专精, 流式识别, 完全离线 (~80MB)",
-            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-paraformer-zh",
             fileName = "paraformer",  // 目录名，实际包含多个文件
             sizeBytes = 80L * MB,
             type = ModelInfo.ModelType.VOICE
@@ -78,7 +78,7 @@ object ModelRegistry {
 
     // Paraformer 各文件下载路径（相对于 hf repo 的 resolve/main/）
     fun getParaformerFileUrl(file: String): String {
-        return "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/main/$file"
+        return "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-paraformer-zh/resolve/main/$file"
     }
 
     fun getById(id: String): ModelInfo? = ALL_MODELS.find { it.id == id }
