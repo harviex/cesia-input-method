@@ -906,14 +906,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 Log.i("Cesia", "单击语音键: bridgeLoaded=$bridgeLoaded, hasVoiceModel=$hasVoiceModel, localMode=$localModeEnabled")
 
                 if (localModeEnabled) {
-                    // 本地模式：必须 Whisper + Qwen 都安装
+                    // 本地模式：必须 Sherpa + 语音模型 + Qwen 都安装
                     if (!bridgeLoaded || !hasVoiceModel || !modelManager.hasAiModel()) {
-                        updateStatus("⚠️ 本地模式需要 Whisper + Qwen 模型，请先到设置中下载")
+                        updateStatus("⚠️ 本地模式需要语音识别 + Qwen 模型，请先到设置中下载")
                         return@setOnClickListener
                     }
                     startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
                 } else {
-                    // 云端模式：Whisper 可用时用 Whisper 识别 + 云端润色，否则 Google + 云端润色
+                    // 云端模式：本地模型可用时用本地识别 + 云端润色，否则 Google + 云端润色
                     if (bridgeLoaded && hasVoiceModel) {
                         startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.CLOUD_OPENROUTER)
                     } else {

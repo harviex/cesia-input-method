@@ -292,11 +292,14 @@ class VoiceAISettingsHelper(
         isDownloading = true
         tvDownloadProgress?.visibility = View.VISIBLE
         pbDownload?.visibility = View.VISIBLE
+        Log.i("VoiceAISettings", "downloadVoiceModel: pbDownload=$pbDownload, tvDownloadProgress=$tvDownloadProgress")
         tvDownloadProgress?.text = "正在下载 Zipformer 语音识别模型..."
 
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
+            Log.i("VoiceAISettings", "downloadZipformer: starting download")
             val result = downloadManager.downloadZipformer { fileName, progress ->
+                Log.i("VoiceAISettings", "downloadZipformer: onProgress $fileName $progress%")
                 activity.runOnUiThread {
                     pbDownload?.progress = progress
                     tvDownloadProgress?.text = "下载 $fileName: $progress%"
@@ -334,12 +337,15 @@ class VoiceAISettingsHelper(
         tvDownloadProgress?.visibility = View.VISIBLE
         pbDownload?.visibility = View.VISIBLE
         tvDownloadProgress?.text = "正在下载 AI 润色模型..."
+        Log.i("VoiceAISettings", "downloadAiModel: pbDownload=$pbDownload, starting AI model download")
 
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
+            Log.i("VoiceAISettings", "downloadAiModel: launching coroutine")
             val result = downloadManager.downloadByType(
                 ModelInfo.ModelType.AI, tier
             ) { modelName, progress ->
+                Log.i("VoiceAISettings", "downloadAiModel: onProgress $modelName $progress%")
                 activity.runOnUiThread {
                     pbDownload?.progress = progress
                     tvDownloadProgress?.text = "下载 $modelName: $progress%"
