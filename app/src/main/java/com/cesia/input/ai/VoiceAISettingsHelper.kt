@@ -131,7 +131,7 @@ class VoiceAISettingsHelper(
                     Toast.LENGTH_SHORT).show()
             } else {
                 // 未安装 → 显示预估大小
-                val totalBytes = 30L * 1024 * 1024  // 30MB 预估
+                val totalBytes = 206L * 1024 * 1024  // 206MB 预估
                 Toast.makeText(activity,
                     "将下载 Zipformer 语音识别模型（约 ${ModelDownloadManager.Formatter.formatSize(totalBytes)}，4个文件）",
                     Toast.LENGTH_SHORT).show()

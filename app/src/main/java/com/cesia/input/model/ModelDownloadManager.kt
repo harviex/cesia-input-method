@@ -163,13 +163,14 @@ class ModelDownloadManager(private val context: Context) {
             val totalFiles = files.size
 
             for (file in files) {
-                val destFile = File(zipformerDir, file)
+                val localName = ModelRegistry.getZipformerLocalName(file)
+                val destFile = File(zipformerDir, localName)
 
                 // 文件已存在则跳过
                 if (destFile.exists()) {
-                    Log.i(TAG, "Zipformer file already exists: $file")
+                    Log.i(TAG, "Zipformer file already exists: $localName")
                     totalDownloaded++
-                    onProgress?.invoke(file, ((totalDownloaded * 100) / totalFiles).toInt())
+                    onProgress?.invoke(localName, ((totalDownloaded * 100) / totalFiles).toInt())
                     continue
                 }
 
@@ -188,7 +189,7 @@ class ModelDownloadManager(private val context: Context) {
                 val body = response.body
                     ?: return@withContext Result.failure(Exception("Empty response for $file"))
 
-                val tempFile = File(zipformerDir, "$file.tmp")
+                val tempFile = File(zipformerDir, "$localName.tmp")
                 body.byteStream().use { input ->
                     FileOutputStream(tempFile).use { output ->
                         val buffer = ByteArray(BUFFER_SIZE)
@@ -206,12 +207,12 @@ class ModelDownloadManager(private val context: Context) {
                 if (destFile.exists()) destFile.delete()
                 if (!tempFile.renameTo(destFile)) {
                     tempFile.delete()
-                    return@withContext Result.failure(Exception("Failed to rename $file"))
+                    return@withContext Result.failure(Exception("Failed to rename $localName"))
                 }
 
                 totalDownloaded++
-                onProgress?.invoke(file, ((totalDownloaded * 100) / totalFiles).toInt())
-                Log.i(TAG, "Zipformer file downloaded: $file (${destFile.length()} bytes)")
+                onProgress?.invoke(localName, ((totalDownloaded * 100) / totalFiles).toInt())
+                Log.i(TAG, "Zipformer file downloaded: $localName (${destFile.length()} bytes)")
             }
 
             // 标记模型已安装
