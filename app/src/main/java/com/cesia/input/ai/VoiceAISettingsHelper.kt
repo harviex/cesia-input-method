@@ -130,18 +130,16 @@ class VoiceAISettingsHelper(
             modelManager.useGpu = checked
         }
 
-        // 下载语音识别模型（Whisper）
+        // 下载语音识别模型（Paraformer 多文件）
         btnDownloadVoice?.setOnClickListener {
-            val ram = getTotalRamGB()
-            val tier = if (ram >= 6.0) ModelInfo.Tier.PREMIUM else ModelInfo.Tier.BASIC
             val model = ModelRegistry.ALL_MODELS.find {
-                it.type == ModelInfo.ModelType.VOICE && it.tier == tier
+                it.type == ModelInfo.ModelType.VOICE
             }
             val sizeStr = model?.let { ModelDownloadManager.Formatter.formatSize(it.sizeBytes) } ?: ""
             Toast.makeText(activity,
-                "将下载语音识别模型（$sizeStr）",
+                "将下载 Paraformer 语音识别模型（$sizeStr，3个文件）",
                 Toast.LENGTH_SHORT).show()
-            downloadVoiceModel(tier)
+            downloadVoiceModel()
         }
 
         // 下载 AI 润色模型（Qwen）
@@ -199,7 +197,14 @@ class VoiceAISettingsHelper(
         // 语音模型
         val voiceInstalled = modelManager.getInstalledVoiceModelFile()
         tvVoiceModelStatus?.text = if (voiceInstalled != null) {
-            "✅ 已安装: ${voiceInstalled.name} (${ModelDownloadManager.Formatter.formatSize(voiceInstalled.length())})"
+            if (voiceInstalled.isDirectory) {
+                // Paraformer 多文件模型 — 计算目录总大小
+                val totalBytes = voiceInstalled.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                val files = voiceInstalled.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
+                "✅ Paraformer 已安装 (${ModelDownloadManager.Formatter.formatSize(totalBytes)})\n   ${files.joinToString(", ")}"
+            } else {
+                "✅ 已安装: ${voiceInstalled.name} (${ModelDownloadManager.Formatter.formatSize(voiceInstalled.length())})"
+            }
         } else {
             "❌ 未安装（将使用 Google 语音识别）"
         }
@@ -298,8 +303,8 @@ class VoiceAISettingsHelper(
         }
     }
 
-    /** 下载语音识别模型 */
-    private fun downloadVoiceModel(tier: ModelInfo.Tier) {
+    /** 下载 Paraformer 语音识别模型（多文件） */
+    private fun downloadVoiceModel() {
         if (isDownloading) {
             Toast.makeText(activity, "正在下载中，请稍候", Toast.LENGTH_SHORT).show()
             return
@@ -307,16 +312,14 @@ class VoiceAISettingsHelper(
         isDownloading = true
         tvDownloadProgress?.visibility = View.VISIBLE
         pbDownload?.visibility = View.VISIBLE
-        tvDownloadProgress?.text = "正在下载语音识别模型..."
+        tvDownloadProgress?.text = "正在下载 Paraformer 语音识别模型..."
 
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
-            val result = downloadManager.downloadByType(
-                ModelInfo.ModelType.VOICE, tier
-            ) { modelName, progress ->
+            val result = downloadManager.downloadParaformer { fileName, progress ->
                 activity.runOnUiThread {
                     pbDownload?.progress = progress
-                    tvDownloadProgress?.text = "下载 $modelName: $progress%"
+                    tvDownloadProgress?.text = "下载 $fileName: $progress%"
                 }
             }
 
@@ -325,11 +328,12 @@ class VoiceAISettingsHelper(
             activity.runOnUiThread {
                 pbDownload?.visibility = View.GONE
                 if (result.isSuccess) {
-                    tvDownloadProgress?.text = "✅ 语音识别模型下载完成"
+                    tvDownloadProgress?.text = "✅ Paraformer 模型下载完成"
                     refreshModeUI()
                     refreshModelStatus()
+                    refreshBridgeStatus()
                     Toast.makeText(activity,
-                        "语音识别安装成功，已替换 Google 语音", Toast.LENGTH_SHORT).show()
+                        "Paraformer 安装成功，支持流式语音识别", Toast.LENGTH_SHORT).show()
                 } else {
                     tvDownloadProgress?.text =
                         "❌ 下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}"

@@ -148,8 +148,84 @@ class ModelDownloadManager(private val context: Context) {
         } else false
     }
 
+    /** 下载 Paraformer 语音识别模型（多文件）
+     * 下载 encoder.onnx + decoder.onnx + tokens.txt 到 local_models/paraformer/ 目录
+     */
+    suspend fun downloadParaformer(
+        onProgress: ((fileName: String, percent: Int) -> Unit)? = null
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val paraformerDir = File(modelsDir, "paraformer")
+            paraformerDir.mkdirs()
+
+            val files = ModelRegistry.PARAFORMER_FILES
+            var totalDownloaded = 0L
+            val totalFiles = files.size
+
+            for (file in files) {
+                val destFile = File(paraformerDir, file)
+
+                // 文件已存在则跳过
+                if (destFile.exists()) {
+                    Log.i(TAG, "Paraformer file already exists: $file")
+                    totalDownloaded++
+                    onProgress?.invoke(file, ((totalDownloaded * 100) / totalFiles).toInt())
+                    continue
+                }
+
+                val url = ModelRegistry.getParaformerFileUrl(file)
+                Log.i(TAG, "Downloading Paraformer file: $url")
+
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        Exception("HTTP ${response.code} for $file")
+                    )
+                }
+
+                val body = response.body
+                    ?: return@withContext Result.failure(Exception("Empty response for $file"))
+
+                val tempFile = File(paraformerDir, "$file.tmp")
+                body.byteStream().use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            if (!isActive) {
+                                tempFile.delete()
+                                return@withContext Result.failure(Exception("Download cancelled"))
+                            }
+                            output.write(buffer, 0, bytesRead)
+                        }
+                    }
+                }
+
+                if (destFile.exists()) destFile.delete()
+                if (!tempFile.renameTo(destFile)) {
+                    tempFile.delete()
+                    return@withContext Result.failure(Exception("Failed to rename $file"))
+                }
+
+                totalDownloaded++
+                onProgress?.invoke(file, ((totalDownloaded * 100) / totalFiles).toInt())
+                Log.i(TAG, "Paraformer file downloaded: $file (${destFile.length()} bytes)")
+            }
+
+            // 标记模型已安装
+            modelManager.markInstalled("sherpa-paraformer", ModelInfo.ModelType.VOICE)
+            Log.i(TAG, "Paraformer model download complete: ${paraformerDir.absolutePath}")
+            Result.success(paraformerDir)
+        } catch (e: Exception) {
+            Log.e(TAG, "Paraformer download failed", e)
+            Result.failure(e)
+        }
+    }
+
     /**
-     * 下载指定类型的所有模型（只下载未安装的）
+     * 下载指定类型的 AI 模型（用于 AI 润色模型下载）
      */
     suspend fun downloadByType(
         type: ModelInfo.ModelType,

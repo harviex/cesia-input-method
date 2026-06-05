@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.model.ModelManager
+import com.k2fsa.sherpa.onnx.OnlineRecognizer
+import com.k2fsa.sherpa.onnx.OnlineStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -17,23 +19,17 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * 语音识别引擎 — 统一本地 Sherpa-onnx / 云端 Groq API 两种后端
- *
- * 本地模式使用流式识别：边录音边识别，实时返回中间结果
- * 云端模式使用 Groq API：录音完成后上传识别
- *
- * 使用方式:
- * 1. 创建实例: VoiceEngine(context)
- * 2. 设置后端: setBackend(Backend.LOCAL) 或 setBackend(Backend.CLOUD)
- * 3. 流式识别: startStreamingRecognition() → 循环 feedAudio() → stopStreamingRecognition()
- * 4. 离线识别: recordAndTranscribe(durationMs) → String
+ * 语音识别引擎
+ * 支持：
+ * - Sherpa-onnx Paraformer 流式识别（OnlineRecognizer，边说边出文字）
+ * - Sherpa-onnx 离线识别（OfflineRecognizer，整段识别）
+ * - Groq 云端识别（whisper-large-v3）
  */
 class VoiceEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "VoiceEngine"
         private const val GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-        private const val FEED_INTERVAL_MS = 100L  // 每100ms喂一次音频
     }
 
     enum class Backend {
@@ -87,14 +83,60 @@ class VoiceEngine(private val context: Context) {
 
     fun getLastErrorMessage(): String? = lastErrorMessage
 
+    // ==================== 模型目录查找 ====================
+
+    /**
+     * 查找模型目录
+     * 优先查找 Paraformer 多文件目录 local_models/paraformer/
+     * 兼容旧路径 local_models/ 下的 .onnx 单文件
+     */
+    private fun findModelDir(): File? {
+        // 1. Paraformer 多文件目录
+        val paraformerDir = File(context.filesDir, "local_models/paraformer")
+        if (paraformerDir.exists() && paraformerDir.isDirectory) {
+            val encoder = File(paraformerDir, "encoder.onnx")
+            val decoder = File(paraformerDir, "decoder.onnx")
+            val tokens = File(paraformerDir, "tokens.txt")
+            if (encoder.exists() && decoder.exists() && tokens.exists()) {
+                Log.i(TAG, "findModelDir: Paraformer 目录完整 ${paraformerDir.absolutePath}")
+                return paraformerDir
+            }
+        }
+
+        // 2. 通过 ModelManager 查找单文件模型
+        val installedFile = modelManager.getInstalledVoiceModelFile()
+        if (installedFile != null) {
+            Log.i(TAG, "findModelDir: ModelManager 找到 ${installedFile.absolutePath}")
+            return installedFile.parentFile
+        }
+
+        // 3. 兼容旧路径
+        val sherpaDir = File(context.filesDir, "models/sherpa")
+        val legacyFile = File(sherpaDir, "model.onnx")
+        if (legacyFile.exists()) {
+            Log.i(TAG, "findModelDir: 旧路径 ${sherpaDir.absolutePath}")
+            return sherpaDir
+        }
+
+        return null
+    }
+
+    /**
+     * 判断是否为 Paraformer 多文件模型
+     */
+    private fun isParaformerModel(modelDir: File): Boolean {
+        return File(modelDir, "encoder.onnx").exists() &&
+               File(modelDir, "decoder.onnx").exists() &&
+               File(modelDir, "tokens.txt").exists()
+    }
+
     // ==================== 本地模型加载 ====================
 
     /**
      * 检查本地语音模型是否可用
-     * 统一使用 ModelManager 的路径：local_models/
+     * 支持 Paraformer 多文件模型（local_models/paraformer/）
      */
     suspend fun loadLocalModel(modelType: ModelType? = null): Boolean = withContext(Dispatchers.IO) {
-        // 检查库是否可用
         if (!SherpaOnnxEngine.isLibraryLoaded()) {
             val err = SherpaOnnxEngine.getLibraryLoadError() ?: "未知错误"
             lastErrorMessage = "Sherpa-onnx 库未加载: $err"
@@ -102,54 +144,17 @@ class VoiceEngine(private val context: Context) {
             return@withContext false
         }
 
-        // 检查模型文件（通过 ModelManager）
-        val modelFile = findModelFile()
-        if (modelFile == null) {
-            lastErrorMessage = "未找到模型文件（local_models/ 目录下无 .onnx 模型）"
+        val modelDir = findModelDir()
+        if (modelDir == null) {
+            lastErrorMessage = "未找到模型目录（local_models/paraformer/）"
             Log.e(TAG, lastErrorMessage!!)
             return@withContext false
         }
 
         recognizerLoaded = true
         lastErrorMessage = null
-        Log.i(TAG, "本地模型可用: ${modelFile.absolutePath}")
+        Log.i(TAG, "本地模型可用: ${modelDir.absolutePath}")
         true
-    }
-
-    /**
-     * 查找模型文件 — 统一路径
-     * 优先通过 ModelManager 查找已安装的模型
-     * 兼容旧路径 models/sherpa/model.onnx
-     */
-    private fun findModelFile(): File? {
-        // 1. 通过 ModelManager 查找（local_models/ 目录）
-        val installedFile = modelManager.getInstalledVoiceModelFile()
-        if (installedFile != null) {
-            Log.i(TAG, "findModelFile: 通过 ModelManager 找到 ${installedFile.absolutePath}")
-            return installedFile
-        }
-
-        // 2. 兼容旧路径 models/sherpa/model.onnx
-        val sherpaDir = File(context.filesDir, "models/sherpa")
-        val legacyFile = File(sherpaDir, "model.onnx")
-        if (legacyFile.exists() && legacyFile.isFile) {
-            Log.i(TAG, "findModelFile: 通过旧路径找到 ${legacyFile.absolutePath}")
-            return legacyFile
-        }
-
-        // 3. 扫描 local_models/ 目录下的任意 .onnx 文件
-        val modelsDir = File(context.filesDir, "local_models")
-        if (modelsDir.exists() && modelsDir.isDirectory) {
-            val onnxFile = modelsDir.listFiles()?.firstOrNull {
-                it.isFile && it.name.endsWith(".onnx") && !it.name.endsWith(".tmp")
-            }
-            if (onnxFile != null) {
-                Log.i(TAG, "findModelFile: 扫描 local_models/ 找到 ${onnxFile.absolutePath}")
-                return onnxFile
-            }
-        }
-
-        return null
     }
 
     fun isLocalModelLoaded(): Boolean = recognizerLoaded
@@ -157,16 +162,22 @@ class VoiceEngine(private val context: Context) {
     /**
      * 检查是否有可用的本地模型
      */
-    fun hasSherpaModel(): Boolean = findModelFile() != null
+    fun hasSherpaModel(): Boolean = findModelDir() != null
 
     /**
      * 获取模型名称和路径信息
      */
     fun getSherpaModelName(): String {
-        val modelFile = findModelFile() ?: return "无模型"
-        val sizeMB = modelFile.length() / 1024 / 1024
+        val modelDir = findModelDir() ?: return "无模型"
         val modelId = modelManager.installedVoiceModelId ?: "未知"
-        return "$modelId (${sizeMB}MB)"
+        return if (isParaformerModel(modelDir)) {
+            val encSize = File(modelDir, "encoder.onnx").length() / 1024 / 1024
+            "Paraformer 流式 (${encSize}MB)"
+        } else {
+            val onnxFile = modelDir.listFiles()?.firstOrNull { it.name.endsWith(".onnx") }
+            val sizeMB = (onnxFile?.length() ?: 0) / 1024 / 1024
+            "$modelId (${sizeMB}MB)"
+        }
     }
 
     /**
@@ -185,8 +196,8 @@ class VoiceEngine(private val context: Context) {
         val installedFile = modelManager.getInstalledVoiceModelFile()
         sb.appendLine("ModelManager模型: ${installedFile?.let { "✅ ${it.name} (${it.length()/1024/1024}MB)" } ?: "❌ 无"}")
 
-        val foundFile = findModelFile()
-        sb.appendLine("VoiceEngine查找: ${foundFile?.let { "✅ ${it.absolutePath}" } ?: "❌ 未找到"}")
+        val foundDir = findModelDir()
+        sb.appendLine("VoiceEngine查找: ${foundDir?.let { "✅ ${it.absolutePath}" } ?: "❌ 未找到"}")
 
         // 列出 local_models/ 目录内容
         val modelsDir = File(context.filesDir, "local_models")
@@ -194,31 +205,26 @@ class VoiceEngine(private val context: Context) {
             val files = modelsDir.listFiles()?.filter { it.isFile } ?: emptyList()
             sb.appendLine("local_models/ 文件: ${files.size} 个")
             files.forEach { sb.appendLine("  - ${it.name} (${it.length()/1024/1024}MB)") }
+            // 列出子目录
+            val dirs = modelsDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+            dirs.forEach { dir ->
+                val dirFiles = dir.listFiles()?.filter { it.isFile } ?: emptyList()
+                sb.appendLine("  📁 ${dir.name}/ (${dirFiles.size} 个文件)")
+                dirFiles.forEach { sb.appendLine("    - ${it.name} (${it.length()/1024/1024}MB)") }
+            }
         } else {
             sb.appendLine("local_models/ 目录: 不存在")
-        }
-
-        // 列出 models/sherpa/ 目录内容
-        val sherpaDir = File(context.filesDir, "models/sherpa")
-        if (sherpaDir.exists() && sherpaDir.isDirectory) {
-            val files = sherpaDir.listFiles()?.filter { it.isFile } ?: emptyList()
-            sb.appendLine("models/sherpa/ 文件: ${files.size} 个")
-            files.forEach { sb.appendLine("  - ${it.name} (${it.length()/1024/1024}MB)") }
-        } else {
-            sb.appendLine("models/sherpa/ 目录: 不存在")
         }
 
         return sb.toString()
     }
 
-    // ==================== 离线识别（录音后识别） ====================
+    // ==================== 流式/分段识别 ====================
 
     /**
-     * 分段录音识别（边说边出文字）
-     * 每 segmentDurationMs 秒识别一次，通过 onSegmentResult 回调返回
-     * @param maxDurationMs 最长录音时间
-     * @param segmentDurationMs 每段识别的时长（秒）
-     * @param onSegmentResult 分段结果回调 (text, isFinal)
+     * 录音识别（边说边出文字）
+     * - Paraformer 模型：使用 OnlineRecognizer 真正流式识别
+     * - 其他模型：使用 OfflineRecognizer 分段识别
      */
     suspend fun recordInSegments(
         maxDurationMs: Int = 30000,
@@ -227,24 +233,125 @@ class VoiceEngine(private val context: Context) {
     ) {
         Log.i(TAG, "recordInSegments: max=${maxDurationMs}ms, segment=${segmentDurationMs}ms")
 
-        // 预检查
         if (!SherpaOnnxEngine.isLibraryLoaded()) {
             Log.e(TAG, "recordInSegments: library not loaded")
             return
         }
-        val modelFile = findModelFile()
-        if (modelFile == null) {
-            Log.e(TAG, "recordInSegments: model file not found")
+
+        val modelDir = findModelDir()
+        if (modelDir == null) {
+            Log.e(TAG, "recordInSegments: model dir not found")
             return
         }
+
+        if (isParaformerModel(modelDir)) {
+            recordStreaming(modelDir, maxDurationMs, onSegmentResult)
+        } else {
+            recordInSegmentsOffline(modelDir, maxDurationMs, segmentDurationMs, onSegmentResult)
+        }
+    }
+
+    /**
+     * Paraformer 流式识别（OnlineRecognizer）
+     * 真正边说边识别，不需要分段
+     */
+    private suspend fun recordStreaming(
+        modelDir: File,
+        maxDurationMs: Int,
+        onSegmentResult: suspend (text: String, isFinal: Boolean) -> Unit
+    ) {
+        Log.i(TAG, "recordStreaming: 使用 OnlineRecognizer 流式识别")
+
+        val onlineRec = sherpaEngine.createStreamingRecognizer(
+            assetManager = null,
+            modelDir = modelDir.absolutePath,
+            modelType = SherpaOnnxEngine.ModelType.PARAFORMER,
+            numThreads = 2
+        )
+        if (onlineRec == null) {
+            Log.e(TAG, "recordStreaming: 创建 OnlineRecognizer 失败")
+            return
+        }
+
+        val stream = onlineRec.createStream()
+        if (stream == null) {
+            Log.e(TAG, "recordStreaming: 创建 OnlineStream 失败")
+            return
+        }
+
+        if (!recorder.init()) {
+            Log.e(TAG, "recordStreaming: recorder init failed")
+            return
+        }
+        recorder.start()
+
+        val readBuffer = FloatArray(1024)
+        val startTime = System.currentTimeMillis()
+        var lastResult = ""
+
+        try {
+            while (System.currentTimeMillis() - startTime < maxDurationMs) {
+                val read = recorder.readChunk(readBuffer.size) ?: break
+                if (read.isEmpty()) {
+                    Thread.sleep(50)
+                    continue
+                }
+
+                // 喂入音频
+                sherpaEngine.acceptWaveform(onlineRec, stream, read)
+
+                // 获取当前结果
+                val currentResult = sherpaEngine.getStreamingResult(onlineRec, stream)
+                if (currentResult.isNotEmpty() && currentResult != lastResult) {
+                    Log.i(TAG, "recordStreaming: 中间结果 '$currentResult'")
+                    onSegmentResult(currentResult, false)
+                    lastResult = currentResult
+                }
+
+                // 检查端点（说话结束）
+                if (sherpaEngine.isEndpoint(onlineRec, stream)) {
+                    val finalText = sherpaEngine.getStreamingResult(onlineRec, stream)
+                    if (finalText.isNotEmpty()) {
+                        onSegmentResult(finalText, true)
+                    }
+                    // 重置继续识别
+                    sherpaEngine.resetStream(onlineRec, stream)
+                    lastResult = ""
+                }
+            }
+
+            // 最终结果
+            val finalText = sherpaEngine.getStreamingResult(onlineRec, stream)
+            if (finalText.isNotEmpty() && finalText != lastResult) {
+                onSegmentResult(finalText, true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "recordStreaming error: ${e.message}", e)
+        } finally {
+            try { recorder.stop() } catch (_: Exception) {}
+            // OnlineStream.delete() and OnlineRecognizer.release() are private;
+            // rely on GC/finalize for native resource cleanup
+        }
+    }
+
+    /**
+     * 分段离线识别（OfflineRecognizer）
+     * 用于非 Paraformer 模型
+     */
+    private suspend fun recordInSegmentsOffline(
+        modelDir: File,
+        maxDurationMs: Int,
+        segmentDurationMs: Int,
+        onSegmentResult: suspend (text: String, isFinal: Boolean) -> Unit
+    ) {
+        Log.i(TAG, "recordInSegmentsOffline: 使用 OfflineRecognizer 分段识别")
 
         val sampleRate = 16000
         val segmentSamples = sampleRate * segmentDurationMs / 1000
         val maxSamples = sampleRate * maxDurationMs / 1000
 
-        // 初始化录音
         if (!recorder.init()) {
-            Log.e(TAG, "recordInSegments: recorder init failed")
+            Log.e(TAG, "recordInSegmentsOffline: recorder init failed")
             return
         }
         recorder.start()
@@ -261,33 +368,28 @@ class VoiceEngine(private val context: Context) {
                     Thread.sleep(50)
                     continue
                 }
-                // 追加到缓冲区
                 for (sample in read) {
                     allAudio.add(sample)
                 }
                 totalSamples += read.size
 
-                // 检查是否够一段了
                 while (allAudio.size >= segmentSamples) {
                     val segment = allAudio.subList(0, segmentSamples).toFloatArray()
                     allAudio.subList(0, segmentSamples).clear()
-
-                    // 识别这一段
-                    val text = transcribeLocal(segment)
-                    Log.i(TAG, "recordInSegments: segment result '$text'")
+                    val text = transcribeLocal(segment, modelDir)
+                    Log.i(TAG, "recordInSegmentsOffline: segment result '$text'")
                     onSegmentResult(text, false)
                 }
             }
 
-            // 处理剩余音频
             if (allAudio.isNotEmpty()) {
                 val remaining = allAudio.toFloatArray()
-                val text = transcribeLocal(remaining)
-                Log.i(TAG, "recordInSegments: final result '$text'")
+                val text = transcribeLocal(remaining, modelDir)
+                Log.i(TAG, "recordInSegmentsOffline: final result '$text'")
                 onSegmentResult(text, true)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "recordInSegments error: ${e.message}", e)
+            Log.e(TAG, "recordInSegmentsOffline error: ${e.message}", e)
         } finally {
             try { recorder.stop() } catch (_: Exception) {}
         }
@@ -300,7 +402,14 @@ class VoiceEngine(private val context: Context) {
         if (audioData.isEmpty()) return@withContext ""
 
         when (currentBackend) {
-            Backend.LOCAL_SHERPA -> transcribeLocal(audioData)
+            Backend.LOCAL_SHERPA -> {
+                val modelDir = findModelDir()
+                if (modelDir == null) {
+                    Log.e(TAG, "transcribe: model dir not found")
+                    return@withContext ""
+                }
+                transcribeLocal(audioData, modelDir)
+            }
             Backend.CLOUD_GROQ -> {
                 val tempFile = saveTempWav(audioData)
                 try {
@@ -312,30 +421,21 @@ class VoiceEngine(private val context: Context) {
         }
     }
 
-    private suspend fun transcribeLocal(audioData: FloatArray): String = withContext(Dispatchers.IO) {
+    private suspend fun transcribeLocal(
+        audioData: FloatArray,
+        modelDir: File
+    ): String = withContext(Dispatchers.IO) {
         try {
-            val rec = recognizer
-            if (rec == null) {
-                Log.e(TAG, "transcribeLocal: recognizer is null, trying to load...")
-                if (!loadLocalModel()) {
-                    return@withContext ""
-                }
+            val modelType = if (isParaformerModel(modelDir)) {
+                SherpaOnnxEngine.ModelType.PARAFORMER
+            } else {
+                SherpaOnnxEngine.ModelType.SENSE_VOICE
             }
+            Log.i(TAG, "transcribeLocal: modelDir=${modelDir.absolutePath}, type=$modelType")
 
-            val modelFile = findModelFile()
-            if (modelFile == null) {
-                Log.e(TAG, "transcribeLocal: model file not found")
-                return@withContext ""
-            }
-
-            // 根据模型 ID 自动选择 ModelType
-            val modelType = detectModelType(modelFile)
-            Log.i(TAG, "transcribeLocal: modelFile=${modelFile.name}, detectedType=$modelType")
-
-            // 每次识别创建新的离线识别器
             val offlineRec = sherpaEngine.createOfflineRecognizer(
                 assetManager = null,
-                modelDir = modelFile.parentFile.absolutePath,
+                modelDir = modelDir.absolutePath,
                 modelType = modelType,
                 numThreads = 2
             )
@@ -352,24 +452,6 @@ class VoiceEngine(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "transcribeLocal error: ${e.message}", e)
             ""
-        }
-    }
-
-    /**
-     * 根据模型文件检测 ModelType
-     */
-    private fun detectModelType(modelFile: File): SherpaOnnxEngine.ModelType {
-        val modelId = modelManager.installedVoiceModelId ?: ""
-        return when {
-            modelId.contains("sensevoice", ignoreCase = true) -> SherpaOnnxEngine.ModelType.SENSE_VOICE
-            modelId.contains("paraformer", ignoreCase = true) -> SherpaOnnxEngine.ModelType.PARAFORMER
-            modelId.contains("zipformer", ignoreCase = true) -> SherpaOnnxEngine.ModelType.ZIPFORMER
-            // 根据文件名推断
-            modelFile.name.contains("sensevoice", ignoreCase = true) -> SherpaOnnxEngine.ModelType.SENSE_VOICE
-            modelFile.name.contains("paraformer", ignoreCase = true) -> SherpaOnnxEngine.ModelType.PARAFORMER
-            modelFile.name.contains("zipformer", ignoreCase = true) -> SherpaOnnxEngine.ModelType.ZIPFORMER
-            // 默认 SenseVoice（单文件 model.onnx）
-            else -> SherpaOnnxEngine.ModelType.SENSE_VOICE
         }
     }
 
@@ -415,7 +497,6 @@ class VoiceEngine(private val context: Context) {
 
     private fun saveTempWav(audioData: FloatArray): File {
         val tempFile = File(context.cacheDir, "voice_temp.wav")
-        // 简单 WAV 写入：16kHz 单声道 16-bit PCM
         val byteBuffer = java.io.ByteArrayOutputStream()
         val dos = java.io.DataOutputStream(byteBuffer)
         val dataSize = audioData.size * 2
@@ -425,13 +506,13 @@ class VoiceEngine(private val context: Context) {
         dos.writeBytes("WAVE")
         // fmt chunk
         dos.writeBytes("fmt ")
-        dos.writeInt(Integer.reverseBytes(16)) // chunk size
-        dos.writeShort(java.lang.Short.reverseBytes(1).toInt()) // PCM
-        dos.writeShort(java.lang.Short.reverseBytes(1).toInt()) // mono
-        dos.writeInt(Integer.reverseBytes(16000)) // sample rate
-        dos.writeInt(Integer.reverseBytes(32000)) // byte rate
-        dos.writeShort(java.lang.Short.reverseBytes(2).toInt()) // block align
-        dos.writeShort(java.lang.Short.reverseBytes(16).toInt()) // bits per sample
+        dos.writeInt(Integer.reverseBytes(16))
+        dos.writeShort(java.lang.Short.reverseBytes(1).toInt())
+        dos.writeShort(java.lang.Short.reverseBytes(1).toInt())
+        dos.writeInt(Integer.reverseBytes(16000))
+        dos.writeInt(Integer.reverseBytes(32000))
+        dos.writeShort(java.lang.Short.reverseBytes(2).toInt())
+        dos.writeShort(java.lang.Short.reverseBytes(16).toInt())
         // data chunk
         dos.writeBytes("data")
         dos.writeInt(Integer.reverseBytes(dataSize))

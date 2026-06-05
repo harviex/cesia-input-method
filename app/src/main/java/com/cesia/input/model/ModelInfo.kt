@@ -36,32 +36,15 @@ object ModelRegistry {
     const val GB = MB * 1024
 
     val ALL_MODELS = listOf(
-        // === 语音识别模型 (Sherpa-onnx) ===
-        ModelInfo(
-            id = "sherpa-sensevoice",
-            name = "SenseVoice",
-            description = "多语言语音识别(中/英/日/韩/粤), 内置标点, 离线识别 (~228MB)",
-            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx",
-            fileName = "sherpa-sensevoice-model.onnx",
-            sizeBytes = 228L * MB,
-            type = ModelInfo.ModelType.VOICE
-        ),
+        // === 语音识别模型 (Sherpa-onnx Paraformer) ===
+        // Paraformer 支持流式识别（OnlineRecognizer），完全离线运行
         ModelInfo(
             id = "sherpa-paraformer",
             name = "Paraformer",
-            description = "中文专精语音识别, 高准确率, 流式识别 (~80MB)",
-            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/main/model.onnx",
-            fileName = "sherpa-paraformer-model.onnx",
+            description = "中文专精, 流式识别, 完全离线 (~80MB)",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14",
+            fileName = "paraformer",  // 目录名，实际包含多个文件
             sizeBytes = 80L * MB,
-            type = ModelInfo.ModelType.VOICE
-        ),
-        ModelInfo(
-            id = "sherpa-zipformer",
-            name = "Zipformer",
-            description = "最轻量语音识别, 中英双语, 流式识别 (~30MB)",
-            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-zipformer-zh-2023-09-14/resolve/main/model.onnx",
-            fileName = "sherpa-zipformer-model.onnx",
-            sizeBytes = 30L * MB,
             type = ModelInfo.ModelType.VOICE
         ),
 
@@ -85,6 +68,18 @@ object ModelRegistry {
             type = ModelInfo.ModelType.AI
         )
     )
+
+    // Paraformer 流式模型文件列表
+    val PARAFORMER_FILES = listOf(
+        "encoder.onnx",
+        "decoder.onnx",
+        "tokens.txt"
+    )
+
+    // Paraformer 各文件下载路径（相对于 hf repo 的 resolve/main/）
+    fun getParaformerFileUrl(file: String): String {
+        return "https://hf-mirror.com/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/main/$file"
+    }
 
     fun getById(id: String): ModelInfo? = ALL_MODELS.find { it.id == id }
 }

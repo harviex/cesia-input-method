@@ -78,11 +78,12 @@ class ModelManager(private val context: Context) {
 
     // ==================== 模型状态查询 ====================
 
-    /** 获取已安装语音模型的本地文件，null 表示未安装 */
+    /** 获取已安装语音模型的本地文件/目录，null 表示未安装 */
     fun getInstalledVoiceModelFile(): File? {
         val modelId = installedVoiceModelId ?: return null
         val info = ModelRegistry.getById(modelId) ?: return null
         val file = File(modelsDir, info.fileName)
+        // 支持目录（Paraformer 多文件模型）和单文件
         return if (file.exists()) file else null
     }
 
