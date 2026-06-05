@@ -1955,53 +1955,46 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         typelessEngine?.startListening(continuous = true)
     }
 
-    /** 本地 Whisper 录音+识别 */
+    /** 本地 Paraformer 分段录音+识别（边说边出文字） */
     private fun startWhisperRecordingAsync() {
         voiceEngineScope.launch {
             try {
                 Log.i("Cesia", "startWhisperRecordingAsync: hasLocalModel=${voiceEngine.hasSherpaModel()}, bridgeLoaded=${SherpaOnnxEngine.isLibraryLoaded()}")
                 if (!SherpaOnnxEngine.isLibraryLoaded() || !voiceEngine.hasSherpaModel()) {
-                    // 不可用，回退 Google
                     withContext(Dispatchers.Main) {
                         updateStatus("⚠️ 本地语音不可用，回退到 Google...")
                         startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
                     }
                     return@launch
                 }
-                // 确保模型已加载到内存
-                if (!voiceEngine.isLocalModelLoaded()) {
-                    withContext(Dispatchers.Main) {
-                        updateStatus("⏳ 正在加载 Sherpa 模型...")
-                    }
-                    Log.i("Cesia", "startWhisperRecordingAsync: calling loadLocalModel()")
-                    val loaded = voiceEngine.loadLocalModel()
-                    Log.i("Cesia", "startWhisperRecordingAsync: loadLocalModel returned=$loaded")
-                    if (!loaded) {
-                        withContext(Dispatchers.Main) {
-                            // 获取详细失败信息
-                            val reason = voiceEngine.getLastErrorMessage() ?: "未知错误"
-                            updateStatus("⚠️ Sherpa 加载失败: $reason，回退到 Google...")
-                            Log.e("Cesia", "Sherpa 加载失败详情: $reason")
-                            startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
-                        }
-                        return@launch
-                    }
-                    // 加载成功，显示确认
-                    withContext(Dispatchers.Main) {
-                        updateStatus("✅ Sherpa 模型已加载，请说话...")
-                    }
-                    Log.i("Cesia", "startWhisperRecordingAsync: model loaded, about to record")
-                } else {
-                    Log.i("Cesia", "startWhisperRecordingAsync: model already loaded, skipping loadLocalModel")
-                }
-                Log.i("Cesia", "startWhisperRecordingAsync: calling recordAndTranscribe(30000)")
-                val text = voiceEngine.recordAndTranscribe(30000)
-                Log.i("Cesia", "startWhisperRecordingAsync: recordAndTranscribe returned, text='${text.take(50)}'")
+
                 withContext(Dispatchers.Main) {
-                    handleCloudVoiceResult(text)
+                    updateStatus("🎤 正在收听 (本地 Sherpa)...")
                 }
+
+                val sb = StringBuilder()
+                voiceEngine.recordInSegments(
+                    maxDurationMs = 30000,
+                    segmentDurationMs = 3000,
+                    onSegmentResult = { text, isFinal ->
+                        if (text.isNotEmpty()) {
+                            sb.append(text)
+                            withContext(Dispatchers.Main) {
+                                updateStatus("🎤 $sb")
+                                // 实时显示在候选栏或输入框
+                                recognizedText = sb.toString()
+                                updateCandidateBar()
+                            }
+                        }
+                        if (isFinal) {
+                            withContext(Dispatchers.Main) {
+                                handleCloudVoiceResult(sb.toString())
+                            }
+                        }
+                    }
+                )
             } catch (e: Throwable) {
-                Log.e("Cesia", "Whisper 录音失败", e)
+                Log.e("Cesia", "Paraformer 录音失败", e)
                 withContext(Dispatchers.Main) {
                     updateStatus("❌ 语音识别失败: ${e.javaClass.simpleName}: ${e.message}")
                     resetToIdle()

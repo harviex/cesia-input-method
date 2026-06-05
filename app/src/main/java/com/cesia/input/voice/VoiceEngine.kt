@@ -90,7 +90,7 @@ class VoiceEngine(private val context: Context) {
     // ==================== 本地模型加载 ====================
 
     /**
-     * 加载本地 Paraformer 模型（单文件 model.onnx）
+     * 检查本地 Paraformer 模型是否可用
      * 模型文件路径：models/sherpa/model.onnx
      */
     suspend fun loadLocalModel(modelType: ModelType? = null): Boolean = withContext(Dispatchers.IO) {
@@ -102,50 +102,18 @@ class VoiceEngine(private val context: Context) {
             return@withContext false
         }
 
-        // 只支持 Paraformer
-        val type = ModelType.PARAFORMER
-        currentModelType = type
-
-        // 查找模型文件：models/sherpa/model.onnx
+        // 检查模型文件
         val modelFile = findParaformerModel()
         if (modelFile == null) {
-            lastErrorMessage = "未找到模型文件。请下载 Paraformer 模型并放入 models/sherpa/model.onnx"
+            lastErrorMessage = "未找到模型文件 models/sherpa/model.onnx"
             Log.e(TAG, lastErrorMessage!!)
             return@withContext false
         }
 
-        Log.i(TAG, "Loading Paraformer model: ${modelFile.absolutePath}")
-
-        try {
-            // 释放旧的识别器
-            (recognizer as? com.k2fsa.sherpa.onnx.OfflineRecognizer)?.release()
-            recognizer = null
-            recognizerLoaded = false
-
-            // 创建离线识别器（单文件 model.onnx）
-            val newRecognizer = sherpaEngine.createOfflineRecognizer(
-                assetManager = null,
-                modelDir = modelFile.parentFile.absolutePath,
-                modelType = SherpaOnnxEngine.ModelType.PARAFORMER,
-                numThreads = 2
-            )
-
-            if (newRecognizer != null) {
-                recognizer = newRecognizer
-                recognizerLoaded = true
-                lastErrorMessage = null
-                Log.i(TAG, "Paraformer model loaded successfully")
-                true
-            } else {
-                lastErrorMessage = "创建识别器失败（模型文件可能损坏）"
-                Log.e(TAG, lastErrorMessage!!)
-                false
-            }
-        } catch (e: Throwable) {
-            lastErrorMessage = "${e.javaClass.simpleName}: ${e.message}"
-            Log.e(TAG, "Failed to load Paraformer model", e)
-            false
-        }
+        recognizerLoaded = true
+        lastErrorMessage = null
+        Log.i(TAG, "Paraformer model available: ${modelFile.absolutePath}")
+        true
     }
 
     /**
@@ -250,26 +218,88 @@ class VoiceEngine(private val context: Context) {
     // ==================== 离线识别（录音后识别） ====================
 
     /**
-     * 录音并识别（一站式，非流式）
-     * 适用于短语音输入
+     * 分段录音识别（边说边出文字）
+     * 每 segmentDurationMs 秒识别一次，通过 onSegmentResult 回调返回
+     * @param maxDurationMs 最长录音时间
+     * @param segmentDurationMs 每段识别的时长（秒）
+     * @param onSegmentResult 分段结果回调 (text, isFinal)
      */
-    suspend fun recordAndTranscribe(durationMs: Int): String {
-        Log.i(TAG, "recordAndTranscribe: starting record, duration=${durationMs}ms")
-        val audioData = withContext(Dispatchers.IO) {
-            recorder.record(durationMs)
+    suspend fun recordInSegments(
+        maxDurationMs: Int = 30000,
+        segmentDurationMs: Int = 3000,
+        onSegmentResult: suspend (text: String, isFinal: Boolean) -> Unit
+    ) {
+        Log.i(TAG, "recordInSegments: max=${maxDurationMs}ms, segment=${segmentDurationMs}ms")
+
+        // 预检查
+        if (!SherpaOnnxEngine.isLibraryLoaded()) {
+            Log.e(TAG, "recordInSegments: library not loaded")
+            return
         }
-        Log.i(TAG, "recordAndTranscribe: record done, audioData=${if (audioData != null) "size=${audioData.size}" else "null"}")
-        return if (audioData != null) {
-            transcribe(audioData)
-        } else {
-            Log.e(TAG, "recordAndTranscribe: audioData is null")
-            ""
+        val modelFile = findParaformerModel()
+        if (modelFile == null) {
+            Log.e(TAG, "recordInSegments: model file not found")
+            return
+        }
+
+        val sampleRate = 16000
+        val segmentSamples = sampleRate * segmentDurationMs / 1000
+        val maxSamples = sampleRate * maxDurationMs / 1000
+
+        // 初始化录音
+        if (!recorder.init()) {
+            Log.e(TAG, "recordInSegments: recorder init failed")
+            return
+        }
+        recorder.start()
+
+        val allAudio = mutableListOf<Float>()
+        val readBuffer = FloatArray(1024)
+        var totalSamples = 0
+        val startTime = System.currentTimeMillis()
+
+        try {
+            while (totalSamples < maxSamples && (System.currentTimeMillis() - startTime) < maxDurationMs + 1000) {
+                val read = recorder.readChunk(readBuffer.size) ?: break
+                if (read.isEmpty()) {
+                    Thread.sleep(50)
+                    continue
+                }
+                // 追加到缓冲区
+                for (sample in read) {
+                    allAudio.add(sample)
+                }
+                totalSamples += read.size
+
+                // 检查是否够一段了
+                while (allAudio.size >= segmentSamples) {
+                    val segment = allAudio.subList(0, segmentSamples).toFloatArray()
+                    allAudio.subList(0, segmentSamples).clear()
+
+                    // 识别这一段
+                    val text = transcribeLocal(segment)
+                    Log.i(TAG, "recordInSegments: segment result '$text'")
+                    onSegmentResult(text, false)
+                }
+            }
+
+            // 处理剩余音频
+            if (allAudio.isNotEmpty()) {
+                val remaining = allAudio.toFloatArray()
+                val text = transcribeLocal(remaining)
+                Log.i(TAG, "recordInSegments: final result '$text'")
+                onSegmentResult(text, true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "recordInSegments error: ${e.message}", e)
+        } finally {
+            try { recorder.stop() } catch (_: Exception) {}
         }
     }
 
-    /**
-     * 识别音频数据
-     */
+    private fun MutableList<Float>.toFloatArray(): FloatArray = FloatArray(size) { this[it] }
+
+    // ==================== 音频识别 ====================
     suspend fun transcribe(audioData: FloatArray): String = withContext(Dispatchers.IO) {
         if (audioData.isEmpty()) return@withContext ""
 
