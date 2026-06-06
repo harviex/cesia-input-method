@@ -55,6 +55,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnSave: MaterialButton
     private lateinit var btnReset: MaterialButton
     private lateinit var btnTestApi: MaterialButton
+    private var btnTestLocalAi: MaterialButton? = null
     private lateinit var tvStatus: TextView
     private lateinit var tvLog: TextView
     private lateinit var tvVersion: TextView
@@ -182,6 +183,7 @@ class SettingsActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btn_save)
         btnReset = findViewById(R.id.btn_reset)
         btnTestApi = findViewById(R.id.btn_test_api)
+        btnTestLocalAi = findViewById(R.id.btn_test_local_ai)
         tvStatus = findViewById(R.id.tv_api_status)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
@@ -334,6 +336,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestApi.setOnClickListener { testApiConnection() }
+        btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
         btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
@@ -810,6 +813,92 @@ class SettingsActivity : AppCompatActivity() {
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
                     btnTestApi.text = "📡 测试 API 润色"
+                }
+            }
+        }.start()
+    }
+
+    // ======================== 本地 AI 测试 ========================
+
+    private fun testLocalAiConnection() {
+        val inputText = etTestText.text?.toString()?.trim() ?: ""
+        if (inputText.isEmpty()) {
+            Toast.makeText(this, "请先在文本框中输入要润色的文字", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        btnTestLocalAi?.isEnabled = false
+        btnTestLocalAi?.text = "推理中..."
+        tvStatus.text = "🔄 正在加载模型并润色..."
+        appendLog("🤖 本地 AI 测试开始: ${inputText.take(30)}...")
+
+        Thread {
+            try {
+                val modelManager = com.cesia.input.model.ModelManager(this@SettingsActivity)
+                val modelFile = modelManager.getInstalledAiModelFile()
+
+                if (modelFile == null || !modelFile.exists()) {
+                    runOnUiThread {
+                        tvStatus.text = "❌ 未安装 AI 模型"
+                        appendLog("本地 AI 失败: 模型未安装")
+                        btnTestLocalAi?.isEnabled = true
+                        btnTestLocalAi?.text = "🤖 本地 AI"
+                    }
+                    return@Thread
+                }
+
+                appendLog("模型文件: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
+
+                val aiEngine = com.cesia.input.ai.AIEngine(this@SettingsActivity)
+
+                // 加载模型（在 IO 线程中运行 suspend 函数）
+                appendLog("正在加载模型...")
+                val loadStart = System.currentTimeMillis()
+                val loaded = kotlinx.coroutines.runBlocking {
+                    aiEngine.loadLocalModel(modelFile.absolutePath, 0)
+                }
+                val loadTime = System.currentTimeMillis() - loadStart
+
+                if (!loaded) {
+                    runOnUiThread {
+                        tvStatus.text = "❌ 模型加载失败"
+                        appendLog("本地 AI 失败: 模型加载失败 (${loadTime}ms)")
+                        btnTestLocalAi?.isEnabled = true
+                        btnTestLocalAi?.text = "🤖 本地 AI"
+                    }
+                    return@Thread
+                }
+                appendLog("模型加载成功 (${loadTime}ms)")
+
+                // 推理
+                appendLog("开始推理...")
+                val inferStart = System.currentTimeMillis()
+                val result = kotlinx.coroutines.runBlocking {
+                    aiEngine.polish(inputText, "润色")
+                }
+                val inferTime = System.currentTimeMillis() - inferStart
+
+                aiEngine.release()
+
+                runOnUiThread {
+                    if (result != null && result.isNotEmpty() && result != inputText) {
+                        etTestText.setText(result)
+                        tvStatus.text = "✅ 本地 AI 润色成功 (${inferTime}ms)"
+                        appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
+                    } else {
+                        tvStatus.text = "⚠️ 润色结果为空"
+                        appendLog("润色结果为空 (${inferTime}ms)")
+                    }
+                    btnTestLocalAi?.isEnabled = true
+                    btnTestLocalAi?.text = "🤖 本地 AI"
+                }
+            } catch (e: Exception) {
+                Log.e("SettingsActivity", "本地 AI 测试异常", e)
+                runOnUiThread {
+                    tvStatus.text = "❌ 异常: ${e.message ?: "未知"}"
+                    appendLog("本地 AI 异常: ${e.message}")
+                    btnTestLocalAi?.isEnabled = true
+                    btnTestLocalAi?.text = "🤖 本地 AI"
                 }
             }
         }.start()
