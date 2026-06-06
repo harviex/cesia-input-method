@@ -6,8 +6,10 @@ import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.model.ModelManager
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
 import com.k2fsa.sherpa.onnx.OnlineStream
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -58,6 +60,12 @@ class VoiceEngine(private val context: Context) {
     private var recognizer: Any? = null
     private var recognizerLoaded = false
     private var lastErrorMessage: String? = null
+
+    // 预热缓存：在后台预创建 OnlineRecognizer，避免首次点击语音键的延迟
+    private var cachedOnlineRecognizer: com.k2fsa.sherpa.onnx.OnlineRecognizer? = null
+    private var cachedModelPath: String? = null
+    private val warmupScope = CoroutineScope(Dispatchers.IO)
+    private var hasWarmedUp = false
 
     private val groqClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -172,6 +180,68 @@ class VoiceEngine(private val context: Context) {
     }
 
     fun isLocalModelLoaded(): Boolean = recognizerLoaded
+
+    /** 后台预热：预创建 OnlineRecognizer，避免首次点击语音键的 1.4s 延迟 */
+    fun warmupRecognizer() {
+        if (hasWarmedUp) return
+        warmupScope.launch {
+            val modelDir = findModelDir()
+            if (modelDir == null) return@launch
+            val modelPath = modelDir.absolutePath
+            // 如果已缓存同路径，跳过
+            if (cachedModelPath == modelPath && cachedOnlineRecognizer != null) return@launch
+
+            try {
+                val modelType = if (isZipformerModel(modelDir)) {
+                    SherpaOnnxEngine.ModelType.ZIPFORMER
+                } else {
+                    SherpaOnnxEngine.ModelType.ZIPFORMER
+                }
+                val onlineRec = sherpaEngine.createStreamingRecognizer(
+                    assetManager = null,
+                    modelDir = modelPath,
+                    modelType = modelType,
+                    numThreads = 2
+                )
+                if (onlineRec != null) {
+                    cachedOnlineRecognizer = onlineRec
+                    cachedModelPath = modelPath
+                    hasWarmedUp = true
+                    Log.i(TAG, "预热完成: OnlineRecognizer 已缓存 ($modelPath)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "预热失败: ${e.message}", e)
+            }
+        }
+    }
+
+    /** 获取或创建 OnlineRecognizer（优先使用缓存） */
+    private suspend fun getOrCreateRecognizer(modelDir: File): com.k2fsa.sherpa.onnx.OnlineRecognizer? {
+        val modelPath = modelDir.absolutePath
+        // 缓存命中
+        if (cachedOnlineRecognizer != null && cachedModelPath == modelPath) {
+            Log.i(TAG, "使用缓存的 OnlineRecognizer")
+            return cachedOnlineRecognizer
+        }
+        // 否则创建新的
+        val modelType = if (isZipformerModel(modelDir)) {
+            SherpaOnnxEngine.ModelType.ZIPFORMER
+        } else {
+            SherpaOnnxEngine.ModelType.ZIPFORMER
+        }
+        val onlineRec = sherpaEngine.createStreamingRecognizer(
+            assetManager = null,
+            modelDir = modelPath,
+            modelType = modelType,
+            numThreads = 2
+        )
+        if (onlineRec != null) {
+            cachedOnlineRecognizer = onlineRec
+            cachedModelPath = modelPath
+            hasWarmedUp = true
+        }
+        return onlineRec
+    }
 
     /** 检查是否有可用的本地模型 */
     fun hasSherpaModel(): Boolean {
@@ -291,35 +361,28 @@ class VoiceEngine(private val context: Context) {
                !File(modelDir, "joiner.onnx").exists()
     }
 
-    /**
-     * Zipformer/Paraformer 流式识别（OnlineRecognizer）
+    /** Zipformer/Paraformer 流式识别（OnlineRecognizer）
      * 真正边说边识别，不需要分段
+     *
+     * 关键逻辑：
+     * - getResult(stream) 返回当前 stream 内累积的完整文本（非增量）
+     * - 端点触发 reset(stream) 后，stream 重新从头累积
+     * - 增量 = 同一次 stream 内前后两次 getResult 之差
+     * - 端点后必须清空 lastResult，因为新 stream 从新开始
      */
     private suspend fun recordStreaming(
         modelDir: File,
         maxDurationMs: Int,
         onSegmentResult: suspend (text: String, isFinal: Boolean) -> Unit
     ) {
-        Log.i(TAG, "recordStreaming: 使用 OnlineRecognizer 流式识别")
+        Log.i(TAG, "recordStreaming: 使用 OnlineRecognizer 流式识别, maxDuration=${maxDurationMs}ms")
 
-        val modelType = if (isZipformerModel(modelDir)) {
-            SherpaOnnxEngine.ModelType.ZIPFORMER
-        } else {
-            // 旧版 Paraformer 目录（无 joiner），尝试用 Zipformer transducer 加载
-            Log.w(TAG, "旧版 Paraformer 目录，尝试用 transducer 模式加载（建议重新下载 Zipformer 模型）")
-            SherpaOnnxEngine.ModelType.ZIPFORMER
-        }
-
-        val onlineRec = sherpaEngine.createStreamingRecognizer(
-            assetManager = null,
-            modelDir = modelDir.absolutePath,
-            modelType = modelType,
-            numThreads = 2
-        )
+        val onlineRec = getOrCreateRecognizer(modelDir)
         if (onlineRec == null) {
-            Log.e(TAG, "recordStreaming: 创建 OnlineRecognizer 失败")
+            Log.e(TAG, "recordStreaming: 创建/获取 OnlineRecognizer 失败")
             return
         }
+        val isUsingCache = (cachedOnlineRecognizer != null && cachedModelPath == modelDir.absolutePath)
 
         val stream = onlineRec.createStream()
         if (stream == null) {
@@ -334,66 +397,171 @@ class VoiceEngine(private val context: Context) {
         recorder.start()
 
         val readBuffer = FloatArray(1024)
-        val startTime = System.currentTimeMillis()
+        val startTime = LongArray(1) { System.currentTimeMillis() }
+        // lastResult: 上一次 getResult 返回的完整文本（用于计算增量）
         var lastResult = ""
         val accumulatedText = StringBuilder()
+
+        // reset 后静默期：忽略接下来一小段时间内的结果，避免重复输出
+        var lastResetTime = 0L
+        val RESET_SETTLE_MS = 300L  // reset 后 300ms 内的结果忽略
+
+        // 静音超时检测
+        var consecutiveEmptyReads = 0
+        var lastNonEmptyResultTime = startTime[0]
+        val SILENCE_TIMEOUT_MS = 2000L
+        val MAX_EMPTY_READS = 20
 
         try {
             var totalSamples = 0
             var nonEmptyResults = 0
             var endpointCount = 0
-            while (System.currentTimeMillis() - startTime < maxDurationMs) {
+            while (System.currentTimeMillis() - startTime[0] < maxDurationMs) {
                 val read = recorder.readChunk(readBuffer.size) ?: break
                 if (read.isEmpty()) {
+                    consecutiveEmptyReads++
+                    if (consecutiveEmptyReads >= MAX_EMPTY_READS
+                        && accumulatedText.isNotEmpty()
+                        && System.currentTimeMillis() - lastNonEmptyResultTime > SILENCE_TIMEOUT_MS) {
+                        Log.i(TAG, "recordStreaming: 静音超时触发伪端点, 累积='${accumulatedText}'")
+                        endpointCount++
+                        // 静音超时：把当前已确认的文本发出去
+                        onSegmentResult(accumulatedText.toString(), false)
+                        sherpaEngine.resetStream(onlineRec, stream)
+                        lastResult = ""
+                        lastResetTime = System.currentTimeMillis()
+                        consecutiveEmptyReads = 0
+                        lastNonEmptyResultTime = System.currentTimeMillis()
+                    }
                     Thread.sleep(50)
                     continue
                 }
+                consecutiveEmptyReads = 0
                 totalSamples += read.size
 
                 // 喂入音频
                 sherpaEngine.acceptWaveform(onlineRec, stream, read)
 
-                // 获取当前结果
-                val currentResult = sherpaEngine.getStreamingResult(onlineRec, stream)
-                if (currentResult.isNotEmpty()) nonEmptyResults++
-                if (currentResult.isNotEmpty() && currentResult != lastResult) {
-                    Log.i(TAG, "recordStreaming: 中间结果 '$currentResult' (samples=$totalSamples)")
-                    // 中间结果：只更新显示，不累积
-                    onSegmentResult(currentResult, false)
-                    lastResult = currentResult
+                // 获取当前完整结果
+                val rawResult = sherpaEngine.getStreamingResult(onlineRec, stream)
+                if (rawResult.isEmpty()) continue
+
+                // reset 后静默期内忽略结果（避免 stream 刚重置时的重复输出）
+                if (System.currentTimeMillis() - lastResetTime < RESET_SETTLE_MS) {
+                    Log.d(TAG, "recordStreaming: 静默期忽略 '$rawResult'")
+                    continue
+                }
+
+                nonEmptyResults++
+                lastNonEmptyResultTime = System.currentTimeMillis()
+
+                // 英文转小写（模型输出常为大写）
+                val currentResult = SherpaOnnxEngine.normalizeText(rawResult)
+                if (rawResult != currentResult) {
+                    Log.d(TAG, "recordStreaming: 英文转小写 '$rawResult' → '$currentResult'")
+                }
+
+                // 增量提取：currentResult 是完整文本，lastResult 是上次完整文本
+                // 增量 = currentResult 去掉 lastResult 前缀后的部分
+                val delta = if (lastResult.isNotEmpty() && currentResult.length > lastResult.length && currentResult.startsWith(lastResult)) {
+                    currentResult.substring(lastResult.length).trim()
+                } else {
+                    // lastResult 为空（刚 reset）或结果回退，取完整文本
+                    currentResult
+                }
+
+                // 更新 lastResult 为当前完整文本（去重后）
+                lastResult = currentResult
+
+                if (delta.isNotEmpty()) {
+                    Log.d(TAG, "recordStreaming: delta='$delta', full='$currentResult', samples=$totalSamples")
+                    onSegmentResult(delta, false)
                 }
 
                 // 检查端点（说话结束）
                 if (sherpaEngine.isEndpoint(onlineRec, stream)) {
                     endpointCount++
-                    val endpointText = sherpaEngine.getStreamingResult(onlineRec, stream)
-                    Log.i(TAG, "recordStreaming: 端点检测 #$endpointCount, text='$endpointText'")
-                    if (endpointText.isNotEmpty()) {
-                        // 端点结果：累积到已确认文本
-                        accumulatedText.append(endpointText)
-                        lastResult = ""
-                        // 重置流，继续识别下一段
-                        sherpaEngine.resetStream(onlineRec, stream)
-                        // 通知 UI 当前已确认的文本
+                    val endpointRaw = sherpaEngine.getStreamingResult(onlineRec, stream)
+                    val endpointText = SherpaOnnxEngine.normalizeText(endpointRaw)
+                    Log.i(TAG, "recordStreaming: 端点 #$endpointCount, text='$endpointText'")
+
+                    // 过滤静音误识别：纯英文字母（如 "n"、"a"）是模型把静音段识别成了字母
+                    val isNoiseLetter = endpointText.length <= 2 && endpointText.all { it in 'a'..'z' || it in 'A'..'Z' }
+                    if (!isNoiseLetter && endpointText.isNotEmpty()) {
+                        // 端点增量：endpointText 与 lastResult 的差
+                        val endpointDelta = if (lastResult.isNotEmpty() && endpointText.length > lastResult.length && endpointText.startsWith(lastResult)) {
+                            endpointText.substring(lastResult.length).trim()
+                        } else {
+                            endpointText
+                        }
+                        if (endpointDelta.isNotEmpty()) {
+                            accumulatedText.append(if (accumulatedText.isNotEmpty()) " " else "").append(endpointDelta)
+                        }
+                    }
+
+                    // 重置流，准备下一段
+                    sherpaEngine.resetStream(onlineRec, stream)
+                    lastResult = ""
+                    lastResetTime = System.currentTimeMillis()  // 记录 reset 时间
+
+                    if (accumulatedText.isNotEmpty()) {
                         onSegmentResult(accumulatedText.toString(), false)
                     }
                 }
             }
-            Log.i(TAG, "recordStreaming: 循环结束, totalSamples=$totalSamples, nonEmptyResults=$nonEmptyResults, endpoints=$endpointCount, accumulated='${accumulatedText.toString().take(50)}'")
+            Log.i(TAG, "recordStreaming: 结束 samples=$totalSamples, results=$nonEmptyResults, endpoints=$endpointCount, accumulated='${accumulatedText.toString().take(100)}'")
 
-            // 录音结束：返回所有累积的文本
-            val finalText = accumulatedText.toString()
+            // 录音结束：取最后一段结果
+            val finalRaw = sherpaEngine.getStreamingResult(onlineRec, stream)
+            val finalText = SherpaOnnxEngine.normalizeText(finalRaw)
             if (finalText.isNotEmpty()) {
-                onSegmentResult(finalText, true)
+                val finalDelta = if (lastResult.isNotEmpty() && finalText.length > lastResult.length && finalText.startsWith(lastResult)) {
+                    finalText.substring(lastResult.length).trim()
+                } else {
+                    finalText
+                }
+                if (finalDelta.isNotEmpty()) {
+                    accumulatedText.append(if (accumulatedText.isNotEmpty()) " " else "").append(finalDelta)
+                }
+            }
+
+            val totalText = accumulatedText.toString()
+            if (totalText.isNotEmpty()) {
+                onSegmentResult(totalText, true)
             }
         } catch (e: Exception) {
             Log.e(TAG, "recordStreaming error: ${e.message}", e)
         } finally {
-            try { recorder.stop() } catch (_: Exception) {}
-            // OnlineStream.delete() and OnlineRecognizer.release() are private;
-            // rely on GC/finalize for native resource cleanup
-        }
-    }
+             try { recorder.stop() } catch (_: Exception) {}
+             // 清理 OnlineStream（每次录音都要新建 stream）
+             try {
+                 if (stream != null) {
+                     val deleteMethod = stream.javaClass.getDeclaredMethod("delete")
+                     deleteMethod.isAccessible = true
+                     deleteMethod.invoke(stream)
+                     Log.i(TAG, "OnlineStream.delete() called via reflection")
+                 }
+             } catch (e: Exception) {
+                 Log.w(TAG, "Failed to call OnlineStream.delete(): ${e.message}")
+             }
+             // 只有非缓存模式才释放 OnlineRecognizer；缓存模式保留供下次复用
+             if (!isUsingCache) {
+                 try {
+                     if (onlineRec != null) {
+                         val releaseMethod = onlineRec.javaClass.getDeclaredMethod("release")
+                         releaseMethod.isAccessible = true
+                         releaseMethod.invoke(onlineRec)
+                         Log.i(TAG, "OnlineRecognizer.release() called via reflection (non-cached)")
+                     }
+                 } catch (e: Exception) {
+                     Log.w(TAG, "Failed to call OnlineRecognizer.release(): ${e.message}")
+                 }
+             } else {
+                 Log.i(TAG, "缓存模式: 保留 OnlineRecognizer 供下次复用")
+             }
+             System.gc()
+         }
+     }
 
     /**
      * 分段离线识别（OfflineRecognizer）

@@ -38,6 +38,16 @@ class SherpaOnnxEngine {
 
         fun isLibraryLoaded(): Boolean = libraryLoaded
         fun getLibraryLoadError(): String? = libraryLoadError
+
+        // ==================== 文本去重 ====================
+
+        /**
+         * 英文转小写（模型输出常为大写）
+         * 不对中文内容做任何去重——用户说什么就输出什么
+         */
+        fun normalizeText(text: String): String {
+            return text.lowercase()
+        }
     }
 
     // ==================== 模型类型 ====================
@@ -187,8 +197,8 @@ class SherpaOnnxEngine {
             )
 
             val endpointConfig = EndpointConfig(
-                rule1 = EndpointRule(mustContainNonSilence = true, minTrailingSilence = 2.4f, minUtteranceLength = 1.0f),
-                rule2 = EndpointRule(mustContainNonSilence = true, minTrailingSilence = 1.2f, minUtteranceLength = 0.5f)
+                rule1 = EndpointRule(mustContainNonSilence = true, minTrailingSilence = 0.8f, minUtteranceLength = 0.3f),
+                rule2 = EndpointRule(mustContainNonSilence = true, minTrailingSilence = 2.0f, minUtteranceLength = 0.5f)
                 // 不设置 rule3：避免 minTrailingSilence=0 导致立即触发端点
             )
 
@@ -197,8 +207,9 @@ class SherpaOnnxEngine {
                 modelConfig = modelConfig,
                 endpointConfig = endpointConfig,
                 enableEndpoint = true,
-                decodingMethod = "greedy_search",
-                maxActivePaths = 4
+                decodingMethod = "modified_beam_search",
+                maxActivePaths = 4,
+                blankPenalty = 0.5f
             )
 
             val recognizer = OnlineRecognizer(assetManager, config)
@@ -302,4 +313,5 @@ class SherpaOnnxEngine {
             Log.e(TAG, "Reset stream error: ${e.message}", e)
         }
     }
+
 }

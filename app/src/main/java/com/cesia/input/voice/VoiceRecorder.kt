@@ -20,11 +20,14 @@ class VoiceRecorder {
         private const val SAMPLE_RATE = 16000       // Whisper 要求 16kHz
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val BUFFER_FACTOR = 2
+        private const val BUFFER_FACTOR = 4  // 增加到 4x，防止缓冲区溢出
+        private const val READ_CHUNK_SIZE = 1024  // 统一读取块大小
     }
 
     private var audioRecord: AudioRecord? = null
     private var bufferSize: Int = 0
+    private var consecutiveReadErrors = 0
+    private val MAX_CONSECUTIVE_ERRORS = 20
 
     val isRecording: Boolean
         get() = audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING
@@ -50,7 +53,8 @@ class VoiceRecorder {
                 Log.e(TAG, "AudioRecord init failed")
                 return false
             }
-            Log.i(TAG, "AudioRecord initialized (buffer=$bufferSize)")
+            consecutiveReadErrors = 0
+            Log.i(TAG, "AudioRecord initialized (buffer=$bufferSize, minBuffer=${AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)})")
             true
         } catch (e: SecurityException) {
             Log.e(TAG, "Mic permission denied", e)
@@ -133,15 +137,60 @@ class VoiceRecorder {
      * 持续录制模式：返回分段读取的 float 数组
      * 用于从 AudioRecord 实时读取 whisper 所需的 chunk
      */
-    fun readChunk(chunkSize: Int): FloatArray? {
-        val buffer = ShortArray(chunkSize)
-        val read = audioRecord?.read(buffer, 0, chunkSize) ?: return null
-        if (read <= 0) return null
+     fun readChunk(chunkSize: Int): FloatArray? {
+         if (audioRecord == null || !isRecording) {
+             Log.w(TAG, "readChunk: AudioRecord not ready")
+             return null
+         }
+        
+         val actualChunkSize = minOf(chunkSize, READ_CHUNK_SIZE)
+         val buffer = ShortArray(actualChunkSize)
+         val read = try {
+             audioRecord?.read(buffer, 0, actualChunkSize)
+         } catch (e: Exception) {
+             consecutiveReadErrors++
+             Log.e(TAG, "readChunk: AudioRecord.read() threw exception (error #$consecutiveReadErrors)", e)
+             if (consecutiveReadErrors >= MAX_CONSECUTIVE_ERRORS) {
+                 Log.e(TAG, "readChunk: too many consecutive errors, forcing stop")
+                 stop()
+             }
+             return null
+         }
+        
+         if (read == null) {
+             consecutiveReadErrors++
+             Log.w(TAG, "readChunk: AudioRecord.read() returned null (error #$consecutiveReadErrors)")
+             if (consecutiveReadErrors >= MAX_CONSECUTIVE_ERRORS) {
+                 stop()
+             }
+             return null
+         }
+        
+         if (read < 0) {
+             consecutiveReadErrors++
+             Log.w(TAG, "readChunk: AudioRecord.read() returned $read (error #$consecutiveReadErrors)")
+             if (read == AudioRecord.ERROR_INVALID_OPERATION) {
+                 Log.e(TAG, "readChunk: AudioRecord invalid operation, stopping")
+                 stop()
+             }
+             if (consecutiveReadErrors >= MAX_CONSECUTIVE_ERRORS) {
+                 stop()
+             }
+             return null
+         }
+        
+         if (read == 0) {
+             // No data available yet - this is normal, not an error
+             return FloatArray(0)
+         }
+        
+         // 成功读取，重置错误计数
+         consecutiveReadErrors = 0
+        
+         return FloatArray(read) { buffer[it] / 32768.0f }
+     }
 
-        return FloatArray(read) { buffer[it] / 32768.0f }
-    }
-
-    fun stop() {
+     fun stop() {
         try {
             if (isRecording) {
                 audioRecord?.stop()

@@ -843,6 +843,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun updateCandidateBar() {
+        // 语音识别期间不更新候选栏（避免覆盖流式识别状态）
+        if (isRecording) return
+        
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         val allCands = rimeEngine.getAllCandidates()
@@ -1851,6 +1854,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
             Log.i("Cesia", "语音后端: 本地 Sherpa-onnx ($modeLabel, $modelName)")
             updateStatus("🎤 语音: 本地 Sherpa-onnx ✅ ($modelName)")
+            // 异步预热 OnlineRecognizer，避免首次点击语音键的延迟
+            voiceEngine.warmupRecognizer()
             return
         }
 
@@ -1985,8 +1990,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
                 var lastStreamingText = ""
                 var segmentCount = 0
+                // 兜底预热（若 updateVoiceBackend 还没触发）
+                voiceEngine.warmupRecognizer()
                 voiceEngine.recordInSegments(
-                    maxDurationMs = 30000,
+                    maxDurationMs = 300000,  // 5分钟，避免长语音被截断
                     segmentDurationMs = 3000,
                     onSegmentResult = { text, isFinal ->
                         segmentCount++
@@ -2024,7 +2031,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 处理云端/本地识别结果 → 显示 AI+/AI× 按钮 */
     private fun handleCloudVoiceResult(text: String) {
-        Log.i("Cesia", "handleCloudVoiceResult: text='${text.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}'")
+        Log.i("Cesia", "handleCloudVoiceResult: text='${text.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}', pendingAiMode=$pendingAiMode, isProcessingResult=$isProcessingResult")
+        // 已在点击 AI+/AI× 时处理过，跳过
+        if (isProcessingResult) {
+            Log.i("Cesia", "handleCloudVoiceResult: already processed, skipping")
+            return
+        }
         if (!isRecording && recognizedText.isEmpty()) return
         isRecording = false
         stopVoiceWave()
@@ -2037,7 +2049,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
 
-        // 显示 AI+/AI× 选择按钮
+        // 如果用户在录音过程中已点击 AI+/AI×，直接执行对应逻辑
+        if (pendingAiMode != null) {
+            val mode = pendingAiMode!!
+            pendingAiMode = null
+            isWaitingForChoice = false
+            hideAiChoiceButtons()
+            if (mode) {
+                updateStatus("✨ 正在施展魔法...")
+                setStatusDot("processing")
+                isProcessingResult = true
+                polishRecognizedText(text)
+            } else {
+                currentInputConnection?.commitText(text, 1)
+                addSentMessage(text)
+                resetToIdle()
+            }
+            return
+        }
+
+        // 否则显示 AI+/AI× 选择按钮等待用户点击
         isWaitingForChoice = true
         updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
         micButton.visibility = View.GONE
@@ -2092,9 +2123,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isProcessingResult = true
             polishRecognizedText(recognizedText)
         } else if (isRecording) {
+            // 说话过程中点击 AI+：立即停止录音，用当前识别文本润色
+            val currentText = recognizedText
             stopRecordingAndWait()
-            pendingAiMode = true
-            updateStatus("⏳ 正在识别，识别后自动施展魔法")
+            if (currentText.isNotEmpty()) {
+                updateStatus("✨ 正在施展魔法...")
+                setStatusDot("processing")
+                isProcessingResult = true
+                polishRecognizedText(currentText)
+            } else {
+                updateStatus("⏳ 正在识别，识别后自动施展魔法")
+                pendingAiMode = true
+            }
         }
     }
 
@@ -2115,18 +2155,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             addSentMessage(recognizedText)
             resetToIdle()
         } else if (isRecording) {
+            // 说话过程中点击 AI×：立即停止录音，用当前识别文本上屏
+            val currentText = recognizedText
             stopRecordingAndWait()
-            pendingAiMode = false
-            updateStatus("⏳ 正在识别，识别后自动上屏")
+            if (currentText.isNotEmpty()) {
+                currentInputConnection?.commitText(currentText, 1)
+                addSentMessage(currentText)
+                resetToIdle()
+            } else {
+                updateStatus("⏳ 正在识别，识别后自动上屏")
+                pendingAiMode = false
+            }
         }
     }
 
     private fun stopRecordingAndWait() {
         isRecording = false
         stopVoiceWave()
-        // 停止所有语音后端
+        // 停止所有语音后端（不再取消协程，让识别自然结束）
         typelessEngine?.stopListening()
-        voiceEngineScope.coroutineContext.cancelChildren()
+        // voiceEngineScope.coroutineContext.cancelChildren() // 移除：会打断 isFinal 回调
         setStatusDot("processing")
     }
 
@@ -3892,6 +3940,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var statusLines = mutableListOf<String>()
 
     private fun updateStatus(msg: String) {
+        Log.d("Cesia", "updateStatus: msg='$msg', isRecording=$isRecording, lines=${statusLines.size}")
         try {
             if (isRecording) {
                 if (msg.startsWith("🎤") || msg.startsWith("⏳") || msg.startsWith("🔄") || msg.startsWith("✅")) {

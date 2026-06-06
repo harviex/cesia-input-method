@@ -20,6 +20,10 @@ class ModelManager(private val context: Context) {
 
         /** 本地模型存储目录 */
         const val MODELS_DIR = "local_models"
+
+        /** 模型版本号 — 变更时清除旧模型强制重新下载 */
+        const val KEY_MODEL_VERSION = "model_version"
+        const val CURRENT_MODEL_VERSION = 4  // 1=双语zipformer, 2=中文zipformer, 3=修复下载URL, 4=回退双语+修复增量逻辑
     }
 
     private val prefs: SharedPreferences =
@@ -35,6 +39,13 @@ class ModelManager(private val context: Context) {
      * @return 新发现的模型 ID 列表
      */
     fun scanExistingModels(): List<String> {
+        // 模型版本检查：版本不匹配时清除所有旧模型
+        val savedVersion = prefs.getInt(KEY_MODEL_VERSION, 0)
+        if (savedVersion != CURRENT_MODEL_VERSION) {
+            Log.i(TAG, "模型版本变更: $savedVersion -> $CURRENT_MODEL_VERSION, 清除旧模型")
+            clearAllModels()
+            prefs.edit().putInt(KEY_MODEL_VERSION, CURRENT_MODEL_VERSION).apply()
+        }
         val found = mutableListOf<String>()
         if (!modelsDir.exists()) return found
         val files = modelsDir.listFiles() ?: return found
@@ -149,10 +160,21 @@ class ModelManager(private val context: Context) {
             .filter { !isModelInstalled(it.id) }
     }
 
-    /** 某个 tier 下所有模型是否都已安装 */
-    fun isTierInstalled(tier: ModelInfo.Tier): Boolean {
-        return ModelRegistry.ALL_MODELS
-            .filter { it.tier == tier }
-            .all { isModelInstalled(it.id) }
+    /**
+     * 清除所有已下载的模型文件
+     */
+    private fun clearAllModels() {
+        if (modelsDir.exists() && modelsDir.isDirectory) {
+            modelsDir.listFiles()?.forEach { file ->
+                if (file.isDirectory) {
+                    file.listFiles()?.forEach { it.delete() }
+                }
+                file.delete()
+            }
+            Log.i(TAG, "已清除所有模型文件: ${modelsDir.absolutePath}")
+        }
+        // 清除已安装记录
+        installedVoiceModelId = null
+        installedAiModelId = null
     }
 }

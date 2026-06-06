@@ -40,7 +40,7 @@ object ModelRegistry {
         // Zipformer 支持流式识别（OnlineRecognizer），完全离线运行，边说边出字
         ModelInfo(
             id = "sherpa-zipformer",
-            name = "Zipformer",
+            name = "Zipformer 中英双语",
             description = "中英双语, 流式识别, 完全离线 (~206MB)",
             downloadUrl = "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
             fileName = "zipformer",  // 目录名，实际包含多个文件
@@ -69,26 +69,25 @@ object ModelRegistry {
         )
     )
 
-    // Zipformer 流式模型文件列表（INT8 量化版本）
-    // 下载时使用原始文件名，下载后重命名为标准文件名
+    // Zipformer 流式模型文件列表（双语 zh-en）
     val ZIPFORMER_FILES = listOf(
-        "encoder-epoch-99-avg-1.int8.onnx",   // 下载后重命名为 encoder.onnx
-        "decoder-epoch-99-avg-1.int8.onnx",   // 下载后重命名为 decoder.onnx
-        "joiner-epoch-99-avg-1.int8.onnx",    // 下载后重命名为 joiner.onnx
+        "encoder-epoch-99-avg-1.onnx",   // 下载后重命名为 encoder.onnx
+        "decoder-epoch-99-avg-1.onnx",   // 下载后重命名为 decoder.onnx
+        "joiner-epoch-99-avg-1.onnx",    // 下载后重命名为 joiner.onnx
         "tokens.txt"
     )
 
     // Zipformer 各文件下载路径
     fun getZipformerFileUrl(file: String): String {
-        return "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/$file"
+        return "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/$file"
     }
 
     // Zipformer 文件下载后的标准文件名映射
     fun getZipformerLocalName(downloadedFile: String): String {
         return when (downloadedFile) {
-            "encoder-epoch-99-avg-1.int8.onnx" -> "encoder.onnx"
-            "decoder-epoch-99-avg-1.int8.onnx" -> "decoder.onnx"
-            "joiner-epoch-99-avg-1.int8.onnx" -> "joiner.onnx"
+            "encoder-epoch-99-avg-1.onnx" -> "encoder.onnx"
+            "decoder-epoch-99-avg-1.onnx" -> "decoder.onnx"
+            "joiner-epoch-99-avg-1.onnx" -> "joiner.onnx"
             else -> downloadedFile
         }
     }
