@@ -1,3 +1,6 @@
 [submodule "ai-engine/src/main/cpp/whisper.cpp"]
 	path = ai-engine/src/main/cpp/whisper.cpp
 	url = https://github.com/ggerganov/whisper.cpp.git
+[submodule "ai-engine/src/main/cpp/llama.cpp"]
+	path = ai-engine/src/main/cpp/llama.cpp
+	url = https://github.com/ggerganov/llama.cpp.git
