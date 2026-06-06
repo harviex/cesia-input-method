@@ -2227,7 +2227,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     return@launch
                 }
                 if (!aiEngine.isModelLoaded()) {
-                    aiEngine.loadLocalModel(modelFile.absolutePath, if (modelManager.useGpu) 99 else 0)
+                    aiEngine.loadLocalModel(modelFile.absolutePath, 0)
                 }
                 val result = aiEngine.polish(text, "润色")
                 withContext(Dispatchers.Main) {
