@@ -270,6 +270,21 @@ class ModelDownloadManager(private val context: Context) {
         } ?: modelsDir)
     }
 
+    /** 下载指定的 AI 润色模型 */
+    suspend fun downloadAiModel(
+        model: ModelInfo,
+        onProgress: ((modelName: String, percent: Int) -> Unit)? = null
+    ): Result<File> {
+        if (isDownloaded(model.id)) {
+            val existing = File(modelsDir, model.fileName).takeIf { it.exists() }
+            return if (existing != null) Result.success(existing)
+            else Result.failure(Exception("模型文件不存在: ${model.fileName}"))
+        }
+        return download(model) { p ->
+            onProgress?.invoke(model.name, p)
+        }
+    }
+
     /**
      * 下载某个 tier 的所有模型（识别 + 润色）
      * 返回最后一个下载结果

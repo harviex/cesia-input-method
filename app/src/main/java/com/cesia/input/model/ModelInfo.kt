@@ -20,8 +20,8 @@ data class ModelInfo(
 
     val tier: Tier
         get() = when (id) {
-            "sherpa-zipformer", "qwen-0.8b" -> Tier.BASIC
-            "sherpa-sensevoice", "qwen-2b" -> Tier.PREMIUM
+            "sherpa-zipformer", "qwen-4b" -> Tier.BASIC
+            "sherpa-sensevoice", "qwen-8b" -> Tier.PREMIUM
             else -> Tier.BASIC
         }
 }
@@ -50,22 +50,14 @@ object ModelRegistry {
 
         // === AI 模型 (GGUF 格式，用于 llama.cpp 本地推理) ===
         // 使用 ModelScope 国内镜像，确保国内可下载
+        // 4B 模型手机端最佳平衡：2.7GB 下载 + 推理快 + 质量好
         ModelInfo(
             id = "qwen-4b",
             name = "Qwen 3 4B",
-            description = "AI 润色模型（~2.7GB），更好的润色质量",
+            description = "AI 润色模型（~2.7GB），手机端最佳平衡",
             downloadUrl = "https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q6_K.gguf",
             fileName = "Qwen3-4B-Q6_K.gguf",
             sizeBytes = 2700L * MB,
-            type = ModelInfo.ModelType.AI
-        ),
-        ModelInfo(
-            id = "qwen-8b",
-            name = "Qwen 3 8B",
-            description = "AI 润色大模型（~5.2GB），最佳润色效果",
-            downloadUrl = "https://modelscope.cn/models/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q6_K.gguf",
-            fileName = "Qwen3-8B-Q6_K.gguf",
-            sizeBytes = 5200L * MB,
             type = ModelInfo.ModelType.AI
         )
     )

@@ -141,16 +141,16 @@ class VoiceAISettingsHelper(
 
         // 下载 AI 润色模型（Qwen）
         btnDownloadAi?.setOnClickListener {
-            val ram = getTotalRamGB()
-            val tier = if (ram >= 6.0) ModelInfo.Tier.PREMIUM else ModelInfo.Tier.BASIC
-            val model = ModelRegistry.ALL_MODELS.find {
-                it.type == ModelInfo.ModelType.AI && it.tier == tier
+            val model = ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI }
+            if (model == null) {
+                Toast.makeText(activity, "没有可用的 AI 模型", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            val sizeStr = model?.let { ModelDownloadManager.Formatter.formatSize(it.sizeBytes) } ?: ""
+            val sizeStr = ModelDownloadManager.Formatter.formatSize(model.sizeBytes)
             Toast.makeText(activity,
                 "将下载 AI 润色模型（$sizeStr）",
                 Toast.LENGTH_SHORT).show()
-            downloadAiModel(tier)
+            downloadAiModel(model)
         }
 
         // 卸载本地模型
@@ -345,7 +345,7 @@ class VoiceAISettingsHelper(
     }
 
     /** 下载 AI 润色模型 */
-    private fun downloadAiModel(tier: ModelInfo.Tier) {
+    private fun downloadAiModel(model: ModelInfo) {
         if (isDownloading) {
             Toast.makeText(activity, "正在下载中，请稍候", Toast.LENGTH_SHORT).show()
             return
@@ -359,9 +359,7 @@ class VoiceAISettingsHelper(
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
             Log.i("VoiceAISettings", "downloadAiModel: launching coroutine")
-            val result = downloadManager.downloadByType(
-                ModelInfo.ModelType.AI, tier
-            ) { modelName, progress ->
+            val result = downloadManager.downloadAiModel(model) { modelName, progress ->
                 Log.i("VoiceAISettings", "downloadAiModel: onProgress $modelName $progress%")
                 activity.runOnUiThread {
                     pbDownload?.progress = progress
