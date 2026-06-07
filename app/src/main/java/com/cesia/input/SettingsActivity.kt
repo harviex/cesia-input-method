@@ -40,6 +40,7 @@ import com.cesia.input.model.ModelManager
 import com.cesia.input.model.ModelRegistry
 import com.cesia.input.voice.VoiceEngine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -370,19 +371,82 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun downloadVoiceModel() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
+        btnDownloadVoice?.isEnabled = false
+        btnDownloadVoice?.text = "下载中..."
         tvStatus.text = "🔄 下载语音模型中..."
         appendLog("⬇ 开始下载语音模型: ${modelInfo.name}")
-        // TODO: 实现下载逻辑
-        Toast.makeText(this, "下载功能开发中", Toast.LENGTH_SHORT).show()
+
+        Thread {
+            try {
+                val dm = ModelDownloadManager(this@SettingsActivity)
+                val result = kotlinx.coroutines.runBlocking {
+                    dm.downloadZipformer { fileName, percent ->
+                        runOnUiThread {
+                            tvStatus.text = "🔄 下载 $fileName ($percent%)"
+                        }
+                    }
+                }
+                runOnUiThread {
+                    btnDownloadVoice?.isEnabled = true
+                    if (result.isSuccess) {
+                        tvStatus.text = "✅ 语音模型下载完成"
+                        appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
+                    } else {
+                        tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
+                        appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
+                        btnDownloadVoice?.text = "📥 下载语音模型"
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    btnDownloadVoice?.isEnabled = true
+                    btnDownloadVoice?.text = "📥 下载语音模型"
+                    tvStatus.text = "❌ 下载异常: ${e.message}"
+                    appendLog("❌ 语音模型下载异常: ${e.message}")
+                }
+            }
+        }.start()
     }
 
     private fun downloadAiModel() {
-        // 默认下载 0.6B 模型（最快）
         val modelInfo = ModelRegistry.getById("qwen-0.6b") ?: return
+        btnDownloadAi?.isEnabled = false
+        btnDownloadAi?.text = "下载中..."
         tvStatus.text = "🔄 下载 AI 模型中..."
         appendLog("⬇ 开始下载 AI 模型: ${modelInfo.name} (${modelInfo.sizeBytes / 1024 / 1024}MB)")
-        // TODO: 实现下载逻辑
-        Toast.makeText(this, "下载功能开发中", Toast.LENGTH_SHORT).show()
+
+        Thread {
+            try {
+                val dm = ModelDownloadManager(this@SettingsActivity)
+                val result = kotlinx.coroutines.runBlocking {
+                    dm.downloadAiModel(modelInfo) { name, percent ->
+                        runOnUiThread {
+                            tvStatus.text = "🔄 下载 $name ($percent%)"
+                        }
+                    }
+                }
+                runOnUiThread {
+                    btnDownloadAi?.isEnabled = true
+                    if (result.isSuccess) {
+                        tvStatus.text = "✅ AI 模型下载完成"
+                        appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
+                    } else {
+                        tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
+                        appendLog("❌ AI 模型下载失败: ${result.exceptionOrNull()?.message}")
+                        btnDownloadAi?.text = "📥 下载 AI 模型"
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    btnDownloadAi?.isEnabled = true
+                    btnDownloadAi?.text = "📥 下载 AI 模型"
+                    tvStatus.text = "❌ 下载异常: ${e.message}"
+                    appendLog("❌ AI 模型下载异常: ${e.message}")
+                }
+            }
+        }.start()
     }
 
     private fun uninstallModels() {
@@ -916,7 +980,7 @@ class SettingsActivity : AppCompatActivity() {
                 appendLog("正在加载模型...")
                 val loadStart = System.currentTimeMillis()
                 val loaded = kotlinx.coroutines.runBlocking {
-                    aiEngine.loadLocalModel(modelFile.absolutePath, 0)
+                    aiEngine.loadLocalModel(modelFile.absolutePath, 99)
                 }
                 val loadTime = System.currentTimeMillis() - loadStart
 
@@ -931,18 +995,23 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 appendLog("模型加载成功 (${loadTime}ms)")
 
-                // 推理
-                appendLog("开始推理...")
+                // 推理（60 秒超时）
+                appendLog("开始推理（最多 60 秒）...")
                 val inferStart = System.currentTimeMillis()
                 val result = kotlinx.coroutines.runBlocking {
-                    aiEngine.polish(inputText, "润色")
+                    withTimeoutOrNull(300000L) {
+                        aiEngine.polish(inputText, "润色")
+                    }
                 }
                 val inferTime = System.currentTimeMillis() - inferStart
 
                 aiEngine.release()
 
                 runOnUiThread {
-                    if (result != null && result.isNotEmpty() && result != inputText) {
+                    if (result == null) {
+                        tvStatus.text = "⏰ 推理超时（60s），模型可能太慢"
+                        appendLog("推理超时（${inferTime}ms），请尝试更短的文本或更小的模型")
+                    } else if (result.isNotEmpty() && result != inputText) {
                         etTestText.setText(result)
                         tvStatus.text = "✅ 本地 AI 润色成功 (${inferTime}ms)"
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")

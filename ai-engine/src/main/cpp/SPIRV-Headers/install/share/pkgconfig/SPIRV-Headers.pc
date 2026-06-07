@@ -1,0 +1,8 @@
+includedir=/home/ca/cesia-input-method/ai-engine/src/main/cpp/SPIRV-Headers/install/include
+
+Name: SPIRV-Headers
+Description: Header files from the SPIR-V registry
+Version: 1.5.5
+Requires:
+Libs:
+Cflags: -I${includedir}

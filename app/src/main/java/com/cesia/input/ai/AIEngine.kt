@@ -23,7 +23,8 @@ class AIEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "AIEngine"
-        private const val DEFAULT_MAX_TOKENS = 512
+        private const val DEFAULT_MAX_TOKENS = 64  // 润色任务不需要太多 token
+        private const val LOCAL_POLISH_TIMEOUT_MS = 30000L  // 30 秒超时
     }
 
     private val llamaEngine = LlamaEngine()
@@ -86,13 +87,7 @@ class AIEngine(private val context: Context) {
      * 构建润色 prompt（Qwen 3.5 Instruct 格式）
      */
     private fun buildPolishPrompt(text: String, instruction: String): String {
-        return "<|im_start|>system\n" +
-            "你是一个专业的文本润色助手。请根据用户的要求处理文本，只输出处理后的结果，不要解释。\n" +
-            "<|im_end|>\n" +
-            "<|im_start|>user\n" +
-            "请对以下文本进行${instruction}：\n\n${text}\n" +
-            "<|im_end|>\n" +
-            "<|im_start|>assistant\n"
+        return "<|im_start|>system\n你是一个文本润色助手。只输出润色后的结果，不要解释。<|im_end|>\n<|im_start|>user\n请对以下文本进行${instruction}：\n${text}\n<|im_end|>\n<|im_start|>assistant\n"
     }
 
     // ==================== 状态查询 ====================

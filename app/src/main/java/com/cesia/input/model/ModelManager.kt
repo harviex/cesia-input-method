@@ -39,11 +39,13 @@ class ModelManager(private val context: Context) {
      * @return 新发现的模型 ID 列表
      */
     fun scanExistingModels(): List<String> {
-        // 模型版本检查：版本不匹配时清除所有旧模型
+        // 模型版本检查：版本不匹配时仅清除安装记录，不删除文件
+        // 文件会在后续扫描中重新注册
         val savedVersion = prefs.getInt(KEY_MODEL_VERSION, 0)
         if (savedVersion != CURRENT_MODEL_VERSION) {
-            Log.i(TAG, "模型版本变更: $savedVersion -> $CURRENT_MODEL_VERSION, 清除旧模型")
-            clearAllModels()
+            Log.i(TAG, "模型版本变更: $savedVersion -> $CURRENT_MODEL_VERSION, 清除安装记录")
+            installedVoiceModelId = null
+            installedAiModelId = null
             prefs.edit().putInt(KEY_MODEL_VERSION, CURRENT_MODEL_VERSION).apply()
         }
         val found = mutableListOf<String>()

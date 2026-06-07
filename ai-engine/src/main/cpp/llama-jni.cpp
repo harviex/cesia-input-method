@@ -32,7 +32,16 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
     LOG_STEP("nativeInit start");
 
     const char * path = env->GetStringUTFChars(modelPath, nullptr);
-    LOGI("Loading model from: %s", path);
+    LOGI("Loading model from: %s (gpu_layers=%d)", path, nGpuLayers);
+
+    // 打印可用后端数量
+    size_t n_backends = ggml_backend_reg_count();
+    LOGI("Available backends: %zu", n_backends);
+    for (size_t i = 0; i < n_backends; i++) {
+        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+        const char * name = ggml_backend_reg_name(reg);
+        LOGI("  backend[%zu]: %s", i, name ? name : "unknown");
+    }
 
     llama_model_params mparams = llama_model_default_params();
     mparams.n_gpu_layers = nGpuLayers;
@@ -51,8 +60,8 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
     cparams.n_ctx = 1024;        // 减少上下文，节省内存
     cparams.n_batch = 256;       // 减少 batch size
     cparams.n_ubatch = 256;
-    cparams.n_threads = 4;
-    cparams.n_threads_batch = 4;
+    cparams.n_threads = 8;
+    cparams.n_threads_batch = 8;
 
     LOG_STEP("calling llama_init_from_model");
     llama_context * ctx = llama_init_from_model(model, cparams);
