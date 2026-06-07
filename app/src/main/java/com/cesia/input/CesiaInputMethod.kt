@@ -832,7 +832,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (selected.isNotEmpty()) {
             commitCandidateText(selected)
             // 调试：选字后打印 Rime 状态
-            Log.d("Cesia", "联想调试: 选字='$selected' isComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size} allCands=${rimeEngine.getAllCandidates().size}")
+            Log.d("Cesia", "联想调试: 选字='$selected' debug=${rimeEngine.getDebugStatus()}")
             // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
@@ -3564,12 +3564,33 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 } else if (isAsciiMode) {
                     ic?.commitText(" ", 1)
                 } else if (composing && hasCands) {
-                    val selected = rimeEngine.selectCandidate(0)
-                    if (selected.isNotEmpty()) {
-                        ic?.commitText(selected, 1)
-                    } else { commitAndClear(); ic?.commitText(" ", 1) }
+                    // 中英混输：如果 composing 文本只包含小写字母和空格（无拼音分隔符），认为是英文输入
+                    val composingText = rimeEngine.composingText
+                    val isPureEnglish = composingText.isNotEmpty() && composingText.all { it in 'a'..'z' || it == ' ' }
+                    if (isPureEnglish) {
+                        // 英文输入：直接上屏 composing 文本（去掉空格）
+                        val englishText = composingText.replace(" ", "")
+                        rimeEngine.clear()
+                        ic?.commitText(englishText, 1)
+                        ic?.commitText(" ", 1)
+                    } else {
+                        val selected = rimeEngine.selectCandidate(0)
+                        if (selected.isNotEmpty()) {
+                            ic?.commitText(selected, 1)
+                        } else { commitAndClear(); ic?.commitText(" ", 1) }
+                    }
                 } else if (composing) {
-                    commitAndClear(); ic?.commitText(" ", 1)
+                    // composing 但没有候选词，可能是英文输入
+                    val composingText = rimeEngine.composingText
+                    val isPureEnglish = composingText.isNotEmpty() && composingText.all { it in 'a'..'z' || it == ' ' }
+                    if (isPureEnglish) {
+                        val englishText = composingText.replace(" ", "")
+                        rimeEngine.clear()
+                        ic?.commitText(englishText, 1)
+                        ic?.commitText(" ", 1)
+                    } else {
+                        commitAndClear(); ic?.commitText(" ", 1)
+                    }
                 } else {
                     ic?.commitText(" ", 1)
                 }

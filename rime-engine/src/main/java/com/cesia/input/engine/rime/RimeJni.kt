@@ -342,5 +342,16 @@ object RimeJni {
         val isLastPage: Boolean,
         val totalPages: Int,
     )
+
+    /** 调试：获取 Rime 完整状态 */
+    fun getDebugStatus(): String {
+        return try {
+            val ctx = TrimeRime.getRimeContext()
+            val status = TrimeRime.getRimeStatus()
+            "isComposing=${status.isComposing} preedit=${ctx.composition.preedit} candSize=${ctx.menu.candidates.size} pageNo=${ctx.menu.pageNumber} isLast=${ctx.menu.isLastPage} commit=${TrimeRime.getRimeCommit().text}"
+        } catch (e: Throwable) {
+            "error: ${e.message}"
+        }
+    }
 }
 

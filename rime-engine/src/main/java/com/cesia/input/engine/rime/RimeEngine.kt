@@ -218,4 +218,6 @@ class RimeEngine(private val context: Context) : InputEngine {
         session = null
     }
 
+    /** 调试：获取 Rime 完整状态 */
+    fun getDebugStatus(): String = RimeJni.getDebugStatus()
 }
