@@ -21,6 +21,18 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Disable Vulkan in llama.cpp CMake
+        run: |
+          # Disable Vulkan — CI has no Vulkan SDK / SPIRV-Headers
+          sed -i 's/^ggml_add_backend(Vulkan)/#ggml_add_backend(Vulkan)  # disabled: no Vulkan SDK in CI/' ai-engine/src/main/cpp/llama.cpp/ggml/src/CMakeLists.txt
+          echo "--- Vulkan lines in CMakeLists.txt ---"
+          grep -n -i "vulkan" ai-engine/src/main/cpp/llama.cpp/ggml/src/CMakeLists.txt
+    
+      - name: Clear CMake cache
+        run: |
+          rm -rf ai-engine/.cxx
+          echo "CMake cache cleared"
+
       - name: Apply llama.cpp patches
         run: |
           cd ai-engine/src/main/cpp/llama.cpp

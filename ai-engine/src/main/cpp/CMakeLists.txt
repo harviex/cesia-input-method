@@ -17,7 +17,7 @@ if (EXISTS "${LLAMA_SRC}/CMakeLists.txt")
     set(GGML_OPENMP ON CACHE BOOL "Enable OpenMP" FORCE)
 
     # Vulkan — optional, disable if SPIRV-Headers not available
-    if (ANDROID)
+    if (CMAKE_SYSTEM_NAME STREQUAL "Android")
         # Android: guard against missing SPIRV-Headers (not in NDK / CI)
         if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Headers/install/share/cmake/SPIRV-Headers")
             set(SPIRV-Headers_DIR "${CMAKE_CURRENT_SOURCE_DIR}/SPIRV-Headers/install/share/cmake/SPIRV-Headers" CACHE PATH "" FORCE)
