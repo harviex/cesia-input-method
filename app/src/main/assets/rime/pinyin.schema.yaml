@@ -54,6 +54,7 @@ traditional:
   tips: all
 
 # 拼音拼写器
+speller:
   alphabet: zyxwvutsrqponmlkjihgfedcba
   delimiter: " '"
   algebra:
@@ -90,7 +91,7 @@ translator:
   spelling_hints: 5
   always_show_comment: false
   enable_completion: true
-  enable_sentence: false
+  enable_sentence: true
   enable_user_dict: true
   comment_format:
     - xform/.*//

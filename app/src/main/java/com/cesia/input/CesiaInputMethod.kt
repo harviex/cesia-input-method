@@ -3482,8 +3482,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         keyboardView.invalidateAllKeys()
                     }
                 } else {
-                    rimeEngine.processKey(primaryCode.toChar())
-                    updateCandidateBar()
+                    // 中文模式：先走 Rime 引擎
+                    val accepted = rimeEngine.processKey(primaryCode.toChar())
+                    if (accepted) {
+                        updateCandidateBar()
+                    } else {
+                        // Rime 不接受该按键（如连续英文输入），直接上屏
+                        ic?.commitText(primaryCode.toChar().toString(), 1)
+                        updateCandidateBar()
+                    }
                 }
             }
 

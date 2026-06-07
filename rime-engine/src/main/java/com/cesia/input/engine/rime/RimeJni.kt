@@ -54,6 +54,14 @@ object RimeJni {
             // 确保选中 pinyin schema
             val currentSchema = TrimeRime.getCurrentRimeSchema()
             Log.i(TAG, "STEP4b: currentSchema=$currentSchema")
+            // 打印所有可用 schema
+            try {
+                val allSchemas = TrimeRime.getRimeSchemaList()
+                val schemaInfo = allSchemas.joinToString("; ") { "id=${it.id} name=${it.name}" }
+                Log.i(TAG, "STEP4b2: 所有schema: $schemaInfo")
+            } catch (e: Throwable) {
+                Log.w(TAG, "STEP4b2: getRimeSchemaList 失败: ${e.message}")
+            }
             if (currentSchema != "pinyin") {
                 val selectResult = TrimeRime.selectRimeSchema("pinyin")
                 Log.i(TAG, "STEP4c: selectRimeSchema(pinyin)=$selectResult, after=${TrimeRime.getCurrentRimeSchema()}")
@@ -313,7 +321,8 @@ object RimeJni {
                 try {
                     val schemas = TrimeRime.getRimeSchemaList()
                     if (schemas.isNotEmpty()) {
-                        Log.i(TAG, "isRimeStarted: schemaList=${schemas.size} after ${i * 100}ms")
+                        val schemaIds = schemas.joinToString(", ") { "${it.id}(${it.name})" }
+                        Log.i(TAG, "isRimeStarted: schemaList=${schemas.size} schemas=[$schemaIds] after ${i * 100}ms")
                         return true
                     }
                 } catch (_: Throwable) {}
@@ -322,12 +331,10 @@ object RimeJni {
             Log.e(TAG, "isRimeStarted: timeout after 60s")
             false
         } catch (e: Throwable) {
-            Log.e(TAG, "isRimeStarted check failed", e)
+            Log.e(TAG, "isRimeStarted: error", e)
             false
         }
     }
-
-    // ======================== 数据类 ========================
 
     data class PageInfo(
         val pageSize: Int,
