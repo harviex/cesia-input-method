@@ -831,6 +831,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
             commitCandidateText(selected)
+            // 调试：选字后打印 Rime 状态
+            Log.d("Cesia", "联想调试: 选字='$selected' isComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}' candidates=${rimeEngine.candidates.size} allCands=${rimeEngine.getAllCandidates().size}")
             // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
@@ -3485,6 +3487,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     // 中文模式：先走 Rime 引擎
                     val hadComposing = rimeEngine.isComposing
                     val accepted = rimeEngine.processKey(primaryCode.toChar())
+                    Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'")
                     if (accepted) {
                         // 如果之前没有 composing，且输入后 Rime 产生了 composing，说明是拼音输入
                         // 如果之前没有 composing，且输入后也没有 composing，说明是英文输入
