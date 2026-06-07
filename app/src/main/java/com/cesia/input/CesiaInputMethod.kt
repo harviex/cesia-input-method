@@ -3483,11 +3483,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     }
                 } else {
                     // 中文模式：先走 Rime 引擎
+                    val hadComposing = rimeEngine.isComposing
                     val accepted = rimeEngine.processKey(primaryCode.toChar())
                     if (accepted) {
+                        // 如果之前没有 composing，且输入后 Rime 产生了 composing，说明是拼音输入
+                        // 如果之前没有 composing，且输入后也没有 composing，说明是英文输入
+                        if (!hadComposing && !rimeEngine.isComposing) {
+                            // Rime 没有进入 composing 状态，直接上屏英文
+                            ic?.commitText(primaryCode.toChar().toString(), 1)
+                        }
                         updateCandidateBar()
                     } else {
-                        // Rime 不接受该按键（如连续英文输入），直接上屏
+                        // Rime 不接受该按键，直接上屏
                         ic?.commitText(primaryCode.toChar().toString(), 1)
                         updateCandidateBar()
                     }
