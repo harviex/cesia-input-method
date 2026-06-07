@@ -4,13 +4,49 @@
 #include <android/log.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <dlfcn.h>
+#include <cstdint>
+#include <cstring>
 
 #define LOG_TAG "CesiaLlama"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// 安全日志宏
 #define LOG_STEP(step) LOGI("STEP: %s (line %d)", step, __LINE__)
+
+// Vulkan 最小类型定义（避免引入 vulkan.h 的复杂性）
+#define VK_SUCCESS 0
+#define VK_STRUCTURE_TYPE_APPLICATION_INFO 0
+#define VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO 1
+#define VK_API_VERSION_1_0 0x00400000
+
+typedef struct {
+    int sType;
+    const void* pNext;
+    const char* pApplicationName;
+    uint32_t applicationVersion;
+    const char* pEngineName;
+    uint32_t engineVersion;
+    uint32_t apiVersion;
+} VkApplicationInfo;
+
+typedef struct {
+    int sType;
+    const void* pNext;
+    uint32_t flags;
+    const VkApplicationInfo* pApplicationInfo;
+    uint32_t enabledLayerCount;
+    const char* const* ppEnabledLayerNames;
+    uint32_t enabledExtensionCount;
+    const char* const* ppEnabledExtensionNames;
+} VkInstanceCreateInfo;
+
+typedef uint32_t VkResult;
+typedef struct VkInstance_T* VkInstance;
+typedef void* VkAllocationCallbacks;
+typedef void* (*PFN_vkGetInstanceProcAddr)(VkInstance, const char*);
+typedef VkResult (*PFN_vkCreateInstance)(const VkInstanceCreateInfo*, const VkAllocationCallbacks*, VkInstance*);
+typedef void (*PFN_vkDestroyInstance)(VkInstance, const VkAllocationCallbacks*);
 
 #ifdef HAS_LLAMA
 #include "llama.h"
@@ -25,7 +61,7 @@ struct LlamaHandle {
 
 static LlamaHandle g_handle = {};
 
-// SIGSEGV 捕获：用 sigsetjmp/siglongjmp 安全恢复
+// SIGSEGV 捕获
 static sigjmp_buf g_jump_buf;
 static volatile sig_atomic_t g_signal_received = 0;
 
@@ -35,25 +71,86 @@ static void signal_handler(int sig) {
     siglongjmp(g_jump_buf, 1);
 }
 
-// 安装信号处理器
 static void install_signal_handlers() {
     struct sigaction sa;
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_ONSTACK; // 使用独立栈，防止栈溢出时无法处理
-
+    sa.sa_flags = SA_ONSTACK;
     sigaction(SIGSEGV, &sa, nullptr);
     sigaction(SIGABRT, &sa, nullptr);
     sigaction(SIGFPE, &sa, nullptr);
     sigaction(SIGILL, &sa, nullptr);
 }
 
-// 恢复默认信号处理器
 static void restore_signal_handlers() {
     signal(SIGSEGV, SIG_DFL);
     signal(SIGABRT, SIG_DFL);
     signal(SIGFPE, SIG_DFL);
     signal(SIGILL, SIG_DFL);
+}
+
+// 轻量 Vulkan 探测（在信号保护下执行）
+// 返回 true = Vulkan 可用，false = 不可用
+static bool probe_vulkan_safe() {
+    LOG_STEP("probe_vulkan_safe start");
+
+    if (sigsetjmp(g_jump_buf, 1) != 0) {
+        LOGE("probe_vulkan_safe: interrupted by signal %d", g_signal_received);
+        return false;
+    }
+
+    void * vulkan_lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    if (!vulkan_lib) {
+        LOGE("probe_vulkan_safe: dlopen failed: %s", dlerror());
+        return false;
+    }
+
+    // dlsym returns void*, safely cast to function pointer via memcpy
+    void * sym_gipa = dlsym(vulkan_lib, "vkGetInstanceProcAddr");
+    if (!sym_gipa) {
+        LOGE("probe_vulkan_safe: dlsym vkGetInstanceProcAddr failed");
+        dlclose(vulkan_lib);
+        return false;
+    }
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    memcpy(&vkGetInstanceProcAddr, &sym_gipa, sizeof(sym_gipa));
+
+    void * sym_vci = vkGetInstanceProcAddr(nullptr, "vkCreateInstance");
+    if (!sym_vci) {
+        LOGE("probe_vulkan_safe: vkCreateInstance not found");
+        dlclose(vulkan_lib);
+        return false;
+    }
+    PFN_vkCreateInstance vkCreateInstance;
+    memcpy(&vkCreateInstance, &sym_vci, sizeof(sym_vci));
+
+    VkApplicationInfo app_info = {};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = "cesia-probe";
+    app_info.apiVersion = VK_API_VERSION_1_0;
+
+    VkInstanceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pApplicationInfo = &app_info;
+
+    VkInstance instance = nullptr;
+    VkResult result = vkCreateInstance(&create_info, nullptr, &instance);
+
+    if (result == VK_SUCCESS && instance != nullptr) {
+        void * sym_vdi = vkGetInstanceProcAddr(instance, "vkDestroyInstance");
+        if (sym_vdi) {
+            PFN_vkDestroyInstance vkDestroyInstance;
+            memcpy(&vkDestroyInstance, &sym_vdi, sizeof(sym_vdi));
+            vkDestroyInstance(instance, nullptr);
+        }
+        LOG_STEP("probe_vulkan_safe: Vulkan is available!");
+        dlclose(vulkan_lib);
+        return true;
+    }
+
+    LOGE("probe_vulkan_safe: vkCreateInstance failed, result=%d", (int)result);
+    dlclose(vulkan_lib);
+    return false;
 }
 
 extern "C" {
@@ -67,13 +164,24 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
     const char * path = env->GetStringUTFChars(modelPath, nullptr);
     LOGI("Loading model from: %s (gpu_layers=%d)", path, nGpuLayers);
 
-    // 安装信号处理器，捕获 Vulkan 初始化可能的 SIGSEGV
+    // 安装信号处理器
     install_signal_handlers();
 
     bool result = false;
+    bool vulkan_available = false;
 
+    // 第一步：探测 Vulkan 是否可用
+    if (nGpuLayers > 0) {
+        LOG_STEP("Probing Vulkan availability...");
+        vulkan_available = probe_vulkan_safe();
+        if (!vulkan_available) {
+            LOGE("Vulkan not available, falling back to CPU (nGpuLayers=0)");
+            nGpuLayers = 0; // 回退到纯 CPU
+        }
+    }
+
+    // 第二步：加载模型（在信号保护下）
     if (sigsetjmp(g_jump_buf, 1) == 0) {
-        // 正常路径：尝试加载模型
         LOG_STEP("calling llama_model_load_from_file");
 
         llama_model_params mparams = llama_model_default_params();
@@ -111,7 +219,6 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
         }
         LOG_STEP("vocab obtained");
 
-        // Create sampler chain
         auto sparams = llama_sampler_chain_default_params();
         llama_sampler * sampler = llama_sampler_chain_init(sparams);
         llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.3f));
@@ -131,8 +238,7 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
              nGpuLayers, g_handle.n_ctx, n_vocab);
         result = true;
     } else {
-        // 信号处理器跳转回来：Vulkan 初始化崩溃了
-        LOGE("Model loading interrupted by signal %d (Vulkan init crash?)", g_signal_received);
+        LOGE("Model loading interrupted by signal %d", g_signal_received);
         result = false;
     }
 
@@ -141,7 +247,7 @@ cleanup:
     env->ReleaseStringUTFChars(modelPath, path);
 
     if (result) {
-        LOGI("nativeInit: SUCCESS");
+        LOGI("nativeInit: SUCCESS (vulkan=%s)", vulkan_available ? "yes" : "no");
     } else {
         LOGI("nativeInit: FAILED");
     }
@@ -165,7 +271,6 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
 
     LOGI("Prompt length: %zu chars", prompt_text.size());
 
-    // Tokenize prompt
     std::vector<llama_token> tokens(prompt_text.size() + 16);
 
     LOG_STEP("calling llama_tokenize");
@@ -175,8 +280,8 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
         (int32_t) prompt_text.size(),
         tokens.data(),
         (int32_t) tokens.size(),
-        true,   // add_special (BOS)
-        false   // parse_special
+        true,
+        false
     );
 
     if (n_tokens < 0) {
@@ -187,18 +292,15 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
     LOGI("Tokenized: %d tokens", n_tokens);
     tokens.resize((size_t) n_tokens);
 
-    // Check if prompt fits in context
     if ((int32_t) tokens.size() + maxTokens > g_handle.n_ctx) {
         LOGE("prompt too long: %d tokens + %d max > %d ctx",
              (int32_t) tokens.size(), maxTokens, g_handle.n_ctx);
         return env->NewStringUTF("");
     }
 
-    // Reset sampler
     llama_sampler_reset(g_handle.sampler);
     LOG_STEP("sampler reset");
 
-    // Feed prompt tokens in batches
     int32_t n_batch = llama_n_batch(g_handle.ctx);
     LOGI("n_batch=%d, processing %d prompt tokens", n_batch, (int32_t) tokens.size());
 
@@ -208,12 +310,7 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
         int32_t batch_end = std::min(i + n_batch, (int32_t) tokens.size());
         int32_t batch_size = batch_end - i;
 
-        LOGI("decode prompt batch: pos=%d, size=%d", i, batch_size);
-
-        llama_batch batch = llama_batch_get_one(
-            tokens.data() + i,
-            batch_size
-        );
+        llama_batch batch = llama_batch_get_one(tokens.data() + i, batch_size);
 
         int32_t ret = llama_decode(g_handle.ctx, batch);
         if (ret != 0) {
@@ -221,23 +318,15 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
             return env->NewStringUTF("");
         }
 
-        LOGI("decode prompt batch OK: pos=%d", batch_end);
         i = batch_end;
     }
 
     LOG_STEP("prompt decode complete, starting generation");
 
-    // Generate tokens one by one
     int32_t n_generated = 0;
     for (; n_generated < maxTokens; n_generated++) {
-        // Sample next token
-        llama_token token = llama_sampler_sample(
-            g_handle.sampler,
-            g_handle.ctx,
-            -1
-        );
+        llama_token token = llama_sampler_sample(g_handle.sampler, g_handle.ctx, -1);
 
-        // Check for EOS
         {
             llama_token eos = llama_vocab_eos(g_handle.vocab);
             if (token == eos) {
@@ -248,22 +337,13 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
 
         llama_sampler_accept(g_handle.sampler, token);
 
-        // Convert token to text
         char buf[256];
-        int32_t n_chars = llama_token_to_piece(
-            g_handle.vocab,
-            token,
-            buf,
-            sizeof(buf),
-            0,
-            false
-        );
+        int32_t n_chars = llama_token_to_piece(g_handle.vocab, token, buf, sizeof(buf), 0, false);
 
         if (n_chars > 0) {
             result_text.append(buf, (size_t) n_chars);
         }
 
-        // Feed generated token back
         llama_batch batch = llama_batch_get_one(&token, 1);
         int32_t ret = llama_decode(g_handle.ctx, batch);
         if (ret != 0) {
