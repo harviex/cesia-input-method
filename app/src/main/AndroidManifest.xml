@@ -14,7 +14,8 @@
         android:allowBackup="true"
         android:label="@string/app_name"
         android:theme="@style/Theme.Cesia"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="true">
 
         <!-- 输入法服务 -->
         <service
