@@ -2,12 +2,14 @@
 #include <string>
 #include <vector>
 #include <android/log.h>
+#include <signal.h>
+#include <setjmp.h>
 
 #define LOG_TAG "CesiaLlama"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// 安全日志宏 — 每个关键步骤都打印
+// 安全日志宏
 #define LOG_STEP(step) LOGI("STEP: %s (line %d)", step, __LINE__)
 
 #ifdef HAS_LLAMA
@@ -23,6 +25,37 @@ struct LlamaHandle {
 
 static LlamaHandle g_handle = {};
 
+// SIGSEGV 捕获：用 sigsetjmp/siglongjmp 安全恢复
+static sigjmp_buf g_jump_buf;
+static volatile sig_atomic_t g_signal_received = 0;
+
+static void signal_handler(int sig) {
+    g_signal_received = sig;
+    LOGE("Caught signal %d, jumping back to safe point", sig);
+    siglongjmp(g_jump_buf, 1);
+}
+
+// 安装信号处理器
+static void install_signal_handlers() {
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_ONSTACK; // 使用独立栈，防止栈溢出时无法处理
+
+    sigaction(SIGSEGV, &sa, nullptr);
+    sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGFPE, &sa, nullptr);
+    sigaction(SIGILL, &sa, nullptr);
+}
+
+// 恢复默认信号处理器
+static void restore_signal_handlers() {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGABRT, SIG_DFL);
+    signal(SIGFPE, SIG_DFL);
+    signal(SIGILL, SIG_DFL);
+}
+
 extern "C" {
 
 JNIEXPORT jboolean JNICALL
@@ -34,72 +67,85 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
     const char * path = env->GetStringUTFChars(modelPath, nullptr);
     LOGI("Loading model from: %s (gpu_layers=%d)", path, nGpuLayers);
 
-    // 打印可用后端数量
-    size_t n_backends = ggml_backend_reg_count();
-    LOGI("Available backends: %zu", n_backends);
-    for (size_t i = 0; i < n_backends; i++) {
-        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
-        const char * name = ggml_backend_reg_name(reg);
-        LOGI("  backend[%zu]: %s", i, name ? name : "unknown");
+    // 安装信号处理器，捕获 Vulkan 初始化可能的 SIGSEGV
+    install_signal_handlers();
+
+    bool result = false;
+
+    if (sigsetjmp(g_jump_buf, 1) == 0) {
+        // 正常路径：尝试加载模型
+        LOG_STEP("calling llama_model_load_from_file");
+
+        llama_model_params mparams = llama_model_default_params();
+        mparams.n_gpu_layers = nGpuLayers;
+
+        llama_model * model = llama_model_load_from_file(path, mparams);
+        if (!model) {
+            LOGE("Failed to load llama model");
+            goto cleanup;
+        }
+        LOG_STEP("model loaded successfully");
+
+        llama_context_params cparams = llama_context_default_params();
+        cparams.n_ctx = 1024;
+        cparams.n_batch = 256;
+        cparams.n_ubatch = 256;
+        cparams.n_threads = 8;
+        cparams.n_threads_batch = 8;
+
+        LOG_STEP("calling llama_init_from_model");
+        llama_context * ctx = llama_init_from_model(model, cparams);
+        if (!ctx) {
+            llama_model_free(model);
+            LOGE("Failed to create llama context");
+            goto cleanup;
+        }
+        LOG_STEP("context created");
+
+        const llama_vocab * vocab = llama_model_get_vocab(model);
+        if (!vocab) {
+            llama_free(ctx);
+            llama_model_free(model);
+            LOGE("Failed to get vocab from model");
+            goto cleanup;
+        }
+        LOG_STEP("vocab obtained");
+
+        // Create sampler chain
+        auto sparams = llama_sampler_chain_default_params();
+        llama_sampler * sampler = llama_sampler_chain_init(sparams);
+        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.3f));
+        llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+        llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
+        llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+        LOG_STEP("sampler created");
+
+        g_handle.model = model;
+        g_handle.ctx = ctx;
+        g_handle.vocab = vocab;
+        g_handle.sampler = sampler;
+        g_handle.n_ctx = llama_n_ctx(ctx);
+
+        int32_t n_vocab = llama_vocab_n_tokens(vocab);
+        LOGI("Llama model loaded: gpu_layers=%d, n_ctx=%d, n_vocab=%d",
+             nGpuLayers, g_handle.n_ctx, n_vocab);
+        result = true;
+    } else {
+        // 信号处理器跳转回来：Vulkan 初始化崩溃了
+        LOGE("Model loading interrupted by signal %d (Vulkan init crash?)", g_signal_received);
+        result = false;
     }
 
-    llama_model_params mparams = llama_model_default_params();
-    mparams.n_gpu_layers = nGpuLayers;
-
-    LOG_STEP("calling llama_model_load_from_file");
-    llama_model * model = llama_model_load_from_file(path, mparams);
+cleanup:
+    restore_signal_handlers();
     env->ReleaseStringUTFChars(modelPath, path);
 
-    if (!model) {
-        LOGE("Failed to load llama model");
-        return JNI_FALSE;
+    if (result) {
+        LOGI("nativeInit: SUCCESS");
+    } else {
+        LOGI("nativeInit: FAILED");
     }
-    LOG_STEP("model loaded successfully");
-
-    llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx = 1024;        // 减少上下文，节省内存
-    cparams.n_batch = 256;       // 减少 batch size
-    cparams.n_ubatch = 256;
-    cparams.n_threads = 8;
-    cparams.n_threads_batch = 8;
-
-    LOG_STEP("calling llama_init_from_model");
-    llama_context * ctx = llama_init_from_model(model, cparams);
-    if (!ctx) {
-        llama_model_free(model);
-        LOGE("Failed to create llama context");
-        return JNI_FALSE;
-    }
-    LOG_STEP("context created");
-
-    const llama_vocab * vocab = llama_model_get_vocab(model);
-    if (!vocab) {
-        llama_free(ctx);
-        llama_model_free(model);
-        LOGE("Failed to get vocab from model");
-        return JNI_FALSE;
-    }
-    LOG_STEP("vocab obtained");
-
-    // Create sampler chain
-    auto sparams = llama_sampler_chain_default_params();
-    llama_sampler * sampler = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.3f));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-    LOG_STEP("sampler created");
-
-    g_handle.model = model;
-    g_handle.ctx = ctx;
-    g_handle.vocab = vocab;
-    g_handle.sampler = sampler;
-    g_handle.n_ctx = llama_n_ctx(ctx);
-
-    int32_t n_vocab = llama_vocab_n_tokens(vocab);
-    LOGI("Llama model loaded: gpu_layers=%d, n_ctx=%d, n_vocab=%d",
-         nGpuLayers, g_handle.n_ctx, n_vocab);
-    return JNI_TRUE;
+    return result ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jstring JNICALL

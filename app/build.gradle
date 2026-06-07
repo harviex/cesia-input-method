@@ -39,6 +39,12 @@ android {
         }
     }
 
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     signingConfigs {
         debug {
             storeFile file("/tmp/cesia-debug.keystore")

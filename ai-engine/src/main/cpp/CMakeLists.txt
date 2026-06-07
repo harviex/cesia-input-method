@@ -16,15 +16,11 @@ if (EXISTS "${LLAMA_SRC}/CMakeLists.txt")
     set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
     set(GGML_OPENMP ON CACHE BOOL "Enable OpenMP" FORCE)
 
-    # Vulkan — DISABLED on Android (SIGSEGV in device init, try-catch can't catch signals)
-    set(GGML_VULKAN OFF CACHE BOOL "Disable Vulkan" FORCE)
+    # Vulkan GPU backend — works on Android via system libvulkan.so
+    set(GGML_VULKAN ON CACHE BOOL "Enable Vulkan" FORCE)
 
-    # OpenCL GPU backend — works on Android via system libOpenCL.so
-    set(GGML_OPENCL ON CACHE BOOL "Enable OpenCL" FORCE)
-    set(GGML_OPENCL_EMBED_KERNELS ON CACHE BOOL "Embed OpenCL kernels" FORCE)
-    set(GGML_OPENCL_USE_ADRENO_KERNELS ON CACHE BOOL "Adreno optimized kernels" FORCE)
-    set(GGML_OPENCL_PROFILING OFF CACHE BOOL "" FORCE)
-    set(GGML_OPENCL_TARGET_VERSION "300" CACHE STRING "" FORCE)
+    # OpenCL — DISABLED (unresolved symbol issues on Android)
+    set(GGML_OPENCL OFF CACHE BOOL "Disable OpenCL" FORCE)
 
     # Android cross-compile: SPIRV-Headers from local install
     if (ANDROID)
@@ -56,7 +52,6 @@ if (LLAMA_EXISTS)
     if (ANDROID)
         target_include_directories(native-bridge PRIVATE
             /home/ca/cesia-input-method/ai-engine/src/main/cpp/SPIRV-Headers/include
-            /home/ca/cesia-input-method/ai-engine/src/main/cpp/OpenCL-Headers
         )
     endif()
 endif()
@@ -64,7 +59,7 @@ endif()
 # 链接库
 set(BRIDGE_LIBS android log)
 if (LLAMA_EXISTS)
-    list(APPEND BRIDGE_LIBS llama ggml-opencl ggml-cpu ggml-base)
+    list(APPEND BRIDGE_LIBS llama ggml-vulkan ggml-cpu ggml-base)
 endif()
 target_link_libraries(native-bridge ${BRIDGE_LIBS})
 
