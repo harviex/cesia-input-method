@@ -87,7 +87,8 @@ class AIEngine(private val context: Context) {
      * 构建润色 prompt（Qwen 3.5 Instruct 格式）
      */
     private fun buildPolishPrompt(text: String, instruction: String): String {
-        return "<|im_start|>system\n你是一个文本润色助手。只输出润色后的结果，不要解释。<|im_end|>\n<|im_start|>user\n请对以下文本进行${instruction}：\n${text}\n<|im_end|>\n<|im_start|>assistant\n"
+        // Qwen3 instruct 模型：/no_think 关闭思考模式，直接输出结果
+        return "<|im_start|>system/no_think\n你是一个文本润色助手。只输出润色后的结果，不要解释，不要思考过程。<|im_end|>\n<|im_start|>user\n请对以下文本进行${instruction}：\n${text}\n<|im_end|>\n<|im_start|>assistant\n"
     }
 
     // ==================== 状态查询 ====================
