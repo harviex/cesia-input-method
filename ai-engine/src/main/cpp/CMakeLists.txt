@@ -16,18 +16,22 @@ if (EXISTS "${LLAMA_SRC}/CMakeLists.txt")
     set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
     set(GGML_OPENMP ON CACHE BOOL "Enable OpenMP" FORCE)
 
-    # Vulkan disabled — no SPIRV-Headers in CI, Adreno 650 doesn't support Vulkan 1.2
-    set(GGML_VULKAN OFF CACHE BOOL "Disable Vulkan" FORCE)
-    set(GGML_VULKAN_DEBUG OFF CACHE BOOL "Disable Vulkan debug" FORCE)
+    # Android: Vulkan is NOT compiled in — no glshaders-gen, no glslc, no Vulkan::Vulkan in NDK
+    # Runtime Vulkan support is probed at app startup via probe_vulkan_safe() which
+    # dlopens libvulkan.so directly. Keep GGML_VULKAN=OFF to avoid build issues.
+    if (ANDROID)
+        set(GGML_VULKAN OFF CACHE BOOL "Vulkan disabled on Android (no glslc in NDK)" FORCE)
+        message(STATUS "Android build: Vulkan disabled at compile time (runtime probe only)")
+    else()
+        set(GGML_VULKAN ON CACHE BOOL "Enable Vulkan" FORCE)
+        set(GGML_VULKAN_DEBUG OFF CACHE BOOL "Disable Vulkan debug" FORCE)
+    endif()
+
     message(STATUS "DEBUG: GGML_VULKAN=${GGML_VULKAN} before add_subdirectory")
 
     add_subdirectory(${LLAMA_SRC} llama EXCLUDE_FROM_ALL)
 
     message(STATUS "DEBUG: GGML_VULKAN=${GGML_VULKAN} after add_subdirectory")
-
-    # Ensure Vulkan stays OFF after add_subdirectory (llama.cpp option() may override)
-    set(GGML_VULKAN OFF CACHE BOOL "Disable Vulkan" FORCE)
-    set(GGML_VULKAN_DEBUG OFF CACHE BOOL "Disable Vulkan debug" FORCE)
     set(LLAMA_EXISTS TRUE)
     message(STATUS "llama.cpp: enabled (CPU+OpenMP+Vulkan)")
 else()

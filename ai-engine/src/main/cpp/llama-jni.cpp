@@ -54,6 +54,7 @@ typedef void (*PFN_vkGetPhysicalDeviceProperties)(void*, void*);
 
 #ifdef HAS_LLAMA
 #include "llama.h"
+#include "ggml-backend.h"
 
 struct LlamaHandle {
     llama_model * model = nullptr;
@@ -288,11 +289,11 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
         LOG_STEP("model loaded successfully");
 
         llama_context_params cparams = llama_context_default_params();
-        cparams.n_ctx = 1024;
+        cparams.n_ctx = 512;
         cparams.n_batch = 256;
         cparams.n_ubatch = 256;
-        cparams.n_threads = 4;
-        cparams.n_threads_batch = 4;
+        cparams.n_threads = 6;
+        cparams.n_threads_batch = 6;
 
         LOG_STEP("calling llama_init_from_model");
         llama_context * ctx = llama_init_from_model(model, cparams);
@@ -327,8 +328,35 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
         g_handle.n_ctx = llama_n_ctx(ctx);
 
         int32_t n_vocab = llama_vocab_n_tokens(vocab);
-        LOGI("Llama model loaded: gpu_layers=%d, n_ctx=%d, n_vocab=%d",
-             nGpuLayers, g_handle.n_ctx, n_vocab);
+
+        // 列出所有 ggml backend device，确认 Vulkan 实际使用情况
+        size_t dev_count = ggml_backend_dev_count();
+        LOGI("ggml backend devices: %zu total", dev_count);
+        bool vulkan_backend_found = false;
+        for (size_t di = 0; di < dev_count; di++) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(di);
+            const char * dev_name = ggml_backend_dev_name(dev);
+            const char * dev_desc = ggml_backend_dev_description(dev);
+            enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+            const char * type_str = (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) ? "GPU" :
+                                    (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) ? "CPU" : "OTHER";
+            size_t mem_free = 0, mem_total = 0;
+            ggml_backend_dev_memory(dev, &mem_free, &mem_total);
+            LOGI("  dev[%zu]: name=%s, desc=%s, type=%s, mem_free=%zuMB, mem_total=%zuMB",
+                 di, dev_name, dev_desc, type_str, mem_free/(1024*1024), mem_total/(1024*1024));
+            if (strstr(dev_name, "vulkan") || strstr(dev_name, "Vulkan") ||
+                strstr(dev_desc, "vulkan") || strstr(dev_desc, "Vulkan")) {
+                vulkan_backend_found = true;
+            }
+        }
+        if (vulkan_backend_found) {
+            LOGI(">>> Vulkan backend device detected! <<<");
+        } else {
+            LOGI(">>> No Vulkan backend device found - running on CPU only <<<");
+        }
+
+        LOGI("Llama model loaded: gpu_layers=%d, vulkan_probe=%s, n_ctx=%d, n_vocab=%d",
+             nGpuLayers, vulkan_available ? "PASS" : "FAIL", g_handle.n_ctx, n_vocab);
         result = true;
     } else {
         LOGE("Model loading interrupted by signal %d", g_signal_received);
