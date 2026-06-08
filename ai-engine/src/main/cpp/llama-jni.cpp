@@ -291,8 +291,8 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeInit(
         cparams.n_ctx = 1024;
         cparams.n_batch = 256;
         cparams.n_ubatch = 256;
-        cparams.n_threads = 8;
-        cparams.n_threads_batch = 8;
+        cparams.n_threads = 4;
+        cparams.n_threads_batch = 4;
 
         LOG_STEP("calling llama_init_from_model");
         llama_context * ctx = llama_init_from_model(model, cparams);
@@ -415,26 +415,40 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
     }
 
     LOG_STEP("prompt decode complete, starting generation");
-
+    std::string result_text;
     int32_t n_generated = 0;
+    llama_token eos_token = llama_vocab_eos(g_handle.vocab);
+
     for (; n_generated < maxTokens; n_generated++) {
         llama_token token = llama_sampler_sample(g_handle.sampler, g_handle.ctx, -1);
 
-        {
-            llama_token eos = llama_vocab_eos(g_handle.vocab);
-            if (token == eos) {
-                LOGI("EOS reached at token %d", n_generated);
-                break;
-            }
+        // EOS 立即停止
+        if (token == eos_token) {
+            LOGI("EOS reached at token %d", n_generated);
+            break;
         }
 
         llama_sampler_accept(g_handle.sampler, token);
 
+        // token → 文本，过滤特殊标记
         char buf[256];
         int32_t n_chars = llama_token_to_piece(g_handle.vocab, token, buf, sizeof(buf), 0, false);
 
         if (n_chars > 0) {
-            result_text.append(buf, (size_t) n_chars);
+            std::string piece(buf, (size_t) n_chars);
+
+            // 过滤 Qwen 特殊标记（如 <|im_end|>, <|im_start|> 等）
+            if (piece.find("<|") != std::string::npos || piece.find("|>") != std::string::npos) {
+                LOGI("Filtered special token: %s", piece.c_str());
+                // 遇到 <|im_end|> 也停止生成
+                if (piece.find("im_end") != std::string::npos) {
+                    LOGI("im_end detected, stopping generation");
+                    break;
+                }
+                continue;
+            }
+
+            result_text.append(piece);
         }
 
         llama_batch batch = llama_batch_get_one(&token, 1);
@@ -449,7 +463,34 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
         }
     }
 
-    LOGI("Generated %d tokens, result length=%zu", n_generated, result_text.size());
+    // 去重：如果结果中存在重复段落，只保留第一段
+    // 检测方式：找到文本中间是否有完整重复
+    if (result_text.size() > 20) {
+        size_t half = result_text.size() / 2;
+        // 在后半部分查找是否有与前半部分匹配的重复
+        for (size_t len = half; len >= 10; len--) {
+            std::string first_part = result_text.substr(0, len);
+            size_t pos = result_text.find(first_part, len);
+            if (pos != std::string::npos && pos == len) {
+                // 发现紧邻的重复，截断
+                LOGI("Duplicate detected at pos %zu, truncating", pos);
+                result_text = result_text.substr(0, pos);
+                break;
+            }
+        }
+    }
+
+    // 去除首尾空白
+    {
+        size_t start = result_text.find_first_not_of(" \t\n\r");
+        if (start == std::string::npos) result_text.clear();
+        else {
+            size_t end = result_text.find_last_not_of(" \t\n\r");
+            result_text = result_text.substr(start, end - start + 1);
+        }
+    }
+
+    LOGI("Generated %d tokens, result length=%zu, result='%s'", n_generated, result_text.size(), result_text.c_str());
     return env->NewStringUTF(result_text.c_str());
 }
 
