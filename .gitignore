@@ -14,6 +14,9 @@ build/
 # Compiled .so files (should be downloaded as bridge plugin, not committed)
 # ai-engine/src/main/jniLibs/arm64-v8a/libnative-bridge.so
 
+# Pre-compiled MNN libraries (downloaded from GitHub Release in CI)
+ai-engine/src/main/cpp/mnn/libs/
+
 # IDE
 .idea/
 *.iml

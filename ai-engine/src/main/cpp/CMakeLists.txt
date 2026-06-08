@@ -10,6 +10,29 @@ set(MNN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mnn")
 set(MNN_LIBS_DIR "${MNN_DIR}/libs")
 set(MNN_INCLUDE_DIR "${MNN_DIR}/include")
 
+# 如果 .a 文件不存在，从 GitHub Release 下载
+set(MNN_RELEASE_BASE "https://github.com/harviex/cesia-input-method/releases/download/mnn-libs-v1.0")
+
+if (NOT EXISTS "${MNN_LIBS_DIR}/libMNN.a" OR NOT EXISTS "${MNN_LIBS_DIR}/libllm.a")
+    message(STATUS "MNN libraries not found, downloading from GitHub Release...")
+    file(DOWNLOAD "${MNN_RELEASE_BASE}/libMNN.a" "${MNN_LIBS_DIR}/libMNN.a"
+         SHOW_PROGRESS STATUS MNN_DL)
+    list(GET MNN_DL 0 MNN_DL_CODE)
+    if (NOT MNN_DL_CODE EQUAL 0)
+        list(GET MNN_DL 1 MNN_DL_ERR)
+        message(FATAL_ERROR "Failed to download libMNN.a: ${MNN_DL_ERR}")
+    endif()
+
+    file(DOWNLOAD "${MNN_RELEASE_BASE}/libllm.a" "${MNN_LIBS_DIR}/libllm.a"
+         SHOW_PROGRESS STATUS LLM_DL)
+    list(GET LLM_DL 0 LLM_DL_CODE)
+    if (NOT LLM_DL_CODE EQUAL 0)
+        list(GET LLM_DL 1 LLM_DL_ERR)
+        message(FATAL_ERROR "Failed to download libllm.a: ${LLM_DL_ERR}")
+    endif()
+    message(STATUS "MNN libraries downloaded successfully")
+endif()
+
 # MNN 核心库
 add_library(mnn STATIC IMPORTED)
 set_target_properties(mnn PROPERTIES
@@ -40,7 +63,7 @@ if (EXISTS "${LLAMA_SRC}/CMakeLists.txt" AND NOT MNN_ONLY)
     set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
     set(GGML_OPENMP ON CACHE BOOL "" FORCE)
-    set(GGML_VULKAN OFF CACHE BOOL "" FORCE)  # 默认关闭 Vulkan
+    set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
     set(GGML_VULKAN_DEBUG OFF CACHE BOOL "" FORCE)
 
     message(STATUS "GGML_VULKAN=${GGML_VULKAN} before add_subdirectory")
