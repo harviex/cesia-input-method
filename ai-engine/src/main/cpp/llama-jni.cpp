@@ -397,7 +397,6 @@ Java_com_cesia_input_engine_ai_LlamaEngine_nativeGenerate(
     int32_t n_batch = llama_n_batch(g_handle.ctx);
     LOGI("n_batch=%d, processing %d prompt tokens", n_batch, (int32_t) tokens.size());
 
-    std::string result_text;
     int32_t i = 0;
     for (; i < (int32_t) tokens.size(); ) {
         int32_t batch_end = std::min(i + n_batch, (int32_t) tokens.size());
