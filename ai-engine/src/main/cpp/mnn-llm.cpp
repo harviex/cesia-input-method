@@ -1,6 +1,5 @@
 //
 //  mnn-llm.cpp — MNN LLM JNI bridge for Cesia
-//
 //  JNI 对应: com.cesia.input.engine.ai.MNNEngine
 //
 
@@ -47,12 +46,10 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
             return JNI_FALSE;
         }
 
-        // 基础配置
-        g_llm->set_config("{\"async\":true}");
-        // 关闭 thinking
-        g_llm->set_config("{\"jinja\":{\"context\":{\"enable_thinking\":false}}}");
-        // 生成参数：低温 + 重复惩罚，与云端对齐
-        g_llm->set_config("{\"sampler\":{\"temperature\":0.1,\"repetition_penalty\":1.2,\"top_k\":20,\"top_p\":0.9}}");
+        // 配置：纯 CPU 异步模式（兼容性最好）
+        g_llm->set_config(R"({"async":true})");
+        // 关闭 thinking（Qwen2.5 默认开启，润色任务不需要推理链）
+        g_llm->set_config(R"({"jinja":{"context":{"enable_thinking":false}}})");
 
         bool loaded = g_llm->load();
         if (!loaded) {
@@ -67,20 +64,16 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
 
     } catch (const std::exception& e) {
         LOGE("Exception during init: %s", e.what());
-        if (g_llm) {
-            Llm::destroy(g_llm);
-            g_llm = nullptr;
-        }
+        if (g_llm) { Llm::destroy(g_llm); g_llm = nullptr; }
         return JNI_FALSE;
     }
 }
 
 /**
- * 同步生成文本
- * promptStr 可能是：
- *   格式A（极简）："只输出润色结果，不解释不重复：xxx\n"
- *   格式B（Chat）："system内容\n\n输入：user内容\n\n输出："
- * end_with="。\n" 让模型在句号后停止，避免无限生成
+ * 同步生成文本（阻塞直到完成）
+ * 与 a468509 版本保持一致，仅做最小修改：
+ * - end_with 设为 "\n" 防止无限生成（原版本 nullptr 会生成到 maxTokens 上限）
+ * - 输出截断到 500 字符（防止 OOM）
  */
 JNIEXPORT jstring JNICALL
 Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
@@ -100,26 +93,8 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
 
     try {
         std::ostringstream outputStream;
-
-        // 检查是否是 Chat 格式（包含 "\n\n输入：" 标记）
-        std::string::size_type splitPos = promptStr.find("\n\n输入：");
-        if (splitPos != std::string::npos) {
-            // Chat 格式：拆成 system + user
-            std::string systemPart = promptStr.substr(0, splitPos);
-            std::string::size_type inputStart = splitPos + 8; // "\n\n输入：" 长度
-            std::string::size_type inputEnd = promptStr.find("\n\n输出：", inputStart);
-            std::string userPart = (inputEnd != std::string::npos)
-                ? promptStr.substr(inputStart, inputEnd - inputStart)
-                : promptStr.substr(inputStart);
-
-            ChatMessages messages;
-            messages.emplace_back("system", systemPart);
-            messages.emplace_back("user", userPart);
-            g_llm->response(messages, &outputStream, "。\n", maxTokens);
-        } else {
-            // 极简格式：直接传入，用换行作为停止标记
-            g_llm->response(promptStr, &outputStream, "\n", maxTokens);
-        }
+        // end_with="\n"：遇到换行就停止，防止模型无限生成
+        g_llm->response(promptStr, &outputStream, "\n", maxTokens);
 
         auto context = g_llm->getContext();
         if (context->status == LlmStatus::INTERNAL_ERROR) {
@@ -131,35 +106,13 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
         LOGI("Generate complete: %d chars, %d tokens",
              (int)result.size(), (int)context->gen_seq_len);
 
-        // 清理输出
-        // 1. 去除模型可能带出的前缀
-        if (result.find("输出：") != std::string::npos) {
-            std::string::size_type outPos = result.rfind("输出：");
-            if (outPos != std::string::npos) {
-                result = result.substr(outPos + 9);
-            }
-        }
-        // 2. 去除润色指令中重复的部分（如果模型把 prompt 也输出了）
-        std::string::size_type repeatPos = result.find("只输出");
-        if (repeatPos != std::string::npos && repeatPos > 0) {
-            // 模型把 prompt 指令当作输出截断了
-            // 保留 repeatPos 之前的内容
-        }
-        // 3. trim 首尾空白
-        std::string::size_type start = result.find_first_not_of(" \t\n\r");
-        if (start != std::string::npos) result = result.substr(start);
-        else result = "";
-        std::string::size_type end = result.find_last_not_of(" \t\n\r");
-        if (end != std::string::npos) result = result.substr(0, end + 1);
-
-        // 4. 如果结果比原文长很多（>3倍），截断到合理长度——防止模型自由发挥
-        // （调用方传入的 text 长度存于 prompt 中，无法直接比较，此处简单截断到 1000 字符）
-        if ((int)result.size() > 1000) {
-            result = result.substr(0, 1000);
+        // 截断过长输出，防止 Java 层 OOM
+        if ((int)result.size() > 500) {
+            result.resize(500);
             // 截到最近一个句号
             std::string::size_type lastPeriod = result.rfind("。");
-            if (lastPeriod != std::string::npos && lastPeriod > 100) {
-                result = result.substr(0, lastPeriod + 1);
+            if (lastPeriod != std::string::npos && lastPeriod > 50) {
+                result.resize(lastPeriod + 1);
             }
         }
 
@@ -200,22 +153,7 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerateStreaming(
 
     try {
         std::ostringstream outputStream;
-        std::string::size_type splitPos = promptStr.find("\n\n输入：");
-        if (splitPos != std::string::npos) {
-            std::string systemPart = promptStr.substr(0, splitPos);
-            std::string::size_type inputStart = splitPos + 8;
-            std::string::size_type inputEnd = promptStr.find("\n\n输出：", inputStart);
-            std::string userPart = (inputEnd != std::string::npos)
-                ? promptStr.substr(inputStart, inputEnd - inputStart)
-                : promptStr.substr(inputStart);
-
-            ChatMessages messages;
-            messages.emplace_back("system", systemPart);
-            messages.emplace_back("user", userPart);
-            g_llm->response(messages, &outputStream, "。\n", maxTokens);
-        } else {
-            g_llm->response(promptStr, &outputStream, "\n", maxTokens);
-        }
+        g_llm->response(promptStr, &outputStream, "\n", maxTokens);
 
         auto context = g_llm->getContext();
         if (context->status == LlmStatus::INTERNAL_ERROR) {
@@ -262,9 +200,7 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGetLog(
     JNIEnv* env,
     jobject /*thiz*/
 ) {
-    if (g_llm == nullptr) {
-        return env->NewStringUTF("");
-    }
+    if (g_llm == nullptr) return env->NewStringUTF("");
     return env->NewStringUTF(g_llm->getLog().c_str());
 }
 
