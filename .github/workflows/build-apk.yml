@@ -13,7 +13,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,12 +38,25 @@ jobs:
           echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > /tmp/cesia-debug.keystore
           echo "Keystore restored"
 
+      - name: Determine version
+        id: version
+        run: |
+          COUNT=$(git rev-list --count HEAD)
+          VERSION="1.1.$COUNT"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "APK_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "apkVersion=$VERSION" > gradle.properties.tmp
+          grep -v "^apkVersion=" gradle.properties >> gradle.properties.tmp 2>/dev/null || true
+          mv gradle.properties.tmp gradle.properties
+          echo "✅ Version: $VERSION"
+
       - name: Build APK with Gradle
         run: |
           export JAVA_HOME=$JAVA_HOME_17_X64
           export ANDROID_NDK_HOME=${{ env.NDK_HOME }}
           ./gradlew assembleDebug \
             --no-daemon \
+            -PapkVersion=${{ steps.version.outputs.version }} \
             -Dorg.gradle.jvmargs="-Xmx4g"
 
       - name: Upload APK
@@ -52,3 +65,24 @@ jobs:
           name: Cesia-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Cesia v${{ steps.version.outputs.version }}"
+          body: |
+            Cesia Input Method v${{ steps.version.outputs.version }}
+
+            自动构建版本 — Git commit: ${{ github.sha }}
+
+            **安装**: 下载 APK 直接安装覆盖旧版本，无需卸载重装。
+
+            **变更**:
+            ${{ github.event.head_commit.message }}
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
