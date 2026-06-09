@@ -228,15 +228,7 @@ class VoiceAISettingsHelper(
         val voiceModel = modelManager.getInstalledVoiceModelFile()
         val modelId = modelManager.installedVoiceModelId
 
-        // llama.cpp 状态：检查 native-bridge 库是否可加载 + AI 模型是否存在
-        val llamaLibLoaded = try {
-            System.loadLibrary("native-bridge")
-            true
-        } catch (_: UnsatisfiedLinkError) {
-            false
-        }
         val aiModelFile = modelManager.getInstalledAiModelFile()
-        val llamaReady = llamaLibLoaded && aiModelFile != null && aiModelFile.exists()
 
         if (!bridgeLoaded) {
             val reason = bridgeError ?: "未知错误"
@@ -249,13 +241,7 @@ class VoiceAISettingsHelper(
             tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
         } else {
             val aiModel = modelManager.getInstalledAiModelFile()
-            val aiText = if (aiModel != null) "Qwen: ${aiModel.name}" else "Qwen: 未安装"
-            val llamaStatusStr = if (llamaLibLoaded) {
-                if (aiModel != null) "✅ llama.cpp 已连接 (${aiModel.name})"
-                else "⚠️ llama.cpp 库已加载，但 AI 模型未安装"
-            } else {
-                "❌ llama.cpp 库未加载（native-bridge.so 缺失）"
-            }
+            val aiText = if (aiModel != null) "MNN: ${aiModel.name}" else "MNN: 未安装"
             val modelInfo = modelId?.let { id ->
                 ModelRegistry.getById(id)?.let { info ->
                     "\n模型: ${info.name} (${info.description})"
@@ -266,9 +252,7 @@ class VoiceAISettingsHelper(
                 appendLine("语音: ${voiceModel.name}")
                 append("路径: ${voiceModel.parent}")
                 if (modelInfo.isNotEmpty()) appendLine(modelInfo) else appendLine()
-                appendLine(aiText)
-                appendLine("---")
-                append(llamaStatusStr)
+                append(aiText)
             }
             tvBridgeStatus?.setTextColor(0xFF2E7D32.toInt())
             tvBridgeStatus?.setBackgroundColor(0xFFE8F5E9.toInt())

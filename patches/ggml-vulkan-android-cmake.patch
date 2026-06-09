@@ -1,9 +1,0 @@
-# Skip glslc detection on Android - Vulkan runtime compiles shaders on Android
-if (ANDROID)
-    find_package(Vulkan REQUIRED)
-    if (NOT Vulkan_FOUND)
-        message(WARNING "Vulkan not found on Android")
-    endif()
-else()
-    find_package(Vulkan COMPONENTS glslc REQUIRED)
-endif()
