@@ -304,6 +304,26 @@
                 android:text="minimax/minimax-m2.5:free" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- AI 润色 Prompt（云端+本地共用） -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="AI 润色 Prompt（云端与本地共用）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_polish_prompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="4"
+                android:gravity="top"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:text="" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- 测试文本输入框 -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"

@@ -19,6 +19,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.cesia.input.stats.PolishStatsManager
+import com.cesia.input.polish.PolishService
 import com.cesia.input.engine.PinyinDictManager
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -50,6 +51,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etApiUrl: TextInputEditText
     private lateinit var etApiKey: TextInputEditText
     private lateinit var etModelId: TextInputEditText
+    private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
     private lateinit var btnSave: MaterialButton
     private lateinit var btnReset: MaterialButton
@@ -120,6 +122,7 @@ class SettingsActivity : AppCompatActivity() {
         const val IMPORT_PHRASES_REQUEST = 2002
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
+        const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
     }
 
@@ -177,6 +180,7 @@ class SettingsActivity : AppCompatActivity() {
         etApiUrl = findViewById(R.id.et_api_url)
         etApiKey = findViewById(R.id.et_openrouter_key)
         etModelId = findViewById(R.id.et_model_id)
+        etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
         btnSave = findViewById(R.id.btn_save)
         btnReset = findViewById(R.id.btn_reset)
@@ -301,6 +305,7 @@ class SettingsActivity : AppCompatActivity() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
         etModelId.setText(prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID))
+        etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, PolishService.DEFAULT_POLISH_PROMPT))
         appendLog("已加载设置")
     }
 
@@ -313,16 +318,21 @@ class SettingsActivity : AppCompatActivity() {
             }
             val apiKey = etApiKey.text?.toString()?.trim() ?: ""
             val modelId = etModelId.text?.toString()?.trim() ?: DEFAULT_MODEL_ID
+            val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
             prefs.edit()
                 .putString(PREF_API_URL, url)
                 .putString(PREF_OPENROUTER_KEY, apiKey)
                 .putString(PREF_MODEL_ID, modelId)
+                .putString(PREF_POLISH_PROMPT, polishPrompt)
                 .apply()
             aiSettingsHelper.saveSettings()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")
             appendLog("🔑 API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "未设置"}")
             appendLog("🤖 模型: $modelId")
+            if (polishPrompt.isNotEmpty()) {
+                appendLog("📝 Prompt: ${polishPrompt.take(50)}...")
+            }
             Toast.makeText(this, "设置已保存 ✓", Toast.LENGTH_SHORT).show()
         }
 
@@ -849,11 +859,12 @@ class SettingsActivity : AppCompatActivity() {
                 val isOr = apiUrl.contains("openrouter.ai")
 
                 val request = if (isOr) {
-                    // OpenRouter 格式
+                    // OpenRouter 格式：使用用户自定义 prompt
+                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: PolishService.DEFAULT_POLISH_PROMPT
                     val messages = JSONArray().apply {
                         put(JSONObject().apply {
                             put("role", "system")
-                            put("content", "你是一个中文文本润色助手。请将用户输入的口语化文字润色为通顺、简洁的书面语。只输出润色后的文字，不要解释。")
+                            put("content", customPrompt)
                         })
                         put(JSONObject().apply {
                             put("role", "user")

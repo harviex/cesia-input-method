@@ -460,6 +460,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_AI_STYLE = "ai_reply_style"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
+        const val PREF_POLISH_PROMPT = "polish_prompt"
         const val DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
         const val KEYCODE_SWITCH_SYMBOL = -100
@@ -702,6 +703,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         loadSettings()
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         typelessEngine?.updateModelId(prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID)
+        // 加载用户自定义润色 prompt 并同步到云端和本地引擎
+        val polishPrompt = prefs.getString(PREF_POLISH_PROMPT, null)
+        if (!polishPrompt.isNullOrEmpty()) {
+            typelessEngine?.getPolishService()?.updatePolishPrompt(polishPrompt)
+            aiEngine.customPolishPrompt = polishPrompt
+        }
         aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getString(PREF_AI_STYLE, "自然") ?: "自然"
 
@@ -2365,8 +2372,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val useLocalPolish = when (mode) {
             LocalModeManager.RunMode.LOCAL -> modelManager.hasAiModel() // 本地模式：有 Qwen 才用本地
             LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                // 云端模式：有 Qwen 用本地润色，否则用 OpenRouter 云端
-                modelManager.hasAiModel()
+                // 云端模式：始终使用云端 API 润色
+                false
             }
         }
 

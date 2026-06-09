@@ -23,13 +23,24 @@ class AIEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "AIEngine"
-        private const val DEFAULT_MAX_TOKENS = 32  // 润色任务简短输出，32足够
+        private const val DEFAULT_MAX_TOKENS = 512  // 润色任务不再限制 token 数
         private const val LOCAL_POLISH_TIMEOUT_MS = 30000L  // 30 秒超时
+        // 默认润色 prompt（与云端 PolishService 共用同一套）
+        const val DEFAULT_POLISH_PROMPT = """你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如"润色后："）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过"换行分段"或使用"* "进行分点陈列。"""
     }
 
     private val mnnEngine = MNNEngine()
     private var modelLoaded = false
     private var currentModelPath: String? = null
+
+    // ==================== Prompt 管理 ====================
+
+    /** 用户自定义润色 prompt，null 使用默认 */
+    var customPolishPrompt: String? = null
+
+    private fun getPolishSystemPrompt(): String {
+        return customPolishPrompt ?: DEFAULT_POLISH_PROMPT
+    }
 
     // ==================== 模型加载 ====================
 
@@ -87,11 +98,12 @@ class AIEngine(private val context: Context) {
         }
 
     /**
-     * 构建润色 prompt（Qwen 3.5 Instruct 格式）
+     * 构建润色 prompt（本地 MNN 格式，使用与云端同一套 system prompt）
      */
     private fun buildPolishPrompt(text: String, instruction: String): String {
-        // 0.8B 模型指令遵循力弱，prompt 极简化为一句
-        return "只输出${instruction}结果，不解释不重复：${text}\n"
+        val systemPrompt = getPolishSystemPrompt()
+        // 本地 MNN 是纯文本格式，将 system prompt 和用户文本拼接
+        return "${systemPrompt}\n\n请${instruction}以下文本：${text}\n\n只输出${instruction}后的结果："
     }
 
     // ==================== 通用生成 API ====================
