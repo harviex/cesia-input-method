@@ -23,7 +23,7 @@ class AIEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "AIEngine"
-        private const val DEFAULT_MAX_TOKENS = 128  // 润色结果通常较短，128 足够，减少内存占用
+        private const val DEFAULT_MAX_TOKENS = 32  // 润色任务简短输出，32足够（a468509验证）
         private const val LOCAL_POLISH_TIMEOUT_MS = 30000L  // 30 秒超时
         // 默认润色 prompt（与云端 PolishService 共用同一套）
         const val DEFAULT_POLISH_PROMPT = """你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如"润色后："）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过"换行分段"或使用"* "进行分点陈列。"""
@@ -92,6 +92,8 @@ class AIEngine(private val context: Context) {
                 mnnEngine.nativeReset()
                 val prompt = buildPolishPrompt(text, instruction)
                 Log.d(TAG, "Polish prompt: ${prompt.take(200)}")
+                // 推理前主动 GC，释放 Java 堆内存，防止 JNI 返回字符串时 OOM
+                System.gc()
                 val result = mnnEngine.nativeGenerate(prompt, DEFAULT_MAX_TOKENS)
                 Log.d(TAG, "Polish result: ${result.take(200)}")
                 result.ifBlank { null }

@@ -106,23 +106,6 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
         LOGI("Generate complete: %d chars, %d tokens",
              (int)result.size(), (int)context->gen_seq_len);
 
-        // 截断过长的输出——润色结果不应超过原文 2 倍长度
-        // prompt 中原文在冒号之后，提取原文长度来判断
-        std::size_t textStart = promptStr.rfind("：");
-        std::size_t origLen = (textStart != std::string::npos)
-            ? (promptStr.size() - textStart - 3) // skip "：" and "\n"
-            : promptStr.size();
-        std::size_t maxLen = std::max((std::size_t)200, origLen * 2);
-        if (maxLen > 800) maxLen = 800; // 硬上限
-        if ((int)result.size() > (int)maxLen) {
-            result.resize((int)maxLen);
-            // 截到最近一个句号
-            std::string::size_type lastPeriod = result.rfind("。");
-            if (lastPeriod != std::string::npos && lastPeriod > 50) {
-                result.resize(lastPeriod + 1);
-            }
-        }
-
         return env->NewStringUTF(result.c_str());
 
     } catch (const std::exception& e) {
