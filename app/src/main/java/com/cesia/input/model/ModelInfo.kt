@@ -13,7 +13,7 @@ data class ModelInfo(
     val sha256: String? = null,
     val type: ModelType
 ) {
-    enum class ModelType { VOICE, AI }
+    enum class ModelType { VOICE, AI, TTS }
 }
 
 /**
@@ -64,6 +64,17 @@ object ModelRegistry {
             fileName = "qwen25-1.5b-mnn",
             sizeBytes = 1200L * MB,
             type = ModelInfo.ModelType.AI
+        ),
+
+        // === TTS 模型 (Sherpa-onnx Vits 中文语音合成) ===
+        ModelInfo(
+            id = "sherpa-tts-zh-hf-theresa",
+            name = "中文语音合成 (Vits)",
+            description = "中文 TTS 模型，用于同声传译语音输出 (~30MB)",
+            downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-tts-zh-hf-theresa-2023-12-28",
+            fileName = "tts",
+            sizeBytes = 30L * MB,
+            type = ModelInfo.ModelType.TTS
         )
     )
 

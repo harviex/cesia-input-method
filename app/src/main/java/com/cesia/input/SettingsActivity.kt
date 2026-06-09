@@ -80,6 +80,7 @@ class SettingsActivity : AppCompatActivity() {
     private var pbDownload: android.widget.ProgressBar? = null
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
+    private var btnDownloadTts: Button? = null
     private var btnUninstall: Button? = null
     private var switchGpu: androidx.appcompat.widget.SwitchCompat? = null
     private var isDownloading = false
@@ -227,6 +228,7 @@ class SettingsActivity : AppCompatActivity() {
             pbDownload = findViewById(R.id.pb_download)
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
+            btnDownloadTts = findViewById(R.id.btn_download_tts)
             btnUninstall = findViewById(R.id.btn_uninstall)
             switchGpu = findViewById(R.id.switch_gpu)
         } catch (_: Exception) {}
@@ -358,6 +360,7 @@ class SettingsActivity : AppCompatActivity() {
         // === 语音与 AI 本地化 ===
         btnDownloadVoice?.setOnClickListener { downloadVoiceModel() }
         btnDownloadAi?.setOnClickListener { downloadAiModel() }
+        btnDownloadTts?.setOnClickListener { downloadTtsModel() }
         btnUninstall?.setOnClickListener { uninstallModels() }
         switchGpu?.setOnCheckedChangeListener { _, isChecked ->
             modelManager.useGpu = isChecked
@@ -442,6 +445,46 @@ class SettingsActivity : AppCompatActivity() {
                     btnDownloadAi?.text = "📥 下载 AI 模型"
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ AI 模型下载异常: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun downloadTtsModel() {
+        val modelInfo = ModelRegistry.getById("sherpa-tts-zh-hf-theresa") ?: return
+        btnDownloadTts?.isEnabled = false
+        btnDownloadTts?.text = "下载中..."
+        tvStatus.text = "🔄 下载中文语音模型中..."
+        appendLog("⬇ 开始下载 TTS 模型: ${modelInfo.name} (~30MB)")
+
+        Thread {
+            try {
+                val dm = ModelDownloadManager(this@SettingsActivity)
+                val result = kotlinx.coroutines.runBlocking {
+                    dm.downloadTts { fileName, percent ->
+                        runOnUiThread {
+                            tvStatus.text = "🔄 下载 $fileName ($percent%)"
+                        }
+                    }
+                }
+                runOnUiThread {
+                    btnDownloadTts?.isEnabled = true
+                    if (result.isSuccess) {
+                        tvStatus.text = "✅ 中文语音模型下载完成"
+                        appendLog("✅ TTS 模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        Toast.makeText(this, "中文语音模型下载完成，同传按钮已启用", Toast.LENGTH_LONG).show()
+                    } else {
+                        tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
+                        appendLog("❌ TTS 模型下载失败: ${result.exceptionOrNull()?.message}")
+                        btnDownloadTts?.text = "📥 下载中文语音"
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    btnDownloadTts?.isEnabled = true
+                    btnDownloadTts?.text = "📥 下载中文语音"
+                    tvStatus.text = "❌ 下载异常: ${e.message}"
+                    appendLog("❌ TTS 模型下载异常: ${e.message}")
                 }
             }
         }.start()

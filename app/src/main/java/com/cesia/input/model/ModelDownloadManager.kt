@@ -259,6 +259,85 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * 下载 TTS 语音合成模型（Vits 中文）
+     * 下载 model.onnx + tokens.txt 到 local_models/tts/ 目录
+     */
+    suspend fun downloadTts(
+        onProgress: ((fileName: String, percent: Int) -> Unit)? = null
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val ttsDir = File(modelsDir, "tts")
+            ttsDir.mkdirs()
+
+            val files = listOf("model.onnx", "tokens.txt")
+            val totalFiles = files.size
+            var completedFiles = 0
+
+            for (file in files) {
+                val url = "https://hf-mirror.com/csukuangfj/sherpa-onnx-tts-zh-hf-theresa-2023-12-28/resolve/main/$file"
+
+                repeat(3) { attempt ->
+                    try {
+                        val request = Request.Builder().url(url).build()
+                        val response = client.newCall(request).execute()
+
+                        if (!response.isSuccessful) {
+                            if (attempt == 2) {
+                                return@withContext Result.failure(
+                                    Exception("HTTP ${response.code} for $file")
+                                )
+                            }
+                            return@repeat
+                        }
+
+                        val body = response.body
+                            ?: return@withContext Result.failure(Exception("Empty response for $file"))
+
+                        val destFile = File(ttsDir, file)
+                        val tempFile = File(ttsDir, "$file.tmp")
+
+                        body.byteStream().use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                val buffer = ByteArray(BUFFER_SIZE)
+                                var bytesRead: Int
+                                while (input.read(buffer).also { bytesRead = it } != -1) {
+                                    if (!isActive) {
+                                        tempFile.delete()
+                                        return@withContext Result.failure(Exception("下载已取消"))
+                                    }
+                                    output.write(buffer, 0, bytesRead)
+                                }
+                            }
+                        }
+
+                        if (destFile.exists()) destFile.delete()
+                        if (!tempFile.renameTo(destFile)) {
+                            tempFile.delete()
+                            return@withContext Result.failure(Exception("重命名失败: $file"))
+                        }
+
+                        completedFiles++
+                        val percent = (completedFiles * 100 / totalFiles).toInt()
+                        onProgress?.invoke(file, percent.coerceIn(0, 100))
+                        Log.i(TAG, "TTS file downloaded: $file (${destFile.length()} bytes)")
+                        return@repeat
+                    } catch (e: Exception) {
+                        if (attempt == 2) throw e
+                        Log.w(TAG, "TTS download attempt ${attempt + 1} failed for $file: ${e.message}")
+                    }
+                }
+            }
+
+            Log.i(TAG, "TTS model download complete: ${ttsDir.absolutePath}")
+            Result.success(ttsDir)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "TTS model download failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * 获取模型存储目录总大小
      */
     fun getTotalModelSize(): Long {

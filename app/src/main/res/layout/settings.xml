@@ -464,6 +464,16 @@
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
+        <!-- TTS 语音合成下载 -->
+        <Button
+            android:id="@+id/btn_download_tts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔊 下载中文语音（同传用）"
+            android:textSize="12sp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginBottom="4dp" />
+
         <Button
             android:id="@+id/btn_uninstall"
             android:layout_width="match_parent"

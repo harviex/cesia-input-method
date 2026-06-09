@@ -59,6 +59,7 @@ class ModelManager(private val context: Context) {
                 val alreadyRegistered = when (matched.type) {
                     ModelInfo.ModelType.VOICE -> installedVoiceModelId == matched.id
                     ModelInfo.ModelType.AI -> installedAiModelId == matched.id
+                    ModelInfo.ModelType.TTS -> true  // TTS 不记录 ID，始终视为已注册
                 }
                 if (!alreadyRegistered) {
                     markInstalled(matched.id, matched.type)
@@ -94,12 +95,17 @@ class ModelManager(private val context: Context) {
 
     // ==================== 模型状态查询 ====================
 
+    /** 某个模型是否已安装 */
+    fun isModelInstalled(modelId: String): Boolean {
+        val info = ModelRegistry.getById(modelId) ?: return false
+        return File(modelsDir, info.fileName).exists()
+    }
+
     /** 获取已安装语音模型的本地文件/目录，null 表示未安装 */
     fun getInstalledVoiceModelFile(): File? {
         val modelId = installedVoiceModelId ?: return null
         val info = ModelRegistry.getById(modelId) ?: return null
         val file = File(modelsDir, info.fileName)
-        // 支持目录（Paraformer 多文件模型）和单文件
         return if (file.exists()) file else null
     }
 
@@ -111,29 +117,26 @@ class ModelManager(private val context: Context) {
         return if (file.exists()) file else null
     }
 
-    /** 某个模型是否已安装 */
-    fun isModelInstalled(modelId: String): Boolean {
-        val info = ModelRegistry.getById(modelId) ?: return false
-        return File(modelsDir, info.fileName).exists()
+    /** 语音模型是否已安装 */
+    fun hasVoiceModel(): Boolean = installedVoiceModelId != null && isModelInstalled(installedVoiceModelId!!)
+
+    /** AI 模型是否已安装 */
+    fun hasAiModel(): Boolean = installedAiModelId != null && isModelInstalled(installedAiModelId!!)
+
+    /** TTS 模型是否已安装 */
+    fun hasTtsModel(): Boolean {
+        val info = ModelRegistry.getById("sherpa-tts-zh-hf-theresa") ?: return false
+        val dir = File(modelsDir, info.fileName)
+        if (!dir.exists() || !dir.isDirectory) return false
+        val modelFile = File(dir, "model.onnx")
+        val int8File = File(dir, "model.int8.onnx")
+        val tokensFile = File(dir, "tokens.txt")
+        return (modelFile.exists() || int8File.exists()) && tokensFile.exists()
     }
 
     /** 已安装模型列表 */
     fun getInstalledModelIds(): List<String> {
         return ModelRegistry.ALL_MODELS.filter { isModelInstalled(it.id) }.map { it.id }
-    }
-
-    /** 语音模型是否已安装（任意一个） */
-    fun hasVoiceModel(): Boolean {
-        return ModelRegistry.ALL_MODELS
-            .filter { it.type == ModelInfo.ModelType.VOICE }
-            .any { isModelInstalled(it.id) }
-    }
-
-    /** AI 模型是否已安装（任意一个） */
-    fun hasAiModel(): Boolean {
-        return ModelRegistry.ALL_MODELS
-            .filter { it.type == ModelInfo.ModelType.AI }
-            .any { isModelInstalled(it.id) }
     }
 
     /** 全部本地模型已安装（语音 + AI 各至少一个） */
@@ -151,6 +154,7 @@ class ModelManager(private val context: Context) {
         when (type) {
             ModelInfo.ModelType.VOICE -> installedVoiceModelId = modelId
             ModelInfo.ModelType.AI -> installedAiModelId = modelId
+            ModelInfo.ModelType.TTS -> { /* TTS 不需要记录 ID，通过文件存在性判断 */ }
         }
     }
 
