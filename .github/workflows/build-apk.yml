@@ -33,6 +33,11 @@ jobs:
           $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653" > /dev/null 2>&1
           echo "NDK_HOME=$SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
+      - name: Restore debug keystore
+        run: |
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > /tmp/cesia-debug.keystore
+          echo "Keystore restored"
+
       - name: Build APK with Gradle
         run: |
           export JAVA_HOME=$JAVA_HOME_17_X64
