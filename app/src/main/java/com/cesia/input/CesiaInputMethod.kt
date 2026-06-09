@@ -2048,7 +2048,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (!simulTranslateManager!!.isInitialized()) {
                 voiceEngineScope.launch {
                     val ok = simulTranslateManager!!.initialize(
-                        engine = aiEngine.takeIf { it.isModelLoaded() }
+                        engine = aiEngine
                     )
                     withContext(Dispatchers.Main) {
                         if (ok) {
@@ -4085,9 +4085,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             modelManager.scanExistingModels()
             updateVoiceBackend()
             preloadWhisperModel()
+            preloadAiModel()
 
             // 同传按钮：AI 模型已加载时显示（TTS 使用系统自带）
-            btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
+            btnSimulTranslate?.visibility = if (aiEngine.isModelLoaded()) View.VISIBLE else View.GONE
         } catch (e: Throwable) {
             Log.e("Cesia", "onStartInputView 异常(已忽略)", e)
         }
@@ -4107,10 +4108,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
+    /** 预加载 AI 模型到内存（如果已安装） */
+    private fun preloadAiModel() {
+        if (aiEngine.isModelLoaded()) return  // 已加载则跳过
+        val modelFile = modelManager.getInstalledAiModelFile() ?: return
+        val configPath = if (modelFile.isDirectory) {
+            File(modelFile, "config.json").absolutePath
+        } else {
+            modelFile.absolutePath
+        }
+        voiceEngineScope.launch {
+            try {
+                val loaded = aiEngine.loadLocalModel(configPath)
+                Log.i("Cesia", "AI 模型预加载: ${if (loaded) "成功" else "失败"}")
+            } catch (e: Throwable) {
+                Log.e("Cesia", "AI 模型预加载失败", e)
+            }
+        }
+    }
+
     /** 本地/云端模式切换后的回调 */
     private fun onLocalModeChanged() {
         updateVoiceBackend()
         preloadWhisperModel()
+        preloadAiModel()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
