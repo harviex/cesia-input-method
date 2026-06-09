@@ -11,7 +11,6 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
 import com.cesia.input.R
 import com.cesia.input.model.ModelDownloadManager
@@ -47,7 +46,6 @@ class VoiceAISettingsHelper(
     var btnUninstall: Button? = null
     var tvDownloadProgress: TextView? = null
     var pbDownload: ProgressBar? = null
-    var switchGpu: SwitchCompat? = null
 
     // 桥梁状态视图
     var tvBridgeStatus: TextView? = null
@@ -64,8 +62,7 @@ class VoiceAISettingsHelper(
         btnDownloadAi: Button?,
         btnUninstall: Button?,
         tvDownloadProgress: TextView?,
-        pbDownload: ProgressBar?,
-        switchGpu: SwitchCompat?
+        pbDownload: ProgressBar?
     ) {
         this.etGroqKey = etGroqKey
         this.tvHardwareInfo = tvHardwareInfo
@@ -76,7 +73,6 @@ class VoiceAISettingsHelper(
         this.btnUninstall = btnUninstall
         this.tvDownloadProgress = tvDownloadProgress
         this.pbDownload = pbDownload
-        this.switchGpu = switchGpu
     }
 
     /** 绑定桥梁状态视图 */
@@ -93,8 +89,6 @@ class VoiceAISettingsHelper(
         }
         // Groq Key
         etGroqKey?.setText(prefs.getString("groq_api_key", "") ?: "")
-        // GPU 开关
-        switchGpu?.isChecked = modelManager.useGpu
         // 刷新 UI
         refreshModelStatus()
         refreshBridgeStatus()
@@ -106,16 +100,10 @@ class VoiceAISettingsHelper(
         etGroqKey?.text?.toString()?.let { key ->
             prefs.edit().putString("groq_api_key", key).apply()
         }
-        modelManager.useGpu = switchGpu?.isChecked ?: true
     }
 
     /** 设置按钮监听 */
     fun setupListeners() {
-        // GPU 开关
-        switchGpu?.setOnCheckedChangeListener { _, checked ->
-            modelManager.useGpu = checked
-        }
-
         // 下载语音识别模型（Zipformer 多文件）
         btnDownloadVoice?.setOnClickListener {
             val installedFile = modelManager.getInstalledVoiceModelFile()

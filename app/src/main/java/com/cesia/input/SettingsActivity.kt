@@ -81,7 +81,6 @@ class SettingsActivity : AppCompatActivity() {
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
     private var btnUninstall: Button? = null
-    private var switchGpu: androidx.appcompat.widget.SwitchCompat? = null
     private var isDownloading = false
 
     // 语音与 AI 本地化设置 helper
@@ -141,7 +140,7 @@ class SettingsActivity : AppCompatActivity() {
             tvVoiceModelStatus, tvAiModelStatus,
             btnDownloadVoice, btnDownloadAi,
             btnUninstall,
-            tvDownloadProgress, pbDownload, switchGpu
+            tvDownloadProgress, pbDownload
         )
         // 绑定桥梁状态视图（仅显示状态，不下载）
         aiSettingsHelper.bindBridgeViews(
@@ -228,7 +227,6 @@ class SettingsActivity : AppCompatActivity() {
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
             btnUninstall = findViewById(R.id.btn_uninstall)
-            switchGpu = findViewById(R.id.switch_gpu)
         } catch (_: Exception) {}
 
     }
@@ -360,10 +358,6 @@ class SettingsActivity : AppCompatActivity() {
         btnDownloadAi?.setOnClickListener { downloadAiModel() }
         // TTS 使用系统自带语音引擎，无需下载
         btnUninstall?.setOnClickListener { uninstallModels() }
-        switchGpu?.setOnCheckedChangeListener { _, isChecked ->
-            modelManager.useGpu = isChecked
-            appendLog("GPU 加速: ${if (isChecked) "开启" else "关闭"}")
-        }
     }
 
     // ======================== 模型下载 ========================

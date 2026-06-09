@@ -73,7 +73,7 @@ class PolishService(
             return PolishResult.Error("OpenRouter API Key 未配置")
         }
 
-        val systemPrompt = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
+        val systemPrompt = _systemPrompt
 
         val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
         var lastError = ""
@@ -282,6 +282,13 @@ class PolishService(
         Log.d("PolishService", "模型已更新为: $_modelId")
     }
 
+    private var _systemPrompt: String = DEFAULT_SYSTEM_PROMPT
+
+    fun updateSystemPrompt(prompt: String) {
+        _systemPrompt = prompt.trim()
+        Log.d("PolishService", "SystemPrompt 已更新: ${_systemPrompt.take(50)}...")
+    }
+
     fun updateApiUrl(newUrl: String) {
         apiUrl = normalizeApiUrl(newUrl.trim())
         Log.d("PolishService", "API URL 更新为: $apiUrl")
@@ -399,5 +406,6 @@ class PolishService(
         const val OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
         const val OPENROUTER_MODEL_FALLBACK = "mistralai/mistral-7b-instruct:free"
         const val DEFAULT_CUSTOM_URL = "https://typeless-ai-service.vercel.app/api/polish"
+        const val DEFAULT_SYSTEM_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
     }
 }

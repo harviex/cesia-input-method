@@ -80,6 +80,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var statusText: TextView
     private lateinit var voiceWave: View
     private lateinit var btnSimulTranslate: TextView
+    private lateinit var btnCloudPolish: TextView
 
     // 候选词栏
     private lateinit var candidateBar: LinearLayout
@@ -147,6 +148,64 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         } else {
             updateStatus("☁️ 云端模式")
         }
+    }
+
+    /** 长按语音键：弹出 prompt 编辑框 */
+    private fun showPolishPromptDialog() {
+        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        val currentPrompt = prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT) ?: DEFAULT_POLISH_PROMPT
+
+        val inflater = LayoutInflater.from(this)
+        val dialogView = inflater.inflate(R.layout.dialog_polish_prompt, null)
+
+        val editText = dialogView.findViewById<android.widget.EditText>(R.id.et_polish_prompt)
+        editText.setText(currentPrompt)
+        editText.setSelection(currentPrompt.length)
+
+        val popup = PopupWindow(
+            dialogView,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            true
+        )
+        popup.isOutsideTouchable = true
+        popup.isFocusable = true
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+
+        val btnConfirm = dialogView.findViewById<android.widget.Button>(R.id.btn_polish_confirm)
+        btnConfirm.setOnClickListener {
+            val newPrompt = editText.text.toString().trim()
+            if (newPrompt.isNotEmpty()) {
+                prefs.edit().putString(PREF_POLISH_PROMPT, newPrompt).apply()
+                // 同步更新 PolishService 的 systemPrompt
+                typelessEngine?.getPolishService()?.updateSystemPrompt(newPrompt)
+                updateStatus("✅ 润色 prompt 已保存")
+            }
+            popup.dismiss()
+        }
+
+        val btnCancel = dialogView.findViewById<android.widget.Button>(R.id.btn_polish_cancel)
+        btnCancel.setOnClickListener {
+            popup.dismiss()
+        }
+
+        // 在输入法顶部弹出（状态栏下方），文本框下端与状态栏上端对齐
+        val win = this.window?.window ?: return
+        val location = IntArray(2)
+        val statusBarView = win.decorView.findViewById<View>(R.id.status_bar)
+        if (statusBarView != null) {
+            statusBarView.getLocationOnScreen(location)
+            popup.showAtLocation(win.decorView, Gravity.TOP or Gravity.START, 0, location[1] - popup.height)
+        } else {
+            // 兜底：显示在顶部
+            popup.showAtLocation(win.decorView, Gravity.TOP, 0, 0)
+        }
+    }
+
+    /** 获取当前润色 prompt（云端和本地共用） */
+    fun getPolishPrompt(): String {
+        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        return prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT) ?: DEFAULT_POLISH_PROMPT
     }
 
     /** 根据当前模式更新语音键图标 */
@@ -460,8 +519,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_AI_STYLE = "ai_reply_style"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
+        const val PREF_POLISH_PROMPT = "polish_prompt"
         const val DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
+        const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
         const val KEYCODE_SWITCH_SYMBOL = -100
         const val KEYCODE_SWITCH_LANG = -101
         const val KEYCODE_SWITCH_NUMBER = -102
@@ -517,6 +578,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statusText = view.findViewById(R.id.tv_status)
         voiceWave = view.findViewById(R.id.v_voice_wave)
         btnSimulTranslate = view.findViewById(R.id.btn_simul_translate)
+        btnCloudPolish = view.findViewById(R.id.btn_cloud_polish)
 
         // 本地/云端模式切换已移除，统一使用长按语音键切换
 
@@ -968,7 +1030,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 resetToIdle()
                 true
             } else {
-                toggleLocalCloudMode()
+                showPolishPromptDialog()
                 true
             }
         }
@@ -978,6 +1040,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnSettings.setOnClickListener { showSettings() }
         btnTraditional.setOnClickListener { toggleTraditionalSimplified() }
         btnSimulTranslate.setOnClickListener { onSimulTranslateButtonClick() }
+        btnCloudPolish.setOnClickListener { onCloudPolishButtonClick() }
 
         deleteLongPressTriggered = false
 
@@ -2094,6 +2157,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnSimulTranslate?.alpha = if (active) 1.0f else 0.6f
     }
 
+    // ======================== 云端润色模式 ========================
+
+    /** 云端润色模式开关 */
+    private var cloudPolishEnabled = false
+
+    /** 云端润色按钮点击 */
+    private fun onCloudPolishButtonClick() {
+        cloudPolishEnabled = !cloudPolishEnabled
+        updateCloudPolishButton()
+        if (cloudPolishEnabled) {
+            updateStatus("☁️ 云端润色模式（OpenRouter）")
+        } else {
+            updateStatus("📱 本地润色模式（MNN）")
+        }
+    }
+
+    /** 更新云端按钮外观 */
+    private fun updateCloudPolishButton() {
+        btnCloudPolish?.alpha = if (cloudPolishEnabled) 1.0f else 0.4f
+    }
+
+    /** 判断是否使用云端润色 */
+    fun isCloudPolishEnabled(): Boolean = cloudPolishEnabled
+
     /**
      * 根据用户选择的识别和润色后端开始录音
      */
@@ -2355,25 +2442,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun polishRecognizedText(text: String) {
         isProcessingResult = true
-        // 根据 LocalModeManager 模式和模型实际状态决定润色方式
-        val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
-        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
-            ?: LocalModeManager.RunMode.CLOUD_FREE.name
-        val mode = try { LocalModeManager.RunMode.valueOf(modeName) }
-            catch (_: Exception) { LocalModeManager.RunMode.CLOUD_FREE }
-
-        val useLocalPolish = when (mode) {
-            LocalModeManager.RunMode.LOCAL -> modelManager.hasAiModel() // 本地模式：有 Qwen 才用本地
-            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                // 云端模式：有 Qwen 用本地润色，否则用 OpenRouter 云端
-                modelManager.hasAiModel()
-            }
-        }
-
-        if (useLocalPolish) {
-            polishWithLocalAi(text)
-        } else {
-            // 云端润色（OpenRouter）
+        Log.d("Cesia", "polishRecognizedText: text=${text.take(30)} cloudPolish=$cloudPolishEnabled")
+        // 如果云端润色按钮亮起，使用 OpenRouter；否则使用本地 MNN
+        if (cloudPolishEnabled) {
+            // 先更新 PolishService 的 systemPrompt 为当前统一 prompt
+            val prompt = getPolishPrompt()
+            typelessEngine?.getPolishService()?.updateSystemPrompt(prompt)
+            val apiKey = typelessEngine?.getPolishService()?.let {
+                getSharedPreferences("cesia_settings", MODE_PRIVATE).getString(PREF_OPENROUTER_KEY, "")
+            } ?: ""
+            Log.d("Cesia", "云端润色: apiKey=${if (apiKey.isNullOrEmpty()) "未设置" else "已设置(${apiKey.take(8)}...)"}")
             typelessEngine?.polishTextAsync(text) { finalText ->
                 isProcessingResult = false
                 currentInputConnection?.commitText(finalText, 1)
@@ -2381,6 +2459,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 statsManager.addRecord(text, finalText, duration)
                 resetToIdle()
             }
+        } else {
+            polishWithLocalAi(text)
         }
     }
 
@@ -2407,7 +2487,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     }
                     aiEngine.loadLocalModel(configPath)
                 }
-                val result = aiEngine.polish(text, "润色")
+                val systemPrompt = getPolishPrompt()
+                val result = aiEngine.polish(text, "润色", customSystemPrompt = systemPrompt)
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     val finalText = result ?: text
@@ -3750,10 +3831,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         ic?.commitText(englishText, 1)
                         ic?.commitText(" ", 1)
                     } else {
+                        val cands = rimeEngine.candidates
+                        Log.d("Cesia", "空格选词: composingText='$composingText' cands=${cands.size} candsList=${cands.take(3)}")
                         val selected = rimeEngine.selectCandidate(0)
+                        Log.d("Cesia", "空格选词: selectCandidate(0)='$selected'")
                         if (selected.isNotEmpty()) {
                             ic?.commitText(selected, 1)
-                        } else { commitAndClear(); ic?.commitText(" ", 1) }
+                        } else {
+                            Log.w("Cesia", "空格选词失败: selectCandidate(0) 返回空，cands=${cands.size}")
+                            commitAndClear(); ic?.commitText(" ", 1)
+                        }
                     }
                 } else if (composing) {
                     // composing 但没有候选词，可能是英文输入
@@ -4109,6 +4196,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateVoiceBackend()
             preloadWhisperModel()
             preloadAiModel()
+
+            // 同步 API Key 和 prompt 到 PolishService
+            val apiKey = settingsPrefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
+            typelessEngine?.getPolishService()?.updateApiKey(apiKey)
+            val prompt = getPolishPrompt()
+            typelessEngine?.getPolishService()?.updateSystemPrompt(prompt)
 
             // 同传按钮：AI 模型文件已下载时显示（TTS 使用系统自带）
             btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE

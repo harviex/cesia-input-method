@@ -62,6 +62,18 @@
             android:contentDescription="同声传译"
             android:visibility="gone" />
 
+        <!-- 云端润色按钮 -->
+        <TextView
+            android:id="@+id/btn_cloud_polish"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:text="☁️"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="云端润色"
+            android:visibility="gone" />
+
         <ImageButton
             android:id="@+id/btn_settings"
             android:layout_width="28dp"

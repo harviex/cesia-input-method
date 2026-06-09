@@ -67,7 +67,7 @@ class AIEngine(private val context: Context) {
      * @param instruction 润色指令（如"扩写"、"缩句"、"转英文"等）
      * @return 润色后的文本，失败返回 null
      */
-    suspend fun polish(text: String, instruction: String = "润色"): String? =
+    suspend fun polish(text: String, instruction: String = "润色", customSystemPrompt: String? = null): String? =
         withContext(Dispatchers.IO) {
             if (!modelLoaded) {
                 Log.w(TAG, "Model not loaded")
@@ -77,7 +77,11 @@ class AIEngine(private val context: Context) {
             if (text.isBlank()) return@withContext ""
 
             try {
-                val prompt = buildPolishPrompt(text, instruction)
+                val prompt = if (customSystemPrompt != null) {
+                    "${customSystemPrompt}\n\n用户输入：${text}\n"
+                } else {
+                    buildPolishPrompt(text, instruction)
+                }
                 val result = mnnEngine.nativeGenerate(prompt, DEFAULT_MAX_TOKENS)
                 result.ifBlank { null }
             } catch (e: Exception) {
