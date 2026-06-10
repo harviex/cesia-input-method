@@ -25,7 +25,8 @@ object ModelRegistry {
     const val MB = KB * 1024
     const val GB = MB * 1024
 
-    // === Qwen2.5-1.5B-Instruct-MNN 模型文件列表 ===
+    // === MNN AI 模型文件列表 ===
+    // Qwen2.5-1.5B 和 Qwen3.5-2B 共用同一套文件列表（不含 visual）
     val MNN_MODEL_FILES = listOf(
         "config.json",
         "llm.mnn",
@@ -64,6 +65,15 @@ object ModelRegistry {
             fileName = "qwen25-1.5b-mnn",
             sizeBytes = 1200L * MB,
             type = ModelInfo.ModelType.AI
+        ),
+        ModelInfo(
+            id = "qwen35-2b-mnn",
+            name = "Qwen3.5 2B",
+            description = "AI 润色模型（~1.3GB），MNN 本地推理，Qwen3.5 指令遵循更强",
+            downloadUrl = "https://hf-mirror.com/taobao-mnn/Qwen3.5-2B-MNN",
+            fileName = "qwen35-2b-mnn",
+            sizeBytes = 1300L * MB,
+            type = ModelInfo.ModelType.AI
         )
     )
 
@@ -84,7 +94,12 @@ object ModelRegistry {
     }
 
     // === MNN 模型文件下载 URL ===
-    fun getMnnFileUrl(file: String): String {
-        return "https://hf-mirror.com/taobao-mnn/Qwen2.5-1.5B-Instruct-MNN/resolve/main/$file"
+    // 根据模型 ID 动态选择仓库
+    fun getMnnFileUrl(file: String, modelId: String = "qwen25-1.5b-mnn"): String {
+        val repo = when (modelId) {
+            "qwen35-2b-mnn" -> "taobao-mnn/Qwen3.5-2B-MNN"
+            else -> "taobao-mnn/Qwen2.5-1.5B-Instruct-MNN"
+        }
+        return "https://hf-mirror.com/$repo/resolve/main/$file"
     }
 }

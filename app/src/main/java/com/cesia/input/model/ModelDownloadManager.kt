@@ -206,10 +206,10 @@ class ModelDownloadManager(private val context: Context) {
      * @return 成功返回目录 File，失败返回异常
      */
     suspend fun downloadMnnModel(
+        modelId: String = "qwen25-1.5b-mnn",
         onProgress: ((fileName: String, percent: Int) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val modelId = "qwen25-1.5b-mnn"
             val modelInfo = ModelRegistry.getById(modelId)
                 ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
 
@@ -231,11 +231,31 @@ class ModelDownloadManager(private val context: Context) {
                     continue
                 }
 
-                // 多镜像下载
-                val result = downloadWithMirrorFallback(mnnMirrors, file, destFile)
-                if (result == null) {
+                // 下载（使用 modelId 对应的仓库 URL）
+                val url = ModelRegistry.getMnnFileUrl(file, modelId)
+                try {
+                    val request = Request.Builder().url(url).build()
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(
+                            Exception("下载失败 HTTP ${response.code}: $file")
+                        )
+                    }
+                    val body = response.body ?: return@withContext Result.failure(
+                        Exception("下载失败: 空响应 $file")
+                    )
+                    // 先写到临时文件，成功后再重命名
+                    val tempFile = File(destFile.parent, "${destFile.name}.tmp")
+                    body.byteStream().use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    if (destFile.exists()) destFile.delete()
+                    tempFile.renameTo(destFile)
+                } catch (e: Exception) {
                     return@withContext Result.failure(
-                        Exception("所有镜像均下载失败: $file")
+                        Exception("下载失败 $file: ${e.message}")
                     )
                 }
 
@@ -262,7 +282,7 @@ class ModelDownloadManager(private val context: Context) {
         model: ModelInfo,
         onProgress: ((modelName: String, percent: Int) -> Unit)? = null
     ): Result<File> {
-        return downloadMnnModel(onProgress)
+        return downloadMnnModel(modelId = model.id, onProgress = onProgress)
     }
 
     /**
