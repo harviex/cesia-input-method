@@ -115,8 +115,9 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
         std::ostringstream outputStream;
 
         // 安全包装：如果 response 抛出异常（如 OOM），捕获并返回空字符串
+        // end_with 用换行而非句号，避免输入中的句号被误判为结束
         try {
-            g_llm->response(messages, &outputStream, "。", maxTokens);
+            g_llm->response(messages, &outputStream, "\n", maxTokens);
         } catch (const std::bad_alloc& e) {
             LOGE("nativeGenerate: OOM during response - %s", e.what());
             return env->NewStringUTF("");
@@ -154,22 +155,6 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
                 LOGI("Truncation: removed continuation at '%s', result now %d chars", marker, (int)result.size());
                 break;
             }
-        }
-
-        // 额外保险：如果结果比原文长了 30% 以上，强制截断到原文长度
-        size_t originalLen = promptStr.length() * 1.3;
-        if (result.length() > originalLen && result.length() > 20) {
-            std::string truncated = result.substr(0, originalLen);
-            std::string::size_type lastPeriod = truncated.rfind("。");
-            std::string::size_type lastQmark = truncated.rfind("？");
-            std::string::size_type lastExclaim = truncated.rfind("！");
-            std::string::size_type bestCut = std::max({lastPeriod, lastQmark, lastExclaim});
-            if (bestCut != std::string::npos && bestCut > originalLen * 0.5) {
-                result = truncated.substr(0, bestCut + 1);
-            } else {
-                result = truncated;
-            }
-            LOGI("Truncation: length exceeded %.0f%% of original, cut to %d chars", originalLen * 100.0 / promptStr.length(), (int)result.size());
         }
 
         return env->NewStringUTF(result.c_str());

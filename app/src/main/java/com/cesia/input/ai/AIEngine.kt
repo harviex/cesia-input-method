@@ -112,16 +112,14 @@ class AIEngine(private val context: Context) {
         }
 
     /**
-     * 润色结果后处理：
-     * 1. 截断超过原文 110% 的部分
-     * 2. 检测并去除续写内容（模型开始回答原文问题时）
+     * 润色结果后处理：检测并去除续写内容
      */
     private fun postProcessPolishResult(original: String, raw: String): String {
         if (raw.isBlank()) return ""
 
         var text = raw.trim()
 
-        // 续写检测：如果结果中出现了以下模式，截断到该位置之前
+        // 续写检测
         val continuationPatterns = listOf(
             "这是一个问题", "所以请", "请注意", "需要说明", "我来解释",
             "我来回答", "这个问题的", "关于这个问题", "简单来说",
@@ -133,25 +131,6 @@ class AIEngine(private val context: Context) {
                 Log.d(TAG, "postProcess: 检测到续写标志 '$pattern'，截断到位置 $idx")
                 text = text.substring(0, idx).trim()
                 break
-            }
-        }
-
-        // 长度限制：不超过原文 110%
-        val maxLen = (original.length * 1.1).toInt().coerceAtLeast(original.length)
-        if (text.length > maxLen) {
-            Log.d(TAG, "postProcess: 长度超限 ${text.length} > $maxLen，截断")
-            // 在 maxLen 范围内找最后一个句子结束符
-            val truncated = text.substring(0, maxLen)
-            val lastPunct = maxOf(
-                truncated.lastIndexOf('。'),
-                truncated.lastIndexOf('？'),
-                truncated.lastIndexOf('！'),
-                truncated.lastIndexOf('，')
-            )
-            text = if (lastPunct > original.length * 0.5) {
-                truncated.substring(0, lastPunct + 1)
-            } else {
-                truncated
             }
         }
 
