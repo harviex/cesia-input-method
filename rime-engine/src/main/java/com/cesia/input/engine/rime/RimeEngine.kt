@@ -48,6 +48,18 @@ class RimeEngine(private val context: Context) : InputEngine {
         isInitialized = success
         if (!success) {
             Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
+        } else {
+            // 后台预构建联想索引，避免首次查询时卡顿
+            Thread {
+                try {
+                    dictIndexBuildTime = System.currentTimeMillis()
+                    dictIndex = buildDictIndex()
+                    dictIndexBuilt = true
+                    Log.d(TAG, "联想索引后台构建完成")
+                } catch (_: Exception) {
+                    Log.e(TAG, "联想索引构建失败")
+                }
+            }.start()
         }
         return success
     }

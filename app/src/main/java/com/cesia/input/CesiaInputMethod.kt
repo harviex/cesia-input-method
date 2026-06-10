@@ -944,8 +944,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val pinyin = rimeEngine.composingText
         val allCands = rimeEngine.getAllCandidates()
 
-        // 没有输入时恢复初始状态
+        // 没有输入时退出联想模式并恢复初始状态
         if (!composing && pinyin.isEmpty()) {
+            if (isAssociationMode) {
+                isAssociationMode = false
+                associationPrefix = ""
+                associationCandidates = emptyList()
+            }
             candidateBar.visibility = View.GONE
             if (isPanelExpanded) collapseCandidatePanel()
             updateStatus("Cesia 已就绪")
@@ -3776,6 +3781,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 } else {
                     // 中文模式：先走 Rime 引擎
                     val hadComposing = rimeEngine.isComposing
+                    exitAssociationMode()
                     val accepted = rimeEngine.processKey(primaryCode.toChar())
                     Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'")
                     if (accepted) {
