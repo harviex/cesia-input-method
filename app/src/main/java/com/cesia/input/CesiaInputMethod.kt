@@ -543,7 +543,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
         candidateAdapter = CandidateAdapter { index, _ ->
-            if (rimeEngine.hasCandidates) {
+            if (rimeEngine.hasCandidates || isAssociationMode) {
                 selectCandidateByGlobalIndex(index)
             }
         }

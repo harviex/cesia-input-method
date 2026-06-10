@@ -293,17 +293,26 @@ class RimeEngine(private val context: Context) : InputEngine {
 
         // 遍历桶内候选，找 prefix 前缀匹配的项
         val seen = mutableSetOf<String>()
-        val result = mutableListOf<String>()
+        val singleChar = mutableListOf<String>()   // 单字优先
+        val multiChar = mutableListOf<Pair<String, Int>>()  // 多字词按权重
         for (entry in candidates) {
             if (entry.fullWord.startsWith(prefix) && entry.fullWord.length > prefix.length) {
                 val displayWord = entry.fullWord.substring(prefix.length)
                 if (seen.add(displayWord)) {
-                    result.add(displayWord)
-                    if (result.size >= limit) break
+                    if (displayWord.length == 1) {
+                        singleChar.add(displayWord)
+                    } else {
+                        multiChar.add(displayWord to entry.weight)
+                    }
                 }
             }
         }
-        return result
+        // 单字在前（按权重降序），多字在后（按权重降序）
+        val sortedMulti = multiChar.sortedByDescending { it.second }.map { it.first }
+        return (singleChar.sortedByDescending { w ->
+            // 单字也按权重排序：从桶里找对应权重
+            candidates.firstOrNull { it.fullWord == prefix + w && it.fullWord.length == prefix.length + 1 }?.weight ?: 0
+        } + sortedMulti).take(limit)
     }
 
     /** 清除索引（词库更新后调用） */
