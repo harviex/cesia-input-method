@@ -42,7 +42,7 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
     g_lastError.clear();
 
     try {
-        // 检查 config 文件是否存在
+        // 检查 config 文件是否存在，并打印内容
         {
             FILE* f = fopen(configStr.c_str(), "r");
             if (!f) {
@@ -50,7 +50,11 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
                 LOGE("%s", g_lastError.c_str());
                 return JNI_FALSE;
             }
+            char buf[4096];
+            size_t n = fread(buf, 1, sizeof(buf)-1, f);
+            buf[n] = 0;
             fclose(f);
+            LOGI("config.json content: %s", buf);
         }
 
         g_llm = Llm::createLLM(configStr);
