@@ -39,6 +39,16 @@ android {
         }
     }
 
+    // 把 MNN 3.5.0 的 .so 也打包进 APK
+    sourceSets {
+        main {
+            jniLibs.srcDirs = [
+                'src/main/jniLibs',
+                '../ai-engine/src/main/jniLibs'
+            ]
+        }
+    }
+
     packagingOptions {
         jniLibs {
             useLegacyPackaging = true

@@ -75,15 +75,9 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
         LOGI("llm->load() returned: %s", loaded ? "true" : "false");
         fflush(stdout);
         if (!loaded) {
-            // 收集 MNN 内部日志
-            std::string mnnLog;
-            try {
-                mnnLog = g_llm->getLog();
-            } catch (...) {}
-
             // 检查模型文件是否存在且非空
             std::string modelDir = configStr.substr(0, configStr.rfind('/') + 1);
-            const char* checkFiles[] = {"llm.mnn", "llm.mnn.weight", "llm.mnn", "embedding.mnn", "lm.mnn"};
+            const char* checkFiles[] = {"llm.mnn", "llm.mnn.weight", "embedding.mnn", "lm.mnn"};
             std::string fileStatus;
             for (const char* fname : checkFiles) {
                 std::string fpath = modelDir + fname;
@@ -100,10 +94,7 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
                 }
             }
 
-            g_lastError = "llm->load() failed.\nFiles: " + fileStatus;
-            if (!mnnLog.empty()) {
-                g_lastError += "\nMNN log: " + mnnLog;
-            }
+            g_lastError = "llm->load() failed. Files: " + fileStatus;
             LOGE("%s", g_lastError.c_str());
 
             Llm::destroy(g_llm);
@@ -379,10 +370,7 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGetLog(
     JNIEnv* env,
     jobject /*thiz*/
 ) {
-    if (g_llm != nullptr) {
-        return env->NewStringUTF(g_llm->getLog().c_str());
-    }
-    // 如果 llm 已销毁（加载失败），返回保存的错误信息
+    // MNN 3.5.0 的 libllm.so 没有导出 getLog 符号，返回保存的错误信息
     return env->NewStringUTF(g_lastError.c_str());
 }
 
