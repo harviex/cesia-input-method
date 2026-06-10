@@ -1113,6 +1113,7 @@ class SettingsActivity : AppCompatActivity() {
                 val request = Request.Builder()
                     .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
                     .addHeader("User-Agent", "CesiaIME/1.0")
+                    .addHeader("Accept", "application/vnd.github.v3+json")
                     .get()
                     .build()
                 val response = client.newCall(request).execute()
@@ -1125,6 +1126,9 @@ class SettingsActivity : AppCompatActivity() {
 
                 if (!response.isSuccessful) {
                     appendLog("❌ 检查更新失败: ${response.code}")
+                    if (response.code == 403) {
+                        appendLog("GitHub API 速率限制，请稍后重试")
+                    }
                     return@Thread
                 }
 

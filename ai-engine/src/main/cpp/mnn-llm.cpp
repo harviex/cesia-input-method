@@ -68,16 +68,37 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
         LOGI("Calling llm->load()...");
         bool loaded = g_llm->load();
         if (!loaded) {
-            g_lastError = "llm->load() failed (model files may be corrupted or incompatible)";
-            LOGE("%s", g_lastError.c_str());
             // 收集 MNN 内部日志
+            std::string mnnLog;
             try {
-                std::string mnnLog = g_llm->getLog();
-                if (!mnnLog.empty()) {
-                    g_lastError += "\nMNN log: " + mnnLog;
-                    LOGE("MNN log: %s", mnnLog.c_str());
-                }
+                mnnLog = g_llm->getLog();
             } catch (...) {}
+
+            // 检查模型文件是否存在且非空
+            std::string modelDir = configStr.substr(0, configStr.rfind('/') + 1);
+            const char* checkFiles[] = {"llm.mnn", "llm.mnn.weight", "llm.mnn", "embedding.mnn", "lm.mnn"};
+            std::string fileStatus;
+            for (const char* fname : checkFiles) {
+                std::string fpath = modelDir + fname;
+                FILE* f = fopen(fpath.c_str(), "r");
+                if (f) {
+                    fseek(f, 0, SEEK_END);
+                    long sz = ftell(f);
+                    fclose(f);
+                    fileStatus += fname;
+                    fileStatus += sz > 0 ? "(OK " + std::to_string(sz/1024/1024) + "MB) " : "(EMPTY!) ";
+                } else {
+                    fileStatus += fname;
+                    fileStatus += "(missing) ";
+                }
+            }
+
+            g_lastError = "llm->load() failed.\nFiles: " + fileStatus;
+            if (!mnnLog.empty()) {
+                g_lastError += "\nMNN log: " + mnnLog;
+            }
+            LOGE("%s", g_lastError.c_str());
+
             Llm::destroy(g_llm);
             g_llm = nullptr;
             return JNI_FALSE;
