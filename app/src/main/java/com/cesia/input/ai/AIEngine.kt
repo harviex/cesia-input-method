@@ -122,6 +122,15 @@ class AIEngine(private val context: Context) {
 
         var text = raw.trim()
 
+        // 0. 去除模型可能输出的前缀
+        val prefixPatterns = listOf("改写的文字：", "改写后：", "润色后：", "润色：", "修改后：", "处理后：", "输出：", "结果：", "？", "?")
+        for (prefix in prefixPatterns) {
+            if (text.startsWith(prefix)) {
+                Log.d(TAG, "postProcess: 去除前缀 '$prefix'")
+                text = text.substring(prefix.length).trim()
+            }
+        }
+
         // 1. 续写检测——黑名单截断
         val continuationPatterns = listOf(
             // 解释/评论类

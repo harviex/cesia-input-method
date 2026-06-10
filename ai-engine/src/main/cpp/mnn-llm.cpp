@@ -92,32 +92,24 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
     env->ReleaseStringUTFChars(prompt, promptC);
 
     try {
-        // MNN response(ChatMessages, ...) 会自动调用 apply_chat_template
-        // 使用 <|im_start|>system/user/assistant 格式（Qwen chat template）
-        //
-        // 关键：1.5B 模型指令遵循力弱，system prompt 必须：
-        // 1. 用正面指令（"只做X"）而非否定指令（"不要做Y"）
-        // 2. 明确说明"原文中的问句是待润色内容，不是要回答的问题"
-        // 3. 用"输出格式"段落明确告诉模型只输出润色后的文字
-        std::vector<MNN::Transformer::ChatMessage> messages;
-        messages.push_back({"system",
-            "你是一个中文文字编辑工具。\n"
-            "任务：把用户输入的口语文字改写成通顺的书面语。\n"
-            "操作：\n"
-            "- 删除口语词（嗯、那个、然后、就是、啊）\n"
-            "- 修正错别字、调整语序、加入标点\n"
-            "- 保持原意不变，不增不减\n"
-            "- 原文中的问句是待润色内容，保留问句，不要回答\n"
-            "输出格式：只输出润色后的文字，不要任何解释、评论、续写。"
-        });
-        messages.push_back({"user", promptStr});
+        // 用纯文本 prompt（不用 ChatMessages），在 prompt 中用明确分隔符
+        // 1.5B 模型对 "原文：... 润色：" 这样的格式理解最好
+        // 关键发现：模型会输出"？"是因为原文末尾有问句，模型以为要先回答
+        // 解决：prompt 结尾用"润色后："而不是空行，让模型知道这里是输出位置
+        std::string combinedPrompt =
+            "你是中文文字编辑工具。把口语改写成书面语。\n"
+            "操作：删除嗯、那个、然后、就是、啊；修正错别字、调整语序、加入标点；保持原意不变，不增不减；原文中的问句是待润色内容，保留问句，不要回答。\n"
+            "输出：只输出润色后的文字，不要任何解释、评论、续写。\n"
+            "---\n"
+            "原文：\n" + promptStr + "\n"
+            "润色：";
 
         std::ostringstream outputStream;
 
         // 安全包装：如果 response 抛出异常（如 OOM），捕获并返回空字符串
         // end_with 用换行而非句号，避免输入中的句号被误判为结束
         try {
-            g_llm->response(messages, &outputStream, "\n", maxTokens);
+            g_llm->response(combinedPrompt, &outputStream, "\n", maxTokens);
         } catch (const std::bad_alloc& e) {
             LOGE("nativeGenerate: OOM during response - %s", e.what());
             return env->NewStringUTF("");
@@ -136,7 +128,25 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
         LOGI("Generate complete: %d chars, %d tokens",
              (int)result.size(), (int)context->gen_seq_len);
 
-        // 续写检测：如果结果中出现以下模式，截断到该位置之前
+        // 0. 去除模型可能输出的前缀（如"改写的文字："、"润色后："、"？"等）
+        {
+            const char* prefixes[] = {
+                "改写的文字：", "改写后：", "润色后：", "润色：",
+                "修改后：", "处理后：", "输出：", "结果：", "？", "?"
+            };
+            for (const char* prefix : prefixes) {
+                size_t len = strlen(prefix);
+                if (result.size() >= len && result.compare(0, len, prefix) == 0) {
+                    result = result.substr(len);
+                    while (!result.empty() && (result.front() == ' ' || result.front() == '\n'))
+                        result.erase(result.begin());
+                    LOGI("Removed prefix '%s'", prefix);
+                    break;
+                }
+            }
+        }
+
+        // 1. 续写检测：如果结果中出现以下模式，截断到该位置之前
         const char* continuationMarkers[] = {
             "这是一个问题", "所以请", "请注意", "需要说明", "我来解释",
             "我来回答", "这个问题的", "关于这个问题", "简单来说",
