@@ -928,11 +928,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /** 退出联想模式（用户输入新拼音时调用） */
+    /** 退出联想模式：清除联想状态并同步更新候选栏 */
     private fun exitAssociationMode() {
         if (isAssociationMode) {
             isAssociationMode = false
             associationPrefix = ""
             associationCandidates = emptyList()
+            // 立即清空候选栏适配器，防止显示旧联想词
+            candidateAdapter?.updateData(emptyList())
+            candidateBar?.visibility = View.GONE
         }
     }
 
