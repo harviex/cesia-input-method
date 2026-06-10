@@ -300,9 +300,15 @@ class ModelDownloadManager(private val context: Context) {
             val json = org.json.JSONObject(configFile.readText())
             val removed = mutableListOf<String>()
             // 移除 MNN 3.5.0 不支持的顶级字段
-            val keysToRemove = listOf("mllm", "jinja", "has_deepstack", "is_mrope",
+            // Qwen3.5 config 比 Qwen2.5 多了很多字段，MNN 3.5.0 的 LLM 引擎不认识
+            val keysToRemove = listOf(
+                "mllm", "jinja", "has_deepstack", "is_mrope",
                 "is_visual", "image_mean", "image_norm", "image_size",
-                "vision_start", "vision_end", "image_pad", "num_grid_per_side")
+                "vision_start", "vision_end", "image_pad", "num_grid_per_side",
+                // sampler 相关：MNN 3.5.0 不支持 mixed sampler
+                "sampler_type", "mixed_samplers", "penalty", "temperature",
+                "topP", "topK", "min_p", "max_new_tokens"
+            )
             for (key in keysToRemove) {
                 if (json.has(key)) {
                     json.remove(key)
