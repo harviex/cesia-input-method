@@ -2416,7 +2416,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         voiceEngineScope.launch {
             try {
                 val modelFile = modelManager.getInstalledAiModelFile()
-                if (modelFile == null) {
+                Log.i("Cesia", "polishWithLocalAi: modelFile=$modelFile, exists=${modelFile?.exists()}, isDir=${modelFile?.isDirectory}")
+                if (modelFile == null || !modelFile.exists()) {
                     withContext(Dispatchers.Main) {
                         updateStatus("⚠️ AI 模型未安装，使用原文")
                         isProcessingResult = false
@@ -2432,7 +2433,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     } else {
                         modelFile.absolutePath
                     }
-                    aiEngine.loadLocalModel(configPath)
+                    Log.i("Cesia", "polishWithLocalAi: loading model from $configPath")
+                    val loadStart = System.currentTimeMillis()
+                    val loaded = aiEngine.loadLocalModel(configPath)
+                    val loadTime = System.currentTimeMillis() - loadStart
+                    Log.i("Cesia", "polishWithLocalAi: loadLocalModel returned $loaded in ${loadTime}ms")
+                    if (!loaded) {
+                        // 尝试获取 MNN 日志
+                        val mnnLog = aiEngine.getMnnLog()
+                        Log.e("Cesia", "polishWithLocalAi: MNN log: $mnnLog")
+                        withContext(Dispatchers.Main) {
+                            updateStatus("⚠️ AI 模型加载失败（${loadTime}ms），使用原文")
+                            isProcessingResult = false
+                            currentInputConnection?.commitText(text, 1)
+                            resetToIdle()
+                        }
+                        return@launch
+                    }
                 }
                 val result = aiEngine.polish(text, "润色")
                 withContext(Dispatchers.Main) {

@@ -237,6 +237,8 @@ class AIEngine(private val context: Context) {
 
     fun getCurrentModelPath(): String? = currentModelPath
 
+    fun getMnnLog(): String = mnnEngine.nativeGetLog()
+
     fun release() {
         mnnEngine.nativeFree()
         modelLoaded = false

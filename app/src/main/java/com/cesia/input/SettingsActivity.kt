@@ -1001,8 +1001,12 @@ class SettingsActivity : AppCompatActivity() {
 
                 if (!loaded) {
                     runOnUiThread {
+                        val mnnLog = aiEngine.getMnnLog()
                         tvStatus.text = "❌ 模型加载失败"
                         appendLog("本地 AI 失败: 模型加载失败 (${loadTime}ms)")
+                        if (mnnLog.isNotEmpty()) {
+                            appendLog("MNN log: $mnnLog")
+                        }
                         btnTestLocalAi?.isEnabled = true
                         btnTestLocalAi?.text = "🤖 本地 AI"
                     }
