@@ -70,7 +70,10 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
         g_llm->set_config(R"({"jinja":{"context":{"enable_thinking":false}}})");
 
         LOGI("Calling llm->load()...");
+        fflush(stdout);
         bool loaded = g_llm->load();
+        LOGI("llm->load() returned: %s", loaded ? "true" : "false");
+        fflush(stdout);
         if (!loaded) {
             // 收集 MNN 内部日志
             std::string mnnLog;

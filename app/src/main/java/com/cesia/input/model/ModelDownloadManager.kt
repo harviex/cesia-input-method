@@ -275,6 +275,8 @@ class ModelDownloadManager(private val context: Context) {
                 onProgress?.invoke(file, pctRounded, downloadedBytes, totalBytes)
                 Log.i(TAG, "MNN file downloaded: $file (${destFile.length()} bytes, $pctRounded%)")
             }
+            // 下载完成后，修复 config.json（移除 MNN 3.5.0 不支持的字段）
+            fixQwen35Config(modelDir)
 
             modelManager.markInstalled(modelId, ModelInfo.ModelType.AI)
             Log.i(TAG, "MNN model download complete: ${modelDir.absolutePath}")
@@ -283,6 +285,36 @@ class ModelDownloadManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "MNN model download failed", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 修复 Qwen3.5-MNN 的 config.json
+     * MNN 3.5.0 的 LLM 引擎不支持 qwen3_5 的某些新特性（mllm、jinja、deepstack、mRoPE）
+     * 移除这些字段使模型能正常加载
+     */
+    private fun fixQwen35Config(modelDir: File) {
+        val configFile = File(modelDir, "config.json")
+        if (!configFile.exists()) return
+        try {
+            val json = org.json.JSONObject(configFile.readText())
+            val removed = mutableListOf<String>()
+            // 移除 MNN 3.5.0 不支持的顶级字段
+            val keysToRemove = listOf("mllm", "jinja", "has_deepstack", "is_mrope",
+                "is_visual", "image_mean", "image_norm", "image_size",
+                "vision_start", "vision_end", "image_pad", "num_grid_per_side")
+            for (key in keysToRemove) {
+                if (json.has(key)) {
+                    json.remove(key)
+                    removed.add(key)
+                }
+            }
+            if (removed.isNotEmpty()) {
+                configFile.writeText(json.toString(2))
+                Log.i(TAG, "fixQwen35Config: removed fields: $removed")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "fixQwen35Config failed: ${e.message}")
         }
     }
 
