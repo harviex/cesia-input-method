@@ -182,6 +182,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var recognizedText: String = ""
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
+    // === 词语联想 ===
+    private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
+    private var associationCandidates = emptyList<String>()  // 当前联想候选词列表
+    private var isAssociationMode = false   // 是否处于联想模式
+
+
 
     // 语音引擎协程作用域
     private val voiceEngineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -858,17 +864,57 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         while (curPage > targetPage) { rimeEngine.prevPage() }
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
-            commitCandidateText(selected)
-            // 调试：选字后打印 Rime 状态
-            Log.d("Cesia", "联想调试: 选字='$selected' debug=${rimeEngine.getDebugStatus()}")
-            // T9模式：点选上屏后清除数字缓冲，与空格上屏一致
-            if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
-                t9InputBuffer.clear()
-                rimeEngine.clear()
-                rimeEngine.createSession()
+            // 联想模式：如果之前有联想前缀，把新选词追加到前缀
+            val newPrefix = if (isAssociationMode) associationPrefix + selected else selected
+            val associations = rimeEngine.getAssociations(newPrefix)
+
+            if (associations.isNotEmpty()) {
+                // 有联想词，进入/继续联想模式
+                isAssociationMode = true
+                associationPrefix = newPrefix
+                associationCandidates = associations
+                // 先上屏选中的词
+                commitCandidateText(selected)
+                if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+                    t9InputBuffer.clear()
+                    rimeEngine.clear()
+                    rimeEngine.createSession()
+                }
+                if (isPanelExpanded) collapseCandidatePanel()
+                // 显示联想候选词
+                showAssociationCandidates()
+            } else {
+                // 没有联想词，正常上屏
+                isAssociationMode = false
+                associationPrefix = ""
+                associationCandidates = emptyList()
+                commitCandidateText(selected)
+                if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+                    t9InputBuffer.clear()
+                    rimeEngine.clear()
+                    rimeEngine.createSession()
+                }
+                if (isPanelExpanded) collapseCandidatePanel()
+                updateCandidateBar()
             }
-            if (isPanelExpanded) collapseCandidatePanel()
-            updateCandidateBar()
+        }
+    }
+
+    /** 显示联想候选词 */
+    private fun showAssociationCandidates() {
+        candidateBar.visibility = View.VISIBLE
+        updateStatus("💡$associationPrefix")
+        val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
+        candidateAdapter?.updateData(displayCands)
+        btnCandidateExpand.visibility = if (associationCandidates.size > 4) View.VISIBLE else View.GONE
+    }
+
+    /** 退出联想模式（用户输入新拼音时调用） */
+    private fun exitAssociationMode() {
+        if (isAssociationMode) {
+            isAssociationMode = false
+            associationPrefix = ""
+            associationCandidates = emptyList()
         }
     }
 
@@ -3681,6 +3727,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
             // ======================== 字母键 a-z ========================
             in 97..122 -> {
+                // 输入新拼音时退出联想模式
+                exitAssociationMode()
                 functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
                 functionalLongPressRunnable = null
                 shortPressHandled = true
@@ -3798,20 +3846,37 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     ic?.commitText(" ", 1)
                 } else {
                     // 全键盘中文模式：参照 T9 空格键逻辑，直接检查 candidates
-                    val cands = rimeEngine.candidates
-                    if (cands.isNotEmpty()) {
-                        // 有候选词：选择首选上屏
-                        val selected = rimeEngine.selectCandidate(0)
-                        if (selected.isNotEmpty()) {
-                            ic?.commitText(selected, 1)
+                    if (isAssociationMode && associationCandidates.isNotEmpty()) {
+                        // 联想模式：选择第一个联想词继续联想
+                        val selectedWord = associationCandidates[0]
+                        val newPrefix = associationPrefix + selectedWord
+                        val newAssociations = rimeEngine.getAssociations(newPrefix)
+                        if (newAssociations.isNotEmpty()) {
+                            associationPrefix = newPrefix
+                            associationCandidates = newAssociations
+                            commitCandidateText(selectedWord)
+                            showAssociationCandidates()
+                        } else {
+                            isAssociationMode = false
+                            associationPrefix = ""
+                            associationCandidates = emptyList()
+                            commitCandidateText(selectedWord)
+                            updateCandidateBar()
+                        }
+                    } else {
+                        val cands = rimeEngine.candidates
+                        if (cands.isNotEmpty()) {
+                            val selected = rimeEngine.selectCandidate(0)
+                            if (selected.isNotEmpty()) {
+                                ic?.commitText(selected, 1)
+                            } else {
+                                ic?.commitText(" ", 1)
+                            }
+                        } else if (composing) {
+                            commitAndClear(); ic?.commitText(" ", 1)
                         } else {
                             ic?.commitText(" ", 1)
                         }
-                    } else if (composing) {
-                        // composing 但无候选：上屏拼音原文 + 空格
-                        commitAndClear(); ic?.commitText(" ", 1)
-                    } else {
-                        ic?.commitText(" ", 1)
                     }
                 }
                 if (keyboardMode != KeyboardMode.NUMBER) updateCandidateBar()

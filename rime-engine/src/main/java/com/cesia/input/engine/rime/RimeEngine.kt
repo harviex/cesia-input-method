@@ -220,4 +220,50 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     /** 调试：获取 Rime 完整状态 */
     fun getDebugStatus(): String = RimeJni.getDebugStatus()
+
+    /**
+     * 词语联想：从词库中查询以 prefix 为前缀的词语
+     * 搜索范围：外部存储 rime/ 目录下所有 .dict.yaml 文件（包括 cn_dicts/）
+     * @param prefix 前缀词（如 "这个"）
+     * @param limit 最大返回数量（默认 20）
+     * @return 联想词语列表，按权重降序
+     */
+    fun getAssociations(prefix: String, limit: Int = 20): List<String> {
+        if (prefix.isEmpty()) return emptyList()
+        val rimeDir = java.io.File(context.getExternalFilesDir(null), "rime")
+        if (!rimeDir.exists()) return emptyList()
+
+        val results = mutableListOf<Pair<String, Int>>()  // word → weight
+
+        // 遍历 rime/ 目录下所有 .dict.yaml 文件（递归，包括 cn_dicts/）
+        rimeDir.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".dict.yaml") }
+            .forEach { dictFile ->
+                try {
+                    dictFile.bufferedReader().useLines { lines ->
+                        lines.forEach { line ->
+                            val trimmed = line.trim()
+                            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("...")) return@forEach
+                            if (trimmed.startsWith("name:") || trimmed.startsWith("version:") || trimmed.startsWith("sort:") || trimmed.startsWith("use_preset_")) return@forEach
+
+                            val parts = trimmed.split("\t")
+                            if (parts.size >= 2) {
+                                val word = parts[0]
+                                if (word.startsWith(prefix) && word != prefix) {
+                                    val weight = if (parts.size >= 4) {
+                                        parts[3].toIntOrNull() ?: 0
+                                    } else 0
+                                    results.add(word to weight)
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // 跳过无法读取的文件
+                }
+            }
+
+        // 按权重降序，返回前 limit 个
+        return results.sortedByDescending { it.second }.take(limit).map { it.first }
+    }
 }
