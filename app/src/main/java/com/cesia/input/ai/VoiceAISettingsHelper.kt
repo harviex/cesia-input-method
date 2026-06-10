@@ -126,9 +126,10 @@ class VoiceAISettingsHelper(
             }
         }
 
-        // 下载 AI 润色模型（Qwen）
+        // 下载 AI 润色模型（默认 Qwen3.5-2B）
         btnDownloadAi?.setOnClickListener {
-            val model = ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI }
+            val model = ModelRegistry.ALL_MODELS.find { it.id == "qwen35-2b-mnn" }
+                ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI }
             if (model == null) {
                 Toast.makeText(activity, "没有可用的 AI 模型", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -287,8 +288,9 @@ class VoiceAISettingsHelper(
             val result = downloadManager.downloadZipformer { fileName, overallPercent ->
                 Log.i("VoiceAISettings", "downloadZipformer: onProgress $fileName $overallPercent%")
                 activity.runOnUiThread {
-                    pbDownload?.progress = overallPercent
-                    tvDownloadProgress?.text = "下载 $fileName: $overallPercent%"
+                    pbDownload?.progress = overallPercent.toInt()
+                    val pctStr = String.format("%.1f%%", overallPercent)
+                    tvDownloadProgress?.text = "下载 $fileName: $pctStr"
                 }
             }
 
@@ -328,11 +330,14 @@ class VoiceAISettingsHelper(
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
             Log.i("VoiceAISettings", "downloadAiModel: launching coroutine")
-            val result = downloadManager.downloadAiModel(model) { modelName, progress ->
-                Log.i("VoiceAISettings", "downloadAiModel: onProgress $modelName $progress%")
+            val result = downloadManager.downloadAiModel(model) { modelName, percent, downloadedBytes, totalBytes ->
+                Log.i("VoiceAISettings", "downloadAiModel: onProgress $modelName $percent% ($downloadedBytes/$totalBytes)")
                 activity.runOnUiThread {
-                    pbDownload?.progress = progress
-                    tvDownloadProgress?.text = "下载 $modelName: $progress%"
+                    pbDownload?.progress = percent.toInt()
+                    val pctStr = String.format("%.1f%%", percent)
+                    val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
+                    val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
+                    tvDownloadProgress?.text = "下载 $modelName: $pctStr ($dlStr / $totalStr)"
                 }
             }
 

@@ -206,8 +206,8 @@ class ModelDownloadManager(private val context: Context) {
      * @return 成功返回目录 File，失败返回异常
      */
     suspend fun downloadMnnModel(
-        modelId: String = "qwen25-1.5b-mnn",
-        onProgress: ((fileName: String, percent: Int) -> Unit)? = null
+        modelId: String = "qwen35-2b-mnn",
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             val modelInfo = ModelRegistry.getById(modelId)
@@ -217,8 +217,18 @@ class ModelDownloadManager(private val context: Context) {
             modelDir.mkdirs()
 
             val files = ModelRegistry.MNN_MODEL_FILES
-            val totalFiles = files.size
-            var completedFiles = 0
+
+            // 计算总大小（用于进度百分比）
+            val totalBytes = modelInfo.sizeBytes
+            var downloadedBytes = 0L
+
+            // 先统计已下载的文件大小
+            for (file in files) {
+                val destFile = File(modelDir, file)
+                if (destFile.exists() && destFile.length() > 100) {
+                    downloadedBytes += destFile.length()
+                }
+            }
 
             for (file in files) {
                 val destFile = File(modelDir, file)
@@ -226,8 +236,8 @@ class ModelDownloadManager(private val context: Context) {
                 // 文件已存在且大小合理则跳过
                 if (destFile.exists() && destFile.length() > 100) {
                     Log.i(TAG, "MNN file already exists: $file (${destFile.length()} bytes)")
-                    completedFiles++
-                    onProgress?.invoke(file, (completedFiles * 100 / totalFiles).toInt())
+                    val pct = downloadedBytes.toDouble() / totalBytes * 100
+                    onProgress?.invoke(file, Math.round(pct * 10.0) / 10.0, downloadedBytes, totalBytes)
                     continue
                 }
 
@@ -245,7 +255,7 @@ class ModelDownloadManager(private val context: Context) {
                         Exception("下载失败: 空响应 $file")
                     )
                     // 先写到临时文件，成功后再重命名
-                    val tempFile = File(destFile.parent, "${destFile.name}.tmp")
+                    val tempFile = File(destFile.parentFile, "${destFile.name}.tmp")
                     body.byteStream().use { input ->
                         FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
@@ -253,16 +263,17 @@ class ModelDownloadManager(private val context: Context) {
                     }
                     if (destFile.exists()) destFile.delete()
                     tempFile.renameTo(destFile)
+                    downloadedBytes += destFile.length()
                 } catch (e: Exception) {
                     return@withContext Result.failure(
                         Exception("下载失败 $file: ${e.message}")
                     )
                 }
 
-                completedFiles++
-                val percent = (completedFiles * 100 / totalFiles).toInt()
-                onProgress?.invoke(file, percent.coerceIn(0, 100))
-                Log.i(TAG, "MNN file downloaded: $file (${destFile.length()} bytes)")
+                val pct = downloadedBytes.toDouble() / totalBytes * 100
+                val pctRounded = Math.round(pct * 10.0) / 10.0
+                onProgress?.invoke(file, pctRounded, downloadedBytes, totalBytes)
+                Log.i(TAG, "MNN file downloaded: $file (${destFile.length()} bytes, $pctRounded%)")
             }
 
             modelManager.markInstalled(modelId, ModelInfo.ModelType.AI)
@@ -280,7 +291,7 @@ class ModelDownloadManager(private val context: Context) {
      */
     suspend fun downloadAiModel(
         model: ModelInfo,
-        onProgress: ((modelName: String, percent: Int) -> Unit)? = null
+        onProgress: ((modelName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> {
         return downloadMnnModel(modelId = model.id, onProgress = onProgress)
     }

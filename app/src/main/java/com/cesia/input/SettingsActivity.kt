@@ -413,7 +413,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun downloadAiModel() {
-        val modelInfo = ModelRegistry.getById("qwen25-1.5b-mnn") ?: return
+        val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
+            ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: return
         btnDownloadAi?.isEnabled = false
         btnDownloadAi?.text = "下载中..."
         tvStatus.text = "🔄 下载 AI 模型中..."
@@ -423,9 +424,13 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val dm = ModelDownloadManager(this@SettingsActivity)
                 val result = kotlinx.coroutines.runBlocking {
-                    dm.downloadAiModel(modelInfo) { name, percent ->
+                    dm.downloadAiModel(modelInfo) { name, percent, downloadedBytes, totalBytes ->
                         runOnUiThread {
-                            tvStatus.text = "🔄 下载 $name ($percent%)"
+                            val pctStr = String.format("%.1f%%", percent)
+                            val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
+                            val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
+                            tvStatus.text = "🔄 下载 $name ($pctStr)"
+                            appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
                     }
                 }
