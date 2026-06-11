@@ -1,0 +1,2429 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/home/ca/jdk-17.0.9+9/bin/uname"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/uname"
+      - "/home/ca/.local/bin/uname"
+      - "/home/ca/bin/uname"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/uname"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineSystem.cmake:207 (message)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      The target system is: Android - 1 - aarch64
+      The host system is: Linux - 6.8.0-124-generic - x86_64
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeUnixFindMake.cmake:5 (find_program)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_MAKE_PROGRAM"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "gmake"
+      - "make"
+      - "smake"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sbin/"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/gmake"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sbin/gmake"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/gmake"
+      - "/home/ca/jdk-17.0.9+9/bin/gmake"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/gmake"
+      - "/home/ca/.local/bin/gmake"
+      - "/home/ca/bin/gmake"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/gmake"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/gmake"
+    found: "/usr/bin/gmake"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:468 (find_file)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:506 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:122 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCCompilerId.c.in"
+    candidate_directories:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/"
+    found: "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCCompilerId.c.in"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:122 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang 
+      Build flags: -g;-DANDROID;-fdata-sections;-ffunction-sections;-funwind-tables;-fstack-protector-strong;-no-canonical-prefixes;-D_FORTIFY_SOURCE=2;-Wformat;-Werror=format-security
+      Id flags: -c;--target=aarch64-none-linux-android24 
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CMakeCCompilerId.o"
+      
+      The C compiler identification is Clang, found in:
+        /home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/4.3.2/CompilerIdC/CMakeCCompilerId.o
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_LINKER"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld"
+      - "ld"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ld.lld"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld.lld"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_NM"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-nm"
+      - "nm"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-nm"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJDUMP"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-objdump"
+      - "objdump"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objdump"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJCOPY"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-objcopy"
+      - "objcopy"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-objcopy"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_READELF"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-readelf"
+      - "readelf"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-readelf"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_DLLTOOL"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "dlltool"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-dlltool"
+      - "/home/ca/jdk-17.0.9+9/bin/llvm-dlltool"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/llvm-dlltool"
+      - "/home/ca/.local/bin/llvm-dlltool"
+      - "/home/ca/bin/llvm-dlltool"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/llvm-dlltool"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/llvm-dlltool"
+      - "/usr/bin/llvm-dlltool"
+      - "/usr/local/sbin/llvm-dlltool"
+      - "/usr/local/bin/llvm-dlltool"
+      - "/usr/sbin/llvm-dlltool"
+      - "/sbin/llvm-dlltool"
+      - "/bin/llvm-dlltool"
+      - "/snap/bin/llvm-dlltool"
+      - "/usr/lib/aarch64-linux-android/24/bin/llvm-dlltool"
+      - "/usr/lib/aarch64-linux-android/24/sbin/llvm-dlltool"
+      - "/usr/lib/aarch64-linux-android/24/llvm-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-dlltool"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/dlltool"
+      - "/home/ca/jdk-17.0.9+9/bin/dlltool"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/dlltool"
+      - "/home/ca/.local/bin/dlltool"
+      - "/home/ca/bin/dlltool"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/dlltool"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/dlltool"
+      - "/usr/bin/dlltool"
+      - "/usr/local/sbin/dlltool"
+      - "/usr/local/bin/dlltool"
+      - "/usr/sbin/dlltool"
+      - "/sbin/dlltool"
+      - "/bin/dlltool"
+      - "/snap/bin/dlltool"
+      - "/usr/lib/aarch64-linux-android/24/bin/dlltool"
+      - "/usr/lib/aarch64-linux-android/24/sbin/dlltool"
+      - "/usr/lib/aarch64-linux-android/24/dlltool"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_ADDR2LINE"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-addr2line"
+      - "addr2line"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-addr2line"
+    found: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_TAPI"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "tapi"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-tapi"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/tapi"
+      - "/home/ca/jdk-17.0.9+9/bin/tapi"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/tapi"
+      - "/home/ca/.local/bin/tapi"
+      - "/home/ca/bin/tapi"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/tapi"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/tapi"
+      - "/usr/bin/tapi"
+      - "/usr/local/sbin/tapi"
+      - "/usr/local/bin/tapi"
+      - "/usr/sbin/tapi"
+      - "/sbin/tapi"
+      - "/bin/tapi"
+      - "/snap/bin/tapi"
+      - "/usr/lib/aarch64-linux-android/24/bin/tapi"
+      - "/usr/lib/aarch64-linux-android/24/sbin/tapi"
+      - "/usr/lib/aarch64-linux-android/24/tapi"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:26 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:201 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_AR"
+    description: "LLVM archiver"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:38 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:201 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_RANLIB"
+    description: "Generate index for LLVM archive"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:50 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCCompiler.cmake:201 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_CLANG_SCAN_DEPS"
+    description: "`clang-scan-deps` dependency scanner"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:468 (find_file)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:506 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/"
+    found: "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ 
+      Build flags: -g;-DANDROID;-fdata-sections;-ffunction-sections;-funwind-tables;-fstack-protector-strong;-no-canonical-prefixes;-D_FORTIFY_SOURCE=2;-Wformat;-Werror=format-security
+      Id flags: -c;--target=aarch64-none-linux-android24 
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CMakeCXXCompilerId.o"
+      
+      The CXX compiler identification is Clang, found in:
+        /home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/4.3.2/CompilerIdCXX/CMakeCXXCompilerId.o
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:26 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_AR"
+    description: "LLVM archiver"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ar"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:38 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_RANLIB"
+    description: "Generate index for LLVM archive"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-llvm-ranlib"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Compiler/Clang-FindBinUtils.cmake:50 (find_program)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:2 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS"
+    description: "`clang-scan-deps` dependency scanner"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+    candidate_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+      - "/home/ca/jdk-17.0.9+9/bin/"
+      - "/home/linuxbrew/.linuxbrew/opt/node@22/bin/"
+      - "/home/ca/.local/bin/"
+      - "/home/ca/bin/"
+      - "/home/ca/.hermes/hermes-agent/venv/bin/"
+      - "/home/ca/.hermes/hermes-agent/node_modules/.bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/snap/bin/"
+      - "/usr/lib/aarch64-linux-android/24/bin/"
+      - "/usr/lib/aarch64-linux-android/24/sbin/"
+      - "/usr/lib/aarch64-linux-android/24/"
+    searched_directories:
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14.0"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps-14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps14"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+      - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang-scan-deps"
+    found: false
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64"
+      ENV{PATH}:
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/ca/jdk-17.0.9+9/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/linuxbrew/.linuxbrew/opt/node@22/bin"
+        - "/home/ca/.local/bin"
+        - "/home/ca/bin"
+        - "/home/ca/.hermes/hermes-agent/venv/bin"
+        - "/home/ca/.hermes/hermes-agent/node_modules/.bin"
+        - "/usr/bin"
+        - "/home/ca/.local/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/snap/bin"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/lib/aarch64-linux-android/24"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+      CMAKE_FIND_ROOT_PATH: "/home/ca/Android/ndk/25.2.9519653"
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    checks:
+      - "Detecting C compiler ABI info"
+    directories:
+      source: "/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4"
+      binary: "/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4"
+    cmakeVariables:
+      ANDROID_ABI: "arm64-v8a"
+      ANDROID_ARM_MODE: "thumb"
+      ANDROID_PIE: "TRUE"
+      ANDROID_PLATFORM: "android-24"
+      ANDROID_STL: "c++_static"
+      ANDROID_TOOLCHAIN: "clang"
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS-NOTFOUND"
+      CMAKE_CXX_COMPILER_TARGET: "aarch64-none-linux-android24"
+      CMAKE_CXX_STDLIB_MODULES_JSON: ""
+      CMAKE_C_COMPILER_TARGET: "aarch64-none-linux-android24"
+      CMAKE_C_FLAGS: "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat "
+      CMAKE_C_FLAGS_DEBUG: "-fno-limit-debug-info "
+      CMAKE_EXE_LINKER_FLAGS: "-static-libstdc++ -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  "
+      CMAKE_POSITION_INDEPENDENT_CODE: "TRUE"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+    buildResult:
+      variable: "CMAKE_C_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4'
+        
+        Run Build Command(s): /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_917a9/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_917a9.dir/build.make CMakeFiles/cmTC_917a9.dir/build
+        gmake[1]: Entering directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4'
+        Building C object CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o
+        /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot   -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat   -fPIE   -v -MD -MT CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -MF CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o.d -o CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCCompilerABI.c
+        Android (9352603, based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)
+        Target: aarch64-none-linux-android24
+        Thread model: posix
+        InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin
+         (in-process)
+         "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" -cc1 -triple aarch64-none-linux-android24 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCCompilerABI.c -mrelocation-model pic -pic-level 2 -pic-is-pie -mframe-pointer=non-leaf -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu generic -target-feature +neon -target-feature +v8a -target-feature +fix-cortex-a53-835769 -target-abi aapcs -fallow-half-arguments-and-returns -mllvm -treat-scalable-fixed-error-as-warning -debug-info-kind=constructor -dwarf-version=4 -debugger-tuning=gdb -v -ffunction-sections -fdata-sections -fcoverage-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4 -resource-dir /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7 -dependency-file CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o.d -MT CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -sys-header-deps -D ANDROID -D _FORTIFY_SOURCE=2 -isysroot /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include -Wformat -fdebug-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4 -ferror-limit 19 -stack-protector 2 -fno-signed-char -fgnuc-version=4.2.1 -target-feature +outline-atomics -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -x c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCCompilerABI.c
+        clang -cc1 version 14.0.7 based upon LLVM 14.0.7git default target x86_64-unknown-linux-gnu
+        ignoring nonexistent directory "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include
+        End of search list.
+        Linking C executable cmTC_917a9
+        /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E cmake_link_script CMakeFiles/cmTC_917a9.dir/link.txt --verbose=1
+        Android (9352603, based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)
+        Target: aarch64-none-linux-android24
+        Thread model: posix
+        InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin
+         "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -pie -EL --fix-cortex-a53-843419 --warn-shared-textrel -z now -z relro -z max-page-size=4096 --hash-style=gnu --enable-new-dtags --eh-frame-hdr -m aarch64linux -dynamic-linker /system/bin/linker64 -o cmTC_917a9 /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib --build-id=sha1 --no-rosegment --fatal-warnings --no-undefined CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl -lc /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o
+        /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat   -static-libstdc++ -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments   -v CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -o cmTC_917a9
+        gmake[1]: Leaving directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed C implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        end of search list found
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        implicit include dirs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed C implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4']
+        ignore line: []
+        ignore line: [Run Build Command(s): /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_917a9/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_917a9.dir/build.make CMakeFiles/cmTC_917a9.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4']
+        ignore line: [Building C object CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot   -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat   -fPIE   -v -MD -MT CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -MF CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o.d -o CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCCompilerABI.c]
+        ignore line: [Android (9352603  based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)]
+        ignore line: [Target: aarch64-none-linux-android24]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin]
+        ignore line: [ (in-process)]
+        ignore line: [ "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" -cc1 -triple aarch64-none-linux-android24 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCCompilerABI.c -mrelocation-model pic -pic-level 2 -pic-is-pie -mframe-pointer=non-leaf -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu generic -target-feature +neon -target-feature +v8a -target-feature +fix-cortex-a53-835769 -target-abi aapcs -fallow-half-arguments-and-returns -mllvm -treat-scalable-fixed-error-as-warning -debug-info-kind=constructor -dwarf-version=4 -debugger-tuning=gdb -v -ffunction-sections -fdata-sections -fcoverage-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4 -resource-dir /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7 -dependency-file CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o.d -MT CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -sys-header-deps -D ANDROID -D _FORTIFY_SOURCE=2 -isysroot /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include -Wformat -fdebug-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-lBE8G4 -ferror-limit 19 -stack-protector 2 -fno-signed-char -fgnuc-version=4.2.1 -target-feature +outline-atomics -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o -x c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCCompilerABI.c]
+        ignore line: [clang -cc1 version 14.0.7 based upon LLVM 14.0.7git default target x86_64-unknown-linux-gnu]
+        ignore line: [ignoring nonexistent directory "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Linking C executable cmTC_917a9]
+        ignore line: [/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E cmake_link_script CMakeFiles/cmTC_917a9.dir/link.txt --verbose=1]
+        ignore line: [Android (9352603  based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)]
+        ignore line: [Target: aarch64-none-linux-android24]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin]
+        link line: [ "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -pie -EL --fix-cortex-a53-843419 --warn-shared-textrel -z now -z relro -z max-page-size=4096 --hash-style=gnu --enable-new-dtags --eh-frame-hdr -m aarch64linux -dynamic-linker /system/bin/linker64 -o cmTC_917a9 /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib --build-id=sha1 --no-rosegment --fatal-warnings --no-undefined CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl -lc /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld] ==> ignore
+          arg [--sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot] ==> ignore
+          arg [-pie] ==> ignore
+          arg [-EL] ==> ignore
+          arg [--fix-cortex-a53-843419] ==> ignore
+          arg [--warn-shared-textrel] ==> ignore
+          arg [-znow] ==> ignore
+          arg [-zrelro] ==> ignore
+          arg [-zmax-page-size=4096] ==> ignore
+          arg [--hash-style=gnu] ==> ignore
+          arg [--enable-new-dtags] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [aarch64linux] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/system/bin/linker64] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_917a9] ==> ignore
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o] ==> obj [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+          arg [--build-id=sha1] ==> ignore
+          arg [--no-rosegment] ==> ignore
+          arg [--fatal-warnings] ==> ignore
+          arg [--no-undefined] ==> ignore
+          arg [CMakeFiles/cmTC_917a9.dir/CMakeCCompilerABI.c.o] ==> ignore
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a] ==> lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+          arg [-l:libunwind.a] ==> lib [-l:libunwind.a]
+          arg [-ldl] ==> lib [dl]
+          arg [-lc] ==> lib [c]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a] ==> lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+          arg [-l:libunwind.a] ==> lib [-l:libunwind.a]
+          arg [-ldl] ==> lib [dl]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o] ==> obj [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+        linker tool for 'C': /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld
+        remove lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+        remove lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+        implicit libs: [-l:libunwind.a;dl;c;-l:libunwind.a;dl]
+        implicit objs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+        implicit dirs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Internal/CMakeDetermineLinkerId.cmake:38 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:299 (cmake_determine_linker_id)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Running the C compiler's linker: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" "-v"
+      LLD 14.0.7 (compatible with GNU linkers)
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g"
+      binary: "/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g"
+    cmakeVariables:
+      ANDROID_ABI: "arm64-v8a"
+      ANDROID_ARM_MODE: "thumb"
+      ANDROID_PIE: "TRUE"
+      ANDROID_PLATFORM: "android-24"
+      ANDROID_STL: "c++_static"
+      ANDROID_TOOLCHAIN: "clang"
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS-NOTFOUND"
+      CMAKE_CXX_COMPILER_TARGET: "aarch64-none-linux-android24"
+      CMAKE_CXX_FLAGS: "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat  "
+      CMAKE_CXX_FLAGS_DEBUG: "-fno-limit-debug-info "
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_CXX_STDLIB_MODULES_JSON: ""
+      CMAKE_C_COMPILER_TARGET: "aarch64-none-linux-android24"
+      CMAKE_EXE_LINKER_FLAGS: "-static-libstdc++ -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  "
+      CMAKE_POSITION_INDEPENDENT_CODE: "TRUE"
+      CMAKE_SYSROOT: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g'
+        
+        Run Build Command(s): /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_8a154/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_8a154.dir/build.make CMakeFiles/cmTC_8a154.dir/build
+        gmake[1]: Entering directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g'
+        Building CXX object CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o
+        /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot   -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat    -fPIE   -v -MD -MT CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp
+        Android (9352603, based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)
+        Target: aarch64-none-linux-android24
+        Thread model: posix
+        InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin
+         (in-process)
+         "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" -cc1 -triple aarch64-none-linux-android24 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -pic-is-pie -mframe-pointer=non-leaf -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu generic -target-feature +neon -target-feature +v8a -target-feature +fix-cortex-a53-835769 -target-abi aapcs -fallow-half-arguments-and-returns -mllvm -treat-scalable-fixed-error-as-warning -debug-info-kind=constructor -dwarf-version=4 -debugger-tuning=gdb -v -ffunction-sections -fdata-sections -fcoverage-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g -resource-dir /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7 -dependency-file CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o.d -MT CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -D ANDROID -D _FORTIFY_SOURCE=2 -isysroot /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1 -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include -Wformat -fdeprecated-macro -fdebug-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g -ferror-limit 19 -stack-protector 2 -fno-signed-char -fgnuc-version=4.2.1 -fcxx-exceptions -fexceptions -target-feature +outline-atomics -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -x c++ /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp
+        clang -cc1 version 14.0.7 based upon LLVM 14.0.7git default target x86_64-unknown-linux-gnu
+        ignoring nonexistent directory "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android
+         /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include
+        End of search list.
+        Linking CXX executable cmTC_8a154
+        /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E cmake_link_script CMakeFiles/cmTC_8a154.dir/link.txt --verbose=1
+        Android (9352603, based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)
+        Target: aarch64-none-linux-android24
+        Thread model: posix
+        InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin
+         "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -pie -EL --fix-cortex-a53-843419 --warn-shared-textrel -z now -z relro -z max-page-size=4096 --hash-style=gnu --enable-new-dtags --eh-frame-hdr -m aarch64linux -dynamic-linker /system/bin/linker64 -o cmTC_8a154 /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib --build-id=sha1 --no-rosegment --fatal-warnings --no-undefined CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -Bstatic -lc++ -Bdynamic -lm /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl -lc /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o
+        /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat    -static-libstdc++ -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments   -v CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_8a154
+        gmake[1]: Leaving directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+          add: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        end of search list found
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+        collapse include dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        implicit include dirs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g']
+        ignore line: []
+        ignore line: [Run Build Command(s): /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_8a154/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_8a154.dir/build.make CMakeFiles/cmTC_8a154.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g']
+        ignore line: [Building CXX object CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot   -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat    -fPIE   -v -MD -MT CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -c /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Android (9352603  based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)]
+        ignore line: [Target: aarch64-none-linux-android24]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin]
+        ignore line: [ (in-process)]
+        ignore line: [ "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" -cc1 -triple aarch64-none-linux-android24 -emit-obj -mrelax-all --mrelax-relocations -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -pic-is-pie -mframe-pointer=non-leaf -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu generic -target-feature +neon -target-feature +v8a -target-feature +fix-cortex-a53-835769 -target-abi aapcs -fallow-half-arguments-and-returns -mllvm -treat-scalable-fixed-error-as-warning -debug-info-kind=constructor -dwarf-version=4 -debugger-tuning=gdb -v -ffunction-sections -fdata-sections -fcoverage-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g -resource-dir /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7 -dependency-file CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o.d -MT CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -D ANDROID -D _FORTIFY_SOURCE=2 -isysroot /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1 -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include -internal-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include -internal-externc-isystem /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include -Wformat -fdeprecated-macro -fdebug-compilation-dir=/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/CMakeScratch/TryCompile-LO2P8g -ferror-limit 19 -stack-protector 2 -fno-signed-char -fgnuc-version=4.2.1 -fcxx-exceptions -fexceptions -target-feature +outline-atomics -D__GCC_HAVE_DWARF2_CFI_ASM=1 -o CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -x c++ /home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [clang -cc1 version 14.0.7 based upon LLVM 14.0.7git default target x86_64-unknown-linux-gnu]
+        ignore line: [ignoring nonexistent directory "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/include]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/local/include]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android]
+        ignore line: [ /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Linking CXX executable cmTC_8a154]
+        ignore line: [/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/bin/cmake -E cmake_link_script CMakeFiles/cmTC_8a154.dir/link.txt --verbose=1]
+        ignore line: [Android (9352603  based on r450784d1) clang version 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0cca074e9238af8b4106c30add4418f6)]
+        ignore line: [Target: aarch64-none-linux-android24]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin]
+        link line: [ "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" --sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot -pie -EL --fix-cortex-a53-843419 --warn-shared-textrel -z now -z relro -z max-page-size=4096 --hash-style=gnu --enable-new-dtags --eh-frame-hdr -m aarch64linux -dynamic-linker /system/bin/linker64 -o cmTC_8a154 /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24 -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android -L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib --build-id=sha1 --no-rosegment --fatal-warnings --no-undefined CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o -Bstatic -lc++ -Bdynamic -lm /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl -lc /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a -l:libunwind.a -ldl /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld] ==> ignore
+          arg [--sysroot=/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot] ==> ignore
+          arg [-pie] ==> ignore
+          arg [-EL] ==> ignore
+          arg [--fix-cortex-a53-843419] ==> ignore
+          arg [--warn-shared-textrel] ==> ignore
+          arg [-znow] ==> ignore
+          arg [-zrelro] ==> ignore
+          arg [-zmax-page-size=4096] ==> ignore
+          arg [--hash-style=gnu] ==> ignore
+          arg [--enable-new-dtags] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [aarch64linux] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/system/bin/linker64] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_8a154] ==> ignore
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o] ==> obj [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android]
+          arg [-L/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib] ==> dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+          arg [--build-id=sha1] ==> ignore
+          arg [--no-rosegment] ==> ignore
+          arg [--fatal-warnings] ==> ignore
+          arg [--no-undefined] ==> ignore
+          arg [CMakeFiles/cmTC_8a154.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [-Bstatic] ==> search static
+          arg [-lc++] ==> lib [c++]
+          arg [-Bdynamic] ==> search dynamic
+          arg [-lm] ==> lib [m]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a] ==> lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+          arg [-l:libunwind.a] ==> lib [-l:libunwind.a]
+          arg [-ldl] ==> lib [dl]
+          arg [-lc] ==> lib [c]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a] ==> lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+          arg [-l:libunwind.a] ==> lib [-l:libunwind.a]
+          arg [-ldl] ==> lib [dl]
+          arg [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o] ==> obj [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+        linker tool for 'CXX': /home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld
+        remove lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+        remove lib [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/libclang_rt.builtins-aarch64-android.a]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android]
+        collapse library dir [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib] ==> [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+        implicit libs: [c++;m;-l:libunwind.a;dl;c;-l:libunwind.a;dl]
+        implicit objs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtbegin_dynamic.o;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/crtend_android.o]
+        implicit dirs: [/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.7/lib/linux/aarch64;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android;/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/Internal/CMakeDetermineLinkerId.cmake:38 (message)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:299 (cmake_determine_linker_id)"
+      - "/home/ca/.hermes/hermes-agent/venv/lib/python3.11/site-packages/cmake/data/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:2 (project)"
+    message: |
+      Running the CXX compiler's linker: "/home/ca/Android/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/ld" "-v"
+      LLD 14.0.7 (compatible with GNU linkers)
+...

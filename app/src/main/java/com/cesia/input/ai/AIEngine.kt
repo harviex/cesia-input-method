@@ -223,19 +223,31 @@ class AIEngine(private val context: Context) {
             }
         }
 
-        // 3. 长度截断：不超过原文 120%
-        val maxLen = (original.length * 1.2).toInt().coerceAtLeast(original.length)
+        // 3. 长度截断：不超过原文 200%（润色后可能比原文长）
+        val maxLen = (original.length * 2.0).toInt().coerceAtLeast(original.length + 10)
         if (text.length > maxLen) {
             Log.d(TAG, "postProcess: 长度截断 ${text.length} -> $maxLen")
-            text = text.substring(0, maxLen)
+            val truncated = text.substring(0, maxLen)
             // 在截断点找最后一个句末标点
             val lastPunct = maxOf(
-                text.lastIndexOf('。'),
-                text.lastIndexOf('？'),
-                text.lastIndexOf('！')
+                truncated.lastIndexOf('。'),
+                truncated.lastIndexOf('？'),
+                truncated.lastIndexOf('！'),
+                truncated.lastIndexOf('\n')
             )
-            if (lastPunct > maxLen * 0.5) {
-                text = text.substring(0, lastPunct + 1)
+            if (lastPunct > maxLen * 0.3) {
+                text = truncated.substring(0, lastPunct + 1).trim()
+            } else {
+                // 找不到合适的句末标点，回退到逗号
+                val lastComma = maxOf(
+                    truncated.lastIndexOf('，'),
+                    truncated.lastIndexOf(',')
+                )
+                text = if (lastComma > maxLen * 0.3) {
+                    truncated.substring(0, lastComma).trim()
+                } else {
+                    truncated.trim()
+                }
             }
         }
 

@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/ca/cesia-input-method/ai-engine/build_cmake/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

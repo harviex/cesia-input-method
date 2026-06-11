@@ -202,13 +202,12 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeGenerate(
     env->ReleaseStringUTFChars(prompt, promptC);
 
     try {
-        // 使用与云端 OpenRouter 完全相同的 prompt 格式
-        // system: 短指令，只说"做什么"不说"不要做什么"
-        // user: 直接传原文
+        // system prompt 与云端 OpenRouter DEFAULT_POLISH_PROMPT 完全一致
         // 关键差异：云端用 temperature=0.3 + stop tokens，本地用 end_with="\n"
         std::vector<MNN::Transformer::ChatMessage> messages;
         messages.push_back({"system",
-            "你是一个文本编辑助手。根据用户指令修改原文。只输出修改后的文本，不要解释。"
+            "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n"
+            "严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \")进行分点陈列。"
         });
         messages.push_back({"user", promptStr});
 

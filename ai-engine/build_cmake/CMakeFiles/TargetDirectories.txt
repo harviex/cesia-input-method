@@ -1,0 +1,3 @@
+/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/mnn-llm-bridge.dir
+/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/edit_cache.dir
+/home/ca/cesia-input-method/ai-engine/build_cmake/CMakeFiles/rebuild_cache.dir
