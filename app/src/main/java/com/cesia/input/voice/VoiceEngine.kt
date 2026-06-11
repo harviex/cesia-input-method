@@ -420,6 +420,7 @@ class VoiceEngine(private val context: Context) {
         var pendingText: String = ""
         var commandDetectedTime: Long = 0L
         val COMMAND_CONFIRM_MS = 1000L  // 命令词后等待 1 秒静音确认
+        var unlockDetected: Boolean = false  // 检测到"退出锁定"命令词
 
         try {
             var totalSamples = 0
@@ -916,8 +917,13 @@ class VoiceEngine(private val context: Context) {
      */
     private fun checkCommandWord(text: String): Pair<String, String>? {
         val lower = text.lowercase().trimEnd()
-        // 按优先级检测：先检测长的 "aiover" / "ai over"，再检测 "over"
+        // 按优先级检测：先检测"退出锁定"，再检测"aiover"/"ai over"，最后检测"over"
         return when {
+            // "退出锁定 over" - 最高优先级
+            lower.endsWith("退出锁定 over") || lower.endsWith("退出锁定over") -> {
+                val before = text.dropLast(if (lower.endsWith("退出锁定 over")) 14 else 13).trimEnd()
+                Pair(before, "unlock")
+            }
             // "aiover" 或 "ai over"（兼容空格）
             lower.endsWith("aiover") -> {
                 val before = text.dropLast(7).trimEnd()
@@ -927,8 +933,8 @@ class VoiceEngine(private val context: Context) {
                 val before = text.dropLast(7).trimEnd()
                 Pair(before, "ai")
             }
-            // "over"（确保不是 "aiover" 的一部分）
-            lower.endsWith("over") && !lower.endsWith("aiover") -> {
+            // "over"（确保不是 "aiover" 或 "退出锁定 over" 的一部分）
+            lower.endsWith("over") && !lower.endsWith("aiover") && !lower.endsWith("退出锁定 over") && !lower.endsWith("退出锁定over") -> {
                 val before = text.dropLast(4).trimEnd()
                 Pair(before, "plain")
             }

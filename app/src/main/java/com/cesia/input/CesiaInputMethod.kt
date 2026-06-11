@@ -90,6 +90,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
     private var cloudMode: CloudMode = CloudMode.LOCAL
 
+    // 语音锁定模式
+    private var isVoiceLocked: Boolean = false
+
     // 候选词栏
     private lateinit var candidateBar: LinearLayout
     private lateinit var btnCandidateExpand: ImageButton
@@ -1116,7 +1119,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 resetToIdle()
                 true
             } else {
-                toggleLocalCloudMode()
+                toggleVoiceLockMode()
                 true
             }
         }
@@ -2351,9 +2354,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             setStatusDot("idle")
                             recognizedText = text
 
+                            if (command == "unlock") {
+                                // 退出锁定模式
+                                isVoiceLocked = false
+                                updateMicButtonLockedState()
+                                updateStatus("🔓 已退出语音锁定模式")
+                                resetToIdle()
+                                return@withContext
+                            }
+
                             if (text.isEmpty()) {
                                 updateStatus("⚠️ 未识别到文字")
-                                resetToIdle()
+                                // 锁定模式下自动重新开始
+                                if (isVoiceLocked) {
+                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                } else {
+                                    resetToIdle()
+                                }
                                 return@withContext
                             }
 
@@ -2366,11 +2383,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 setStatusDot("processing")
                                 isProcessingResult = true
                                 polishRecognizedText(text)
+                                // 锁定模式下润色完成后自动重新开始录音
+                                if (isVoiceLocked) {
+                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                }
                             } else {
                                 // over → 直接上屏
                                 currentInputConnection?.commitText(text, 1)
                                 updateStatus("✅ 已上屏")
-                                resetToIdle()
+                                // 锁定模式下自动重新开始录音
+                                if (isVoiceLocked) {
+                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                } else {
+                                    resetToIdle()
+                                }
                             }
                         }
                     }
@@ -2386,9 +2412,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 处理云端/本地识别结果 → 显示 AI+/AI× 按钮 */
+    /** 处理云端/本地识别结果 → 显示 AI+/AI× 按钮（锁定模式自动处理） */
     private fun handleCloudVoiceResult(text: String) {
-        Log.i("Cesia", "handleCloudVoiceResult: text='${text.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}', pendingAiMode=$pendingAiMode, isProcessingResult=$isProcessingResult")
+        Log.i("Cesia", "handleCloudVoiceResult: text='${text.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}', pendingAiMode=$pendingAiMode, isProcessingResult=$isProcessingResult, isVoiceLocked=$isVoiceLocked")
         // 已在点击 AI+/AI× 时处理过，跳过
         if (isProcessingResult) {
             Log.i("Cesia", "handleCloudVoiceResult: already processed, skipping")
@@ -2403,6 +2429,36 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (text.isEmpty()) {
             updateStatus("⚠️ 未识别到文字，请重试")
             resetToIdle()
+            return
+        }
+
+        // 锁定模式：自动根据云按钮状态处理，不显示 AI+/AI× 按钮
+        if (isVoiceLocked) {
+            Log.i("Cesia", "handleCloudVoiceResult: 锁定模式，自动处理")
+            isWaitingForChoice = false
+            hideAiChoiceButtons()
+            // 锁定模式下，根据云按钮状态决定润色或直接上屏
+            if (isLocalPolishMode() && modelManager.hasAiModel()) {
+                // 本地润色模式
+                updateStatus("✨ 语音润色中...")
+                setStatusDot("processing")
+                isProcessingResult = true
+                polishRecognizedText(text)
+            } else if (isCloudPolishAvailable()) {
+                // 云端润色模式
+                updateStatus("☁️ 云端润色中...")
+                setStatusDot("processing")
+                isProcessingResult = true
+                polishRecognizedText(text)
+            } else {
+                // 无润色服务 → 直接上屏
+                currentInputConnection?.commitText(text, 1)
+                updateStatus("✅ 已上屏")
+            }
+            // 锁定模式下自动重新开始录音
+            if (isVoiceLocked) {
+                startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+            }
             return
         }
 
@@ -4605,6 +4661,49 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      */
     fun isLocalPolishMode(): Boolean {
         return cloudMode == CloudMode.LOCAL || cloudMode == CloudMode.LOCAL_LOCKED
+    }
+
+    // ======================== 语音锁定模式 ========================
+
+    /**
+     * 切换语音锁定模式（长按语音键）
+     */
+    private fun toggleVoiceLockMode() {
+        if (isVoiceLocked) {
+            // 已锁定 → 退出锁定
+            isVoiceLocked = false
+            updateMicButtonLockedState()
+            updateStatus("🔓 已退出语音锁定模式")
+        } else {
+            // 未锁定 → 进入锁定
+            val recognitionAvailable = isVoiceRecognitionAvailable()
+            if (!recognitionAvailable) {
+                updateStatus("⚠️ 语音识别不可用，无法进入锁定模式")
+                return
+            }
+            isVoiceLocked = true
+            updateMicButtonLockedState()
+            updateStatus("🔒 已进入语音锁定模式，说话后自动处理")
+            // 自动开始录音
+            startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+        }
+    }
+
+    /**
+     * 更新语音键的锁定状态显示
+     */
+    private fun updateMicButtonLockedState() {
+        micButton?.let { btn ->
+            if (isVoiceLocked) {
+                // 锁定状态：高亮显示
+                btn.setBackgroundColor(0xFF81D8D0.toInt()) // 青色背景
+                btn.setTextColor(0xFFFFFFFF.toInt()) // 白色文字
+            } else {
+                // 正常状态
+                btn.setBackgroundColor(0x00000000.toInt()) // 透明背景
+                btn.setTextColor(0xFF555555.toInt()) // 灰色文字
+            }
+        }
     }
 
     /**
