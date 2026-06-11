@@ -2392,19 +2392,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         Log.i("Cesia", "onSegmentResult #$segmentCount: text='${text.take(50)}', isFinal=$isFinal")
                         if (text.isNotEmpty() && text != lastStreamingText) {
                             lastStreamingText = text
+                            recognizedText = text
                             withContext(Dispatchers.Main) {
+                                // 流式显示：直接在光标位置显示识别文本（组合态）
+                                val ic = currentInputConnection ?: return@withContext
+                                ic.setComposingText(text, 1)
                                 updateStatus("🎤 $text")
-                                recognizedText = text
-                                updateCandidateBar()
                             }
                         }
                         if (isFinal) {
                             withContext(Dispatchers.Main) {
                                 Log.i("Cesia", "onSegmentResult: isFinal, text='${text.take(50)}', recognizedText='${recognizedText.take(50)}'")
                                 if (text.isNotEmpty()) {
+                                    // 最终结果：确认组合文本
+                                    val ic = currentInputConnection ?: return@withContext
+                                    ic.finishComposingText()
                                     handleCloudVoiceResult(text)
                                 } else {
                                     Log.w("Cesia", "onSegmentResult: isFinal but text is empty!")
+                                    handleCloudVoiceResult("")
                                 }
                             }
                         }
@@ -2412,6 +2418,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     onCommandWordDetected = { text: String, command: String ->
                         Log.i("Cesia", "命令词检测: command='$command', text='${text.take(50)}'")
                         withContext(Dispatchers.Main) {
+                            // 先确认组合文本
+                            currentInputConnection?.finishComposingText()
                             isRecording = false
                             stopVoiceWave()
                             setStatusDot("idle")
@@ -2448,8 +2456,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 polishRecognizedText(text)
                                 // 注意：polishRecognizedText 内部已处理锁定模式重启
                             } else {
-                                // over → 直接上屏
-                                currentInputConnection?.commitText(text, 1)
+                                // over → 原文已上屏（finishComposingText），直接结束
                                 updateStatus("✅ 已上屏")
                                 // 锁定模式下自动重新开始录音
                                 if (isVoiceLocked) {
@@ -2511,8 +2518,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isProcessingResult = true
                 polishRecognizedText(text)
             } else {
-                // 无润色服务 → 直接上屏
-                currentInputConnection?.commitText(text, 1)
+                // 无润色服务 → 原文已上屏（finishComposingText），直接结束
                 updateStatus("✅ 已上屏")
             }
             // 锁定模式下自动重新开始录音
@@ -2528,13 +2534,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             pendingAiMode = null
             isWaitingForChoice = false
             hideAiChoiceButtons()
+            if (text.isEmpty()) {
+                // 没有识别到文字，直接退出
+                updateStatus("⚠️ 未识别到文字")
+                resetToIdle()
+                return
+            }
             if (mode) {
-                updateStatus("✨ 正在施展魔法...")
+                updateStatus("✨ 正在润色...")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(text)
             } else {
-                currentInputConnection?.commitText(text, 1)
+                // AI×：原文已上屏（finishComposingText），直接结束
                 addSentMessage(text)
                 resetToIdle()
             }
@@ -2591,7 +2603,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isWaitingForChoice = false
             pendingAiMode = true
             hideAiChoiceButtons()
-            updateStatus("✨ 正在施展魔法...")
+            updateStatus("✨ 正在润色...")
             setStatusDot("processing")
             isProcessingResult = true
             polishRecognizedText(recognizedText)
@@ -2600,13 +2612,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val currentText = recognizedText
             stopRecordingAndWait()
             if (currentText.isNotEmpty()) {
-                updateStatus("✨ 正在施展魔法...")
+                updateStatus("✨ 正在润色...")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(currentText)
             } else {
-                updateStatus("⏳ 正在识别，识别后自动施展魔法")
-                pendingAiMode = true
+                // 没有识别到文字，直接退出语音状态
+                updateStatus("⚠️ 未识别到文字")
+                resetToIdle()
             }
         }
     }
@@ -2636,8 +2649,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 addSentMessage(currentText)
                 resetToIdle()
             } else {
-                updateStatus("⏳ 正在识别，识别后自动上屏")
-                pendingAiMode = false
+                // 没有识别到文字，直接退出语音状态
+                updateStatus("⚠️ 未识别到文字")
+                resetToIdle()
             }
         }
     }
@@ -2669,16 +2683,37 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             typelessEngine?.polishTextAsync(text) { finalText ->
                 Log.d("Cesia", "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'")
                 isProcessingResult = false
-                currentInputConnection?.commitText(finalText, 1)
-                val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-                statsManager.addRecord(text, finalText, duration)
-                // 锁定模式下润色完成后自动重新开始录音
-                if (isVoiceLocked) {
-                    startRecordingLocked()
-                } else {
-                    resetToIdle()
-                }
+                // 替换光标处的原文为润色结果
+                replaceTextWithPolish(text, finalText)
             }
+        }
+    }
+
+    /**
+     * 替换光标处的原文为润色结果
+     * 删除前面的原文，插入润色后的文本
+     */
+    private fun replaceTextWithPolish(originalText: String, polishedText: String) {
+        try {
+            val ic = currentInputConnection ?: return
+            // 删除原文（光标前面的 text.length 个字符）
+            val deleteLen = originalText.length
+            if (deleteLen > 0) {
+                ic.deleteSurroundingText(deleteLen, 0)
+            }
+            // 插入润色结果
+            ic.commitText(polishedText, 1)
+        } catch (e: Exception) {
+            Log.e("Cesia", "replaceTextWithPolish 失败，fallback commitText", e)
+            currentInputConnection?.commitText(polishedText, 1)
+        }
+        val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
+        statsManager.addRecord(originalText, polishedText, duration)
+        // 锁定模式下润色完成后自动重新开始录音
+        if (isVoiceLocked) {
+            startRecordingLocked()
+        } else {
+            resetToIdle()
         }
     }
 
@@ -2692,7 +2727,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     withContext(Dispatchers.Main) {
                         updateStatus("⚠️ AI 模型未安装，使用原文")
                         isProcessingResult = false
-                        currentInputConnection?.commitText(text, 1)
+                        // 原文已上屏（finishComposingText），直接结束
                         resetToIdle()
                     }
                     return@launch
@@ -2716,7 +2751,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         withContext(Dispatchers.Main) {
                             updateStatus("⚠️ AI 模型加载失败（${loadTime}ms），使用原文")
                             isProcessingResult = false
-                            currentInputConnection?.commitText(text, 1)
+                            // 原文已上屏（finishComposingText），直接结束
                             if (isVoiceLocked) {
                                 startRecordingLocked()
                             } else {
@@ -2730,25 +2765,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     val finalText = result ?: text
-                    currentInputConnection?.commitText(finalText, 1)
-                    val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-                    statsManager.addRecord(text, finalText, duration)
-                    if (isVoiceLocked) {
-                        startRecordingLocked()
-                    } else {
-                        resetToIdle()
-                    }
+                    // 替换光标处的原文为润色结果
+                    replaceTextWithPolish(text, finalText)
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "本地润色失败", e)
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
-                    currentInputConnection?.commitText(text, 1)
-                    if (isVoiceLocked) {
-                        startRecordingLocked()
-                    } else {
-                        resetToIdle()
-                    }
+                    // 润色失败：直接上屏原文
+                    replaceTextWithPolish(text, text)
                 }
             }
         }
