@@ -2325,6 +2325,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         showAiChoiceButtons()
     }
 
+    /**
+     * 锁定模式开始录音（不分裂按钮，不显示 AI+/AI×）
+     */
+    private fun startRecordingLocked() {
+        isRecording = true
+        isWaitingForChoice = false
+        recognizedText = ""
+        pendingAiMode = null
+        setStatusDot("recording")
+        startVoiceWave()
+        keyboardView.visibility = View.GONE
+        candidateBar.visibility = View.GONE
+        voiceStartTime = System.currentTimeMillis()
+        updateStatus("🎤 正在收听 (锁定模式)...")
+        startWhisperRecordingAsync()
+        // 不调用 showAiChoiceButtons()，保持语音键不分列
+    }
+
     /** Google 语音识别（流式，通过 FallbackRecognizer） */
     private fun startGoogleRecording(polishChoice: PolishChoice) {
         try {
@@ -2412,7 +2430,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 updateStatus("⚠️ 未识别到文字")
                                 // 锁定模式下自动重新开始
                                 if (isVoiceLocked) {
-                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                    startRecordingLocked()
                                 } else {
                                     resetToIdle()
                                 }
@@ -2435,7 +2453,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 updateStatus("✅ 已上屏")
                                 // 锁定模式下自动重新开始录音
                                 if (isVoiceLocked) {
-                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                    startRecordingLocked()
                                 } else {
                                     resetToIdle()
                                 }
@@ -2499,7 +2517,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             // 锁定模式下自动重新开始录音
             if (isVoiceLocked) {
-                startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                startRecordingLocked()
             }
             return
         }
@@ -2656,7 +2674,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 statsManager.addRecord(text, finalText, duration)
                 // 锁定模式下润色完成后自动重新开始录音
                 if (isVoiceLocked) {
-                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                    startRecordingLocked()
                 } else {
                     resetToIdle()
                 }
@@ -2700,7 +2718,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             isProcessingResult = false
                             currentInputConnection?.commitText(text, 1)
                             if (isVoiceLocked) {
-                                startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                                startRecordingLocked()
                             } else {
                                 resetToIdle()
                             }
@@ -2716,7 +2734,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
                     statsManager.addRecord(text, finalText, duration)
                     if (isVoiceLocked) {
-                        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                        startRecordingLocked()
                     } else {
                         resetToIdle()
                     }
@@ -2727,7 +2745,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     isProcessingResult = false
                     currentInputConnection?.commitText(text, 1)
                     if (isVoiceLocked) {
-                        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                        startRecordingLocked()
                     } else {
                         resetToIdle()
                     }
@@ -4767,7 +4785,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateMicButtonLockedState()
             updateStatus("🔓 已退出语音锁定模式")
         } else {
-            // 未锁定 → 进入锁定
+            // 未锁定 → 进入锁定，直接录音（不分裂按钮）
             val recognitionAvailable = isVoiceRecognitionAvailable()
             if (!recognitionAvailable) {
                 updateStatus("⚠️ 语音识别不可用，无法进入锁定模式")
@@ -4776,8 +4794,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isVoiceLocked = true
             updateMicButtonLockedState()
             updateStatus("🔒 已进入语音锁定模式，说话后自动处理")
-            // 自动开始录音
-            startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+            // 锁定模式直接录音，不分裂按钮
+            startRecordingLocked()
         }
     }
 
