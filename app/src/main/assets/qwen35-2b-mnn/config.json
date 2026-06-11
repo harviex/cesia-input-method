@@ -1,5 +1,5 @@
 {
-    "hidden_size": 1248,
+    "hidden_size": 2048,
     "max_new_tokens": 8192,
     "llm_model": "llm.mnn",
     "llm_weight": "llm.mnn.weight",

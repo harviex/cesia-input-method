@@ -73,14 +73,14 @@ class AIEngine(private val context: Context) {
                         // 最后修复逗号后跟 { 的模式（不应该有）
                         json = json.replace(Regex(",\\s*\\{"), "{")
 
-                        // 3. 添加 hidden_size=1248（Qwen3.5-2B 实际架构参数，不是 1280）
+                        // 3. 添加 hidden_size=2048（Qwen3.5-2B 实际架构参数）
                         if (!json.contains("\"hidden_size\"")) {
-                            json = json.replaceFirst("\\{", "{\n    \"hidden_size\": 1248,")
-                            Log.i(TAG, "loadLocalModel: added hidden_size=1248")
+                            json = json.replaceFirst("\\{", "{\n    \"hidden_size\": 2048,")
+                            Log.i(TAG, "loadLocalModel: added hidden_size=2048")
                         } else {
-                            // 如果已有 hidden_size，修正为正确的 1248
-                            json = json.replace(Regex("\"hidden_size\"\\s*:\\s*\\d+"), "\"hidden_size\": 1248")
-                            Log.i(TAG, "loadLocalModel: corrected hidden_size to 1248")
+                            // 如果已有 hidden_size，修正为正确的 2048
+                            json = json.replace(Regex("\"hidden_size\"\\s*:\\s*\\d+"), "\"hidden_size\": 2048")
+                            Log.i(TAG, "loadLocalModel: corrected hidden_size to 2048")
                         }
 
                         // 4. 关闭 thinking（减少推理开销）
