@@ -110,11 +110,9 @@ class AIEngine(private val context: Context) {
                         json = json.replace(Regex("\"backend_type\"\\s*:\\s*\"[^\"]+\""), "\"backend_type\": \"cpu\"")
                         Log.i(TAG, "loadLocalModel: backend_type set to cpu")
 
-                        // 7. 根据 CPU 核心数动态设置线程数（最少2，最多8）
-                        val cpuCores = Runtime.getRuntime().availableProcessors()
-                        val threadNum = cpuCores.coerceIn(2, 8)
-                        json = json.replace(Regex("\"thread_num\"\\s*:\\s*\\d+"), "\"thread_num\": $threadNum")
-                        Log.i(TAG, "loadLocalModel: thread_num set to $threadNum (cpuCores=$cpuCores)")
+                        // 7. 固定 4 线程（实测 8 线程反而更慢，4 线程最优）
+                        json = json.replace(Regex("\"thread_num\"\\s*:\\s*\\d+"), "\"thread_num\": 4")
+                        Log.i(TAG, "loadLocalModel: thread_num fixed to 4")
 
                         configFile.writeText(json)
                         Log.i(TAG, "loadLocalModel: config.json patched successfully")
