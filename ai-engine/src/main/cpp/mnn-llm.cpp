@@ -140,8 +140,8 @@ Java_com_cesia_input_engine_ai_MNNEngine_nativeInit(
         LOGI("llm->load() returned: %s", loaded ? "true" : "false");
         fflush(stdout);
         if (!loaded) {
-            // Vulkan 加载失败，尝试回退到 CPU
-            LOGW("llm->load() failed with vulkan, retrying with cpu backend...");
+            // GPU 后端加载失败，回退到 CPU
+            LOGW("llm->load() failed with GPU backend, retrying with cpu...");
             Llm::destroy(g_llm);
             g_llm = nullptr;
 
