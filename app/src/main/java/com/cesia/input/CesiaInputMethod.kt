@@ -80,6 +80,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var statusText: TextView
     private lateinit var voiceWave: View
     private lateinit var btnSimulTranslate: TextView
+    private lateinit var btnCloud: TextView
+
+    // 云按钮状态
+    enum class CloudMode {
+        LOCAL,       // 本地模式（本字，不高亮）
+        CLOUD,       // 云端模式（云字，高亮）
+        LOCAL_LOCKED // 本地锁定（本字，高亮）
+    }
+    private var cloudMode: CloudMode = CloudMode.LOCAL
 
     // 候选词栏
     private lateinit var candidateBar: LinearLayout
@@ -519,6 +528,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         keyboardView = view.findViewById(R.id.keyboard_view)
         btnTraditional = view.findViewById(R.id.btn_traditional)
+        btnCloud = view.findViewById(R.id.btn_cloud)
         micButton = view.findViewById(R.id.btn_mic)
         micButtonContainer = view.findViewById(R.id.mic_button_container)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
@@ -754,6 +764,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         loadSettings()
+        // 加载云按钮状态
+        loadCloudMode()
+        updateCloudButtonState()
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         typelessEngine?.updateModelId(prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID)
         // 加载用户自定义润色 prompt 并同步到云端和本地引擎
@@ -1112,6 +1125,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMicNoAi.setOnClickListener { onAiCrossSelected() }
         btnSettings.setOnClickListener { showSettings() }
         btnTraditional.setOnClickListener { toggleTraditionalSimplified() }
+        btnCloud.setOnClickListener { onCloudButtonClick() }
+        btnCloud.setOnLongClickListener { onCloudButtonLongClick(); true }
         btnSimulTranslate.setOnClickListener { onSimulTranslateButtonClick() }
 
         deleteLongPressTriggered = false
@@ -2525,28 +2540,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun polishRecognizedText(text: String) {
         isProcessingResult = true
-        // 根据 LocalModeManager 模式和模型实际状态决定润色方式
-        val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
-        val modeName = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
-            ?: LocalModeManager.RunMode.CLOUD_FREE.name
-        val mode = try { LocalModeManager.RunMode.valueOf(modeName) }
-            catch (_: Exception) { LocalModeManager.RunMode.CLOUD_FREE }
-        Log.d("Cesia", "polishRecognizedText: text='${text.take(50)}' mode=$mode")
-
-        val useLocalPolish = when (mode) {
-            LocalModeManager.RunMode.LOCAL -> modelManager.hasAiModel()
-            LocalModeManager.RunMode.CLOUD_FREE, LocalModeManager.RunMode.CLOUD_PAID -> {
-                false
-            }
-        }
-        Log.d("Cesia", "polishRecognizedText: useLocalPolish=$useLocalPolish, typelessEngine=${typelessEngine != null}, polishService=${typelessEngine?.getPolishService() != null}")
+        // 根据云按钮状态决定润色方式
+        val useLocalPolish = isLocalPolishMode() && modelManager.hasAiModel()
+        Log.d("Cesia", "polishRecognizedText: text='${text.take(50)}', useLocalPolish=$useLocalPolish, cloudMode=$cloudMode")
 
         if (useLocalPolish) {
-            Log.d("Cesia", "polishRecognizedText: 走本地润色")
+            Log.d("Cesia", "polishRecognizedText: 走本地润色 (MNN)")
             polishWithLocalAi(text)
         } else {
             // 云端润色（OpenRouter）
-            Log.d("Cesia", "polishRecognizedText: 走云端润色")
+            Log.d("Cesia", "polishRecognizedText: 走云端润色 (OpenRouter)")
             typelessEngine?.polishTextAsync(text) { finalText ->
                 Log.d("Cesia", "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'")
                 isProcessingResult = false
@@ -4398,6 +4401,210 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         aiEngine.release()
         voiceEngineScope.cancel()
         super.onDestroy()
+    }
+
+    // ======================== 云按钮逻辑 ========================
+
+    /**
+     * 检查语音识别是否可用（Zipformer 或 Google）
+     */
+    private fun isVoiceRecognitionAvailable(): Boolean {
+        val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
+        val hasVoiceModel = modelManager.hasVoiceModel()
+        return bridgeLoaded && hasVoiceModel
+    }
+
+    /**
+     * 检查是否使用 Google 识别（没有本地模型时用 Google）
+     */
+    private fun isUsingGoogleRecognition(): Boolean {
+        val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
+        val hasVoiceModel = modelManager.hasVoiceModel()
+        // 没有本地语音模型 → 用 Google
+        return !bridgeLoaded || !hasVoiceModel
+    }
+
+    /**
+     * 检查语音润色是否可用（MNN 本地 或 API 云端）
+     */
+    private fun isVoicePolishAvailable(): Boolean {
+        val mnnAvailable = modelManager.hasAiModel()
+        val apiAvailable = !getOpenRouterApiKey().isNullOrEmpty()
+        return mnnAvailable || apiAvailable
+    }
+
+    /**
+     * 检查本地润色是否可用（MNN）
+     */
+    private fun isLocalPolishAvailable(): Boolean {
+        return modelManager.hasAiModel()
+    }
+
+    /**
+     * 检查云端润色是否可用（API Key）
+     */
+    private fun isCloudPolishAvailable(): Boolean {
+        return !getOpenRouterApiKey().isNullOrEmpty()
+    }
+
+    /**
+     * 更新云按钮和语音按钮的状态
+     */
+    private fun updateCloudButtonState() {
+        val recognitionAvailable = isVoiceRecognitionAvailable()
+        val polishAvailable = isVoicePolishAvailable()
+        val usingGoogle = isUsingGoogleRecognition()
+        val localPolish = isLocalPolishAvailable()
+        val cloudPolish = isCloudPolishAvailable()
+
+        // 语音输入按钮
+        micButton?.let { btn ->
+            btn.isEnabled = recognitionAvailable
+            btn.alpha = if (recognitionAvailable) 1.0f else 0.4f
+        }
+
+        // 云按钮
+        btnCloud?.let { btn ->
+            when {
+                !recognitionAvailable -> {
+                    // 识别不可用 → 灰色
+                    btn.isEnabled = false
+                    btn.alpha = 0.4f
+                    btn.text = "云"
+                    btn.setTextColor(0xFF888888.toInt())
+                }
+                !polishAvailable -> {
+                    // 润色不可用 → 灰色
+                    btn.isEnabled = false
+                    btn.alpha = 0.4f
+                    btn.text = "云"
+                    btn.setTextColor(0xFF888888.toInt())
+                }
+                usingGoogle -> {
+                    // Google 识别 → 强制云端模式，云字高亮
+                    cloudMode = CloudMode.CLOUD
+                    btn.isEnabled = false
+                    btn.alpha = 1.0f
+                    btn.text = "云"
+                    btn.setTextColor(0xFF81D8D0.toInt()) // 青色高亮
+                }
+                !localPolish && cloudPolish -> {
+                    // 只有云端润色 → 强制云端
+                    cloudMode = CloudMode.CLOUD
+                    btn.isEnabled = false
+                    btn.alpha = 1.0f
+                    btn.text = "云"
+                    btn.setTextColor(0xFF81D8D0.toInt())
+                }
+                localPolish && !cloudPolish -> {
+                    // 只有本地润色 → 强制本地
+                    cloudMode = CloudMode.LOCAL
+                    btn.isEnabled = false
+                    btn.alpha = 1.0f
+                    btn.text = "本"
+                    btn.setTextColor(0xFF888888.toInt())
+                }
+                localPolish && cloudPolish -> {
+                    // 都有 → 可切换，根据当前模式显示
+                    btn.isEnabled = true
+                    btn.alpha = 1.0f
+                    when (cloudMode) {
+                        CloudMode.LOCAL -> {
+                            btn.text = "本"
+                            btn.setTextColor(0xFF888888.toInt())
+                        }
+                        CloudMode.CLOUD -> {
+                            btn.text = "云"
+                            btn.setTextColor(0xFF81D8D0.toInt())
+                        }
+                        CloudMode.LOCAL_LOCKED -> {
+                            btn.text = "本"
+                            btn.setTextColor(0xFF81D8D0.toInt())
+                        }
+                    }
+                }
+            }
+        }
+
+        // 保存状态到 SharedPreferences
+        saveCloudMode()
+    }
+
+    /**
+     * 保存云按钮状态
+     */
+    private fun saveCloudMode() {
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        prefs.edit().putString("cloud_mode", cloudMode.name).apply()
+    }
+
+    /**
+     * 加载云按钮状态
+     */
+    private fun loadCloudMode() {
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        val savedMode = prefs.getString("cloud_mode", CloudMode.LOCAL.name)
+        cloudMode = try {
+            CloudMode.valueOf(savedMode ?: CloudMode.LOCAL.name)
+        } catch (e: Exception) {
+            CloudMode.LOCAL
+        }
+    }
+
+    /**
+     * 云按钮点击：切换本地/云端
+     */
+    private fun onCloudButtonClick() {
+        if (!btnCloud.isEnabled) return
+
+        when (cloudMode) {
+            CloudMode.LOCAL -> {
+                cloudMode = CloudMode.CLOUD
+                updateStatus("☁️ 已切换到云端润色模式")
+            }
+            CloudMode.CLOUD -> {
+                cloudMode = CloudMode.LOCAL
+                updateStatus("🏠 已切换到本地润色模式")
+            }
+            CloudMode.LOCAL_LOCKED -> {
+                // 锁定模式下点击解锁
+                cloudMode = CloudMode.LOCAL
+                updateStatus("🔓 已解锁本地模式")
+            }
+        }
+        updateCloudButtonState()
+    }
+
+    /**
+     * 云按钮长按：锁定本地模式
+     */
+    private fun onCloudButtonLongClick() {
+        val localPolish = isLocalPolishAvailable()
+        val cloudPolish = isCloudPolishAvailable()
+
+        if (!localPolish || !cloudPolish) {
+            updateStatus("⚠️ 需要 MNN 和 API 都可用才能锁定")
+            return
+        }
+
+        if (cloudMode == CloudMode.LOCAL_LOCKED) {
+            // 已锁定 → 解锁
+            cloudMode = CloudMode.LOCAL
+            updateStatus("🔓 已解锁，恢复默认本地模式")
+        } else {
+            // 锁定本地
+            cloudMode = CloudMode.LOCAL_LOCKED
+            updateStatus("🔒 已锁定本地模式（MNN + Zipformer）")
+        }
+        updateCloudButtonState()
+    }
+
+    /**
+     * 获取当前润色模式是否为本地
+     * 供语音润色时判断使用 MNN 还是 OpenRouter
+     */
+    fun isLocalPolishMode(): Boolean {
+        return cloudMode == CloudMode.LOCAL || cloudMode == CloudMode.LOCAL_LOCKED
     }
 
     /**
