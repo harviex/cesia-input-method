@@ -379,9 +379,13 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val dm = ModelDownloadManager(this@SettingsActivity)
                 val result = kotlinx.coroutines.runBlocking {
-                    dm.downloadZipformer { fileName, percent ->
+                    dm.downloadZipformer { fileName, percent, downloadedBytes, totalBytes ->
                         runOnUiThread {
-                            tvStatus.text = "🔄 下载 $fileName ($percent%)"
+                            val pctStr = String.format("%.1f%%", percent)
+                            val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
+                            val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
+                            tvStatus.text = "🔄 下载 $fileName ($pctStr)"
+                            appendLog("⬇ $fileName: $pctStr ($dlStr / $totalStr)")
                         }
                     }
                 }

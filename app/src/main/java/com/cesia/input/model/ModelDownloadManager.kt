@@ -149,41 +149,112 @@ class ModelDownloadManager(private val context: Context) {
      * onProgress 回调: (当前文件名, 整体进度0-100)
      */
     suspend fun downloadZipformer(
-        onProgress: ((fileName: String, percent: Int) -> Unit)? = null
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             val zipformerDir = File(modelsDir, "zipformer")
             zipformerDir.mkdirs()
 
             val files = ModelRegistry.ZIPFORMER_FILES
-            val totalFiles = files.size
-            var completedFiles = 0
-            var totalBytes = 0L
-            var downloadedBytes = 0L
+
+            // === 第一阶段：HEAD 获取真实文件大小 ===
+            data class FileSpec(val name: String, val localName: String, val destFile: File, val url: String, val totalSize: Long)
+            val fileSpecs = mutableListOf<FileSpec>()
+            var grandTotal = 0L
 
             for (file in files) {
                 val localName = ModelRegistry.getZipformerLocalName(file)
                 val destFile = File(zipformerDir, localName)
 
-                // 文件已存在则跳过
-                if (destFile.exists()) {
-                    Log.i(TAG, "Zipformer file already exists: $localName")
-                    totalBytes += destFile.length()
-                    downloadedBytes += destFile.length()
-                    completedFiles++
-                    onProgress?.invoke(localName, (downloadedBytes * 100 / totalBytes.coerceAtLeast(1L)).toInt())
+                if (destFile.exists() && destFile.length() > 0) {
+                    grandTotal += destFile.length()
                     continue
                 }
 
-                // 多镜像下载
-                val result = downloadWithMirrorFallback(zipformerMirrors, file, destFile)
-                if (result == null) {
-                    return@withContext Result.failure(
-                        Exception("所有镜像均下载失败: $file")
-                    )
+                // 尝试 HEAD 获取大小
+                var fileSize = 0L
+                for (mirror in zipformerMirrors) {
+                    try {
+                        val headReq = Request.Builder().url("$mirror/$file").head().build()
+                        val headResp = client.newCall(headReq).execute()
+                        if (headResp.isSuccessful) {
+                            fileSize = headResp.header("Content-Length")?.toLongOrNull() ?: 0L
+                            if (fileSize > 0) break
+                        }
+                    } catch (_: Exception) { }
+                }
+                // HEAD 失败时用估算值
+                if (fileSize == 0L) {
+                    fileSize = when (file) {
+                        "encoder-epoch-99-avg-1.onnx" -> 60L * 1024 * 1024
+                        "decoder-epoch-99-avg-1.onnx" -> 15L * 1024 * 1024
+                        "joiner-epoch-99-avg-1.onnx" -> 5L * 1024 * 1024
+                        "tokens.txt" -> 500L * 1024
+                        else -> 1024L
+                    }
+                }
+                val url = "${zipformerMirrors[0]}/$file"
+                fileSpecs.add(FileSpec(file, localName, destFile, url, fileSize))
+                grandTotal += fileSize
+            }
+
+            var downloadedBytes = grandTotal - fileSpecs.sumOf { it.totalSize }
+            var lastCallbackTime = 0L
+
+            // === 第二阶段：逐文件流式下载 ===
+            for (spec in fileSpecs) {
+                var success = false
+                val mirrorUrls = zipformerMirrors.map { "$it/${spec.name}" }
+
+                for (mirrorUrl in mirrorUrls) {
+                    try {
+                        val request = Request.Builder().url(mirrorUrl).build()
+                        val response = client.newCall(request).execute()
+                        if (!response.isSuccessful) continue
+                        val body = response.body ?: continue
+
+                        val tempFile = File(spec.destFile.parentFile, "${spec.destFile.name}.tmp")
+                        var fileDownloaded = 0L
+                        body.byteStream().use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                val buffer = ByteArray(BUFFER_SIZE)
+                                var bytesRead: Int
+                                while (input.read(buffer).also { bytesRead = it } != -1) {
+                                    if (!coroutineContext.isActive) {
+                                        tempFile.delete()
+                                        return@withContext Result.failure(Exception("下载已取消"))
+                                    }
+                                    output.write(buffer, 0, bytesRead)
+                                    fileDownloaded += bytesRead
+                                    val overallDownloaded = downloadedBytes + fileDownloaded
+                                    val pct = if (grandTotal > 0) overallDownloaded.toDouble() / grandTotal * 100 else 0.0
+                                    // 节流：每 200ms 或每 1% 更新一次 UI
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastCallbackTime > 200) {
+                                        lastCallbackTime = now
+                                        onProgress?.invoke(spec.localName, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
+                                    }
+                                }
+                            }
+                        }
+
+                        if (spec.destFile.exists()) spec.destFile.delete()
+                        tempFile.renameTo(spec.destFile)
+                        downloadedBytes += spec.destFile.length()
+                        onProgress?.invoke(spec.localName, Math.round(downloadedBytes.toDouble() / grandTotal * 1000.0) / 10.0, downloadedBytes, grandTotal)
+                        success = true
+                        Log.i(TAG, "Zipformer file downloaded: ${spec.localName} (${spec.destFile.length()} bytes)")
+                        break
+                    } catch (e: Exception) {
+                        Log.w(TAG, "镜像下载失败 ($mirrorUrl): ${spec.name}: ${e.message}")
+                    }
                 }
 
-                downloadedBytes += destFile.length()
+                if (!success) {
+                    return@withContext Result.failure(
+                        Exception("所有镜像均下载失败: ${spec.name}")
+                    )
+                }
             }
 
             modelManager.markInstalled("sherpa-zipformer", ModelInfo.ModelType.VOICE)
@@ -260,6 +331,7 @@ class ModelDownloadManager(private val context: Context) {
             }
 
             var downloadedBytes = grandTotal - fileSpecs.sumOf { it.totalSize }
+            var lastCallbackTime = 0L
 
             // === 第二阶段：逐文件下载，流式进度 ===
             for (spec in fileSpecs) {
@@ -293,7 +365,12 @@ class ModelDownloadManager(private val context: Context) {
                                     fileDownloaded += bytesRead
                                     val overallDownloaded = downloadedBytes + fileDownloaded
                                     val pct = if (grandTotal > 0) overallDownloaded.toDouble() / grandTotal * 100 else 0.0
-                                    onProgress?.invoke(spec.name, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
+                                    // 节流：每 200ms 更新一次 UI，避免频繁刷新
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastCallbackTime > 200) {
+                                        lastCallbackTime = now
+                                        onProgress?.invoke(spec.name, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
+                                    }
                                 }
                             }
                         }
@@ -301,6 +378,8 @@ class ModelDownloadManager(private val context: Context) {
                         if (spec.destFile.exists()) spec.destFile.delete()
                         tempFile.renameTo(spec.destFile)
                         downloadedBytes += spec.destFile.length()
+                        // 文件完成时强制回调一次
+                        onProgress?.invoke(spec.name, Math.round(downloadedBytes.toDouble() / grandTotal * 1000.0) / 10.0, downloadedBytes, grandTotal)
                         success = true
                         Log.i(TAG, "MNN file downloaded: ${spec.name} (${spec.destFile.length()} bytes)")
                         break

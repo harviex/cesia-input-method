@@ -222,23 +222,27 @@ class VoiceAISettingsHelper(
         // 更新语音识别下载按钮
         if (voiceInstalled != null) {
             btnDownloadVoice?.text = "✅ 语音识别已安装"
-            btnDownloadVoice?.isEnabled = false
+            btnDownloadVoice?.isEnabled = true  // 保持可点击，支持长按卸载
+            btnDownloadVoice?.setTextColor(0xFF888888.toInt())  // 灰色文字表示已安装
         } else {
             val ram = getTotalRamGB()
             val recommended = if (ram >= 6) "Large" else "Small"
             btnDownloadVoice?.text = "⬇ 下载语音识别 ($recommended)"
             btnDownloadVoice?.isEnabled = !isDownloading
+            btnDownloadVoice?.setTextColor(0xFF4488FF.toInt())  // 蓝色文字表示可下载
         }
 
         // 更新 AI 润色下载按钮
         if (aiInstalled != null) {
             btnDownloadAi?.text = "✅ 语音润色已安装"
-            btnDownloadAi?.isEnabled = false
+            btnDownloadAi?.isEnabled = true  // 保持可点击，支持长按卸载
+            btnDownloadAi?.setTextColor(0xFF888888.toInt())  // 灰色文字表示已安装
         } else {
             val ram = getTotalRamGB()
             val recommended = if (ram >= 6) "2B" else "0.8B"
             btnDownloadAi?.text = "⬇ 下载语音润色 ($recommended)"
             btnDownloadAi?.isEnabled = !isDownloading
+            btnDownloadAi?.setTextColor(0xFF4488FF.toInt())  // 蓝色文字表示可下载
         }
 
     }
@@ -319,12 +323,14 @@ class VoiceAISettingsHelper(
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
             Log.i("VoiceAISettings", "downloadZipformer: starting download")
-            val result = downloadManager.downloadZipformer { fileName, overallPercent ->
+            val result = downloadManager.downloadZipformer { fileName, overallPercent, downloadedBytes, totalBytes ->
                 Log.i("VoiceAISettings", "downloadZipformer: onProgress $fileName $overallPercent%")
                 activity.runOnUiThread {
                     pbDownload?.progress = overallPercent.toInt()
                     val pctStr = String.format("%.1f%%", overallPercent)
-                    tvDownloadProgress?.text = "下载 $fileName: $pctStr"
+                    val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
+                    val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
+                    tvDownloadProgress?.text = "下载 $fileName: $pctStr ($dlStr / $totalStr)"
                 }
             }
 
