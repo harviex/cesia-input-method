@@ -2383,10 +2383,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 setStatusDot("processing")
                                 isProcessingResult = true
                                 polishRecognizedText(text)
-                                // 锁定模式下润色完成后自动重新开始录音
-                                if (isVoiceLocked) {
-                                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
-                                }
+                                // 注意：polishRecognizedText 内部已处理锁定模式重启
                             } else {
                                 // over → 直接上屏
                                 currentInputConnection?.commitText(text, 1)
@@ -2598,7 +2595,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         isProcessingResult = true
         // 根据云按钮状态决定润色方式
         val useLocalPolish = isLocalPolishMode() && modelManager.hasAiModel()
-        Log.d("Cesia", "polishRecognizedText: text='${text.take(50)}', useLocalPolish=$useLocalPolish, cloudMode=$cloudMode")
+        Log.d("Cesia", "polishRecognizedText: text='${text.take(50)}', useLocalPolish=$useLocalPolish, cloudMode=$cloudMode, isVoiceLocked=$isVoiceLocked")
 
         if (useLocalPolish) {
             Log.d("Cesia", "polishRecognizedText: 走本地润色 (MNN)")
@@ -2612,7 +2609,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 currentInputConnection?.commitText(finalText, 1)
                 val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
                 statsManager.addRecord(text, finalText, duration)
-                resetToIdle()
+                // 锁定模式下润色完成后自动重新开始录音
+                if (isVoiceLocked) {
+                    startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                } else {
+                    resetToIdle()
+                }
             }
         }
     }
@@ -2652,7 +2654,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             updateStatus("⚠️ AI 模型加载失败（${loadTime}ms），使用原文")
                             isProcessingResult = false
                             currentInputConnection?.commitText(text, 1)
-                            resetToIdle()
+                            if (isVoiceLocked) {
+                                startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                            } else {
+                                resetToIdle()
+                            }
                         }
                         return@launch
                     }
@@ -2664,14 +2670,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     currentInputConnection?.commitText(finalText, 1)
                     val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
                     statsManager.addRecord(text, finalText, duration)
-                    resetToIdle()
+                    if (isVoiceLocked) {
+                        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                    } else {
+                        resetToIdle()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "本地润色失败", e)
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     currentInputConnection?.commitText(text, 1)
-                    resetToIdle()
+                    if (isVoiceLocked) {
+                        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
+                    } else {
+                        resetToIdle()
+                    }
                 }
             }
         }
