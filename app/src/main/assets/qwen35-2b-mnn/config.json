@@ -3,7 +3,7 @@
     "max_new_tokens": 8192,
     "llm_model": "llm.mnn",
     "llm_weight": "llm.mnn.weight",
-    "backend_type": "opencl",
+    "backend_type": "auto",
     "thread_num": 4,
     "precision": "low",
     "memory": "low",
