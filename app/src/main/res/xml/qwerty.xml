@@ -84,8 +84,9 @@
 
     <!-- ===== 第4行：符号切换 + 逗号 + 空格 + 句号 + 回车 ===== -->
     <Row>
-        <Key android:codes="-100" android:keyLabel="符" android:keyEdgeFlags="left"
-            android:keyWidth="12%p" />
+        <Key android:codes="-100" android:keyLabel="T9" android:keyEdgeFlags="left"
+            android:keyWidth="12%p"
+            android:popupCharacters="符" />
         <Key android:codes="-102" android:keyLabel="数" android:keyTextSize="12sp"
             android:keyWidth="10%p" />
         <Key android:codes="44" android:keyLabel="，" android:popupCharacters="," />

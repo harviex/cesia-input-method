@@ -268,6 +268,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 回车键长按检测
     private var enterLongPressRunnable: Runnable? = null
 
+    // -100 键长按检测（符号键盘切换）
+    private var symbolKeyLongPressRunnable: Runnable? = null
+
     // 魔法模式
     private var magicMode = false
     private var magicOriginalText = ""
@@ -912,7 +915,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isAssociationMode && globalIndex < associationCandidates.size) {
             val selectedDisplay = associationCandidates[globalIndex]
             val newPrefix = associationPrefix + selectedDisplay
-            val newAssociations = rimeEngine.getAssociations(newPrefix)
+            val newAssociations = rimeEngine.getAssociations(newPrefix).take(20)
 
             // 上屏选中的词（追加到已有前缀后面）
             commitCandidateText(selectedDisplay)
@@ -951,8 +954,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.clear()
                 rimeEngine.createSession()
             }
-            // 查询联想词
-            val associations = rimeEngine.getAssociations(selected)
+            // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
+            val associations = rimeEngine.getAssociations(selected).take(20)
             if (associations.isNotEmpty()) {
                 // 有联想词，进入联想模式
                 isAssociationMode = true
@@ -1009,7 +1012,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val allCands = rimeEngine.getAllCandidates()
 
         // 没有输入时退出联想模式并恢复初始状态
-        if (!composing && pinyin.isEmpty()) {
+        // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
+        if (!composing && pinyin.isEmpty() && !isAssociationMode) {
             if (isAssociationMode) {
                 isAssociationMode = false
                 associationPrefix = ""
@@ -1029,6 +1033,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateStatus(t9InputBuffer.toString())
         } else {
             updateStatus(pinyin)
+        }
+
+        // 联想模式：显示联想候选词
+        if (isAssociationMode && associationCandidates.isNotEmpty()) {
+            val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
+            candidateAdapter?.updateData(displayCands)
+            btnCandidateExpand.visibility = if (associationCandidates.size > 4) View.VISIBLE else View.GONE
+            if (isPanelExpanded) {
+                tvPanelComposing.text = "💡$associationPrefix"
+                val displayPanel = displayCands
+                panelAdapter?.clear()
+                panelAdapter?.addAll(displayPanel)
+                panelAdapter?.notifyDataSetChanged()
+            }
+            return
         }
 
         // 简繁转换：繁体模式下候选词显示繁体
@@ -3014,8 +3033,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun toggleSymbolKeyboard() {
         if (keyboardMode == KeyboardMode.SYMBOL_CN || keyboardMode == KeyboardMode.SYMBOL_EN) {
-            switchToKeyboard(KeyboardMode.QWERTY)
-        } else { switchToKeyboard(KeyboardMode.SYMBOL_CN) }
+            // 符号键盘 → 返回上一个键盘
+            switchToKeyboard(prevKeyboardMode)
+        } else if (keyboardMode == KeyboardMode.NUMBER) {
+            // T9 模式：短按切回全键盘（同 -999 返回键）
+            switchToDefaultKeyboard()
+        } else {
+            // 全键盘：切换到符号键盘
+            switchToKeyboard(KeyboardMode.SYMBOL_CN)
+        }
     }
 
     private fun toggleNumberKeyboard() {
@@ -3202,8 +3228,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 when (primaryCode) {
                     49 -> {
-                        // 1键：Tab
-                        sendTabKey()
+                        // 1键：输入数字 1
+                        currentInputConnection?.commitText("1", 1)
                     }
                     65292 -> {
                         currentInputConnection?.commitText("，", 1)
@@ -3381,6 +3407,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 取消回车长按
         enterLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         enterLongPressRunnable = null
+        // 取消 -100 键长按
+        symbolKeyLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        symbolKeyLongPressRunnable = null
         // 取消退格长按
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
@@ -4490,6 +4519,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 Handler(Looper.getMainLooper()).postDelayed(it, 600)
             }
         }
+        // -100 键长按：切换到符号键盘（全键盘和 T9 都支持）
+        if (primaryCode == KEYCODE_SWITCH_SYMBOL) {
+            symbolKeyLongPressRunnable = Runnable {
+                if (!shortPressHandled) {
+                    longPressTriggered = true
+                    longPressConsumed = false
+                    toggleSymbolKeyboard()
+                }
+            }.also {
+                Handler(Looper.getMainLooper()).postDelayed(it, 600)
+            }
+        }
+
         if (primaryCode == -200) {
             startSendKeyLongPress()
         }
@@ -4507,6 +4549,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         shiftLongPressRunnable = null
         enterLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         enterLongPressRunnable = null
+        symbolKeyLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        symbolKeyLongPressRunnable = null
         cancelSendKeyLongPress()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
