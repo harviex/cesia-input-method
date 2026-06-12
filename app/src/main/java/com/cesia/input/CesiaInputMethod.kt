@@ -757,6 +757,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
 
                         if (command == "ai") {
+                            // 先上屏原文，再调用润色
+                            currentInputConnection?.commitText(textBefore, 1)
                             updateStatus("✨ 语音润色中...")
                             setStatusDot("processing")
                             isProcessingResult = true
@@ -2487,39 +2489,35 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             stopVoiceWave()
                             setStatusDot("idle")
 
+                            // 注意：此时组合文本（setComposingText）显示的是不含命令词的原文
+                            // 不要 finishComposingText + deleteSurroundingText，否则会删错字符
+                            // 直接交给 replaceTextWithPolish / commitText 统一处理
+
                             val ic = currentInputConnection ?: run {
                                 resetToIdle()
                                 return@withContext
                             }
 
-                            // 1. 先 finishComposingText 确认当前组合文本
-                            ic.finishComposingText()
-
-                            // 2. 删除末尾命令词对应字符数（动态长度）
-                            val cmdWord = when (command) {
-                                "exit" -> VoiceEngine.cmdExit
-                                "send" -> VoiceEngine.cmdSend
-                                "ai" -> VoiceEngine.cmdPolish
-                                "finish" -> VoiceEngine.cmdFinish
-                                else -> ""
-                            }
-                            val deleteLen = cmdWord.length.coerceAtLeast(1)
-                            ic.deleteSurroundingText(deleteLen, 0)
-
-                            // 3. 更新 recognizedText（去掉命令词后的文本）
+                            // 更新 recognizedText（去掉命令词后的文本）
                             recognizedText = text
 
                             when (command) {
                                 "exit" -> {
-                                    // 退出：结束识别 + 退出语音输入状态
+                                    // 退出：清除组合文本 + 退出语音输入状态
+                                    ic.finishComposingText()
                                     isVoiceLocked = false
                                     updateMicButtonLockedState()
                                     updateStatus("🔓 已退出语音输入")
                                     resetToIdle()
                                 }
                                 "send" -> {
-                                    // 发送：确认文本 + 发送
+                                    // 发送：先清除组合文本，再 commitText + 发送
                                     updateStatus("📤 已发送")
+                                    ic.finishComposingText()
+                                    if (text.isNotEmpty()) {
+                                        ic.deleteSurroundingText(text.length, 0)
+                                        ic.commitText(text, 1)
+                                    }
                                     // 检查当前输入框是否支持发送动作
                                     val editorInfo = currentInputEditorInfo
                                     val canSend = editorInfo != null &&
@@ -2527,11 +2525,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                     if (canSend) {
                                         ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
                                     } else {
-                                        // 不支持 IME_ACTION_SEND，尝试 commitText + 换行
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
                                         updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
                                     }
-                                    // 锁定模式下发送后继续保持锁定，继续录音
                                     if (isVoiceLocked) {
                                         startRecordingLocked()
                                     } else {
@@ -2539,28 +2535,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                     }
                                 }
                                 "ai" -> {
-                                    // 润色：对删除命令词后的文本润色
+                                    // 润色：先清除组合文本，commitText 原文上屏，再调用 AI 润色
+                                    ic.finishComposingText()
                                     if (text.isEmpty()) {
                                         updateStatus("⚠️ 没有需要润色的文字")
-                                        if (isVoiceLocked) {
-                                            startRecordingLocked()
-                                        } else {
-                                            resetToIdle()
-                                        }
+                                        if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                                     } else {
+                                        // 先上屏原文
+                                        ic.commitText(text, 1)
                                         updateStatus("✨ 语音润色中...")
                                         setStatusDot("processing")
                                         isProcessingResult = true
                                         isWaitingForChoice = false
                                         hideAiChoiceButtons()
+                                        // 调用润色（润色完成后会替换上屏的文字）
                                         polishRecognizedText(text)
                                     }
                                 }
                                 "finish" -> {
-                                    // 结束：原文已上屏，直接结束识别
+                                    // 结束：清除组合文本（原文上屏），直接结束
+                                    ic.finishComposingText()
                                     updateStatus("✅ 已上屏")
                                     if (isVoiceLocked) {
-                                        // 锁定模式下继续录音
                                         startRecordingLocked()
                                     } else {
                                         resetToIdle()
@@ -2818,7 +2814,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun replaceTextWithPolish(originalText: String, polishedText: String) {
         try {
             val ic = currentInputConnection ?: return
-            // 删除原文（光标前面的 text.length 个字符）
+            // 删除原文（光标前面的 originalText.length 个字符）
             val deleteLen = originalText.length
             if (deleteLen > 0) {
                 ic.deleteSurroundingText(deleteLen, 0)
@@ -2827,7 +2823,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             ic.commitText(polishedText, 1)
         } catch (e: Exception) {
             Log.e("Cesia", "replaceTextWithPolish 失败，fallback commitText", e)
-            currentInputConnection?.commitText(polishedText, 1)
+            try {
+                val ic2 = currentInputConnection ?: return
+                ic2.finishComposingText()
+                ic2.commitText(polishedText, 1)
+            } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
         statsManager.addRecord(originalText, polishedText, duration)
