@@ -391,13 +391,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateStatus("✅ 已转换 ${selectedText.length} 字")
     }
 
-    /** 英文转大写，数字转中文小写数字（一二三四五六七八九零） */
+    /** 大小写切换：英文小写↔大写，数字↔中文小写数字（一二三四五六七八九零） */
     private fun toUpperCaseText(text: String): String {
-        val chineseNumbers = charArrayOf('一','二','三','四','五','六','七','八','九','零')
+        val chineseNumbers = charArrayOf('零','一','二','三','四','五','六','七','八','九')
         return text.map { ch ->
             when {
                 ch in 'a'..'z' -> ch.uppercaseChar()
-                ch in 'A'..'Z' -> ch
+                ch in 'A'..'Z' -> ch.lowercaseChar()
                 ch in '0'..'9' -> chineseNumbers[ch - '0']
                 else -> ch
             }
@@ -630,7 +630,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             120 to "剪切", // x
             99 to "复制",  // c
             118 to "粘贴", // v
-            98 to "大小写",  // b
+            98 to "大小",  // b
             122 to "撤销", // z
             110 to "前进",  // n
             109 to "Del",  // m
@@ -3033,15 +3033,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun toggleSymbolKeyboard() {
         if (keyboardMode == KeyboardMode.SYMBOL_CN || keyboardMode == KeyboardMode.SYMBOL_EN) {
-            // 符号键盘 → 返回上一个键盘
-            switchToKeyboard(prevKeyboardMode)
-        } else if (keyboardMode == KeyboardMode.NUMBER) {
-            // T9 模式：短按切回全键盘（同 -999 返回键）
-            switchToDefaultKeyboard()
-        } else {
-            // 全键盘：切换到符号键盘
-            switchToKeyboard(KeyboardMode.SYMBOL_CN)
-        }
+            switchToKeyboard(KeyboardMode.QWERTY)
+        } else { switchToKeyboard(KeyboardMode.SYMBOL_CN) }
     }
 
     private fun toggleNumberKeyboard() {
@@ -4514,18 +4507,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     longPressTriggered = true
                     longPressConsumed = false
                     sendCtrlKey(KeyEvent.KEYCODE_Z)
-                }
-            }.also {
-                Handler(Looper.getMainLooper()).postDelayed(it, 600)
-            }
-        }
-        // -100 键长按：切换到符号键盘（全键盘和 T9 都支持）
-        if (primaryCode == KEYCODE_SWITCH_SYMBOL) {
-            symbolKeyLongPressRunnable = Runnable {
-                if (!shortPressHandled) {
-                    longPressTriggered = true
-                    longPressConsumed = false
-                    toggleSymbolKeyboard()
                 }
             }.also {
                 Handler(Looper.getMainLooper()).postDelayed(it, 600)

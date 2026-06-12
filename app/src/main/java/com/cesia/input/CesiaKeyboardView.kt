@@ -284,19 +284,12 @@ class CesiaKeyboardView @JvmOverloads constructor(
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
                 val symbol = popup[0].toString()
-                // -100 键（T9/符号切换键）：灰色副字符「符」，右上角
-                if (code == -100) {
-                    val subPaint = Paint(popupPaint).apply { color = 0xFF888888.toInt() }
-                    val y = key.y + 10f + popupSpSize
-                    canvas.drawText(symbol, x, y, subPaint)
+                val y = if (fnLabel != null) {
+                    key.y + 10f + spSize + popupSpSize + 2f
                 } else {
-                    val y = if (fnLabel != null) {
-                        key.y + 10f + spSize + popupSpSize + 2f
-                    } else {
-                        key.y + 10f + popupSpSize
-                    }
-                    canvas.drawText(symbol, x, y, popupPaint)
+                    key.y + 10f + popupSpSize
                 }
+                canvas.drawText(symbol, x, y, popupPaint)
             }
 
             // ===== 3. T9 1键/剪贴板键 表面文字（统一灰色12px） =====
