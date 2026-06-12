@@ -679,6 +679,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         voiceEngine = VoiceEngine(this)
         aiEngine = AIEngine(this)
 
+        // 从 SharedPreferences 加载自定义命令词（跨进程同步：设置页面保存后，IME 启动时读取）
+        runCatching {
+            val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+            val exit = cmdPrefs.getString("cmd_exit", null)
+            val polish = cmdPrefs.getString("cmd_polish", null)
+            val finish = cmdPrefs.getString("cmd_finish", null)
+            val send = cmdPrefs.getString("cmd_send", null)
+            if (exit != null && polish != null && finish != null && send != null) {
+                VoiceEngine.updateCommandWords(exit, polish, finish, send)
+                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send")
+            }
+        }
+
         // 从 SharedPreferences 恢复本地/云端模式（确保与 polishRecognizedText 读取同一数据源）
         val modePrefs = getSharedPreferences("cesia_local_mode", Context.MODE_PRIVATE)
         val savedMode = modePrefs.getString("run_mode", LocalModeManager.RunMode.CLOUD_FREE.name)
@@ -2515,16 +2528,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                         ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
                                     } else {
                                         // 不支持 IME_ACTION_SEND，尝试 commitText + 换行
-                                        // Telegram 等应用需要特殊处理
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
                                         updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
                                     }
-                                    // 锁定模式退出
+                                    // 锁定模式下发送后继续保持锁定，继续录音
                                     if (isVoiceLocked) {
-                                        isVoiceLocked = false
-                                        updateMicButtonLockedState()
+                                        startRecordingLocked()
+                                    } else {
+                                        resetToIdle()
                                     }
-                                    resetToIdle()
                                 }
                                 "ai" -> {
                                     // 润色：对删除命令词后的文本润色
