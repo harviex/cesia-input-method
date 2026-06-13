@@ -532,7 +532,13 @@ class VoiceEngine(private val context: Context) {
                 // 支持 "aiover"、"ai over"、"over"（兼容空格）
                 val commandResult = checkCommandWord(currentResult)
                 if (commandResult != null) {
-                    val (textBefore, command) = commandResult
+                    var (textBefore, command) = commandResult
+                    // 端点重置后 currentResult 只含命令词，textBefore 为空
+                    // 此时应使用 accumulatedText 作为原文
+                    if (textBefore.isEmpty() && accumulatedText.isNotEmpty()) {
+                        textBefore = accumulatedText.toString().trimEnd()
+                        Log.i(TAG, "recordStreaming: 端点后命令词，使用累积文本='${textBefore.take(50)}'")
+                    }
                     Log.i(TAG, "recordStreaming: 检测到命令词 '$command', 文本='${textBefore.take(50)}', 等待 ${COMMAND_CONFIRM_MS}ms 确认")
                     // 不立即触发，记录待触发状态，等 1 秒静音确认
                     pendingCommand = command
