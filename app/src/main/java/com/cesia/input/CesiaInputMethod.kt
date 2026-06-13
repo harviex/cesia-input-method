@@ -3018,10 +3018,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setStatusDot("processing")
         isProcessingResult = true
 
-        val prompt = "$cmdLower：\n\n$currentText\n\n只输出结果："
-        Log.i("Cesia", "executeVoiceCommand: 直接传给 AI, prompt='$prompt'")
+        // 尝试从 InstructionSet 匹配标准指令
+        val matchedInstruction = com.cesia.input.instruction.InstructionSet.findByKeywords(cmdLower)
+        val (prompt, recordName) = if (matchedInstruction != null) {
+            // 匹配到标准指令：用标准化 prompt，记录指令名称
+            val p = com.cesia.input.instruction.InstructionSet.buildPrompt(matchedInstruction, currentText)
+            Log.i("Cesia", "executeVoiceCommand: 匹配到标准指令 '${matchedInstruction.name}'")
+            Pair(p, matchedInstruction.name)
+        } else {
+            // 未匹配到：回退到简单 prompt
+            val p = "$cmdLower：\n\n$currentText\n\n只输出结果："
+            Pair(p, cmdLower)
+        }
+        Log.i("Cesia", "executeVoiceCommand: prompt='${prompt.take(80)}'")
 
-        polishWithCommandPrompt(currentText, prompt, cmdLower)
+        polishWithCommandPrompt(currentText, prompt, recordName)
     }
 
     /**
@@ -3059,6 +3070,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             ic.commitText(cleaned, 1)
                         }
                         updateStatus("✅ 已执行：$cmdLabel")
+                        // 将指令加入魔法书历史第1位
+                        magicHistoryManager?.addRecord(cmdLabel)
                     } else {
                         updateStatus("⚠️ 执行失败，已保留原文")
                     }
