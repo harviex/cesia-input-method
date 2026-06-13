@@ -3034,13 +3034,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     if (result != null) {
-                        // 后处理：去掉 AI 可能输出的前缀
                         val cleaned = cleanCommandResult(result)
-                        // 替换当前输入框文字为执行结果
-                        replaceInputText(text, cleaned)
+                        val ic = currentInputConnection ?: return@withContext
+                        // 检查是否有选区
+                        val selectedText = ic.getSelectedText(0)
+                        if (selectedText != null && selectedText.isNotEmpty()) {
+                            // 有选区：直接替换选区文字
+                            ic.commitText(cleaned, 1)
+                        } else {
+                            // 无选区：清空全文后写入
+                            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
+                            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+                            if (before > 0 || after > 0) {
+                                ic.deleteSurroundingText(before, after)
+                            }
+                            ic.commitText(cleaned, 1)
+                        }
                         updateStatus("✅ 已执行：$cmdLabel")
                     } else {
-                        updateStatus("⚠️ 润色失败，已保留原文")
+                        updateStatus("⚠️ 执行失败，已保留原文")
                     }
                     resetToIdle()
                 }
@@ -3048,7 +3060,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 Log.e("Cesia", "语音命令执行失败", e)
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
-                    updateStatus("⚠️ 执行失败：$cmdLabel")
+                    // 异常时恢复原文
+                    val ic = currentInputConnection ?: return@withContext
+                    val selectedText = ic.getSelectedText(0)
+                    if (selectedText != null && selectedText.isNotEmpty()) {
+                        // 有选区：恢复选区文字
+                        ic.commitText(text, 1)
+                    } else {
+                        // 无选区：恢复全文
+                        val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
+                        val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+                        if (before > 0 || after > 0) {
+                            ic.deleteSurroundingText(before, after)
+                        }
+                        ic.commitText(text, 1)
+                    }
+                    updateStatus("⚠️ 执行失败，已恢复原文")
                     resetToIdle()
                 }
             }
@@ -3110,6 +3137,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         } catch (e: Exception) {
             Log.e("Cesia", "getInputText 失败", e)
             ""
+        }
+    }
+
+    /** 清空输入框中的全部文字 */
+    private fun clearInputText() {
+        try {
+            val ic = currentInputConnection ?: return
+            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
+            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+            if (before > 0 || after > 0) {
+                ic.deleteSurroundingText(before, after)
+            }
+        } catch (e: Exception) {
+            Log.e("Cesia", "clearInputText 失败", e)
         }
     }
 
