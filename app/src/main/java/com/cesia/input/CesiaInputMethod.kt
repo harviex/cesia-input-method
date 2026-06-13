@@ -696,9 +696,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val polish = cmdPrefs.getString("cmd_polish", null)
             val finish = cmdPrefs.getString("cmd_finish", null)
             val send = cmdPrefs.getString("cmd_send", null)
-            if (exit != null && polish != null && finish != null && send != null) {
-                VoiceEngine.updateCommandWords(exit, polish, finish, send)
-                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send")
+            val command = cmdPrefs.getString("cmd_command", null)
+            if (exit != null && polish != null && finish != null && send != null && command != null) {
+                VoiceEngine.updateCommandWords(exit, polish, finish, send, command)
+                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command")
             }
         }
 
@@ -2595,6 +2596,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                         polishRecognizedText(text)
                                     }
                                 }
+                                "cmd" -> {
+                                    // 命令模式：text 是指令内容（如"翻译成英文"）
+                                    if (text.isEmpty()) {
+                                        updateStatus("⚠️ 请输入指令")
+                                        resetToIdle()
+                                    } else {
+                                        Log.i("Cesia", "命令模式: 指令='$text'")
+                                        executeVoiceCommand(text)
+                                    }
+                                }
                                 "finish" -> {
                                     // 结束：原文已上屏，直接结束识别
                                     updateStatus("✅ 已上屏")
@@ -2884,7 +2895,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 本地 AI 润色 */
     private fun polishWithLocalAi(text: String) {
-        voiceEngineScope.launch {
+        // 使用独立 scope，防止被 voiceEngineScope.cancelChildren() 取消
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
                 val modelFile = modelManager.getInstalledAiModelFile()
                 Log.i("Cesia", "polishWithLocalAi: modelFile=$modelFile, exists=${modelFile?.exists()}, isDir=${modelFile?.isDirectory}")
@@ -2892,13 +2904,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     withContext(Dispatchers.Main) {
                         updateStatus("⚠️ AI 模型未安装，使用原文")
                         isProcessingResult = false
-                        // 原文已上屏（finishComposingText），直接结束
-                        resetToIdle()
+                        if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                     }
                     return@launch
                 }
                 if (!aiEngine.isModelLoaded()) {
-                    // MNN 模型：传 config.json 路径
                     val configPath = if (modelFile.isDirectory) {
                         File(modelFile, "config.json").absolutePath
                     } else {
@@ -2910,18 +2920,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     val loadTime = System.currentTimeMillis() - loadStart
                     Log.i("Cesia", "polishWithLocalAi: loadLocalModel returned $loaded in ${loadTime}ms")
                     if (!loaded) {
-                        // 尝试获取 MNN 日志
                         val mnnLog = aiEngine.getMnnLog()
                         Log.e("Cesia", "polishWithLocalAi: MNN log: $mnnLog")
                         withContext(Dispatchers.Main) {
                             updateStatus("⚠️ AI 模型加载失败（${loadTime}ms），使用原文")
                             isProcessingResult = false
-                            // 原文已上屏（finishComposingText），直接结束
-                            if (isVoiceLocked) {
-                                startRecordingLocked()
-                            } else {
-                                resetToIdle()
-                            }
+                            if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                         }
                         return@launch
                     }
@@ -2930,14 +2934,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     val finalText = result ?: text
-                    // 替换光标处的原文为润色结果
                     replaceTextWithPolish(text, finalText)
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "本地润色失败", e)
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
-                    // 润色失败：直接上屏原文
                     replaceTextWithPolish(text, text)
                 }
             }
@@ -2964,8 +2966,127 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateStatus("Cesia 已就绪")
     }
 
+    /**
+     * 语音指令执行器
+     * 用户说"XXX指令"后，XXX 作为自然语言指令传给 AI 理解执行
+     * 不预设任何关键词，AI 自己理解用户意图
+     */
+    private fun executeVoiceCommand(commandText: String) {
+        Log.i("Cesia", "executeVoiceCommand: commandText='$commandText'")
+
+        // 获取当前输入框中的文字作为操作对象
+        val currentText = getInputText()
+        Log.i("Cesia", "executeVoiceCommand: currentText='${currentText.take(80)}', length=${currentText.length}")
+
+        // 直接把完整指令+原文传给 AI，让它自己理解要做什么
+        val prompt = "用户指令：$commandText\n\n当前文字：$currentText\n\n请根据用户指令对「当前文字」执行相应操作，只输出操作后的结果，不要输出任何其他解释。如果指令不明确或无法理解，输出原文不变。"
+
+        // 发送指令也走 AI 理解（"发送"指令会由 AI 返回特殊标记）
+        // 先判断是否是发送类指令
+        val cmdLower = commandText.trim()
+        if (cmdLower == "发送" || cmdLower == "发送指令" || cmdLower == "发送文字" || cmdLower == "发出") {
+            updateStatus("📤 已发送")
+            val editorInfo = currentInputEditorInfo
+            val canSend = editorInfo != null &&
+                (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
+            if (canSend) {
+                currentInputConnection?.performEditorAction(EditorInfo.IME_ACTION_SEND)
+            } else {
+                Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND")
+                updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
+            }
+            if (isVoiceLocked) {
+                isVoiceLocked = false
+                updateMicButtonLockedState()
+            }
+            resetToIdle()
+            return
+        }
+
+        if (currentText.isEmpty()) {
+            updateStatus("⚠️ 输入框没有文字，无法执行指令")
+            resetToIdle()
+            return
+        }
+
+        updateStatus("✨ 执行指令中...")
+        setStatusDot("processing")
+        isProcessingResult = true
+
+        polishWithCommandPrompt(currentText, prompt, commandText)
+    }
+
+    /**
+     * 用自定义 prompt 执行语音命令润色
+     */
+    private fun polishWithCommandPrompt(text: String, prompt: String, cmdLabel: String) {
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            try {
+                val hasLocalModel = modelManager.hasAiModel()
+                val result = if (hasLocalModel) {
+                    aiEngine.polishWithPrompt(prompt)
+                } else {
+                    // 无本地模型 → 尝试云端
+                    // TODO: 云端润色
+                    null
+                }
+
+                withContext(Dispatchers.Main) {
+                    isProcessingResult = false
+                    if (result != null) {
+                        // 替换当前输入框文字为执行结果
+                        replaceInputText(text, result)
+                        updateStatus("✅ 已执行：$cmdLabel")
+                    } else {
+                        updateStatus("⚠️ 润色失败，已保留原文")
+                    }
+                    resetToIdle()
+                }
+            } catch (e: Exception) {
+                Log.e("Cesia", "语音命令执行失败", e)
+                withContext(Dispatchers.Main) {
+                    isProcessingResult = false
+                    updateStatus("⚠️ 执行失败：$cmdLabel")
+                    resetToIdle()
+                }
+            }
+        }
+    }
+
     private fun stopRecording() {
         stopRecordingAndWait()
+    }
+
+    /** 获取当前输入框中的全部文字 */
+    private fun getInputText(): String {
+        return try {
+            val ic = currentInputConnection ?: return ""
+            val before = ic.getTextBeforeCursor(10000, 0)?.toString() ?: ""
+            val after = ic.getTextAfterCursor(10000, 0)?.toString() ?: ""
+            before + after
+        } catch (e: Exception) {
+            Log.e("Cesia", "getInputText 失败", e)
+            ""
+        }
+    }
+
+    /** 替换输入框中的全部文字 */
+    private fun replaceInputText(oldText: String, newText: String) {
+        try {
+            val ic = currentInputConnection ?: return
+            // 先选中全部文字
+            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
+            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+            if (before > 0 || after > 0) {
+                ic.setSelection(0, 0)  // 移到开头
+                // 选中到末尾
+                ic.setSelection(0, 0)
+            }
+            ic.deleteSurroundingText(before, after)
+            ic.commitText(newText, 1)
+        } catch (e: Exception) {
+            Log.e("Cesia", "replaceInputText 失败", e)
+        }
     }
 
     private fun addSentMessage(text: String) {

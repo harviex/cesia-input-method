@@ -48,15 +48,19 @@ class VoiceEngine(private val context: Context) {
         @Volatile
         var cmdSend: String = "发送"
 
+        @Volatile
+        var cmdCommand: String = "指令"
+
         /**
          * 更新命令词（从设置页面调用）
          */
-        fun updateCommandWords(exit: String, polish: String, finish: String, send: String) {
+        fun updateCommandWords(exit: String, polish: String, finish: String, send: String, command: String) {
             cmdExit = exit
             cmdPolish = polish
             cmdFinish = finish
             cmdSend = send
-            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send")
+            cmdCommand = command
+            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command")
         }
     }
 
@@ -965,8 +969,7 @@ class VoiceEngine(private val context: Context) {
      */
     private fun checkCommandWord(text: String): Pair<String, String>? {
         val trimmed = text.trimEnd()
-        // 按优先级检测：退出 > 发送 > 魔法 > 结束（长的先匹配）
-        // 使用动态命令词，按实际长度删除
+        // 按优先级检测：退出 > 发送 > 魔法 > 结束 > 命令（长的先匹配）
         return when {
             trimmed.endsWith(cmdExit) -> {
                 Pair(trimmed.dropLast(cmdExit.length).trimEnd(), "exit")
@@ -979,6 +982,12 @@ class VoiceEngine(private val context: Context) {
             }
             trimmed.endsWith(cmdFinish) -> {
                 Pair(trimmed.dropLast(cmdFinish.length).trimEnd(), "finish")
+            }
+            trimmed.endsWith(cmdCommand) -> {
+                // "命令"作为结束词，前面的是指令文本
+                // 返回 "cmd" 类型，指令文本 = 去掉"命令"后剩余的部分
+                val beforeCommand = trimmed.dropLast(cmdCommand.length).trimEnd()
+                Pair(beforeCommand, "cmd")
             }
             else -> null
         }

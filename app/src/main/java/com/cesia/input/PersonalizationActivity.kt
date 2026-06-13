@@ -34,12 +34,14 @@ class PersonalizationActivity : AppCompatActivity() {
         const val KEY_CMD_POLISH = "cmd_polish"
         const val KEY_CMD_FINISH = "cmd_finish"
         const val KEY_CMD_SEND = "cmd_send"
+        const val KEY_CMD_COMMAND = "cmd_command"
 
         // 默认值
         const val DEFAULT_EXIT = "退出"
         const val DEFAULT_POLISH = "魔法"
         const val DEFAULT_FINISH = "结束"
         const val DEFAULT_SEND = "发送"
+        const val DEFAULT_COMMAND = "指令"
     }
 
     private val prefs by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
@@ -71,7 +73,8 @@ class PersonalizationActivity : AppCompatActivity() {
             prefs.getString(KEY_CMD_EXIT, DEFAULT_EXIT) ?: DEFAULT_EXIT,
             prefs.getString(KEY_CMD_POLISH, DEFAULT_POLISH) ?: DEFAULT_POLISH,
             prefs.getString(KEY_CMD_FINISH, DEFAULT_FINISH) ?: DEFAULT_FINISH,
-            prefs.getString(KEY_CMD_SEND, DEFAULT_SEND) ?: DEFAULT_SEND
+            prefs.getString(KEY_CMD_SEND, DEFAULT_SEND) ?: DEFAULT_SEND,
+            prefs.getString(KEY_CMD_COMMAND, DEFAULT_COMMAND) ?: DEFAULT_COMMAND
         )
     }
 
@@ -95,6 +98,7 @@ class PersonalizationActivity : AppCompatActivity() {
         private lateinit var etPolish: TextInputEditText
         private lateinit var etFinish: TextInputEditText
         private lateinit var etSend: TextInputEditText
+        private lateinit var etCommand: TextInputEditText
         private lateinit var btnSave: Button
         private lateinit var btnReset: Button
         private lateinit var tvStatus: TextView
@@ -118,6 +122,8 @@ class PersonalizationActivity : AppCompatActivity() {
             etPolish.setText(prefs.getString(KEY_CMD_POLISH, DEFAULT_POLISH))
             etFinish.setText(prefs.getString(KEY_CMD_FINISH, DEFAULT_FINISH))
             etSend.setText(prefs.getString(KEY_CMD_SEND, DEFAULT_SEND))
+            etCommand = view.findViewById(R.id.et_cmd_command)
+            etCommand.setText(prefs.getString(KEY_CMD_COMMAND, DEFAULT_COMMAND))
 
             btnSave.setOnClickListener { saveCommandWords() }
             btnReset.setOnClickListener { resetCommandWords() }
@@ -128,6 +134,7 @@ class PersonalizationActivity : AppCompatActivity() {
             val polish = etPolish.text?.toString()?.trim() ?: ""
             val finish = etFinish.text?.toString()?.trim() ?: ""
             val send = etSend.text?.toString()?.trim() ?: ""
+            val command = etCommand.text?.toString()?.trim() ?: ""
 
             // 校验
             val errors = mutableListOf<String>()
@@ -135,14 +142,16 @@ class PersonalizationActivity : AppCompatActivity() {
             if (polish.isEmpty()) errors.add("润色命令词不能为空")
             if (finish.isEmpty()) errors.add("结束命令词不能为空")
             if (send.isEmpty()) errors.add("发送命令词不能为空")
+            if (command.isEmpty()) errors.add("指令模式词不能为空")
 
             if (exit.length > 5) errors.add("退出命令词超过 5 个字")
             if (polish.length > 5) errors.add("润色命令词超过 5 个字")
             if (finish.length > 5) errors.add("结束命令词超过 5 个字")
             if (send.length > 5) errors.add("发送命令词超过 5 个字")
+            if (command.length > 5) errors.add("指令模式词超过 5 个字")
 
             // 检查重复
-            val words = listOf(exit, polish, finish, send)
+            val words = listOf(exit, polish, finish, send, command)
             val duplicates = words.groupBy { it }.filter { it.value.size > 1 }.keys
             if (duplicates.isNotEmpty()) {
                 errors.add("命令词不能重复：${duplicates.joinToString("、")}")
@@ -160,14 +169,15 @@ class PersonalizationActivity : AppCompatActivity() {
                 .putString(KEY_CMD_POLISH, polish)
                 .putString(KEY_CMD_FINISH, finish)
                 .putString(KEY_CMD_SEND, send)
+                .putString(KEY_CMD_COMMAND, command)
                 .apply()
 
             // 立即更新 VoiceEngine
-            VoiceEngine.updateCommandWords(exit, polish, finish, send)
+            VoiceEngine.updateCommandWords(exit, polish, finish, send, command)
 
-            tvStatus.text = "✅ 已保存并生效：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send"
+            tvStatus.text = "✅ 已保存并生效：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command"
             tvStatus.setBackgroundColor(0xFFE8F5E9.toInt())
-            Log.i(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send")
+            Log.i(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command")
 
             Toast.makeText(requireContext(), "命令词已保存", Toast.LENGTH_SHORT).show()
         }
@@ -177,6 +187,7 @@ class PersonalizationActivity : AppCompatActivity() {
             etPolish.setText(DEFAULT_POLISH)
             etFinish.setText(DEFAULT_FINISH)
             etSend.setText(DEFAULT_SEND)
+            etCommand.setText(DEFAULT_COMMAND)
             tvStatus.text = "已恢复默认值，请点击保存"
             tvStatus.setBackgroundColor(0xFFFFF3E0.toInt())
         }

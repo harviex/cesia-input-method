@@ -106,6 +106,26 @@
                 android:text="发送" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- 命令模式命令词 -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="指令模式（默认：指令）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_marginBottom="16dp"
+            helperText="语音指令的结束词，如'翻译成韩文指令'表示执行翻译指令"
+            app:helperTextEnabled="true"
+            xmlns:app="http://schemas.android.com/apk/res-auto">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_cmd_command"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:maxLength="5"
+                android:text="命令" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- 按钮行 -->
         <LinearLayout
             android:layout_width="match_parent"

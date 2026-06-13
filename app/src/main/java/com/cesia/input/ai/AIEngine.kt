@@ -26,7 +26,14 @@ class AIEngine(private val context: Context) {
         private const val TAG = "AIEngine"
         private const val LOCAL_POLISH_TIMEOUT_MS = 30000L  // 30 秒超时
         // 默认润色 prompt（与云端 PolishService 共用同一套）
-        const val DEFAULT_POLISH_PROMPT = """你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如"润色后："）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过"换行分段"或使用"* "进行分点陈列。"""
+        const val DEFAULT_POLISH_PROMPT = """你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：
+1. 去掉所有语气词（嗯、啊、呃、哈、呀、哇、哎、唉、哼、嘿、呵、哦、噢、喔、呦、吁、喂、嗯啊、那个、这个、就是、然后呢、所以说、反正、其实、你知道吧之类的口语填充词）
+2. 去掉重复和冗余的词
+3. 严禁删减核心信息，严禁随意扩写
+4. 仅修正错别字、口语和语序，加入适当的标点
+5. 使语句通顺自然，保持原意不变
+6. 只输出润色排版后的纯文本，禁止解释，禁止添加任何前缀（如"润色后："）或后缀
+7. 如果内容包含多个观点、步骤或长篇大论，请自动通过换行分段或使用"* "进行分点陈列"""
     }
 
     private val mnnEngine = MNNEngine()
@@ -142,6 +149,32 @@ class AIEngine(private val context: Context) {
     // ==================== 润色 API ====================
 
     /**
+     * 用自定义 prompt 执行润色（语音命令专用）
+     * @param prompt 完整的 prompt（包含指令和原文）
+     * @return 润色后的文本，失败返回 null
+     */
+    suspend fun polishWithPrompt(prompt: String): String? =
+        withContext(Dispatchers.IO) {
+            if (!modelLoaded) {
+                Log.w(TAG, "polishWithPrompt: Model not loaded")
+                return@withContext null
+            }
+            try {
+                mnnEngine.nativeReset()
+                // prompt 已包含原文，按 prompt 长度动态计算 maxTokens
+                val maxTokens = (prompt.length * 2.0).toInt().coerceIn(64, 2048)
+                Log.d(TAG, "polishWithPrompt: promptLen=${prompt.length}, maxTokens=$maxTokens")
+                System.gc()
+                val result = mnnEngine.nativeGenerate(prompt, maxTokens)
+                Log.d(TAG, "polishWithPrompt raw result: ${result.take(200)}")
+                result.ifBlank { null }
+            } catch (e: Exception) {
+                Log.e(TAG, "polishWithPrompt failed", e)
+                null
+            }
+        }
+
+    /**
      * 润色文本（本地 LLM）
      * @param text 原始文本
      * @param instruction 润色指令（如"扩写"、"缩句"、"转英文"等）
@@ -160,8 +193,8 @@ class AIEngine(private val context: Context) {
                 // 重置对话历史，避免上下文污染导致重复
                 mnnEngine.nativeReset()
 
-                // 动态计算 maxTokens：原文长度 * 2.5（留足余量），最少 64，最多 512
-                val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 512)
+                // 动态计算 maxTokens：原文长度 * 2.5（留足余量），最少 64，最多 2048
+                val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 2048)
                 Log.d(TAG, "Polish: textLen=${text.length}, maxTokens=$maxTokens")
 
                 val prompt = buildPolishPrompt(text, instruction)
@@ -285,7 +318,10 @@ class AIEngine(private val context: Context) {
      * C++ 层已使用 ChatMessages（system+user 分离），这里只返回原文
      */
     private fun buildPolishPrompt(text: String, instruction: String): String {
-        return "请对以下文字进行$instruction，只输出处理后的文本，不要输出任何解释或其他内容。\n\n原文：$text\n\n处理后："
+        // C++ 层已使用 ChatMessages（system+user 分离）
+        // system prompt 在 C++ 层硬编码（与 DEFAULT_POLISH_PROMPT 一致）
+        // 这里只返回原文，不需要额外指令
+        return text
     }
 
     // ==================== 通用生成 API ====================
