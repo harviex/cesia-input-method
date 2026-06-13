@@ -1236,12 +1236,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     true
                 }
                 android.view.MotionEvent.ACTION_UP -> {
-                    // 取消长按检测runnable，但保留高光（锁定状态持续到popup关闭）
                     magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
                     magicBookRunnable = null
                     if (!magicBookLongPressTriggered) {
+                        // 单击：停止高光
+                        stopMagicBookGlow()
                         v.performClick()
                     }
+                    // 长按已触发：保持高光（持续到popup关闭）
                     true
                 }
                 android.view.MotionEvent.ACTION_CANCEL -> {
@@ -1283,12 +1285,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     true
                 }
                 android.view.MotionEvent.ACTION_UP -> {
-                    // 取消长按检测runnable，但保留高光（锁定状态持续到popup关闭）
                     sendKeyRunnable?.let { sendKeyHandler.removeCallbacks(it) }
                     sendKeyRunnable = null
                     if (!sendKeyLongPressTriggered) {
+                        // 单击：停止高光
+                        stopSendButtonGlow()
                         v.performClick()
                     }
+                    // 长按已触发：保持高光（持续到popup关闭）
                     true
                 }
                 android.view.MotionEvent.ACTION_CANCEL -> {
@@ -2120,6 +2124,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun updateTraditionalButton() {
         // 更新按钮视觉状态
         if (::btnTraditional.isInitialized) {
+            // 简体模式显示"简"字，正体模式显示"正"字
+            btnTraditional.text = if (isTraditional) "正" else "简"
             btnTraditional.setTextColor(if (isTraditional) 0xFF81D8D0.toInt() else 0xFF888888.toInt())
             btnTraditional.setBackgroundColor(if (isTraditional) 0x2281D8D0.toInt() else 0x00000000)
             if (isTraditional && !traditionalGlowing) {
@@ -2137,6 +2143,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else if (!isTraditional && traditionalGlowing) {
                 traditionalGlowing = false
                 btnTraditional.clearAnimation()
+                btnTraditional.backgroundTintList = android.content.res.ColorStateList.valueOf(0x00000000.toInt())
+                btnTraditional.elevation = 0f
             }
         }
     }
@@ -3054,7 +3062,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     } else {
                         updateStatus("⚠️ 执行失败，已保留原文")
                     }
-                    resetToIdle()
+                    // 锁定模式下恢复录音，否则重置
+                    if (isVoiceLocked) {
+                        startRecordingLocked()
+                    } else {
+                        resetToIdle()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "语音命令执行失败", e)
@@ -3076,7 +3089,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         ic.commitText(text, 1)
                     }
                     updateStatus("⚠️ 执行失败，已恢复原文")
-                    resetToIdle()
+                    if (isVoiceLocked) {
+                        startRecordingLocked()
+                    } else {
+                        resetToIdle()
+                    }
                 }
             }
         }

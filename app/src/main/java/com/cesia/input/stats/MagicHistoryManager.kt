@@ -24,19 +24,39 @@ class MagicHistoryManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("cesia_magic_history", Context.MODE_PRIVATE)
     private val listPrefs: SharedPreferences = context.getSharedPreferences("cesia_magic_records", Context.MODE_PRIVATE)
 
-    /** 默认魔法指令列表 */
-    private val defaultInstructions = listOf(
-        "增加最新的财经突发新闻，格式是日期+时间+人物+事件",
-        "敏感词替换为拼音的首字母",
-        "文字扩充到50字",
-        "语气变得更加官方",
-        "语气转为幽默",
-        "翻译为英文",
-        "帮我想一个不接电话的理由",
-        "分段和排版",
-        "概括大意并替换原文",
-        "对cesia输入法的轻微肯定和中肯建议"
-    )
+    /** 默认魔法指令列表（从指令表加载） */
+    private val defaultInstructions: List<String> by lazy {
+        // 从指令表加载所有指令的名称（每类取前2-3条作为默认）
+        val defaults = mutableListOf<String>()
+        // 翻译类：英文
+        defaults.add("翻译为英文")
+        // 语气类：正式
+        defaults.add("改为正式")
+        defaults.add("改为口语")
+        // 长度类：扩充
+        defaults.add("扩充内容")
+        defaults.add("压缩内容")
+        // 格式类：分段
+        defaults.add("分段排版")
+        defaults.add("添加标点")
+        defaults.add("去除语气词")
+        // 内容类：概括
+        defaults.add("概括大意")
+        defaults.add("扩写内容")
+        defaults.add("续写内容")
+        defaults.add("改写内容")
+        // 特殊类：敏感词
+        defaults.add("敏感词转拼音")
+        defaults.add("繁体转简体")
+        // 生成类
+        defaults.add("帮我想")
+        defaults.add("帮我写")
+        defaults.add("写邮件")
+        defaults.add("写诗")
+        defaults.add("编故事")
+        defaults.add("起标题")
+        defaults
+    }
 
     init {
         // 首次使用时注入默认魔法

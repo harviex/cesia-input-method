@@ -42,7 +42,7 @@
             android:id="@+id/btn_traditional"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:text="正"
+            android:text="简"
             android:textSize="14sp"
             android:textColor="#888888"
             android:textStyle="bold"
