@@ -1785,13 +1785,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val keyboardWidth = keyboardView.width
         val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
 
+        // 测量标题栏实际高度
+        popupView.measure(
+            View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)?.measuredHeight
+            ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
+
         val gridHeightPx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, 300f, resources.displayMetrics
         ).toInt()
         val barHeightPx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
         ).toInt()
-        val totalHeight = (gridHeightPx + barHeightPx).coerceAtMost(
+        // 总高度 = 标题栏 + 网格列表 + 底部按钮栏，限制在屏幕高度 60% 以内
+        val totalHeight = (titleHeightPx + gridHeightPx + barHeightPx).coerceAtMost(
             (resources.displayMetrics.heightPixels * 0.6f).toInt()
         )
 
