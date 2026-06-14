@@ -751,9 +751,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             engine.onRecognitionComplete = { text ->
                 Handler(Looper.getMainLooper()).post {
-                    // 魔法模式停止时，忽略 Google 识别的残余结果
+                    // 魔法模式停止时，直接用 Google 识别结果触发 AI
                     if (magicStopRequested) {
-                        Log.d("Cesia", "onRecognitionComplete: 魔法模式停止中，忽略残余结果")
+                        Log.d("Cesia", "onRecognitionComplete: 魔法模式停止中，直接触发 AI")
+                        magicStopRequested = false
+                        if (text.isNotEmpty()) {
+                            handleMagicResult(text)
+                        }
                         return@post
                     }
                     // 命令词检测（Google 识别结果走这里）
@@ -1408,22 +1412,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun toggleMagicMode() {
         if (isRecording && magicMode) {
             // 魔法模式正在录音 → 结束录音
+            // 设置标志，阻止普通语音流程处理 Google 识别结果
             magicStopRequested = true
             isRecording = false
             voiceEngine.releaseRecorder()
             typelessEngine?.stopListening()
             resetMagicHighlight()
-            // 用已识别的文本触发 AI（如果有的话）
-            val recognized = lastMagicRecognizedText
-            lastMagicRecognizedText = ""
-            if (recognized.isNotEmpty()) {
-                handleMagicResult(recognized)
-            } else {
-                updateStatus("⚠️ 未识别到内容")
-                magicMode = false
-                typelessEngine?.magicMode = false
-                magicStopRequested = false
-            }
+            // AI 触发交给回调：
+            // - 本地模式：startMagicLocalRecording 的 onSegmentResult(isFinal) 或 recordInSegments 结束后
+            // - 云端模式：onRecognitionComplete 中检测到 magicStopRequested 后直接触发
+            updateStatus("⏳ 正在处理...")
         } else if (isRecording) {
             // 普通语音录音中点魔法键 → 忽略
             updateStatus("⚠️ 请先停止当前录音")
