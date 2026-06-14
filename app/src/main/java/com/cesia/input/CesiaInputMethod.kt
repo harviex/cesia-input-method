@@ -283,6 +283,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicMode = false
     private var magicOriginalText = ""
     private var magicIsWaitingForVoice = false
+    private var lastMagicRecognizedText = ""  // 魔法模式最后一次识别的文本（用于停止时触发AI）
+    private var magicStopRequested = false    // 用户主动停止魔法录音标志（防止重复触发AI）
 
     // 撤销历史
     private val undoHistory = mutableListOf<Pair<String, String>>()
@@ -749,6 +751,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             engine.onRecognitionComplete = { text ->
                 Handler(Looper.getMainLooper()).post {
+                    // 魔法模式停止时，忽略 Google 识别的残余结果
+                    if (magicStopRequested) {
+                        Log.d("Cesia", "onRecognitionComplete: 魔法模式停止中，忽略残余结果")
+                        return@post
+                    }
                     // 命令词检测（Google 识别结果走这里）
                     val commandResult = checkVoiceCommandWord(text)
                     if (commandResult != null) {
@@ -1399,10 +1406,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 魔法修改 ========================
 
     private fun toggleMagicMode() {
-        if (isRecording) {
-            // 正在录音 → 结束录音，取消高亮，识别结果由 onRecognitionComplete → handleMagicResult 处理
-            stopRecording()
+        if (isRecording && magicMode) {
+            // 魔法模式正在录音 → 结束录音
+            magicStopRequested = true
+            isRecording = false
+            voiceEngine.releaseRecorder()
+            typelessEngine?.stopListening()
             resetMagicHighlight()
+            // 用已识别的文本触发 AI（如果有的话）
+            val recognized = lastMagicRecognizedText
+            lastMagicRecognizedText = ""
+            if (recognized.isNotEmpty()) {
+                handleMagicResult(recognized)
+            } else {
+                updateStatus("⚠️ 未识别到内容")
+                magicMode = false
+                typelessEngine?.magicMode = false
+                magicStopRequested = false
+            }
+        } else if (isRecording) {
+            // 普通语音录音中点魔法键 → 忽略
+            updateStatus("⚠️ 请先停止当前录音")
         } else {
             // 未录音 → 读取输入框文字 + 高亮 + 开始录音
             startMagicMode()
@@ -1435,12 +1459,97 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMagic.elevation = 6f
         startMagicButtonGlow()
 
-        updateStatus("🎤 请说出修改指令...（再次点击✨停止）")
+        updateStatus("🎤 请说出你的想法...（再次点击✨停止）")
         setStatusDot("recording")
         startVoiceWave()
         isRecording = true
         micButton.text = "🎤 说话"
-        typelessEngine?.startListening(continuous = true)
+
+        // 根据本地/云端模式选择语音识别后端
+        when (cloudMode) {
+            CloudMode.LOCAL, CloudMode.LOCAL_LOCKED -> {
+                // 本地模式：使用 Sherpa 本地识别
+                if (SherpaOnnxEngine.isLibraryLoaded() && voiceEngine.hasSherpaModel()) {
+                    startMagicLocalRecording()
+                } else {
+                    updateStatus("⚠️ 本地语音不可用，回退到 Google...")
+                    startMagicGoogleRecording()
+                }
+            }
+            CloudMode.CLOUD -> {
+                // 云端模式：使用 Google 语音识别
+                startMagicGoogleRecording()
+            }
+        }
+    }
+
+    /**
+     * 魔法模式 - 本地语音识别
+     * 使用 Sherpa 本地模型，识别结果通过 handleMagicResult 处理
+     */
+    private fun startMagicLocalRecording() {
+        magicStopRequested = false
+        voiceEngineScope.launch {
+            try {
+                voiceEngine.warmupRecognizer()
+                lastMagicRecognizedText = ""
+                voiceEngine.recordInSegments(
+                    onSegmentResult = { text, isFinal ->
+                        if (text.isNotEmpty()) {
+                            lastMagicRecognizedText = text
+                            Handler(Looper.getMainLooper()).post {
+                                updateStatus("🎤 $text")
+                            }
+                            if (isFinal) {
+                                // 流式最终结果：直接触发 AI
+                                Handler(Looper.getMainLooper()).post {
+                                    handleMagicResult(text)
+                                }
+                            }
+                        }
+                    }
+                )
+                // recordInSegments 正常结束（超时）
+                // 如果用户主动停止（magicStopRequested=true），则由 toggleMagicMode 触发 AI，这里不重复
+                Handler(Looper.getMainLooper()).post {
+                    if (!magicStopRequested) {
+                        val text = lastMagicRecognizedText
+                        if (text.isNotEmpty() && !isAiProcessing) {
+                            handleMagicResult(text)
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                // 协程被 cancel：不处理，由 toggleMagicMode 触发
+                Log.d("Cesia", "魔法模式本地录音协程被取消")
+            } catch (e: Exception) {
+                Log.e("Cesia", "魔法模式本地识别失败", e)
+                Handler(Looper.getMainLooper()).post {
+                    updateStatus("❌ 本地识别失败: ${e.message}")
+                    resetMagicHighlight()
+                    magicMode = false
+                    typelessEngine?.magicMode = false
+                    isRecording = false
+                }
+            }
+        }
+    }
+
+    /**
+     * 魔法模式 - 云端语音识别
+     * 使用 Google SpeechRecognizer，识别结果通过 onMagicResult 回调
+     */
+    private fun startMagicGoogleRecording() {
+        try {
+            typelessEngine?.startListening(continuous = true)
+        } catch (e: Throwable) {
+            Log.e("Cesia", "魔法模式 Google 识别失败", e)
+            updateStatus("❌ Google 语音启动失败: ${e.javaClass.simpleName}")
+            resetMagicHighlight()
+            magicMode = false
+            typelessEngine?.magicMode = false
+            isRecording = false
+        }
     }
 
     private fun resetMagicHighlight() {
@@ -1472,7 +1581,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun handleMagicResult(recognizedText: String) {
+        // 防重入：如果 AI 正在处理中，忽略重复触发
+        if (isAiProcessing) {
+            Log.d("Cesia", "handleMagicResult: AI 正在处理中，忽略重复触发")
+            return
+        }
         magicMode = false
+        magicStopRequested = false
         typelessEngine?.magicMode = false
         isRecording = false
         stopVoiceWave()
@@ -1487,43 +1602,72 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         updateStatus("✨ 正在施展魔法...")
 
-        val prompt = buildMagicPrompt(magicOriginalText, instruction)
-        val polishService = typelessEngine?.getPolishService()
+        // 读取屏幕内容作为语境（无障碍服务，如未开启则跳过）
+        val screenContext = readScreenContext()
 
-        Thread {
+        // 异步执行 AI，避免阻塞主线程
+        isAiProcessing = true
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val result = polishService?.polishWithPrompt(prompt)
-                Handler(Looper.getMainLooper()).post {
+                val prompt = buildMagicPrompt(magicOriginalText, instruction, screenContext)
+                val result = typelessEngine?.getPolishService()?.polishWithPrompt(prompt)
+                withContext(Dispatchers.Main) {
+                    isAiProcessing = false
                     if (result != null && result.isNotEmpty()) {
-                        if (result == magicOriginalText) {
-                            updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
-                        } else {
-                            magicHistoryManager?.addRecord(instruction)
-                            saveUndoHistory(magicOriginalText, instruction)
-                            try {
-                                val ic2 = currentInputConnection
-                                ic2?.performContextMenuAction(android.R.id.selectAll)
-                                ic2?.commitText(result, 1)
-                                resetToIdle()
-                            } catch (e2: Exception) {
-                                Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
-                                updateStatus("❌ 上屏失败: ${e2.message}")
-                            }
+                        magicHistoryManager?.addRecord(instruction)
+                        saveUndoHistory(magicOriginalText, instruction)
+                        try {
+                            val ic2 = currentInputConnection
+                            ic2?.performContextMenuAction(android.R.id.selectAll)
+                            ic2?.commitText(result, 1)
+                            resetToIdle()
+                        } catch (e2: Exception) {
+                            Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
+                            updateStatus("❌ 上屏失败: ${e2.message}")
                         }
                     } else {
                         updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
                     }
                 }
             } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post {
+                Log.e("Cesia", "魔法修改失败", e)
+                withContext(Dispatchers.Main) {
+                    isAiProcessing = false
                     updateStatus("❌ 修改失败: ${e.message}")
                 }
             }
-        }.start()
+        }
     }
 
-    private fun buildMagicPrompt(original: String, instruction: String): String {
-        return "原文：$original\n\n用户指令：$instruction\n\n请根据用户指令修改原文，输出修改后的完整文本。只输出修改后的文本，不要输出任何解释。"
+    /**
+     * 读取当前屏幕内容作为语境
+     * 通过无障碍服务获取当前前台 App 的文本内容
+     * 如无障碍服务未开启或不可用，返回空字符串
+     */
+    private fun readScreenContext(): String {
+        // TODO: 接入无障碍服务后实现
+        // 当前版本返回空字符串，后续实现 ScreenReaderService 后替换
+        return ""
+    }
+
+    /**
+     * 构建魔法模式 prompt
+     * @param original 输入框原文
+     * @param instruction 用户语音指令
+     * @param screenContext 屏幕语境（无障碍服务读取的当前 App 内容）
+     */
+    private fun buildMagicPrompt(original: String, instruction: String, screenContext: String): String {
+        val contextSection = if (screenContext.isNotEmpty()) {
+            "\n【当前屏幕内容】\n$screenContext\n"
+        } else {
+            ""
+        }
+
+        return "你是一位富有创意的文字助手。请根据以下信息，生成一段自然流畅的内容。\n" +
+                "\n【参考原文】\n$original\n" +
+                contextSection +
+                "\n【用户的想法/指令】\n$instruction\n" +
+                "\n请根据以上内容自由发挥，生成合适的回复或文字内容。直接输出内容本身，不要解释。"
     }
 
 // endregion 魔法修改
