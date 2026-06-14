@@ -8,19 +8,19 @@ import android.view.accessibility.AccessibilityNodeInfo
 /**
  * 无障碍屏幕内容读取服务
  *
- * 功能：监听窗口变化事件，遍历当前前台 App 的 UI 树，提取所有文本内容
+ * 功能：监听窗口变化事件，遍历当前前台 App 的 UI 树，提取主要内容文本
  * 用途：为星星按钮的 AI 回复提供屏幕上下文
  *
- * 注意：
- * - 仅读取文本，不做任何修改
- * - 用户需在系统设置中手动开启此无障碍服务
- * - 部分 App（如微信）可能对无障碍读取做了限制
+ * 过滤策略：
+ * - 跳过已知系统 UI 类名（状态栏、导航栏、弹窗等）
+ * - 优先读取 EditText/TextView 等文本控件
+ * - 限制最大读取字符数，避免 prompt 过长
  */
 class ScreenReaderService : AccessibilityService() {
 
     companion object {
         private const val TAG = "CesiaScreenReader"
-        private const val MAX_TEXT_LENGTH = 3000  // 限制最大读取字符数，避免 prompt 过长
+        private const val MAX_TEXT_LENGTH = 2000
 
         /** 最近一次读取的屏幕文本（缓存） */
         @Volatile
@@ -32,13 +32,37 @@ class ScreenReaderService : AccessibilityService() {
         var lastReadTime: Long = 0L
             private set
 
-        /** 读取超时：超过此时间认为缓存失效（毫秒） */
         private const val CACHE_TIMEOUT_MS = 5000L
 
         /**
-         * 获取当前屏幕文本
-         * 如果缓存未过期则返回缓存，否则返回空字符串
+         * 需要跳过的系统 UI 类名（状态栏、导航栏、弹窗、按钮栏等）
          */
+        private val SKIP_CLASSES = setOf(
+            "android.widget.Button",
+            "android.widget.ImageButton",
+            "android.widget.ImageView",
+            "android.widget.FrameLayout",
+            "android.widget.LinearLayout",
+            "android.widget.RelativeLayout",
+            "android.widget.Toolbar",
+            "android.widget.ActionMenuView",
+            "android.inputmethodservice.InputMethodWindow",
+            "com.android.systemui",
+            "android.app.Dialog",
+            "android.widget.PopupWindow",
+            "android.widget.Toast"
+        )
+
+        /**
+         * 只关注包含有意义文本的控件类型
+         */
+        private val TEXT_CLASSES = setOf(
+            "android.widget.TextView",
+            "android.widget.EditText",
+            "android.widget.AutoCompleteTextView",
+            "android.webkit.WebView"
+        )
+
         fun getScreenText(): String {
             val now = System.currentTimeMillis()
             return if (now - lastReadTime < CACHE_TIMEOUT_MS && cachedScreenText.isNotEmpty()) {
@@ -48,9 +72,6 @@ class ScreenReaderService : AccessibilityService() {
             }
         }
 
-        /**
-         * 清除缓存（切换 App 或输入框变化时调用）
-         */
         fun clearCache() {
             cachedScreenText = ""
             lastReadTime = 0L
@@ -65,7 +86,6 @@ class ScreenReaderService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // 只处理窗口状态变化和内容变化事件
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
@@ -75,51 +95,101 @@ class ScreenReaderService : AccessibilityService() {
                     if (text.isNotEmpty()) {
                         cachedScreenText = text.take(MAX_TEXT_LENGTH)
                         lastReadTime = System.currentTimeMillis()
-                        Log.d(TAG, "屏幕内容已更新: ${cachedScreenText.length} 字符")
+                        Log.d(TAG, "屏幕内容已更新: ${cachedScreenText.length} 字符 → ${text.take(100)}")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "读取屏幕内容失败", e)
-                } finally {
-                    rootNode.recycle()
                 }
             }
         }
     }
 
     /**
-     * 递归遍历 UI 节点树，提取所有文本内容
+     * 递归遍历 UI 节点树，提取有意义的文本内容
+     * 跳过系统 UI 控件，只读取文本类控件
      */
     private fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""
 
+        val className = node.className?.toString() ?: ""
+
+        // 跳过系统 UI 类
+        if (shouldSkipClass(className)) {
+            return ""
+        }
+
         val sb = StringBuilder()
 
-        // 提取当前节点的文本
-        node.text?.let { text ->
-            if (text.isNotBlank()) {
-                sb.append(text.trim()).append("\n")
+        // 只提取文本类控件的内容
+        if (isTextClass(className)) {
+            node.text?.let { text ->
+                val trimmed = text.toString().trim()
+                if (trimmed.length >= 2) {  // 过滤单字符/emoji噪音
+                    sb.append(trimmed).append("\n")
+                }
             }
         }
 
-        // 提取 contentDescription（部分 App 用这个存文本）
+        // contentDescription 只在非文本类控件中提取（如图标的描述文字，但跳过已知噪音）
         node.contentDescription?.let { desc ->
-            if (desc.isNotBlank() && desc.toString() != node.text?.toString()) {
-                sb.append(desc.trim()).append("\n")
+            val trimmed = desc.toString().trim()
+            if (trimmed.length >= 2 && trimmed.length <= 100
+                && !isNoisyDesc(trimmed)
+                && trimmed != node.text?.toString()
+            ) {
+                sb.append(trimmed).append("\n")
             }
         }
 
         // 递归遍历子节点
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { child ->
-                val childText = extractTextFromNode(child)
-                if (childText.isNotBlank()) {
-                    sb.append(childText)
+                try {
+                    val childText = extractTextFromNode(child)
+                    if (childText.isNotBlank()) {
+                        sb.append(childText)
+                    }
+                } finally {
+                    child.recycle()
                 }
-                child.recycle()
             }
         }
 
         return sb.toString().trim()
+    }
+
+    /**
+     * 判断是否应该跳过该控件类
+     */
+    private fun shouldSkipClass(className: String): Boolean {
+        // 跳过已知系统类
+        if (SKIP_CLASSES.any { className.contains(it) }) return true
+        // 跳过包名包含 systemui 的
+        if (className.contains("systemui", ignoreCase = true)) return true
+        // 跳过输入法自身的窗口
+        if (className.contains("inputmethod", ignoreCase = true)) return true
+        return false
+    }
+
+    /**
+     * 判断是否为文本类控件
+     */
+    private fun isTextClass(className: String): Boolean {
+        return TEXT_CLASSES.any { className.contains(it) }
+    }
+
+    /**
+     * 判断 contentDescription 是否为噪音（系统标准描述文字）
+     */
+    private fun isNoisyDesc(desc: String): Boolean {
+        val noisy = listOf(
+            "查看全部", "已取消", "已连接", "滑动即可", "继续滑动",
+            "去开启", "稍后再说", "确定", "取消", "关闭", "返回",
+            "更多选项", "搜索", "菜单", "通知", "状态栏",
+            "next", "back", "close", "menu", "search",
+            "Bluetooth", "Wi-Fi", "Battery", "Signal"
+        )
+        return noisy.any { desc.contains(it, ignoreCase = true) }
     }
 
     override fun onInterrupt() {
