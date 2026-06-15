@@ -1717,6 +1717,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * @param screenContext 屏幕语境（无障碍服务读取的当前 App 内容）
      */
     private fun buildMagicPrompt(original: String, instruction: String, screenContext: String): String {
+        val originalSection = if (original.isNotEmpty()) {
+            "\n【参考原文】\n$original\n"
+        } else {
+            ""
+        }
         val contextSection = if (screenContext.isNotEmpty()) {
             "\n【当前屏幕内容】\n$screenContext\n"
         } else {
@@ -1724,7 +1729,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         return "你是一位富有创意的文字助手。请根据以下信息，生成一段自然流畅的内容。\n" +
-                "\n【参考原文】\n$original\n" +
+                originalSection +
                 contextSection +
                 "\n【用户的想法/指令】\n$instruction\n" +
                 "\n请根据以上内容自由发挥，生成合适的回复或文字内容。直接输出内容本身，不要解释。"
