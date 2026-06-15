@@ -1649,6 +1649,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (!isScreenReaderEnabled()) {
                 return ""
             }
+            // 主动触发一次屏幕内容读取，确保获取最新语境
+            ScreenReaderService.refreshNow()
             val text = ScreenReaderService.getScreenText()
             if (text.isNotEmpty()) {
                 Log.d("Cesia", "readScreenContext: 读取到 ${text.length} 字符屏幕内容")

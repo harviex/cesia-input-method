@@ -76,10 +76,36 @@ class ScreenReaderService : AccessibilityService() {
             cachedScreenText = ""
             lastReadTime = 0L
         }
+
+        /**
+         * 主动触发一次屏幕内容读取（同步）
+         * 用于星星按钮点击时立即获取最新屏幕语境
+         */
+        fun refreshNow(): String {
+            return try {
+                val rootNode = instance?.rootInActiveWindow ?: return cachedScreenText
+                val text = instance?.extractTextFromNode(rootNode) ?: ""
+                if (text.isNotEmpty()) {
+                    cachedScreenText = text.take(MAX_TEXT_LENGTH)
+                    lastReadTime = System.currentTimeMillis()
+                    Log.d(TAG, "主动刷新屏幕内容: ${cachedScreenText.length} 字符")
+                }
+                cachedScreenText
+            } catch (e: Exception) {
+                Log.e(TAG, "主动刷新屏幕内容失败", e)
+                cachedScreenText
+            }
+        }
+
+        /** 服务实例引用，用于主动调用 extractTextFromNode */
+        @Volatile
+        var instance: ScreenReaderService? = null
+            private set
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         Log.i(TAG, "无障碍屏幕读取服务已连接")
     }
 
@@ -107,8 +133,10 @@ class ScreenReaderService : AccessibilityService() {
     /**
      * 递归遍历 UI 节点树，提取有意义的文本内容
      * 跳过系统 UI 控件，只读取文本类控件
+     * 文本行按 UI 树顺序（从上到下）收集，最终输出时逆序（最近消息在前），
+     * take(MAX_TEXT_LENGTH) 截断后保留的是屏幕底部的最近内容
      */
-    private fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
+    internal fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""
 
         val className = node.className?.toString() ?: ""
@@ -118,26 +146,26 @@ class ScreenReaderService : AccessibilityService() {
             return ""
         }
 
-        val sb = StringBuilder()
+        val lines = mutableListOf<String>()
 
         // 只提取文本类控件的内容
         if (isTextClass(className)) {
             node.text?.let { text ->
                 val trimmed = text.toString().trim()
-                if (trimmed.length >= 2) {  // 过滤单字符/emoji噪音
-                    sb.append(trimmed).append("\n")
+                if (trimmed.length >= 2) {
+                    lines.add(trimmed)
                 }
             }
         }
 
-        // contentDescription 只在非文本类控件中提取（如图标的描述文字，但跳过已知噪音）
+        // contentDescription 只在非文本类控件中提取
         node.contentDescription?.let { desc ->
             val trimmed = desc.toString().trim()
             if (trimmed.length >= 2 && trimmed.length <= 100
                 && !isNoisyDesc(trimmed)
                 && trimmed != node.text?.toString()
             ) {
-                sb.append(trimmed).append("\n")
+                lines.add(trimmed)
             }
         }
 
@@ -147,7 +175,7 @@ class ScreenReaderService : AccessibilityService() {
                 try {
                     val childText = extractTextFromNode(child)
                     if (childText.isNotBlank()) {
-                        sb.append(childText)
+                        lines.add(childText)
                     }
                 } finally {
                     child.recycle()
@@ -155,7 +183,8 @@ class ScreenReaderService : AccessibilityService() {
             }
         }
 
-        return sb.toString().trim()
+        // 逆序后拼接（屏幕底部/最近内容在前），截断后保留最近的信息
+        return lines.reversed().joinToString("\n").take(MAX_TEXT_LENGTH)
     }
 
     /**
@@ -198,6 +227,7 @@ class ScreenReaderService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         clearCache()
         Log.i(TAG, "无障碍屏幕读取服务已销毁")
     }
