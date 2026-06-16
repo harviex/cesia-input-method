@@ -1596,19 +1596,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         updateStatus("✨ 正在施展魔法...")
 
-        // 读取屏幕内容作为语境（无障碍服务，如未开启则跳过）
-        val screenContext = readScreenContext()
-
-        // 如果无障碍服务未开启，首次使用时弹窗引导
-        if (screenContext.isEmpty() && !isScreenReaderEnabled()) {
-            showAccessibilityGuideDialog()
-        }
+        // 读取剪贴板非置顶首条内容作为语境
+        val clipboardContext = getClipboardFirstNonPinned()
 
         // 异步执行 AI，避免阻塞主线程
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val prompt = buildMagicPrompt(magicOriginalText, instruction, screenContext)
+                val prompt = buildMagicPrompt(magicOriginalText, instruction, clipboardContext)
                 val result = typelessEngine?.getPolishService()?.polishWithPrompt(prompt)
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
@@ -1639,103 +1634,68 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /**
-     * 读取当前屏幕内容作为语境
-     * 通过无障碍服务获取当前前台 App 的文本内容
-     * 如无障碍服务未开启或不可用，返回空字符串
+     * 读取剪贴板非置顶首条内容作为语境
+     * 返回剪贴板列表中第一条非置顶且非空的文本，如果没有则返回空字符串
      */
-    private fun readScreenContext(): String {
+    private fun getClipboardFirstNonPinned(): String {
         return try {
-            // 检查无障碍服务是否已开启
-            if (!isScreenReaderEnabled()) {
-                return ""
-            }
-            // 主动触发一次屏幕内容读取，确保获取最新语境
-            ScreenReaderService.refreshNow()
-            val text = ScreenReaderService.getScreenText()
-            if (text.isNotEmpty()) {
-                Log.d("Cesia", "readScreenContext: 读取到 ${text.length} 字符屏幕内容")
-            }
-            text
-        } catch (e: Exception) {
-            Log.e("Cesia", "readScreenContext: 读取屏幕内容失败", e)
-            ""
-        }
-    }
-
-    /**
-     * 检查无障碍屏幕读取服务是否已开启
-     */
-    private fun isScreenReaderEnabled(): Boolean {
-        return try {
-            val enabledServices = android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            ) ?: return false
-            val colonSplitter = enabledServices.split(':')
-            colonSplitter.any { svc ->
-                svc.startsWith("$packageName/") && svc.contains("ScreenReaderService")
-            }
-        } catch (e: Exception) {
-            Log.e("Cesia", "检查无障碍服务状态失败", e)
-            false
-        }
-    }
-
-    /**
-     * 弹窗引导用户开启无障碍服务
-     */
-    private fun showAccessibilityGuideDialog() {
-        try {
-            AlertDialog.Builder(this)
-                .setTitle("📖 需要开启无障碍服务")
-                .setMessage(
-                    "星星按钮的 AI 回复功能需要读取屏幕内容作为语境。\n\n" +
-                    "请按以下步骤操作：\n" +
-                    "1. 点击「去开启」\n" +
-                    "2. 找到「Cesia输入法」\n" +
-                    "3. 开启无障碍服务\n\n" +
-                    "开启后，星星按钮将能自动读取当前聊天内容，AI 回复会更智能。"
-                )
-                .setPositiveButton("去开启") { _, _ ->
-                    try {
-                        val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                    } catch (e: Exception) {
-                        updateStatus("❌ 无法打开系统设置")
+            val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            if (clipboardMgr?.hasPrimaryClip() == true) {
+                val clip = clipboardMgr.primaryClip
+                if (clip != null) {
+                    for (i in 0 until clip.itemCount) {
+                        val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
+                        if (text.isNotEmpty()) {
+                            Log.d("Cesia", "getClipboardFirstNonPinned: 读取到 ${text.length} 字符剪贴板内容")
+                            return text
+                        }
                     }
                 }
-                .setNegativeButton("稍后再说", null)
-                .show()
-        } catch (_: Exception) {
-            // IME context 可能不支持 AlertDialog，静默失败
+            }
+            // 系统剪贴板为空，尝试从持久化历史读取
+            val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
+            val historyStr = prefs.getString("history", "") ?: ""
+            if (historyStr.isNotEmpty()) {
+                val favStr = prefs.getString("favorites", "") ?: ""
+                val favSet = if (favStr.isNotEmpty()) favStr.split("\n").toSet() else emptySet()
+                for (text in historyStr.split("\n")) {
+                    if (text.isNotEmpty() && !favSet.contains(text)) {
+                        Log.d("Cesia", "getClipboardFirstNonPinned: 从历史读取到非置顶内容 ${text.length} 字符")
+                        return text
+                    }
+                }
+            }
+            ""
+        } catch (e: Exception) {
+            Log.e("Cesia", "getClipboardFirstNonPinned: 读取剪贴板失败", e)
+            ""
         }
     }
 
-    /**
-     * 构建魔法模式 prompt
-     * @param original 输入框原文
-     * @param instruction 用户语音指令
-     * @param screenContext 屏幕语境（无障碍服务读取的当前 App 内容）
-     */
-    private fun buildMagicPrompt(original: String, instruction: String, screenContext: String): String {
-        val originalSection = if (original.isNotEmpty()) {
-            "\n【参考原文】\n$original\n"
-        } else {
-            ""
-        }
-        val contextSection = if (screenContext.isNotEmpty()) {
-            "\n【当前屏幕内容】\n$screenContext\n"
-        } else {
-            ""
-        }
-
-        return "你是一位富有创意的文字助手。请根据以下信息，生成一段自然流畅的内容。\n" +
-                originalSection +
-                contextSection +
-                "\n【用户的想法/指令】\n$instruction\n" +
-                "\n请根据以上内容自由发挥，生成合适的回复或文字内容。直接输出内容本身，不要解释。"
+/**
+ * 构建魔法模式 prompt
+ * @param original 输入框原文
+ * @param instruction 用户语音指令
+ * @param clipboardContext 剪贴板语境（用户复制的参考内容）
+ */
+private fun buildMagicPrompt(original: String, instruction: String, clipboardContext: String): String {
+    val originalSection = if (original.isNotEmpty()) {
+        "\n【参考原文】\n$original\n"
+    } else {
+        ""
     }
+    val contextSection = if (clipboardContext.isNotEmpty()) {
+        "\n【参考内容】\n$clipboardContext\n"
+    } else {
+        ""
+    }
+
+    return "你是一位富有创意的文字助手。请根据以下信息，生成一段自然流畅的内容。\n" +
+            originalSection +
+            contextSection +
+            "\n【用户的想法/指令】\n$instruction\n" +
+            "\n请根据以上内容自由发挥，生成合适的回复或文字内容。直接输出内容本身，不要解释。"
+}
 
 // endregion 魔法修改
 
