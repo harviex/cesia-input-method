@@ -1607,7 +1607,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val prompt = buildMagicPrompt(magicOriginalText, instruction, clipboardContext)
                 Log.d("Cesia", "handleMagicResult: prompt长度=${prompt.length}")
                 val polishService = typelessEngine?.getPolishService()
-                Log.d("Cesia", "handleMagicResult: polishService=${polishService != null}, apiKey=${polishService?.getApiKey()?.take(10) ?: "null"}")
+                Log.d("Cesia", "handleMagicResult: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(30) ?: "null"}")
                 val result = polishService?.polishWithPrompt(prompt)
                 Log.d("Cesia", "handleMagicResult: result=${result?.take(50) ?: "null"}, isNullOrEmpty=${result.isNullOrEmpty()}")
                 withContext(Dispatchers.Main) {
