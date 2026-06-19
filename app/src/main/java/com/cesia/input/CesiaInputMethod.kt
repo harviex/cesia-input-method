@@ -2312,30 +2312,47 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 执行智能写作命令（点击列表项直接调用AI） */
     private fun executeSmartCommand(command: String) {
         val selectedOptions = getSmartWritingSelection()
-        val contextParts = mutableListOf<String>()
 
-        // 根据选中的选项收集语境
-        if (selectedOptions.contains("clipboard")) {
-            val clipboardText = getClipboardFirstNonPinned()
-            if (clipboardText.isNotEmpty()) {
-                contextParts.add("参考内容：\n$clipboardText")
-            }
-        }
-        if (selectedOptions.contains("grammar")) {
-            val grammarGuide = buildGrammarGuide()
-            if (grammarGuide.isNotEmpty()) {
-                contextParts.add("语法纲要：\n$grammarGuide")
-            }
-        }
+        // 获取剪贴板内容（作为搜索 query 和参考内容）
+        val clipboardText = if (selectedOptions.contains("clipboard"))
+            getClipboardFirstNonPinned() else ""
 
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                // 如果需要搜索，先执行 SearXNG 搜索
+                // 构建结构化 prompt
+                val promptParts = mutableListOf<String>()
+
+                // 1. 用户命令
+                promptParts.add("【指令】\n$command")
+
+                // 2. 剪贴板内容（参考素材）
+                if (clipboardText.isNotEmpty()) {
+                    promptParts.add("【参考素材】\n$clipboardText")
+                }
+
+                // 3. 语法纲要
+                if (selectedOptions.contains("grammar")) {
+                    val grammarGuide = buildGrammarGuide()
+                    if (grammarGuide.isNotEmpty()) {
+                        promptParts.add("【语法纲要】\n$grammarGuide")
+                    }
+                }
+
+                // 4. 互联网搜索（用剪贴板内容作为搜索词，不用命令文本）
                 if (selectedOptions.contains("search")) {
-                    val searchResults = performSearXNGSearch(command)
+                    val searchQuery = if (clipboardText.isNotEmpty()) {
+                        // 取剪贴板前80字作为搜索关键词
+                        clipboardText.take(80)
+                    } else {
+                        // 没有剪贴板时用命令本身（去掉常见指令词）
+                        command.replace(Regex("(续写|扩写|改写|润色|翻译|总结|生成|帮我|请|字数|个字)"), "").trim()
+                            .ifEmpty { command }
+                    }
+                    Log.d("Cesia", "SearXNG query: $searchQuery")
+                    val searchResults = performSearXNGSearch(searchQuery)
                     if (searchResults.isNotEmpty()) {
-                        contextParts.add("【网络搜索结果】\n$searchResults")
+                        promptParts.add("【网络搜索结果】\n$searchResults")
                     }
                 }
 
@@ -2348,8 +2365,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
 
                 val textBefore = ic.getTextBeforeCursor(1000, 0)?.toString() ?: ""
-                val contextStr = if (contextParts.isNotEmpty()) "\n\n" + contextParts.joinToString("\n\n") else ""
-                val fullPrompt = "$command$contextStr\n\n当前文本：\n$textBefore"
+                if (textBefore.isNotEmpty()) {
+                    promptParts.add("【当前文本】\n$textBefore")
+                }
+
+                val fullPrompt = promptParts.joinToString("\n\n") + "\n\n只输出结果："
+
+                Log.d("Cesia", "SmartWriting prompt: ${fullPrompt.take(200)}...")
 
                 val polishService = typelessEngine?.getPolishService()
                 val result = polishService?.polishWithPrompt(fullPrompt)
@@ -2373,59 +2395,70 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    /** SearXNG 搜索（公共实例） */
+    /** Brave Search API（互联网搜索） */
     private fun performSearXNGSearch(query: String): String {
-        // 公共 SearXNG 实例列表
-        val searxInstances = listOf(
-            "https://searx.org",
-            "https://searx.net",
-            "https://search.sapti.me"
-        )
-        for (instance in searxInstances) {
-            try {
-                val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-                val url = "$instance/search?q=$encoded&format=json&language=zh-CN"
-                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 5000
-                conn.readTimeout = 8000
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                val code = conn.responseCode
-                if (code == 200) {
-                    val json = conn.inputStream.bufferedReader().readText()
-                    val results = parseSearXNGResults(json)
-                    if (results.isNotEmpty()) {
-                        Log.d("Cesia", "SearXNG search: instance=$instance, results=${results.length}")
-                        return results
-                    }
-                }
-                conn.disconnect()
-            } catch (e: Exception) {
-                Log.w("Cesia", "SearXNG instance failed: $instance", e)
-            }
+        // 从 SharedPreferences 读取 Brave API key
+        val prefs = getSharedPreferences("cesia_prefs", MODE_PRIVATE)
+        val braveApiKey = prefs.getString("brave_search_api_key", "") ?: ""
+        if (braveApiKey.isEmpty()) {
+            Log.w("Cesia", "Brave Search API key not configured")
+            return ""
         }
-        Log.w("Cesia", "All SearXNG instances failed")
+        try {
+            val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+            val url = "https://api.search.brave.com/res/v1/web/search?q=$encoded&count=5"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 12000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Accept-Encoding", "gzip")
+            conn.setRequestProperty("X-Subscription-Token", braveApiKey)
+            val code = conn.responseCode
+            if (code == 200) {
+                val rawBytes = conn.inputStream.readBytes()
+                // gzip decompress
+                val json = try {
+                    val inflater = java.util.zip.GZIPInputStream(rawBytes.inputStream())
+                    inflater.bufferedReader().readText()
+                } catch (_: Exception) {
+                    rawBytes.toString(Charsets.UTF_8)
+                }
+                val results = parseBraveResults(json)
+                if (results.isNotEmpty()) {
+                    Log.d("Cesia", "Brave search: results=${results.length}")
+                    return results
+                }
+            } else {
+                Log.w("Cesia", "Brave search HTTP $code: ${conn.errorStream?.bufferedReader()?.readText()?.take(200)}")
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            Log.w("Cesia", "Brave search failed: ${e.message}")
+        }
         return ""
     }
 
-    /** 解析 SearXNG JSON 结果 */
-    private fun parseSearXNGResults(json: String): String {
+    /** 解析 Brave Search JSON 结果 */
+    private fun parseBraveResults(json: String): String {
         try {
             val obj = org.json.JSONObject(json)
-            val results = obj.optJSONArray("results") ?: return ""
+            val results = obj.optJSONObject("web")?.optJSONArray("results") ?: return ""
+            if (results.length() == 0) return ""
             val sb = StringBuilder()
             for (i in 0 until minOf(results.length(), 5)) {
                 val item = results.getJSONObject(i)
                 val title = item.optString("title", "").trim()
-                val content = item.optString("content", "").trim()
+                val description = item.optString("description", "").trim()
                 val url = item.optString("url", "").trim()
                 if (title.isNotEmpty()) sb.appendLine("• $title")
-                if (content.isNotEmpty()) sb.appendLine("  $content")
+                if (description.isNotEmpty()) sb.appendLine("  ${description.take(200)}")
                 if (url.isNotEmpty()) sb.appendLine("  $url")
                 if (i < minOf(results.length(), 5) - 1) sb.appendLine()
             }
             return sb.toString().trim()
         } catch (e: Exception) {
-            Log.e("Cesia", "SearXNG parse error", e)
+            Log.e("Cesia", "Brave parse error", e)
             return ""
         }
     }

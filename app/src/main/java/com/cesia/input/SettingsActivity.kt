@@ -50,7 +50,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var etApiUrl: TextInputEditText
     private lateinit var etApiKey: TextInputEditText
-    private lateinit var etModelId: TextInputEditText
+    private var spinnerCloudModel: Spinner? = null
+    private var tvModelInfo: TextView? = null
     private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
     private lateinit var btnSave: MaterialButton
@@ -76,6 +77,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var modelManager: ModelManager
     private lateinit var downloadManager: ModelDownloadManager
     private var etGroqKey: EditText? = null
+    private var etBraveApiKey: EditText? = null
     private var tvHardwareInfo: TextView? = null
     private var tvVoiceModelStatus: TextView? = null
     private var tvAiModelStatus: TextView? = null
@@ -132,6 +134,7 @@ class SettingsActivity : AppCompatActivity() {
         const val IMPORT_PHRASES_REQUEST = 2002
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
+        const val PREF_BRAVE_KEY = "brave_search_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
     }
@@ -178,6 +181,7 @@ class SettingsActivity : AppCompatActivity() {
         aiSettingsHelper.setupListeners()
         showVersion()
         refreshStats()
+        loadOpenRouterFreeModels()
         refreshDictInfo()
         updateThemeUI()
 
@@ -199,7 +203,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun initViews() {
         etApiUrl = findViewById(R.id.et_api_url)
         etApiKey = findViewById(R.id.et_openrouter_key)
-        etModelId = findViewById(R.id.et_model_id)
+        spinnerCloudModel = findViewById(R.id.spinner_cloud_model)
+        tvModelInfo = findViewById(R.id.tv_model_info)
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
         btnSave = findViewById(R.id.btn_save)
@@ -244,6 +249,7 @@ class SettingsActivity : AppCompatActivity() {
         // === 语音与 AI 本地化视图 ===
         try {
             etGroqKey = findViewById(R.id.et_groq_key)
+            etBraveApiKey = findViewById(R.id.et_brave_api_key)
             tvHardwareInfo = findViewById(R.id.tv_hardware_info)
             tvVoiceModelStatus = findViewById(R.id.tv_voice_model_status)
             tvAiModelStatus = findViewById(R.id.tv_ai_model_status)
@@ -335,7 +341,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSettings() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
-        etModelId.setText(prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID))
+        etBraveApiKey?.setText(prefs.getString(PREF_BRAVE_KEY, ""))
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, PolishService.DEFAULT_POLISH_PROMPT))
         // 加载语音命令词
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -355,19 +361,22 @@ class SettingsActivity : AppCompatActivity() {
                 etApiUrl.error = "URL 必须以 http:// 或 https:// 开头"; return@setOnClickListener
             }
             val apiKey = etApiKey.text?.toString()?.trim() ?: ""
-            val modelId = etModelId.text?.toString()?.trim() ?: DEFAULT_MODEL_ID
+            val braveApiKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
+            val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
+                ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
             val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
             prefs.edit()
                 .putString(PREF_API_URL, url)
                 .putString(PREF_OPENROUTER_KEY, apiKey)
-                .putString(PREF_MODEL_ID, modelId)
+                .putString(PREF_BRAVE_KEY, braveApiKey)
+                .putString(PREF_MODEL_ID, selectedModel)
                 .putString(PREF_POLISH_PROMPT, polishPrompt)
                 .apply()
             aiSettingsHelper.saveSettings()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")
             appendLog("🔑 API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "未设置"}")
-            appendLog("🤖 模型: $modelId")
+            appendLog("🤖 模型: $selectedModel")
             if (polishPrompt.isNotEmpty()) {
                 appendLog("📝 Prompt: ${polishPrompt.take(50)}...")
             }
@@ -892,8 +901,10 @@ class SettingsActivity : AppCompatActivity() {
                             put("content", inputText)
                         })
                     }
+                    val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
+                        ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
                     val json = JSONObject().apply {
-                        put("model", etModelId.text?.toString()?.trim() ?: DEFAULT_MODEL_ID)
+                        put("model", selectedModel)
                         put("messages", messages)
                         put("temperature", 0.3)
                         put("max_tokens", 512)
@@ -1376,5 +1387,118 @@ class SettingsActivity : AppCompatActivity() {
         etCmdCommand?.setText("指令")
         tvCommandStatus?.text = "已恢复默认值，请点击保存"
         tvCommandStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
+    }
+
+    // ==================== 云端模型加载 ====================
+
+    data class CloudModel(
+        val id: String,
+        val name: String,
+        val provider: String,
+        val contextLength: Long,
+        val hasTools: Boolean,
+        val hasVision: Boolean
+    )
+
+    private var cloudModelList: List<CloudModel>? = null
+
+    private fun loadOpenRouterFreeModels() {
+        val url = "https://harviex.github.io/openrouter-free-dashboard/data/models.json"
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        val request = okhttp3.Request.Builder().url(url).build()
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                runOnUiThread {
+                    tvModelInfo?.text = "⚠️ 无法加载模型列表：${e.message}"
+                }
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        tvModelInfo?.text = "⚠️ 加载失败：HTTP ${response.code}"
+                    }
+                    return
+                }
+                val body = response.body?.string() ?: return
+                try {
+                    val json = org.json.JSONObject(body)
+                    val models = json.getJSONArray("models")
+                    val list = mutableListOf<CloudModel>()
+                    for (i in 0 until models.length()) {
+                        val m = models.getJSONObject(i)
+                        list.add(
+                            CloudModel(
+                                id = m.optString("id", ""),
+                                name = m.optString("name", m.optString("id", "")),
+                                provider = m.optString("provider", ""),
+                                contextLength = m.optLong("context_length", 0),
+                                hasTools = m.optBoolean("has_tools", false),
+                                hasVision = m.optBoolean("has_vision", false)
+                            )
+                        )
+                    }
+                    cloudModelList = list
+                    runOnUiThread {
+                        updateSpinner(list)
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        tvModelInfo?.text = "⚠️ 解析失败：${e.message}"
+                    }
+                }
+            }
+        })
+    }
+
+    private fun updateSpinner(models: List<CloudModel>) {
+        val spinner = spinnerCloudModel ?: return
+        val displayNames = models.map { model ->
+            val ctxStr = if (model.contextLength >= 1000000)
+                "${model.contextLength / 1000000}M"
+            else if (model.contextLength >= 1000)
+                "${model.contextLength / 1000}K"
+            else "${model.contextLength}"
+            val features = buildString {
+                if (model.hasTools) append("🔧")
+                if (model.hasVision) append("👁")
+            }
+            "${model.name} ($ctxStr) $features"
+        }
+        val adapter = android.widget.ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            displayNames
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinner.adapter = adapter
+
+        // 恢复之前保存的选择
+        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
+        val savedIndex = models.indexOfFirst { it.id == savedModelId }
+        if (savedIndex >= 0) {
+            spinner.setSelection(savedIndex)
+        }
+
+        // 选中后更新信息栏
+        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val model = models[position]
+                val ctxStr = if (model.contextLength >= 1000000)
+                    "${model.contextLength / 1000000}M tokens"
+                else if (model.contextLength >= 1000)
+                    "${model.contextLength / 1000}K tokens"
+                else "${model.contextLength} tokens"
+                val features = mutableListOf<String>()
+                if (model.hasTools) features.add("工具调用")
+                if (model.hasVision) features.add("视觉")
+                tvModelInfo?.text = "${model.provider} · $ctxStr · ${features.joinToString(", ")}"
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
     }
 }

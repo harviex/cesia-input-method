@@ -296,20 +296,46 @@
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 模型 ID -->
+        <!-- 云端模型选择（下拉菜单） -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="云端 AI 模型"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinner_cloud_model"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="4dp"
+            android:padding="8dp"
+            android:background="@android:drawable/btn_dropdown" />
+
+        <TextView
+            android:id="@+id/tv_model_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Brave Search API Key（互联网搜索） -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="模型 ID (如 minimax/minimax-m2.5:free)"
+            android:hint="Brave Search API Key（互联网搜索，BSA...）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_model_id"
+                android:id="@+id/et_brave_api_key"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="text"
-                android:text="minimax/minimax-m2.5:free" />
+                android:inputType="textPassword"
+                android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- AI 润色 Prompt（云端+本地共用） -->
