@@ -2083,6 +2083,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
+        Log.d("Cesia", "showSmartWritingPopup: 弹窗被调用")
         try {
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
@@ -2311,11 +2312,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 执行智能写作命令（点击列表项直接调用AI） */
     private fun executeSmartCommand(command: String) {
+        Log.d("Cesia", "executeSmartCommand: command=$command")
         val selectedOptions = getSmartWritingSelection()
+        Log.d("Cesia", "executeSmartCommand: selectedOptions=$selectedOptions")
 
         // 获取剪贴板内容（作为搜索 query 和参考内容）
         val clipboardText = if (selectedOptions.contains("clipboard"))
             getClipboardFirstNonPinned() else ""
+        Log.d("Cesia", "executeSmartCommand: clipboardText=${clipboardText.length} chars")
 
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -2342,17 +2346,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 4. 互联网搜索（用剪贴板内容作为搜索词，不用命令文本）
                 if (selectedOptions.contains("search")) {
                     val searchQuery = if (clipboardText.isNotEmpty()) {
-                        // 取剪贴板前80字作为搜索关键词
                         clipboardText.take(80)
                     } else {
-                        // 没有剪贴板时用命令本身（去掉常见指令词）
                         command.replace(Regex("(续写|扩写|改写|润色|翻译|总结|生成|帮我|请|字数|个字)"), "").trim()
                             .ifEmpty { command }
                     }
                     Log.d("Cesia", "SearXNG query: $searchQuery")
                     val searchResults = performSearXNGSearch(searchQuery)
+                    Log.d("Cesia", "SearXNG results: ${searchResults.length} chars")
                     if (searchResults.isNotEmpty()) {
                         promptParts.add("【网络搜索结果】\n$searchResults")
+                    } else {
+                        Log.w("Cesia", "SearXNG: 搜索结果为空")
                     }
                 }
 
@@ -2397,16 +2402,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** Brave Search API（互联网搜索） */
     private fun performSearXNGSearch(query: String): String {
-        // 从 SharedPreferences 读取 Brave API key
-        val prefs = getSharedPreferences("cesia_prefs", MODE_PRIVATE)
+        Log.d("Cesia", "BraveSearch: start, query=$query")
+        // 从 SharedPreferences 读取 Brave API key（SettingsActivity 保存到 cesia_settings）
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         val braveApiKey = prefs.getString("brave_search_api_key", "") ?: ""
         if (braveApiKey.isEmpty()) {
-            Log.w("Cesia", "Brave Search API key not configured")
+            Log.w("Cesia", "BraveSearch: API key not configured")
             return ""
         }
         try {
             val encoded = java.net.URLEncoder.encode(query, "UTF-8")
             val url = "https://api.search.brave.com/res/v1/web/search?q=$encoded&count=5"
+            Log.d("Cesia", "BraveSearch: url=$url")
             val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 8000
             conn.readTimeout = 12000
@@ -2415,6 +2422,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             conn.setRequestProperty("Accept-Encoding", "gzip")
             conn.setRequestProperty("X-Subscription-Token", braveApiKey)
             val code = conn.responseCode
+            Log.d("Cesia", "BraveSearch: HTTP $code")
             if (code == 200) {
                 val rawBytes = conn.inputStream.readBytes()
                 // gzip decompress
@@ -2424,18 +2432,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 } catch (_: Exception) {
                     rawBytes.toString(Charsets.UTF_8)
                 }
+                Log.d("Cesia", "BraveSearch: response length=${json.length}")
                 val results = parseBraveResults(json)
+                Log.d("Cesia", "BraveSearch: results=${results.length} chars")
                 if (results.isNotEmpty()) {
-                    Log.d("Cesia", "Brave search: results=${results.length}")
                     return results
                 }
             } else {
-                Log.w("Cesia", "Brave search HTTP $code: ${conn.errorStream?.bufferedReader()?.readText()?.take(200)}")
+                Log.w("Cesia", "BraveSearch error HTTP $code: ${conn.errorStream?.bufferedReader()?.readText()?.take(200)}")
             }
             conn.disconnect()
         } catch (e: Exception) {
-            Log.w("Cesia", "Brave search failed: ${e.message}")
+            Log.w("Cesia", "BraveSearch failed: ${e.message}")
         }
+        Log.d("Cesia", "BraveSearch: returning empty")
         return ""
     }
 
