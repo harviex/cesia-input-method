@@ -27,6 +27,7 @@ import android.widget.ArrayAdapter
 import android.widget.GridView
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.PopupWindow
 import android.widget.TextView
 import android.text.TextUtils
@@ -2097,7 +2098,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
             val savedOptions = smartPrefs.getStringSet("selected_options", emptySet())
             fun refreshOption(tv: TextView, tag: String, label: String) {
-                val checked = savedOptions.contains(tag)
+                val checked = savedOptions?.contains(tag) ?: false
                 tv.text = if (checked) "✓ $label" else "○ $label"
                 tv.setTextColor(if (checked) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
                 tv.setTypeface(null, if (checked) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
@@ -2109,7 +2110,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // 点击切换
             fun toggleOption(tv: TextView, tag: String, label: String) {
-                val current = smartPrefs.getStringSet("selected_options", emptySet()).toMutableSet()
+                val current = (smartPrefs.getStringSet("selected_options", emptySet()) ?: emptySet()).toMutableSet()
                 if (current.contains(tag)) current.remove(tag) else current.add(tag)
                 smartPrefs.edit().putStringSet("selected_options", current).apply()
                 refreshOption(tv, tag, label)
@@ -2154,7 +2155,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
 
-            lvRecords.setOnItemClickListener { _, _, position, _ ->
+            lvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
                 etInput.setText(magicRecords[position])
             }
 
@@ -2163,7 +2164,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnClose = popupView.findViewById<TextView>(R.id.btn_close_smart)
 
             btnConfirm.setOnClickListener {
-                Log.d("Cesia", "SmartWriting: ✅ 确认, selected=${savedOptions.size}")
+                Log.d("Cesia", "SmartWriting: ✅ 确认, selected=${savedOptions?.size ?: 0}")
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
                 updateStatus("✅ 智能写作设置已保存")
@@ -2196,9 +2197,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             val listHeightPx = (totalHeight - titleHeightPx - optionHeightPx * 3 - dividerPx - recordTitleHeightPx - inputHeightPx - barHeightPx).coerceAtLeast(80)
 
-            lvRecords.layoutParams = lvRecords.layoutParams.apply {
-                height = listHeightPx
-            }
+            lvRecords.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, listHeightPx)
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.elevation = 4f
@@ -2244,7 +2243,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 获取当前智能写作选中状态（供短按时使用） */
     private fun getSmartWritingSelection(): Set<String> {
         val prefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
-        return prefs.getStringSet("selected_options", emptySet())
+        return prefs.getStringSet("selected_options", emptySet()) ?: emptySet()
     }
 
     /** 短按星星按钮：执行智能写作 */
