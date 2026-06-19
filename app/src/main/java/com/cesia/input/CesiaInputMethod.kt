@@ -2096,7 +2096,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // 恢复上次选中状态（持久化）
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
-            val savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+            var savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
 
             fun refreshOption(tv: TextView, tag: String, label: String) {
                 val checked = savedOptions.contains(tag)
@@ -2109,11 +2109,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             refreshOption(optGrammar, "grammar", OPT_GRAMMAR)
             refreshOption(optSearch, "search", OPT_SEARCH)
 
-            // 点击切换（直接保存到 SharedPreferences）
+            // 点击切换（直接保存到 SharedPreferences 并刷新 UI）
             fun toggleOption(tv: TextView, tag: String, label: String) {
                 val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
                 if (current.contains(tag)) current.remove(tag) else current.add(tag)
                 smartPrefs.edit().putStringSet("selected_options", current).apply()
+                // 更新 savedOptions 闭包变量，使 refreshOption 读取最新值
+                savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
                 refreshOption(tv, tag, label)
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
@@ -2178,32 +2180,65 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_smart_delete)
             val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
 
-            // ＋：进入编辑模式输入新命令
+            // ===== ＋：进入编辑模式输入新命令 =====
             btnAdd.setOnClickListener {
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
                 enterSmartEditMode()
             }
 
-            // 置顶：将第一条置顶
+            // ===== 置顶按钮：PopupMenu 选择置顶指定命令 =====
             btnPin.setOnClickListener {
-                if (smartRecords.size > 1) {
-                    val first = smartRecords.removeAt(0)
-                    smartRecords.add(0, first)
-                    saveSmartRecords(smartRecords)
-                    notifyChanged()
+                if (smartRecords.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnPin)
+                for ((idx, cmd) in smartRecords.withIndex()) {
+                    val title = "${if (idx == 0) "⤒ " else "○ "}${cmd.take(20)}"
+                    popupMenu.menu.add(0, idx, 0, title)
                 }
+                popupMenu.setOnMenuItemClickListener { item ->
+                    val pos = item.itemId
+                    if (pos >= 0 && pos < smartRecords.size) {
+                        val moved = smartRecords.removeAt(pos)
+                        smartRecords.add(0, moved)
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⤒ 已置顶：${moved.take(18)}")
+                    }
+                    true
+                }
+                popupMenu.show()
             }
 
-            // 删除：清空所有记录
+            // ===== 删除按钮：PopupMenu 选择删除 =====
             btnDelete.setOnClickListener {
-                smartRecords.clear()
-                saveSmartRecords(smartRecords)
-                notifyChanged()
-                updateStatus("🗑️ 已清空智能写作命令")
+                if (smartRecords.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnDelete)
+                // 全部删除置顶（order=0）
+                popupMenu.menu.add(0, -1, 0, "⊗ 删除全部（${smartRecords.size}条）")
+                for ((idx, cmd) in smartRecords.withIndex()) {
+                    popupMenu.menu.add(0, idx + 1, 1, "⊗ ${cmd.take(18)}")
+                }
+                popupMenu.setOnMenuItemClickListener { item ->
+                    if (item.itemId == -1) {
+                        smartRecords.clear()
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⊗ 已清空智能写作命令")
+                    } else {
+                        val pos = item.itemId - 1
+                        if (pos >= 0 && pos < smartRecords.size) {
+                            val removed = smartRecords.removeAt(pos)
+                            saveSmartRecords(smartRecords)
+                            notifyChanged()
+                            updateStatus("⊗ 已删除：${removed.take(18)}")
+                        }
+                    }
+                    true
+                }
+                popupMenu.show()
             }
 
-            // 关闭
+            // ===== 关闭按钮 =====
             btnClose.setOnClickListener {
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
