@@ -7,17 +7,18 @@
 
     <!-- 标题 -->
     <TextView
+        android:id="@+id/tv_smart_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="10dp"
-        android:text="✨ 智能写作设置"
+        android:text="✨ 智能写作"
         android:textSize="18sp"
         android:textColor="#81D8D0"
         android:textStyle="bold"
         android:background="#1A1A2E" />
 
-    <!-- 三个来源选项（单栏） -->
+    <!-- 三个选项（语法/语料/语境） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -65,20 +66,9 @@
         android:background="#CCCCCC"
         android:layout_marginHorizontal="12dp" />
 
-    <!-- 魔法记录区标题 -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="8dp"
-        android:paddingStart="12dp"
-        android:text="📝 魔法记录"
-        android:textSize="13sp"
-        android:textColor="#81D8D0"
-        android:textStyle="bold" />
-
-    <!-- 魔法记录列表 -->
+    <!-- 智能写作命令列表 -->
     <ListView
-        android:id="@+id/lv_magic_records"
+        android:id="@+id/lv_smart_records"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
@@ -88,61 +78,29 @@
         android:scrollbars="vertical"
         android:listSelector="@android:color/transparent" />
 
-    <!-- 手动输入区 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:gravity="center_vertical">
-
-        <EditText
-            android:id="@+id/et_magic_input"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:hint="输入智能写作指令..."
-            android:textSize="13sp"
-            android:paddingHorizontal="8dp"
-            android:background="#F5F5F5"
-            android:inputType="text"
-            android:imeOptions="actionDone"
-            android:maxLines="1" />
-
-        <TextView
-            android:id="@+id/btn_add_record"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginStart="4dp"
-            android:gravity="center"
-            android:text="＋"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="添加指令" />
-    </LinearLayout>
-
-    <!-- 底部按钮栏 -->
+    <!-- 底部按钮栏：＋ 置顶 删除 ⨯ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
         android:orientation="horizontal"
-        android:gravity="center"
+        android:gravity="center_vertical"
         android:background="#F5F5F5"
+        android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
+        <!-- 新增：＋ -->
         <TextView
-            android:id="@+id/btn_confirm"
+            android:id="@+id/btn_smart_add"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="✅ 确认"
-            android:textSize="15sp"
+            android:text="＋"
+            android:textSize="18sp"
             android:textColor="#81D8D0"
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
-            android:contentDescription="确认" />
+            android:contentDescription="新增智能写作命令" />
 
         <View
             android:layout_width="1dp"
@@ -150,17 +108,57 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
+        <!-- 置顶：⤒ -->
         <TextView
-            android:id="@+id/btn_close_smart"
+            android:id="@+id/btn_smart_pin"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⨯ 关闭"
-            android:textSize="15sp"
+            android:text="⤒"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="置顶" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 删除：⊗ -->
+        <TextView
+            android:id="@+id/btn_smart_delete"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="⊗"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="删除" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 关闭：⨯ -->
+        <TextView
+            android:id="@+id/btn_smart_close"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="18sp"
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="关闭" />
+
     </LinearLayout>
 
 </LinearLayout>

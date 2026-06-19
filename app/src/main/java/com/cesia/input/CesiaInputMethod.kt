@@ -2087,18 +2087,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
 
-            val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)
+            val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
 
             // 选项视图
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
             val optGrammar = popupView.findViewById<TextView>(R.id.opt_grammar)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
 
-            // 恢复上次选中状态
+            // 恢复上次选中状态（持久化）
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
-            val savedOptions = smartPrefs.getStringSet("selected_options", emptySet())
+            val savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+
             fun refreshOption(tv: TextView, tag: String, label: String) {
-                val checked = savedOptions?.contains(tag) ?: false
+                val checked = savedOptions.contains(tag)
                 tv.text = if (checked) "✓ $label" else "○ $label"
                 tv.setTextColor(if (checked) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
                 tv.setTypeface(null, if (checked) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
@@ -2108,9 +2109,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             refreshOption(optGrammar, "grammar", OPT_GRAMMAR)
             refreshOption(optSearch, "search", OPT_SEARCH)
 
-            // 点击切换
+            // 点击切换（直接保存到 SharedPreferences）
             fun toggleOption(tv: TextView, tag: String, label: String) {
-                val current = (smartPrefs.getStringSet("selected_options", emptySet()) ?: emptySet()).toMutableSet()
+                val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
                 if (current.contains(tag)) current.remove(tag) else current.add(tag)
                 smartPrefs.edit().putStringSet("selected_options", current).apply()
                 refreshOption(tv, tag, label)
@@ -2119,17 +2120,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
 
-            // 智能写作记录列表
-            val lvRecords = popupView.findViewById<ListView>(R.id.lv_magic_records)
-            val etInput = popupView.findViewById<android.widget.EditText>(R.id.et_magic_input)
-            val btnAddRecord = popupView.findViewById<TextView>(R.id.btn_add_record)
-
-            val magicRecords = mutableListOf<String>()
-            loadMagicRecords(magicRecords)
+            // 智能写作命令列表
+            val lvRecords = popupView.findViewById<ListView>(R.id.lv_smart_records)
+            val smartRecords = mutableListOf<String>()
+            loadSmartRecords(smartRecords)
 
             val recordAdapter = object : android.widget.BaseAdapter() {
-                override fun getCount() = magicRecords.size
-                override fun getItem(p: Int) = magicRecords[p]
+                override fun getCount() = smartRecords.size
+                override fun getItem(p: Int) = smartRecords[p]
                 override fun getItemId(p: Int) = p.toLong()
                 override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                     val v = cv ?: android.widget.TextView(parent?.context).apply {
@@ -2138,46 +2136,102 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         setTextColor(0xFF555555.toInt())
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     }
-                    (v as android.widget.TextView).text = "• ${magicRecords[p]}"
+                    (v as android.widget.TextView).text = "• ${smartRecords[p]}"
                     return v
                 }
             }
             lvRecords.adapter = recordAdapter
 
-            btnAddRecord.setOnClickListener {
-                val text = etInput.text.toString().trim()
-                if (text.isNotEmpty()) {
-                    magicRecords.add(0, text)
-                    if (magicRecords.size > 50) magicRecords.removeAt(magicRecords.size - 1)
-                    saveMagicRecords(magicRecords)
-                    recordAdapter.notifyDataSetChanged()
-                    etInput.text.clear()
+            // 追踪当前编辑状态
+            var editingPosition = -1
+            var hasFocusedEdit = false
+
+            fun notifyChanged() {
+                (lvRecords.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            }
+
+            // 长按：置顶/删除（和魔法书一致）
+            lvRecords.setOnItemLongClickListener { _, view, position, _ ->
+                if (position < smartRecords.size) {
+                    val item = smartRecords[position]
+                    smartRecords.removeAt(position)
+                    smartRecords.add(0, item)
+                    saveSmartRecords(smartRecords)
+                    notifyChanged()
+                    updateStatus("⤒ 已置顶：${item.take(20)}")
+                }
+                true
+            }
+
+            // 单击：复制到输入框
+            lvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+                if (position < smartRecords.size) {
+                    val ic = currentInputConnection ?: return@setOnItemClickListener
+                    ic.commitText(smartRecords[position], 1)
+                    updateStatus("✅ 已输入命令")
                 }
             }
 
-            lvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
-                etInput.setText(magicRecords[position])
-            }
-
             // 底部按钮
-            val btnConfirm = popupView.findViewById<TextView>(R.id.btn_confirm)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_close_smart)
+            val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
+            val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
+            val btnDelete = popupView.findViewById<TextView>(R.id.btn_smart_delete)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
 
-            btnConfirm.setOnClickListener {
-                Log.d("Cesia", "SmartWriting: ✅ 确认, selected=${savedOptions?.size ?: 0}")
+            // ＋：进入编辑模式输入新命令
+            btnAdd.setOnClickListener {
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
-                updateStatus("✅ 智能写作设置已保存")
+                enterSmartEditMode()
             }
+
+            // 置顶：将第一条置顶
+            btnPin.setOnClickListener {
+                if (smartRecords.size > 1) {
+                    val first = smartRecords.removeAt(0)
+                    smartRecords.add(0, first)
+                    saveSmartRecords(smartRecords)
+                    notifyChanged()
+                }
+            }
+
+            // 删除：清空所有记录
+            btnDelete.setOnClickListener {
+                smartRecords.clear()
+                saveSmartRecords(smartRecords)
+                notifyChanged()
+                updateStatus("🗑️ 已清空智能写作命令")
+            }
+
+            // 关闭
             btnClose.setOnClickListener {
-                Log.d("Cesia", "SmartWriting: 关闭 clicked")
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
             }
 
-            // 弹窗尺寸和定位
+            // 弹窗尺寸和定位（与魔法书一致）
             val keyboardWidth = keyboardView.width
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            // 测量标题栏实际高度
+            popupView.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+            )
+            val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)?.measuredHeight
+                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
+
+            val barHeightPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
+            ).toInt()
+
+            // 选项区高度（3项 × 40dp）
+            val optionHeightPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics
+            ).toInt()
+            val optionsHeightPx = optionHeightPx * 3 + TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
+            ).toInt() // padding
 
             val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
                 if (id > 0) resources.getDimensionPixelSize(id) else 88
@@ -2185,21 +2239,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val keyboardLocation = IntArray(2)
             keyboardView.getLocationOnScreen(keyboardLocation)
             val keyboardTopScreenY = keyboardLocation[1]
-            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(300)
+            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
 
-            // 列表高度 = 总高度 - 标题 - 选项区(3*40dp) - 分隔线 - 记录标题 - 输入框 - 底部按钮
-            val titleHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
-            val optionHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
-            val recordTitleHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 32f, resources.displayMetrics).toInt()
-            val inputHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 52f, resources.displayMetrics).toInt()
-            val barHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics).toInt()
-            val dividerPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1f, resources.displayMetrics).toInt()
+            // 列表高度 = 总高度 - 标题 - 选项区 - 分隔线 - 底部按钮
+            val listHeightPx = (totalHeight - titleHeightPx - optionsHeightPx - barHeightPx).coerceAtLeast(80)
 
-            val listHeightPx = (totalHeight - titleHeightPx - optionHeightPx * 3 - dividerPx - recordTitleHeightPx - inputHeightPx - barHeightPx).coerceAtLeast(80)
-
-            lvRecords.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, listHeightPx)
+            lvRecords.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, listHeightPx
+            )
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            popup.isOutsideTouchable = false
             popup.elevation = 4f
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
@@ -2209,12 +2259,44 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 smartWritingPopup = null
             }
 
-            popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
             smartWritingPopup = popup
         } catch (e: Exception) {
             Log.e("Cesia", "showSmartWritingPopup 异常", e)
         }
     }
+
+    /** 进入智能写作命令编辑模式 */
+    private fun enterSmartEditMode() {
+        smartEditMode = true
+        smartEditBuffer.clear()
+        updateStatus("✏️ 输入智能写作命令...（按发送键保存）")
+    }
+
+    /** 加载智能写作命令记录 */
+    private fun loadSmartRecords(list: MutableList<String>) {
+        try {
+            val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+            val records = prefs.getString("records", "") ?: ""
+            if (records.isNotEmpty()) {
+                list.clear()
+                list.addAll(records.split("\n").filter { it.isNotEmpty() })
+            }
+        } catch (e: Exception) {
+            Log.e("Cesia", "loadSmartRecords 异常", e)
+        }
+    }
+
+    /** 保存智能写作命令记录 */
+    private fun saveSmartRecords(list: List<String>) {
+        try {
+            val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+            prefs.edit().putString("records", list.joinToString("\n")).apply()
+        } catch (e: Exception) {
+            Log.e("Cesia", "saveSmartRecords 异常", e)
+        }
+    }
+
 
     /** 加载智能写作记录 */
     private fun loadMagicRecords(list: MutableList<String>) {
@@ -2340,6 +2422,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 智能写作选项弹窗引用 */
     private var smartWritingPopup: PopupWindow? = null
+    private var smartEditMode = false
+    private var smartEditBuffer = StringBuilder()
 
 // endregion 候选适配器
 
@@ -2384,6 +2468,26 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         magicEditMode = false
         magicEditBuffer.clear()
         magicEditMgr = null
+    }
+
+    /** 退出智能写作命令编辑模式 */
+    private fun exitSmartEditMode(save: Boolean = false) {
+        if (save && smartEditBuffer.isNotEmpty()) {
+            val text = smartEditBuffer.toString().trim()
+            if (text.isNotEmpty()) {
+                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                val records = prefs.getString("records", "") ?: ""
+                val list = if (records.isNotEmpty()) records.split("\n").filter { it.isNotEmpty() }.toMutableList() else mutableListOf()
+                list.add(0, text)
+                if (list.size > 50) list.removeAt(list.size - 1)
+                prefs.edit().putString("records", list.joinToString("\n")).apply()
+                updateStatus("✅ 已保存智能写作命令：${text.take(20)}")
+            }
+        } else {
+            if (smartEditMode) updateStatus("❌ 已取消新增命令")
+        }
+        smartEditMode = false
+        smartEditBuffer.clear()
     }
 
 
@@ -3791,8 +3895,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun switchToKeyboard(mode: KeyboardMode) {
-        // 切换键盘时退出魔法编辑模式
+        // 切换键盘时退出魔法编辑模式和智能写作编辑模式
         if (magicEditMode) exitMagicEditMode(save = false)
+        if (smartEditMode) exitSmartEditMode(save = false)
         // 记录进入符号键盘前的模式，用于返回
         // 只在从非符号键盘进入符号键盘时记录，符号↔符号切换不更新
         if ((mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN)
@@ -4849,6 +4954,73 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     // 其他按键（shift/ctrl等）忽略
                     else -> return
+                }
+            }
+        }
+
+        // ======================== 智能写作命令编辑模式拦截 ========================
+        if (smartEditMode) {
+            when (primaryCode) {
+                // 发送键/回车键：保存命令并退出编辑模式
+                -200, 10 -> {
+                    val comp = rimeEngine.composingText
+                    if (comp.isNotEmpty()) {
+                        smartEditBuffer.append(comp)
+                        rimeEngine.clear()
+                    }
+                    exitSmartEditMode(save = true)
+                    return
+                }
+                // 返回键：取消并退出编辑模式
+                KeyEvent.KEYCODE_BACK -> {
+                    rimeEngine.clear()
+                    exitSmartEditMode(save = false)
+                    return
+                }
+                // 退格键
+                -5, Keyboard.KEYCODE_DELETE -> {
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.processKey("BackSpace")
+                        updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    } else if (smartEditBuffer.isNotEmpty()) {
+                        smartEditBuffer.deleteCharAt(smartEditBuffer.length - 1)
+                        updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    }
+                    return
+                }
+                // 字母键 a-z
+                in 97..122 -> {
+                    rimeEngine.processKey(primaryCode.toChar())
+                    updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    return
+                }
+                // 数字键 0-9
+                in 48..57 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                        val cands = rimeEngine.candidates
+                        if (index < cands.size) {
+                            val selected = rimeEngine.selectCandidate(index)
+                            smartEditBuffer.append(selected)
+                            updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                        }
+                    } else {
+                        smartEditBuffer.append(primaryCode.toChar())
+                        updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    }
+                    return
+                }
+                // 空格
+                32 -> {
+                    smartEditBuffer.append(' ')
+                    updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    return
+                }
+                // 标点符号
+                else -> {
+                    smartEditBuffer.append(primaryCode.toChar())
+                    updateStatus("✏️ ${smartEditBuffer}${rimeEngine.composingText}")
+                    return
                 }
             }
         }
