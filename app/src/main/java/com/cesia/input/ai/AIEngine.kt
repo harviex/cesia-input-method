@@ -162,7 +162,7 @@ class AIEngine(private val context: Context) {
             try {
                 mnnEngine.nativeReset()
                 // prompt 已包含原文，按 prompt 长度动态计算 maxTokens
-                val maxTokens = (prompt.length * 2.0).toInt().coerceIn(64, 2048)
+                val maxTokens = (prompt.length * 2.0).toInt().coerceIn(64, 4096)
                 Log.d(TAG, "polishWithPrompt: promptLen=${prompt.length}, maxTokens=$maxTokens")
                 System.gc()
                 val result = mnnEngine.nativeGenerate(prompt, maxTokens)
@@ -194,7 +194,7 @@ class AIEngine(private val context: Context) {
                 mnnEngine.nativeReset()
 
                 // 动态计算 maxTokens：原文长度 * 2.5（留足余量），最少 64，最多 2048
-                val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 2048)
+                val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 4096)
                 Log.d(TAG, "Polish: textLen=${text.length}, maxTokens=$maxTokens")
 
                 val prompt = buildPolishPrompt(text, instruction)

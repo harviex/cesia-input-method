@@ -22,9 +22,9 @@ class PolishService(
     private var apiUrl: String = DEFAULT_OPENROUTER_URL
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
     sealed class PolishResult {
@@ -112,7 +112,7 @@ class PolishService(
             put("model", model)
             put("messages", messages)
             put("temperature", 0.3)
-            put("max_tokens", 512)
+            put("max_tokens", 4096)
             put("stop", JSONArray().apply {
                 put("</assistant>")
                 put("<|endoftext|>")
@@ -317,6 +317,7 @@ class PolishService(
     /** 魔法模式：使用自定义 prompt 调用 API */
     fun polishWithPrompt(prompt: String): String? {
         return try {
+            Log.d("PolishService", "polishWithPrompt: apiUrl=$apiUrl, isOpenRouter=${isOpenRouterUrl(apiUrl)}")
             if (isOpenRouterUrl(apiUrl)) {
                 polishWithPromptOpenRouter(prompt)
             } else {
@@ -330,6 +331,7 @@ class PolishService(
 
     private fun polishWithPromptOpenRouter(prompt: String): String? {
         val apiKey = getOpenRouterApiKey() ?: return null
+        Log.d("PolishService", "polishWithPromptOpenRouter: _modelId=$_modelId, fallback=$OPENROUTER_MODEL_FALLBACK, apiKey=${apiKey.take(8)}...")
 
         val messages = JSONArray().apply {
             put(JSONObject().apply {
@@ -342,14 +344,14 @@ class PolishService(
             })
         }
 
-        // 魔法模式也支持多模型重试
-        val models = listOf(_modelId, OPENROUTER_MODEL_FALLBACK)
-        for (model in models.distinct()) {
+        // 魔法模式：单模型，避免重试浪费时间
+        val models = listOf(_modelId)
+        for (model in models) {
             val json = JSONObject().apply {
                 put("model", model)
                 put("messages", messages)
                 put("temperature", 0.3)
-                put("max_tokens", 2048)
+                put("max_tokens", 4096)
                 put("stop", JSONArray().apply {
                     put("</assistant>")
                     put("<|endoftext|>")
