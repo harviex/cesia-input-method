@@ -77,7 +77,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: ImageButton // 智能修改按钮（魔法书/笔）
-    private lateinit var btnMagic: MaterialButton // 智能写作按钮（星星/四角星）
+    private lateinit var btnMagic: ImageButton // 智能写作按钮（星星/五角星）
     private lateinit var btnSend: ImageButton
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
@@ -1278,9 +1278,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 开始发光（与魔法书按钮一致：青色背景+白色图标）
-                    btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-                    (btnMagic as android.widget.ImageView).setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
-                    btnMagic.elevation = 6f
+                    btnMagic.setBackgroundColor(0xFF81D8D0.toInt())
+                    btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
                     startMagicButtonGlow()
                     // 延迟触发长按弹窗
                     magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
@@ -1299,9 +1298,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     if (!magicBookLongPressTriggered) {
                         // 短按：停止发光，执行第一项命令
                         stopMagicButtonGlow()
-                        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-                        (btnMagic as android.widget.ImageView).clearColorFilter()
-                        btnMagic.elevation = 0f
+                        btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
+                        btnMagic.clearColorFilter()
                         v.performClick()
                     }
                     // 长按已触发：保持高光（持续到popup关闭）
@@ -1311,9 +1309,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
                     magicBookRunnable = null
                     stopMagicButtonGlow()
-                    btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-                    (btnMagic as android.widget.ImageView).clearColorFilter()
-                    btnMagic.elevation = 0f
+                    btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
+                    btnMagic.clearColorFilter()
                     true
                 }
                 else -> false
@@ -1489,9 +1486,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 高亮按钮表示正在录音 + 脉冲发光动画
         magicIsWaitingForVoice = true
         magicModeGlowing = true
-        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-        btnMagic.setTextColor(0xFFFFFFFF.toInt())
-        btnMagic.elevation = 6f
+        btnMagic.setBackgroundColor(0xFF81D8D0.toInt())
+        btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
         startMagicButtonGlow()
 
         updateStatus("🎤 请说出你的想法...（再次点击✨停止）")
@@ -1592,9 +1588,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicModeGlowing = false
         stopMagicButtonGlow()
         try {
-            btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-            btnMagic.setTextColor(0xFF888888.toInt())
-            btnMagic.elevation = 0f
+            btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
+            btnMagic.clearColorFilter()
         } catch (_: Exception) {}
     }
 
@@ -2342,9 +2337,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 smartWritingPopup = null
                 // 弹窗关闭时停止发光
                 stopMagicButtonGlow()
-                btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-                (btnMagic as android.widget.ImageView).clearColorFilter()
-                btnMagic.elevation = 0f
+                btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
+                btnMagic.clearColorFilter()
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
@@ -4649,8 +4643,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
         // 立即高亮发送按钮
-        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-        btnSend.elevation = 6f
+        btnSend.setBackgroundColor(0xFF81D8D0.toInt())
         startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
@@ -4678,15 +4671,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopSendButtonGlow() {
         sendButtonGlowing = false
         btnSend.clearAnimation()
-        btnSend.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-        btnSend.elevation = 0f
+        btnSend.setBackgroundColor(0xFFE0E0E0.toInt())
     }
 
     private fun startMagicBookLongPress() {
         cancelMagicBookLongPress()
         // 立即高亮魔法书按钮
-        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
-        btnClipboard.elevation = 6f
+        btnClipboard.setBackgroundColor(0xFF81D8D0.toInt())
         startMagicBookGlow()
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
@@ -4714,8 +4705,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopMagicBookGlow() {
         magicBookGlowing = false
         btnClipboard.clearAnimation()
-        btnClipboard.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-        btnClipboard.elevation = 0f
+        btnClipboard.setBackgroundColor(0xFFE0E0E0.toInt())
     }
 
     // ====== 语音按钮发光（锁定模式） ======
