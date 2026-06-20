@@ -1129,13 +1129,103 @@ class SettingsActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("📖 个人语法纲要")
             .setView(scrollView)
-            .setPositiveButton("刷新") { _, _ ->
-                // 触发一次完整刷新
+            .setPositiveButton("刷新") { dialog, _ ->
                 val records = statsManager.getRecords()
                 if (records.isNotEmpty()) {
-                    guideMgr.clear()
-                    guideMgr.updateRecordCount(0)
-                    Toast.makeText(this, "正在后台生成大纲...", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                    // 后台线程生成
+                    Thread {
+                        try {
+                            val guideMgr = com.cesia.input.stats.GrammarGuideManager(this@SettingsActivity)
+                            guideMgr.clear()
+                            guideMgr.updateRecordCount(0)
+
+                            val sb = StringBuilder()
+                            for ((i, record) in records.take(20).withIndex()) {
+                                sb.appendLine("【${i + 1}】原文：${record.inputText}")
+                                sb.appendLine("    润色：${record.outputText}")
+                                sb.appendLine()
+                            }
+                            val inputText = sb.toString().trim()
+                            if (inputText.isEmpty()) return@Thread
+
+                            val prompt = "以下是用户的最近润色记录（原文→润色后），请分析并生成一份简洁的【用户个人语法纲要】。\n" +
+                                    "包括：\n" +
+                                    "1. 常用句式和表达习惯\n" +
+                                    "2. 词汇偏好（喜欢用哪些词）\n" +
+                                    "3. 语气风格（正式/口语/幽默/简洁等）\n" +
+                                    "4. 标点使用习惯\n" +
+                                    "5. 其他语言特点\n" +
+                                    "\n" +
+                                    "要求：简洁精炼，不超过500字，用要点列表形式。\n" +
+                                    "\n" +
+                                    "润色记录：\n" + inputText
+
+                            val apiKey = prefs.getString("openrouter_api_key", "") ?: ""
+                            if (apiKey.isEmpty()) {
+                                runOnUiThread {
+                                    Toast.makeText(this@SettingsActivity, "请先设置 OpenRouter API Key", Toast.LENGTH_LONG).show()
+                                }
+                                return@Thread
+                            }
+
+                            val client = OkHttpClient.Builder()
+                                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                                .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                                .build()
+
+                            val url = prefs.getString("api_url", DEFAULT_API_URL) ?: DEFAULT_API_URL
+                            val model = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+                            Log.d("GrammarGuide", "请求: url=$url model=$model")
+
+                            val json = org.json.JSONObject().apply {
+                                put("model", model)
+                                put("messages", org.json.JSONArray().apply {
+                                    put(org.json.JSONObject().apply {
+                                        put("role", "user")
+                                        put("content", prompt)
+                                    })
+                                })
+                                put("max_tokens", 1024)
+                            }
+
+                            val request = Request.Builder()
+                                .url(url)
+                                .addHeader("Authorization", "Bearer $apiKey")
+                                .addHeader("Content-Type", "application/json")
+                                .post(json.toString().toRequestBody("application/json".toMediaType()))
+                                .build()
+
+                            val response = client.newCall(request).execute()
+                            val body = response.body?.string() ?: ""
+
+                            if (response.isSuccessful) {
+                                val result = org.json.JSONObject(body)
+                                val content = result.getJSONArray("choices")
+                                    .getJSONObject(0)
+                                    .getJSONObject("message")
+                                    .getString("content")
+                                if (content.isNotEmpty()) {
+                                    guideMgr.saveGuide(content)
+                                    guideMgr.updateRecordCount(records.size)
+                                    runOnUiThread {
+                                        Toast.makeText(this@SettingsActivity, "✅ 语法大纲已生成（版本${guideMgr.version}）", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else {
+                                runOnUiThread {
+                                    Toast.makeText(this@SettingsActivity, "生成失败: ${response.code}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("SettingsActivity", "语法大纲生成失败", e)
+                            runOnUiThread {
+                                Toast.makeText(this@SettingsActivity, "生成失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }.start()
+                } else {
+                    Toast.makeText(this, "暂无润色记录，无法生成大纲", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("关闭", null)

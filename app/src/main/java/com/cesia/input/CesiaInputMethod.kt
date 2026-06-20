@@ -2122,8 +2122,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     // 智能写作设置弹窗中的选项标签常量
     private val OPT_CLIPBOARD = "📋 剪贴板首条"
-    private val OPT_GRAMMAR = "📖 语法大纲"
-    private val OPT_SEARCH = "🌐 互联网搜索"
+    private val OPT_CHAT_HISTORY = "💬 聊天记录"
+    private val OPT_SEARCH = "🌐 网络搜索"
+    private val OPT_LOCAL_LIB = "📚 本地文库"
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
@@ -2136,8 +2137,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // 选项视图
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
-            val optGrammar = popupView.findViewById<TextView>(R.id.opt_grammar)
+            val optChatHistory = popupView.findViewById<TextView>(R.id.opt_chat_history)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
+            val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
 
             // 恢复上次选中状态（持久化）
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
@@ -2151,8 +2153,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.tag = tag
             }
             refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
-            refreshOption(optGrammar, "grammar", OPT_GRAMMAR)
+            refreshOption(optChatHistory, "chat_history", OPT_CHAT_HISTORY)
             refreshOption(optSearch, "search", OPT_SEARCH)
+            refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
 
             // 点击切换（直接保存到 SharedPreferences 并刷新 UI）
             fun toggleOption(tv: TextView, tag: String, label: String) {
@@ -2164,8 +2167,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 refreshOption(tv, tag, label)
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
-            optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
+            optChatHistory.setOnClickListener { toggleOption(it as TextView, "chat_history", OPT_CHAT_HISTORY) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
+            optLocalLib.setOnClickListener { toggleOption(it as TextView, "local_lib", OPT_LOCAL_LIB) }
 
             // 智能写作命令列表（2列，可滚动，与魔法书一致）
             val gvRecords = popupView.findViewById<android.widget.GridView>(R.id.gv_smart_records)
@@ -2303,11 +2307,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
             ).toInt()
 
-            // 选项区高度（3项 × 40dp）
+            // 选项区高度（2列×2行 × 40dp）
             val optionHeightPx = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics
             ).toInt()
-            val optionsHeightPx = optionHeightPx * 3 + TypedValue.applyDimension(
+            val optionsHeightPx = optionHeightPx * 2 + TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
             ).toInt() // padding
 
@@ -2319,13 +2323,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val keyboardTopScreenY = keyboardLocation[1]
             val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
 
-            // 列表高度 = 总高度 - 标题 - 选项区 - 分隔线 - 底部按钮
-            val listHeightPx = (totalHeight - titleHeightPx - optionsHeightPx - barHeightPx).coerceAtLeast(80)
+            // GridView 使用 weight=1 自动填满剩余空间，无需手动设置高度
 
-            gvRecords.layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, listHeightPx
-            )
-
+            // 弹窗尺寸：固定高度 = 键盘顶部 - 状态栏底部，完全填满
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
             popup.elevation = 4f
@@ -2335,7 +2335,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             popup.setOnDismissListener {
                 smartWritingPopup = null
-                // 弹窗关闭时停止发光
                 stopMagicButtonGlow()
                 btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
                 btnMagic.clearColorFilter()
@@ -2425,10 +2424,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                 val polishService = typelessEngine?.getPolishService()
                 val result = polishService?.polishWithPrompt(fullPrompt)
+                Log.d("Cesia", "executeSmartCommand: result=${result?.take(100) ?: "NULL"}, resultIsNull=${result == null}")
 
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
-                    if (result != null && result.isNotEmpty()) {
+                    if (result != null && result.isNotEmpty() && result != "null") {
                         ic.commitText(result, 1)
                         updateStatus("✅ 智能写作已完成")
                     } else {
@@ -2527,15 +2527,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 list.clear()
                 list.addAll(records.split("\n").filter { it.isNotEmpty() })
             } else {
-                // 首次使用：添加5条示范命令
+                // 首次使用：注入生成类10条标准指令
                 list.clear()
-                list.addAll(listOf(
-                    "请以今天发生的国际新闻为主题，写一篇200字的简短报道",
-                    "请将以下文字改写成正式商务风格，适合邮件使用",
-                    "请帮我写一条周末出游的朋友社文案，语气轻松活泼",
-                    "请用简洁的语言总结当前科技发展趋势，不超过100字",
-                    "请根据上下文续写一段话，内容与原文风格保持一致"
-                ))
+                list.addAll(com.cesia.input.instruction.InstructionSet.starInstructions.map { it.name })
                 saveSmartRecords(list)
             }
         } catch (e: Exception) {

@@ -109,7 +109,7 @@ object InstructionSet {
         Instruction("polish_readable", "润色", "提高可读性", "提高以下文字的可读性，调整句子长度和段落结构，使读者更容易理解和阅读，只输出修改后的文字，不要输出任何解释", listOf("可读性", "易读", "好读", "通俗易懂", "阅读体验"))
     )
 
-    // ==================== 全部指令 ====================
+    // ==================== 全部指令（魔法书50条，不含生成类） ====================
     val allInstructions: List<Instruction> = listOf(
         translateInstructions,
         toneInstructions,
@@ -117,13 +117,15 @@ object InstructionSet {
         formatInstructions,
         contentInstructions,
         specialInstructions,
-        generateInstructions,
         polishInstructions
     ).flatten()
 
+    // ==================== 仅生成类（星星按钮专用） ====================
+    val starInstructions: List<Instruction> = generateInstructions
+
     // ==================== 分类列表 ====================
     val categories: List<String> = listOf(
-        "翻译", "语气", "长度", "格式", "内容", "特殊", "生成", "润色"
+        "翻译", "语气", "长度", "格式", "内容", "特殊", "润色"
     )
 
     // ==================== 查询方法 ====================

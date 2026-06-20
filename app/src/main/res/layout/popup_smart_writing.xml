@@ -18,45 +18,72 @@
         android:textStyle="bold"
         android:background="#1A1A2E" />
 
-    <!-- 三个选项（语法/语料/语境） -->
+    <!-- 选项区域：2列布局 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:padding="12dp">
 
-        <TextView
-            android:id="@+id/opt_clipboard"
-            android:layout_width="match_parent"
+        <!-- 第一列：剪贴板、聊天记录 -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:padding="12dp"
-            android:text="○ 📋 剪贴板首条"
-            android:textSize="14sp"
-            android:textColor="#333333"
-            android:background="?attr/selectableItemBackground"
-            android:tag="clipboard" />
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/opt_grammar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="12dp"
-            android:text="○ 📖 语法大纲"
-            android:textSize="14sp"
-            android:textColor="#333333"
-            android:background="?attr/selectableItemBackground"
-            android:tag="grammar" />
+            <TextView
+                android:id="@+id/opt_clipboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="○ 📋 剪贴板首条"
+                android:textSize="14sp"
+                android:textColor="#333333"
+                android:background="?attr/selectableItemBackground"
+                android:tag="clipboard" />
 
-        <TextView
-            android:id="@+id/opt_search"
-            android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/opt_chat_history"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="○ 💬 聊天记录"
+                android:textSize="14sp"
+                android:textColor="#333333"
+                android:background="?attr/selectableItemBackground"
+                android:tag="chat_history" />
+        </LinearLayout>
+
+        <!-- 第二列：网络搜索、本地文库 -->
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:padding="12dp"
-            android:text="○ 🌐 互联网搜索"
-            android:textSize="14sp"
-            android:textColor="#333333"
-            android:background="?attr/selectableItemBackground"
-            android:tag="search" />
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/opt_search"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="○ 🌐 网络搜索"
+                android:textSize="14sp"
+                android:textColor="#333333"
+                android:background="?attr/selectableItemBackground"
+                android:tag="search" />
+
+            <TextView
+                android:id="@+id/opt_local_lib"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="○ 📚 本地文库"
+                android:textSize="14sp"
+                android:textColor="#333333"
+                android:background="?attr/selectableItemBackground"
+                android:tag="local_lib" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 分隔线 -->
