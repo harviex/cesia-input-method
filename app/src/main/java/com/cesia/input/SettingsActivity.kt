@@ -68,7 +68,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvStatOutputChars: TextView
     private lateinit var tvStatCount: TextView
     private lateinit var btnHistory: Button
-    private lateinit var btnGrammarGuide: Button
     private lateinit var statsManager: PolishStatsManager
     private lateinit var dictManager: PinyinDictManager
 
@@ -93,9 +92,13 @@ class SettingsActivity : AppCompatActivity() {
     private var etCmdFinish: TextInputEditText? = null
     private var etCmdSend: TextInputEditText? = null
     private var etCmdCommand: TextInputEditText? = null
-    private var btnSaveCommands: Button? = null
-    private var btnResetCommands: Button? = null
+    private var etCmdWriting: TextInputEditText? = null
     private var tvCommandStatus: TextView? = null
+
+    // 个性化设置
+    private var etStatusIdle: TextInputEditText? = null
+    private var etSmartWritingLabel: TextInputEditText? = null
+    private var etMagicBookTitle: TextInputEditText? = null
 
     // 语音与 AI 本地化设置 helper
     private lateinit var aiSettingsHelper: VoiceAISettingsHelper
@@ -134,7 +137,7 @@ class SettingsActivity : AppCompatActivity() {
         const val IMPORT_PHRASES_REQUEST = 2002
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
-        const val PREF_BRAVE_KEY = "brave_search_api_key"
+        const val PREF_BRAVE_KEY = "tavily_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
     }
@@ -223,7 +226,6 @@ class SettingsActivity : AppCompatActivity() {
         tvStatOutputChars = findViewById(R.id.tv_stat_output_chars)
         tvStatCount = findViewById(R.id.tv_stat_count)
         btnHistory = findViewById(R.id.btn_history)
-        btnGrammarGuide = findViewById(R.id.btn_grammar_guide)
 
         // 主题切换
         try {
@@ -266,9 +268,15 @@ class SettingsActivity : AppCompatActivity() {
             etCmdFinish = findViewById(R.id.et_cmd_finish)
             etCmdSend = findViewById(R.id.et_cmd_send)
             etCmdCommand = findViewById(R.id.et_cmd_command)
-            btnSaveCommands = findViewById(R.id.btn_save_commands)
-            btnResetCommands = findViewById(R.id.btn_reset_commands)
+            etCmdWriting = findViewById(R.id.et_cmd_writing)
             tvCommandStatus = findViewById(R.id.tv_command_status)
+        } catch (_: Exception) {}
+
+        // 个性化设置
+        try {
+            etStatusIdle = findViewById(R.id.et_status_idle)
+            etSmartWritingLabel = findViewById(R.id.et_smart_writing_label)
+            etMagicBookTitle = findViewById(R.id.et_magic_book_title)
         } catch (_: Exception) {}
     }
 
@@ -350,6 +358,23 @@ class SettingsActivity : AppCompatActivity() {
         etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束"))
         etCmdSend?.setText(cmdPrefs.getString("cmd_send", "发送"))
         etCmdCommand?.setText(cmdPrefs.getString("cmd_command", "指令"))
+        etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "写作"))
+
+        // 加载个性化设置
+        etStatusIdle?.setText(prefs.getString("status_idle", ""))
+        etSmartWritingLabel?.setText(prefs.getString("smart_writing_label", ""))
+        etMagicBookTitle?.setText(prefs.getString("magic_book_title", ""))
+
+        // 更新 VoiceEngine 命令词
+        VoiceEngine.updateCommandWords(
+            cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
+            cmdPrefs.getString("cmd_polish", "魔法") ?: "魔法",
+            cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
+            cmdPrefs.getString("cmd_send", "发送") ?: "发送",
+            cmdPrefs.getString("cmd_command", "指令") ?: "指令",
+            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
+        )
+
         appendLog("已加载设置")
     }
 
@@ -365,18 +390,51 @@ class SettingsActivity : AppCompatActivity() {
             val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
                 ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
             val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
+
+            // 语音命令词
+            val cmdExit = etCmdExit?.text?.toString()?.trim() ?: "退出"
+            val cmdPolish = etCmdPolish?.text?.toString()?.trim() ?: "魔法"
+            val cmdFinish = etCmdFinish?.text?.toString()?.trim() ?: "结束"
+            val cmdSend = etCmdSend?.text?.toString()?.trim() ?: "发送"
+            val cmdCommand = etCmdCommand?.text?.toString()?.trim() ?: "指令"
+            val cmdWriting = etCmdWriting?.text?.toString()?.trim() ?: "写作"
+
+            // 个性化设置
+            val statusIdle = etStatusIdle?.text?.toString()?.trim() ?: ""
+            val smartWritingLabel = etSmartWritingLabel?.text?.toString()?.trim() ?: ""
+            val magicBookTitle = etMagicBookTitle?.text?.toString()?.trim() ?: ""
+
             prefs.edit()
                 .putString(PREF_API_URL, url)
                 .putString(PREF_OPENROUTER_KEY, apiKey)
                 .putString(PREF_BRAVE_KEY, braveApiKey)
                 .putString(PREF_MODEL_ID, selectedModel)
                 .putString(PREF_POLISH_PROMPT, polishPrompt)
+                .putString("status_idle", statusIdle)
+                .putString("smart_writing_label", smartWritingLabel)
+                .putString("magic_book_title", magicBookTitle)
                 .apply()
+
+            // 保存命令词到 cesia_commands
+            val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+            cmdPrefs.edit()
+                .putString("cmd_exit", cmdExit)
+                .putString("cmd_polish", cmdPolish)
+                .putString("cmd_finish", cmdFinish)
+                .putString("cmd_send", cmdSend)
+                .putString("cmd_command", cmdCommand)
+                .putString("cmd_writing", cmdWriting)
+                .apply()
+
+            // 更新 VoiceEngine 命令词
+            VoiceEngine.updateCommandWords(cmdExit, cmdPolish, cmdFinish, cmdSend, cmdCommand, cmdWriting)
+
             aiSettingsHelper.saveSettings()
             tvStatus.text = "✓ 设置已保存"
             appendLog("💾 API: $url")
             appendLog("🔑 API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "未设置"}")
             appendLog("🤖 模型: $selectedModel")
+            appendLog("🎙️ 命令词: 退出=$cmdExit 润色=$cmdPolish 结束=$cmdFinish 发送=$cmdSend 指令=$cmdCommand 写作=$cmdWriting")
             if (polishPrompt.isNotEmpty()) {
                 appendLog("📝 Prompt: ${polishPrompt.take(50)}...")
             }
@@ -385,18 +443,34 @@ class SettingsActivity : AppCompatActivity() {
 
         btnReset.setOnClickListener {
             etApiUrl.setText(DEFAULT_API_URL)
+            etApiKey.setText("")
+            etBraveApiKey?.setText("")
+            etPolishPrompt.setText("")
             prefs.edit().putString(PREF_API_URL, DEFAULT_API_URL).apply()
+
+            // 重置命令词
+            etCmdExit?.setText("退出")
+            etCmdPolish?.setText("魔法")
+            etCmdFinish?.setText("结束")
+            etCmdSend?.setText("发送")
+            etCmdCommand?.setText("指令")
+            etCmdWriting?.setText("写作")
+            VoiceEngine.updateCommandWords("退出", "魔法", "结束", "发送", "指令", "写作")
+
+            // 重置个性化设置
+            etStatusIdle?.setText("")
+            etSmartWritingLabel?.setText("")
+            etMagicBookTitle?.setText("")
+
             tvStatus.text = "已重置"
-            appendLog("🔄 已重置")
+            appendLog("🔄 已重置为默认值")
+            Toast.makeText(this, "已重置为默认值", Toast.LENGTH_SHORT).show()
         }
 
         btnTestApi.setOnClickListener { testApiConnection() }
         btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
         btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
-        }
-        btnGrammarGuide.setOnClickListener {
-            showGrammarGuideDialog()
         }
 
         // 主题切换
@@ -418,9 +492,6 @@ class SettingsActivity : AppCompatActivity() {
         btnDownloadAi?.setOnClickListener { downloadAiModel() }
         // 卸载按钮已在 VoiceAISettingsHelper 中绑定
 
-        // === 语音命令词 ===
-        btnSaveCommands?.setOnClickListener { saveCommandWords() }
-        btnResetCommands?.setOnClickListener { resetCommandWords() }
     }
 
     // ======================== 模型下载 ========================
@@ -1106,131 +1177,7 @@ class SettingsActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    /**
-     * 显示语法大纲弹窗
-     */
-    private fun showGrammarGuideDialog() {
-        val guideMgr = com.cesia.input.stats.GrammarGuideManager(this)
-        val guideContent = guideMgr.content
-
-        val scrollView = android.widget.ScrollView(this)
-        val tv = android.widget.TextView(this).apply {
-            textSize = 14f
-            setPadding(32, 24, 32, 24)
-            setTextColor(0xFF333333.toInt())
-            text = if (guideContent.isEmpty()) {
-                "暂无语法大纲\n\n请先使用几次润色功能，系统会自动根据历史记录生成个人语法纲要。"
-            } else {
-                "版本: ${guideMgr.version}\n\n$guideContent"
-            }
-        }
-        scrollView.addView(tv)
-
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("📖 个人语法纲要")
-            .setView(scrollView)
-            .setPositiveButton("刷新") { dialog, _ ->
-                val records = statsManager.getRecords()
-                if (records.isNotEmpty()) {
-                    dialog.dismiss()
-                    // 后台线程生成
-                    Thread {
-                        try {
-                            val guideMgr = com.cesia.input.stats.GrammarGuideManager(this@SettingsActivity)
-                            guideMgr.clear()
-                            guideMgr.updateRecordCount(0)
-
-                            val sb = StringBuilder()
-                            for ((i, record) in records.take(20).withIndex()) {
-                                sb.appendLine("【${i + 1}】原文：${record.inputText}")
-                                sb.appendLine("    润色：${record.outputText}")
-                                sb.appendLine()
-                            }
-                            val inputText = sb.toString().trim()
-                            if (inputText.isEmpty()) return@Thread
-
-                            val prompt = "以下是用户的最近润色记录（原文→润色后），请分析并生成一份简洁的【用户个人语法纲要】。\n" +
-                                    "包括：\n" +
-                                    "1. 常用句式和表达习惯\n" +
-                                    "2. 词汇偏好（喜欢用哪些词）\n" +
-                                    "3. 语气风格（正式/口语/幽默/简洁等）\n" +
-                                    "4. 标点使用习惯\n" +
-                                    "5. 其他语言特点\n" +
-                                    "\n" +
-                                    "要求：简洁精炼，不超过500字，用要点列表形式。\n" +
-                                    "\n" +
-                                    "润色记录：\n" + inputText
-
-                            val apiKey = prefs.getString("openrouter_api_key", "") ?: ""
-                            if (apiKey.isEmpty()) {
-                                runOnUiThread {
-                                    Toast.makeText(this@SettingsActivity, "请先设置 OpenRouter API Key", Toast.LENGTH_LONG).show()
-                                }
-                                return@Thread
-                            }
-
-                            val client = OkHttpClient.Builder()
-                                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                                .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                                .build()
-
-                            val url = prefs.getString("api_url", DEFAULT_API_URL) ?: DEFAULT_API_URL
-                            val model = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
-                            Log.d("GrammarGuide", "请求: url=$url model=$model")
-
-                            val json = org.json.JSONObject().apply {
-                                put("model", model)
-                                put("messages", org.json.JSONArray().apply {
-                                    put(org.json.JSONObject().apply {
-                                        put("role", "user")
-                                        put("content", prompt)
-                                    })
-                                })
-                                put("max_tokens", 1024)
-                            }
-
-                            val request = Request.Builder()
-                                .url(url)
-                                .addHeader("Authorization", "Bearer $apiKey")
-                                .addHeader("Content-Type", "application/json")
-                                .post(json.toString().toRequestBody("application/json".toMediaType()))
-                                .build()
-
-                            val response = client.newCall(request).execute()
-                            val body = response.body?.string() ?: ""
-
-                            if (response.isSuccessful) {
-                                val result = org.json.JSONObject(body)
-                                val content = result.getJSONArray("choices")
-                                    .getJSONObject(0)
-                                    .getJSONObject("message")
-                                    .getString("content")
-                                if (content.isNotEmpty()) {
-                                    guideMgr.saveGuide(content)
-                                    guideMgr.updateRecordCount(records.size)
-                                    runOnUiThread {
-                                        Toast.makeText(this@SettingsActivity, "✅ 语法大纲已生成（版本${guideMgr.version}）", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            } else {
-                                runOnUiThread {
-                                    Toast.makeText(this@SettingsActivity, "生成失败: ${response.code}", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("SettingsActivity", "语法大纲生成失败", e)
-                            runOnUiThread {
-                                Toast.makeText(this@SettingsActivity, "生成失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }.start()
-                } else {
-                    Toast.makeText(this, "暂无润色记录，无法生成大纲", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("关闭", null)
-            .show()
-    }
+    // ======================== 日志工具 ========================
 
     private fun appendLog(msg: String) {
         runOnUiThread {
@@ -1432,6 +1379,7 @@ class SettingsActivity : AppCompatActivity() {
         val finish = etCmdFinish?.text?.toString()?.trim() ?: ""
         val send = etCmdSend?.text?.toString()?.trim() ?: ""
         val command = etCmdCommand?.text?.toString()?.trim() ?: ""
+        val writing = etCmdWriting?.text?.toString()?.trim() ?: ""
 
         val errors = mutableListOf<String>()
         if (exit.isEmpty()) errors.add("退出命令词不能为空")
@@ -1439,8 +1387,9 @@ class SettingsActivity : AppCompatActivity() {
         if (finish.isEmpty()) errors.add("结束命令词不能为空")
         if (send.isEmpty()) errors.add("发送命令词不能为空")
         if (command.isEmpty()) errors.add("指令模式词不能为空")
+        if (writing.isEmpty()) errors.add("写作命令词不能为空")
 
-        val words = listOf(exit, polish, finish, send, command)
+        val words = listOf(exit, polish, finish, send, command, writing)
         val duplicates = words.groupBy { it }.filter { it.value.size > 1 }.keys
         if (duplicates.isNotEmpty()) errors.add("命令词不能重复：${duplicates.joinToString("、")}")
 
@@ -1457,14 +1406,15 @@ class SettingsActivity : AppCompatActivity() {
             .putString("cmd_finish", finish)
             .putString("cmd_send", send)
             .putString("cmd_command", command)
+            .putString("cmd_writing", writing)
             .apply()
 
         // 立即更新 VoiceEngine
         try {
-            com.cesia.input.voice.VoiceEngine.updateCommandWords(exit, polish, finish, send, command)
+            com.cesia.input.voice.VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing)
         } catch (_: Exception) {}
 
-        tvCommandStatus?.text = "✅ 已保存：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command"
+        tvCommandStatus?.text = "✅ 已保存：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command, 写作=$writing"
         tvCommandStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
         Toast.makeText(this, "命令词已保存", Toast.LENGTH_SHORT).show()
     }
@@ -1475,6 +1425,7 @@ class SettingsActivity : AppCompatActivity() {
         etCmdFinish?.setText("结束")
         etCmdSend?.setText("发送")
         etCmdCommand?.setText("指令")
+        etCmdWriting?.setText("写作")
         tvCommandStatus?.text = "已恢复默认值，请点击保存"
         tvCommandStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
     }

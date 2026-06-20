@@ -349,7 +349,7 @@ class PolishService(
                 put("model", model)
                 put("messages", messages)
                 put("temperature", 0.3)
-                put("max_tokens", 512)
+                put("max_tokens", 2048)
                 put("stop", JSONArray().apply {
                     put("</assistant>")
                     put("<|endoftext|>")
@@ -374,7 +374,11 @@ class PolishService(
                     val respJson = JSONObject(respBody)
                     val choices = respJson.optJSONArray("choices")
                     if (choices != null && choices.length() > 0) {
-                        return choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+                        val content = choices.getJSONObject(0).getJSONObject("message").optString("content", "").trim()
+                        if (content.isNotEmpty() && content != "null") {
+                            return content
+                        }
+                        Log.w("PolishService", "魔法模型 $model 返回空内容或null")
                     }
                 } else {
                     Log.w("PolishService", "魔法模型 $model HTTP ${result.code}: ${result.body?.string()?.take(100)}")

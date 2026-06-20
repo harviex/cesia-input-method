@@ -60,12 +60,9 @@ object InstructionSet {
         Instruction("fmt_lower", "格式", "全部转为小写字母", "将以下文字中的英文字母全部转为小写，中文保持不变，只输出转换后的文字，不要输出任何解释", listOf("小写", "全部小写", "转小写", "小写化"))
     )
 
-    // ==================== 内容类（8条）====================
+    // ==================== 内容类（5条）====================
     private val contentInstructions = listOf(
         Instruction("cnt_summarize", "内容", "概括核心要点", "概括以下文字的核心要点，提炼出最重要的信息，用简洁的语言表达，只输出概括结果，不要输出任何解释", listOf("总结", "概括", "摘要", "概括大意", "总结一下", "归纳", "核心内容")),
-        Instruction("cnt_expand", "内容", "扩写增加细节", "对以下文字进行扩写，增加更多细节描述和具体事例，使内容更加丰富生动，只输出扩写后的文字，不要输出任何解释", listOf("扩写", "展开", "扩充", "扩写内容", "写详细", "详细描述")),
-        Instruction("cnt_continue", "内容", "续写后续内容", "根据以下文字的风格和主题，续写一段后续内容，保持文风一致，只输出续写部分，不要输出任何解释", listOf("续写", "接着写", "继续写", "往下写", "续写内容")),
-        Instruction("cnt_rewrite", "内容", "改写换一种说法", "用不同的表达方式改写以下文字，保持原意不变但用词和句式完全不同，只输出改写后的文字，不要输出任何解释", listOf("改写", "换一种说法", "重新表达", "改写内容", "换个说法")),
         Instruction("cnt_question", "内容", "改为反问句式", "将以下文字改为反问句式，增强表达力度和感染力，只输出修改后的文字，不要输出任何解释", listOf("反问", "改为反问", "反问句", "反问句式")),
         Instruction("cnt_example", "内容", "添加具体例子", "为以下文字中的观点添加具体的例子来说明，使内容更有说服力，只输出添加例子后的文字，不要输出任何解释", listOf("举例", "添加例子", "加例子", "举个例子", "举例说明")),
         Instruction("cnt_quote", "内容", "添加引用或名言", "为以下文字添加相关的引用或名言警句，增强内容的深度和说服力，只输出添加引用后的文字，不要输出任何解释", listOf("引用", "添加引用", "加引用", "引用名言", "添加名言")),
@@ -82,21 +79,26 @@ object InstructionSet {
         Instruction("spc_split", "特殊", "逐词拆分用空格隔开", "将以下文字中的词语逐一分开，用空格隔开每个词，只输出拆分后的文字，不要输出任何解释", listOf("拆词", "分词", "词语分开", "逐词分开", "分词显示"))
     )
 
-    // ==================== 生成类（10条，允许空文本）====================
+    // ==================== 生成类（15条，星星按钮专用，允许空文本）====================
     private val generateInstructions = listOf(
-        Instruction("gen_idea", "生成", "帮我想几个创意点子", "根据以下主题，帮我想出几个创意点子，每个点子用一句话概括，以列表形式输出", listOf("帮我想", "帮我想想", "想点子", "出主意", "给建议"), isGeneration = true),
-        Instruction("gen_write", "生成", "帮我写一段文字", "根据以下要求，帮我写一段文字，内容通顺流畅，逻辑清晰", listOf("帮我写", "帮我写一段", "写一段", "写一篇"), isGeneration = true),
-        Instruction("gen_email", "生成", "帮我写一封邮件", "根据以下信息，帮我写一封格式规范、语气得体的邮件", listOf("写邮件", "写一封邮件", "帮我写邮件", "邮件"), isGeneration = true),
-        Instruction("gen_poem", "生成", "写一首诗", "根据以下主题，写一首有意境的诗，可以是古体诗或现代诗", listOf("写诗", "作诗", "写一首诗", "诗歌"), isGeneration = true),
-        Instruction("gen_code", "生成", "写一段代码", "根据以下需求，写一段代码，代码简洁高效，有必要的注释", listOf("写代码", "编程", "写程序", "代码"), isGeneration = true),
-        Instruction("gen_table", "生成", "制作一个表格", "根据以下信息，制作一个格式清晰的表格，用markdown格式输出", listOf("做表格", "制表", "表格", "创建表格"), isGeneration = true),
-        Instruction("gen_list", "生成", "列一个清单", "根据以下主题，列一个详细的清单，每条用序号标注", listOf("列清单", "列一个清单", "清单", "列表"), isGeneration = true),
-        Instruction("gen_story", "生成", "编一个短故事", "根据以下主题，编一个有趣的短故事，有开头发展和结尾", listOf("编故事", "写故事", "讲故事", "编一个故事"), isGeneration = true),
-        Instruction("gen_title", "生成", "生成几个标题", "根据以下文字内容，生成几个吸引人的标题，每个标题不超过15个字", listOf("起标题", "写标题", "生成标题", "标题"), isGeneration = true),
-        Instruction("gen_summary", "生成", "写一个摘要", "根据以下文字，写一个简洁的摘要，不超过100字，涵盖核心内容", listOf("写摘要", "摘要", "写简介", "简介"), isGeneration = true)
+        Instruction("gen_news", "生成", "生成今日新闻简报", "请搜索今天发生的国内外重要新闻，生成一份200字左右的新闻简报，包含3-5条要点，语言简洁客观，只输出新闻内容，不要输出任何解释", listOf("新闻", "今日新闻", "新闻简报", "今天新闻"), isGeneration = true),
+        Instruction("gen_idea", "生成", "帮我想几个创意点子", "根据以下主题，帮我想出5个创意点子，每个点子用一句话概括，以列表形式输出，只输出点子列表，不要输出任何解释", listOf("帮我想", "帮我想想", "想点子", "出主意", "给建议"), isGeneration = true),
+        Instruction("gen_write", "生成", "帮我写一段文字", "根据以下要求，帮我写一段文字，内容通顺流畅，逻辑清晰，不少于150字，只输出文字内容，不要输出任何解释", listOf("帮我写", "帮我写一段", "写一段", "写一篇"), isGeneration = true),
+        Instruction("gen_email", "生成", "帮我写一封邮件", "根据以下信息，帮我写一封格式规范、语气得体的邮件，包含称呼、正文、落款，只输出邮件内容，不要输出任何解释", listOf("写邮件", "写一封邮件", "帮我写邮件", "邮件"), isGeneration = true),
+        Instruction("gen_poem", "生成", "写一首诗", "根据以下主题，写一首有意境的诗，可以是古体诗或现代诗，不少于4句，只输出诗作，不要输出任何解释", listOf("写诗", "作诗", "写一首诗", "诗歌"), isGeneration = true),
+        Instruction("gen_code", "生成", "写一段代码", "根据以下需求，写一段代码，代码简洁高效，有必要的注释，只输出代码，不要输出任何解释", listOf("写代码", "编程", "写程序", "代码"), isGeneration = true),
+        Instruction("gen_table", "生成", "制作一个表格", "根据以下信息，制作一个格式清晰的表格，用markdown格式输出，包含表头和至少3行数据，只输出表格，不要输出任何解释", listOf("做表格", "制表", "表格", "创建表格"), isGeneration = true),
+        Instruction("gen_list", "生成", "列一个清单", "根据以下主题，列一个详细的清单，每条用序号标注，不少于5条，只输出清单，不要输出任何解释", listOf("列清单", "列一个清单", "清单", "列表"), isGeneration = true),
+        Instruction("gen_story", "生成", "编一个短故事", "根据以下主题，编一个有趣的短故事，有开头发展和结尾，不少于200字，只输出故事内容，不要输出任何解释", listOf("编故事", "写故事", "讲故事", "编一个故事"), isGeneration = true),
+        Instruction("gen_title", "生成", "生成几个标题", "根据以下文字内容，生成5个吸引人的标题，每个标题不超过15个字，以列表形式输出，只输出标题列表，不要输出任何解释", listOf("起标题", "写标题", "生成标题", "标题"), isGeneration = true),
+        Instruction("gen_summary", "生成", "写内容摘要", "根据以下文字，写一个简洁的摘要，不超过100字，涵盖核心内容，只输出摘要，不要输出任何解释", listOf("写摘要", "摘要", "写简介", "简介"), isGeneration = true),
+        Instruction("gen_continue", "生成", "续写后续内容", "根据以下文字的风格和主题，续写一段后续内容，保持文风一致，不少于100字，只输出续写部分，不要输出任何解释", listOf("续写", "接着写", "继续写", "往下写", "续写内容"), isGeneration = true),
+        Instruction("gen_expand", "生成", "扩写增加细节", "对以下文字进行扩写，增加更多细节描述和具体事例，使内容更加丰富生动，长度不少于原来的两倍，只输出扩写后的文字，不要输出任何解释", listOf("扩写", "展开", "扩充", "扩写内容", "写详细", "详细描述"), isGeneration = true),
+        Instruction("gen_rewrite", "生成", "改写换一种说法", "用不同的表达方式改写以下文字，保持原意不变但用词和句式完全不同，只输出改写后的文字，不要输出任何解释", listOf("改写", "换一种说法", "重新表达", "改写内容", "换个说法"), isGeneration = true),
+        Instruction("gen_translate_en", "生成", "翻译为英文", "将以下文字翻译为流畅自然的英文，只输出翻译后的英文，不要输出任何解释", listOf("翻译英文", "翻译成英文", "翻译为英文", "英文翻译", "翻英文", "翻成英文"), isGeneration = true)
     )
 
-    // ==================== 润色类（9条）====================
+    // ==================== 润色类（12条）====================
     private val polishInstructions = listOf(
         Instruction("polish_general", "润色", "润色优化表达", "对以下文字进行润色优化，使表达更加流畅自然，用词更加精准，只输出润色后的文字，不要输出任何解释", listOf("润色", "优化", "润色一下", "优化表达", "改好一点")),
         Instruction("polish_grammar", "润色", "修正语法错误", "修正以下文字中的语法错误和不通顺的句子，保持原意不变，只输出修正后的文字，不要输出任何解释", listOf("语法", "修正语法", "语法错误", "不通顺", "改错")),
@@ -106,7 +108,10 @@ object InstructionSet {
         Instruction("polish_vivid", "润色", "使表达更加生动", "使以下文字的表达更加生动形象，加入适当的修辞手法，让读者更有画面感，只输出修改后的文字，不要输出任何解释", listOf("生动", "更生动", "形象", "有画面感", "栩栩如生")),
         Instruction("polish_emotion", "润色", "增强情感表达", "增强以下文字的情感表达，使文字更有感染力和共鸣感，只输出修改后的文字，不要输出任何解释", listOf("情感", "更有感情", "感染力", "共鸣", "打动人心")),
         Instruction("polish_professional", "润色", "润色为专业风格", "将以下文字润色为专业风格，用词严谨规范，适合商务或学术场景，只输出润色后的文字，不要输出任何解释", listOf("专业", "商务", "学术", "专业风格", "规范化")),
-        Instruction("polish_readable", "润色", "提高可读性", "提高以下文字的可读性，调整句子长度和段落结构，使读者更容易理解和阅读，只输出修改后的文字，不要输出任何解释", listOf("可读性", "易读", "好读", "通俗易懂", "阅读体验"))
+        Instruction("polish_readable", "润色", "提高可读性", "提高以下文字的可读性，调整句子长度和段落结构，使读者更容易理解和阅读，只输出修改后的文字，不要输出任何解释", listOf("可读性", "易读", "好读", "通俗易懂", "阅读体验")),
+        Instruction("polish_paragraph", "润色", "优化段落结构", "优化以下文字的段落结构，将相关内容合并，将不同主题分段，使文章层次分明，只输出修改后的文字，不要输出任何解释", listOf("段落", "分段", "段落结构", "层次分明", "文章结构")),
+        Instruction("polish_transition", "润色", "添加过渡语句", "为以下文字的段落之间添加过渡语句，使文章衔接更加自然流畅，只输出修改后的文字，不要输出任何解释", listOf("过渡", "衔接", "连接", "过渡句", "承上启下")),
+        Instruction("polish_opening", "润色", "优化开头结尾", "优化以下文字的开头和结尾，开头要吸引读者，结尾要有力或有余韵，中间内容保持不变，只输出修改后的文字，不要输出任何解释", listOf("开头", "结尾", "首尾", "开篇", "收尾"))
     )
 
     // ==================== 全部指令（魔法书50条，不含生成类） ====================
@@ -177,12 +182,10 @@ object InstructionSet {
 
         // ========== 内容类 ==========
         if (t.contains("总结") || t.contains("概括") || t.contains("摘要") && !t.contains("写摘要")) return findById("cnt_summarize")
-        if (t.contains("续写") || t.contains("接着写")) return findById("cnt_continue")
-        if (t.contains("改写") || t.contains("换一种说法")) return findById("cnt_rewrite")
         if (t.contains("反问")) return findById("cnt_question")
         if (t.contains("举例") || t.contains("加例子")) return findById("cnt_example")
         if (t.contains("引用") || t.contains("名言")) return findById("cnt_quote")
-        if (t.contains("简化") || t.contains("简洁") && !t.contains("简洁有力")) return findById("cnt_simplify")
+        if (t.contains("简化") || t.contains("写简单一点")) return findById("cnt_simplify")
 
         // ========== 特殊类 ==========
         if (t.contains("敏感词") || t.contains("拼音首字母")) return findById("spc_pinyin")
@@ -201,19 +204,27 @@ object InstructionSet {
         if (t.contains("情感") || t.contains("感情") || t.contains("感染力") || t.contains("共鸣")) return findById("polish_emotion")
         if (t.contains("专业") && (t.contains("风格") || t.contains("商务") || t.contains("学术") || t.contains("规范"))) return findById("polish_professional")
         if (t.contains("可读性") || t.contains("易读") || t.contains("阅读体验")) return findById("polish_readable")
+        if (t.contains("段落") || t.contains("分段") || t.contains("层次") || t.contains("文章结构")) return findById("polish_paragraph")
+        if (t.contains("过渡") || t.contains("衔接") || t.contains("承上启下")) return findById("polish_transition")
+        if (t.contains("开头") || t.contains("结尾") || t.contains("首尾") || t.contains("开篇") || t.contains("收尾")) return findById("polish_opening")
         if (t.contains("润色") || t.contains("优化") || t.contains("改好")) return findById("polish_general")
 
-        // ========== 生成类 ==========
+        // ========== 生成类（星星按钮专用） ==========
+        if (t.contains("新闻") || t.contains("简报")) return findById("gen_news")
         if (t.contains("帮我想") || t.contains("出主意")) return findById("gen_idea")
-        if (t.contains("帮我写")) return findById("gen_write")
-        if (t.contains("邮件")) return findById("gen_email")
-        if (t.contains("写诗") || t.contains("作诗")) return findById("gen_poem")
-        if (t.contains("写代码") || t.contains("编程")) return findById("gen_code")
-        if (t.contains("表格") || t.contains("制表")) return findById("gen_table")
+        if (t.contains("帮我写") || t.contains("写一段") || t.contains("写一篇")) return findById("gen_write")
+        if (t.contains("邮件") || t.contains("写邮件")) return findById("gen_email")
+        if (t.contains("写诗") || t.contains("作诗") || t.contains("诗歌")) return findById("gen_poem")
+        if (t.contains("写代码") || t.contains("编程") || t.contains("写程序")) return findById("gen_code")
+        if (t.contains("表格") || t.contains("制表") || t.contains("创建表格")) return findById("gen_table")
         if (t.contains("清单") || t.contains("列表") && !t.contains("列表形式")) return findById("gen_list")
-        if (t.contains("故事")) return findById("gen_story")
-        if (t.contains("标题")) return findById("gen_title")
+        if (t.contains("故事") || t.contains("编故事")) return findById("gen_story")
+        if (t.contains("标题") || t.contains("起标题")) return findById("gen_title")
         if (t.contains("写摘要") || t.contains("简介")) return findById("gen_summary")
+        if (t.contains("续写") || t.contains("接着写") || t.contains("继续写") || t.contains("往下写")) return findById("gen_continue")
+        if (t.contains("扩写") || t.contains("展开") || t.contains("扩充") || t.contains("写详细") || t.contains("详细描述")) return findById("gen_expand")
+        if (t.contains("改写") || t.contains("换一种说法") || t.contains("重新表达") || t.contains("换个说法")) return findById("gen_rewrite")
+        if (t.contains("翻译英文") || t.contains("翻译成英文") || t.contains("翻英文") || t.contains("翻成英文")) return findById("gen_translate_en")
 
         return null
     }

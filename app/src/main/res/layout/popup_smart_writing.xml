@@ -14,9 +14,9 @@
         android:padding="10dp"
         android:text="✨ 智能写作"
         android:textSize="18sp"
-        android:textColor="#81D8D0"
+        android:textColor="#333333"
         android:textStyle="bold"
-        android:background="#1A1A2E" />
+        android:background="#E0E0E0" />
 
     <!-- 选项区域：2列布局 -->
     <LinearLayout

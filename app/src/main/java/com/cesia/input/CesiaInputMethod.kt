@@ -14,6 +14,10 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import java.util.concurrent.TimeUnit
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -92,6 +96,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         LOCAL_LOCKED // 本地锁定（本字，高亮）
     }
     private var cloudMode: CloudMode = CloudMode.LOCAL
+
+    // 个性化设置（从 SharedPreferences 读取）
+    private var statusIdleText: String = "Cesia 已就绪"
+    private var smartWritingLabel: String = "智能写作"
+    private var magicBookTitle: String = "芙莉莲的魔法书"
 
     // 语音锁定模式
     private var isVoiceLocked: Boolean = false
@@ -701,9 +710,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val finish = cmdPrefs.getString("cmd_finish", null)
             val send = cmdPrefs.getString("cmd_send", null)
             val command = cmdPrefs.getString("cmd_command", null)
-            if (exit != null && polish != null && finish != null && send != null && command != null) {
-                VoiceEngine.updateCommandWords(exit, polish, finish, send, command)
-                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command")
+            val writing = cmdPrefs.getString("cmd_writing", null)
+            if (exit != null && polish != null && finish != null && send != null && command != null && writing != null) {
+                VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing)
+                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing")
             }
         }
 
@@ -729,6 +739,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             engine.onPolishComplete = { inputText, outputText, _ ->
                 val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
                 statsManager.addRecord(inputText, outputText, duration)
+                // 每5条记录自动更新语法大纲
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    try {
+                        val guideMgr = com.cesia.input.stats.GrammarGuideManager(this@CesiaInputMethod)
+                        val recordCount = statsManager.getRecords().size
+                        if (guideMgr.needsUpdate(recordCount)) {
+                            Log.d("Cesia", "语法大纲自动更新: 当前记录数=$recordCount, 上次更新=${guideMgr.lastRecordCount}")
+                            val records = statsManager.getRecords()
+                            val newGuide = guideMgr.generateGuide(records) { text, instruction ->
+                                typelessEngine?.getPolishService()?.polishWithPrompt(text)
+                            }
+                            if (!newGuide.isNullOrEmpty()) {
+                                guideMgr.saveGuide(newGuide)
+                                guideMgr.updateRecordCount(recordCount)
+                                Log.d("Cesia", "语法大纲自动更新成功: 版本=${guideMgr.version}, 长度=${newGuide.length}")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("Cesia", "语法大纲自动更新失败", e)
+                    }
+                }
             }
             engine.onResultProcessing = {
                 Handler(Looper.getMainLooper()).post {
@@ -785,6 +816,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             setStatusDot("processing")
                             isProcessingResult = true
                             polishRecognizedText(textBefore)
+                        } else if (command == "writing") {
+                            // 写作命令：延迟1秒执行智能写作
+                            updateStatus("✨ 语音写作中...")
+                            CoroutineScope(Dispatchers.Main).launch {
+                                delay(1000)
+                                // 删除命令内容
+                                val ic = currentInputConnection
+                                if (ic != null && textBefore.isNotEmpty()) {
+                                    ic.deleteSurroundingText(textBefore.length, 0)
+                                }
+                                executeSmartCommand(textBefore)
+                                // 退出语音输入模式（除非锁定）
+                                if (isVoiceLocked) {
+                                    startRecordingLocked()
+                                } else {
+                                    isVoiceLocked = false
+                                    updateMicButtonLockedState()
+                                    resetToIdle()
+                                }
+                            }
                         } else {
                             currentInputConnection?.commitText(textBefore, 1)
                             updateStatus("✅ 已上屏")
@@ -1053,6 +1104,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateStatus("💡$associationPrefix")
         val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
         candidateAdapter?.updateData(displayCands)
+        rvCandidates?.scrollToPosition(0)
         btnCandidateExpand.visibility = if (associationCandidates.size > 4) View.VISIBLE else View.GONE
     }
 
@@ -1065,6 +1117,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             associationCandidates = emptyList()
             // 立即清空候选栏适配器，防止显示旧联想词
             candidateAdapter?.updateData(emptyList())
+            rvCandidates?.scrollToPosition(0)
             candidateBar?.visibility = View.GONE
         }
     }
@@ -1087,7 +1140,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             candidateBar.visibility = View.GONE
             if (isPanelExpanded) collapseCandidatePanel()
-            updateStatus("Cesia 已就绪")
+            updateStatus(statusIdleText)
             return
         }
 
@@ -1105,6 +1158,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isAssociationMode && associationCandidates.isNotEmpty()) {
             val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
             candidateAdapter?.updateData(displayCands)
+            rvCandidates?.scrollToPosition(0)
             btnCandidateExpand.visibility = if (associationCandidates.size > 4) View.VISIBLE else View.GONE
             if (isPanelExpanded) {
                 tvPanelComposing.text = "💡$associationPrefix"
@@ -1121,6 +1175,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 更新候选词列表
         candidateAdapter?.updateData(displayCands)
+        rvCandidates?.scrollToPosition(0)
         btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板
@@ -1630,18 +1685,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
 
-        // 检测"写作"关键词：如果说"写作 xxx"，则作为智能写作命令执行
-        val writingMatch = Regex("^写作[：:\\s]*(.+)", RegexOption.IGNORE_CASE).find(instruction)
-        if (writingMatch != null) {
-            val command = writingMatch.groupValues[1].trim()
-            if (command.isNotEmpty()) {
-                Log.d("Cesia", "handleMagicResult: 语音写作命令=$command")
-                updateStatus("✨ 语音写作：$command")
-                executeSmartCommand(command)
-                return
-            }
-        }
-
         updateStatus("✨ 正在施展魔法...")
 
         // 读取剪贴板非置顶首条内容作为语境
@@ -1853,11 +1896,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
-        // 设置标题（可从 SharedPreferences 读取自定义标题）
+        // 设置标题（使用个性化设置）
         val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)
-        val customTitle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-            .getString("magic_book_title", "芙莉莲的魔法书")
-        tvTitle?.text = customTitle
+        tvTitle?.text = magicBookTitle
 
         val keyboardWidth = keyboardView.width
         val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
@@ -2122,7 +2163,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     // 智能写作设置弹窗中的选项标签常量
     private val OPT_CLIPBOARD = "📋 剪贴板首条"
-    private val OPT_CHAT_HISTORY = "💬 聊天记录"
+    private val OPT_GRAMMAR = "📖 语法大纲"
     private val OPT_SEARCH = "🌐 网络搜索"
     private val OPT_LOCAL_LIB = "📚 本地文库"
 
@@ -2134,10 +2175,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
 
             val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
+            tvTitle.text = smartWritingLabel
 
             // 选项视图
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
-            val optChatHistory = popupView.findViewById<TextView>(R.id.opt_chat_history)
+            val optGrammar = popupView.findViewById<TextView>(R.id.opt_chat_history)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
             val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
 
@@ -2153,7 +2195,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.tag = tag
             }
             refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
-            refreshOption(optChatHistory, "chat_history", OPT_CHAT_HISTORY)
+            refreshOption(optGrammar, "grammar", OPT_GRAMMAR)
             refreshOption(optSearch, "search", OPT_SEARCH)
             refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
 
@@ -2167,7 +2209,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 refreshOption(tv, tag, label)
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
-            optChatHistory.setOnClickListener { toggleOption(it as TextView, "chat_history", OPT_CHAT_HISTORY) }
+            optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
             optLocalLib.setOnClickListener { toggleOption(it as TextView, "local_lib", OPT_LOCAL_LIB) }
 
@@ -2360,6 +2402,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val selectedOptions = getSmartWritingSelection()
         Log.d("Cesia", "executeSmartCommand: selectedOptions=$selectedOptions")
 
+        // 立即显示状态，让用户知道正在处理
+        updateStatus("⏳ 智能写作处理中...")
+
         // 获取剪贴板内容（作为搜索 query 和参考内容）
         val clipboardText = if (selectedOptions.contains("clipboard"))
             getClipboardFirstNonPinned() else ""
@@ -2395,13 +2440,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         command.replace(Regex("(续写|扩写|改写|润色|翻译|总结|生成|帮我|请|字数|个字)"), "").trim()
                             .ifEmpty { command }
                     }
-                    Log.d("Cesia", "SearXNG query: $searchQuery")
-                    val searchResults = performSearXNGSearch(searchQuery)
+                    // 如果搜索词包含"今天"、"最新"、"新闻"等关键词，附加当前日期以确保时效性
+                    val dateKeywords = listOf("今天", "最新", "新闻", "时事", "热点", "头条")
+                    val needsDate = dateKeywords.any { searchQuery.contains(it) }
+                    val finalQuery = if (needsDate) {
+                        val sdf = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINA)
+                        val today = sdf.format(java.util.Date())
+                        "$searchQuery $today"
+                    } else {
+                        searchQuery
+                    }
+                    Log.d("Cesia", "SearXNG query: $finalQuery (dateAdded=$needsDate)")
+                    withContext(Dispatchers.Main) { updateStatus("🔍 正在搜索：${finalQuery.take(20)}...") }
+                    val searchResults = performSearXNGSearch(finalQuery)
                     Log.d("Cesia", "SearXNG results: ${searchResults.length} chars")
                     if (searchResults.isNotEmpty()) {
                         promptParts.add("【网络搜索结果】\n$searchResults")
                     } else {
                         Log.w("Cesia", "SearXNG: 搜索结果为空")
+                        withContext(Dispatchers.Main) { updateStatus("⚠️ 搜索无结果，将不使用搜索内容") }
                     }
                 }
 
@@ -2422,6 +2479,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                 Log.d("Cesia", "SmartWriting prompt: ${fullPrompt.take(200)}...")
 
+                withContext(Dispatchers.Main) { updateStatus("🤖 AI 正在生成...") }
                 val polishService = typelessEngine?.getPolishService()
                 val result = polishService?.polishWithPrompt(fullPrompt)
                 Log.d("Cesia", "executeSmartCommand: result=${result?.take(100) ?: "NULL"}, resultIsNull=${result == null}")
@@ -2445,75 +2503,87 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    /** Brave Search API（互联网搜索） */
+    /** Tavily Search API（互联网搜索） */
     private fun performSearXNGSearch(query: String): String {
-        Log.d("Cesia", "BraveSearch: start, query=$query")
-        // 从 SharedPreferences 读取 Brave API key（SettingsActivity 保存到 cesia_settings）
+        Log.d("Cesia", "TavilySearch: start, query=$query")
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        val braveApiKey = prefs.getString("brave_search_api_key", "") ?: ""
-        if (braveApiKey.isEmpty()) {
-            Log.w("Cesia", "BraveSearch: API key not configured")
+        val tavilyApiKey = prefs.getString("tavily_api_key", "") ?: ""
+        if (tavilyApiKey.isEmpty()) {
+            Log.w("Cesia", "TavilySearch: API key not configured")
             return ""
         }
         try {
-            val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-            val url = "https://api.search.brave.com/res/v1/web/search?q=$encoded&count=5"
-            Log.d("Cesia", "BraveSearch: url=$url")
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 8000
-            conn.readTimeout = 12000
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
-            conn.setRequestProperty("Accept-Encoding", "gzip")
-            conn.setRequestProperty("X-Subscription-Token", braveApiKey)
-            val code = conn.responseCode
-            Log.d("Cesia", "BraveSearch: HTTP $code")
-            if (code == 200) {
-                val rawBytes = conn.inputStream.readBytes()
-                // gzip decompress
-                val json = try {
-                    val inflater = java.util.zip.GZIPInputStream(rawBytes.inputStream())
-                    inflater.bufferedReader().readText()
-                } catch (_: Exception) {
-                    rawBytes.toString(Charsets.UTF_8)
+            val url = "https://api.tavily.com/search"
+            // 判断是否为新闻类查询，使用新闻搜索通道
+            val newsKeywords = listOf("新闻", "最新", "今天", "日报", "时报", "早报", "晚报", "时事", "热点", "头条", "战况", "比分")
+            val isNewsQuery = newsKeywords.any { query.contains(it) }
+            val jsonBody = org.json.JSONObject().apply {
+                put("query", query)
+                put("max_results", 5)
+                put("include_answer", true)
+                put("search_depth", if (isNewsQuery) "advanced" else "basic")
+                if (isNewsQuery) {
+                    put("topic", "news")
+                    put("days", 3)
                 }
-                Log.d("Cesia", "BraveSearch: response length=${json.length}")
-                val results = parseBraveResults(json)
-                Log.d("Cesia", "BraveSearch: results=${results.length} chars")
+            }.toString()
+            val body = jsonBody.toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $tavilyApiKey")
+                .post(body)
+                .build()
+            val client = OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(12, TimeUnit.SECONDS)
+                .build()
+            val response = client.newCall(request).execute()
+            val code = response.code
+            Log.d("Cesia", "TavilySearch: HTTP $code")
+            if (code == 200) {
+                val json = response.body?.string() ?: ""
+                Log.d("Cesia", "TavilySearch: response length=${json.length}")
+                val results = parseTavilyResults(json)
+                Log.d("Cesia", "TavilySearch: results=${results.length} chars")
                 if (results.isNotEmpty()) {
                     return results
                 }
             } else {
-                Log.w("Cesia", "BraveSearch error HTTP $code: ${conn.errorStream?.bufferedReader()?.readText()?.take(200)}")
+                Log.w("Cesia", "TavilySearch error HTTP $code: ${response.body?.string()?.take(200)}")
             }
-            conn.disconnect()
         } catch (e: Exception) {
-            Log.w("Cesia", "BraveSearch failed: ${e.message}")
+            Log.w("Cesia", "TavilySearch failed: ${e.message}")
         }
-        Log.d("Cesia", "BraveSearch: returning empty")
+        Log.d("Cesia", "TavilySearch: returning empty")
         return ""
     }
 
-    /** 解析 Brave Search JSON 结果 */
-    private fun parseBraveResults(json: String): String {
+    /** 解析 Tavily Search JSON 结果 */
+    private fun parseTavilyResults(json: String): String {
         try {
             val obj = org.json.JSONObject(json)
-            val results = obj.optJSONObject("web")?.optJSONArray("results") ?: return ""
-            if (results.length() == 0) return ""
+            // 先取 answer（LLM 摘要答案）
+            val answer = obj.optString("answer", "").trim()
+            val results = obj.optJSONArray("results") ?: return ""
+            if (results.length() == 0 && answer.isEmpty()) return ""
             val sb = StringBuilder()
+            if (answer.isNotEmpty()) {
+                sb.appendLine("【摘要】$answer")
+                sb.appendLine()
+            }
             for (i in 0 until minOf(results.length(), 5)) {
                 val item = results.getJSONObject(i)
                 val title = item.optString("title", "").trim()
-                val description = item.optString("description", "").trim()
+                val content = item.optString("content", "").trim()
                 val url = item.optString("url", "").trim()
                 if (title.isNotEmpty()) sb.appendLine("• $title")
-                if (description.isNotEmpty()) sb.appendLine("  ${description.take(200)}")
+                if (content.isNotEmpty()) sb.appendLine("  ${content.take(200)}")
                 if (url.isNotEmpty()) sb.appendLine("  $url")
                 if (i < minOf(results.length(), 5) - 1) sb.appendLine()
             }
             return sb.toString().trim()
         } catch (e: Exception) {
-            Log.e("Cesia", "Brave parse error", e)
+            Log.e("Cesia", "Tavily parse error", e)
             return ""
         }
     }
@@ -2655,13 +2725,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 构建语法指南 */
     private fun buildGrammarGuide(): String {
         return try {
-            val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
-            val historyStr = prefs.getString("history", "") ?: ""
-            val favStr = prefs.getString("favorites", "") ?: ""
-            val favSet = if (favStr.isNotEmpty()) favStr.split("\n").toSet() else emptySet()
-            val recentItems = historyStr.split("\n").filter { it.isNotEmpty() && !favSet.contains(it) }.take(10)
-            if (recentItems.isNotEmpty()) {
-                recentItems.joinToString("\n") { "• $it" }
+            val guideMgr = com.cesia.input.stats.GrammarGuideManager(this)
+            val guideContent = guideMgr.content
+            if (guideContent.isNotEmpty()) {
+                guideContent
             } else {
                 ""
             }
@@ -2704,6 +2771,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 同步更新候选栏
         val allCands = rimeEngine.getAllCandidates()
         candidateAdapter?.updateData(allCands)
+        rvCandidates?.scrollToPosition(0)
         candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
     }
 
@@ -2744,6 +2812,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 同步更新候选栏
         val allCands = rimeEngine.getAllCandidates()
         candidateAdapter?.updateData(allCands)
+        rvCandidates?.scrollToPosition(0)
         candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
     }
 
@@ -3486,6 +3555,37 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         resetToIdle()
                                     }
                                 }
+                                "writing" -> {
+                                    // 写作：text 是写作指令（如"帮我写篇文章"）
+                                    if (text.isEmpty()) {
+                                        updateStatus("⚠️ 请输入写作内容")
+                                        resetToIdle()
+                                    } else {
+                                        Log.i("Cesia", "语音写作命令: '$text'")
+                                        updateStatus("✨ 语音写作中...")
+                                        // 延迟1秒执行，让用户看到状态提示
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            delay(1000)
+                                            // 删除命令内容（recognizedText 是命令词前的文本）
+                                            val ic = currentInputConnection
+                                            if (ic != null && recognizedText.isNotEmpty()) {
+                                                // 删除已上屏的命令文字
+                                                ic.deleteSurroundingText(recognizedText.length, 0)
+                                            }
+                                            executeSmartCommand(text)
+                                            // 退出语音输入模式（除非锁定）
+                                            if (isVoiceLocked) {
+                                                // 锁定模式：跳转到新的语音识别状态
+                                                startRecordingLocked()
+                                            } else {
+                                                // 非锁定模式：退出语音输入
+                                                isVoiceLocked = false
+                                                updateMicButtonLockedState()
+                                                resetToIdle()
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -3833,7 +3933,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         setStatusDot("idle")
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
-        updateStatus("Cesia 已就绪")
+        updateStatus(statusIdleText)
     }
 
     /**
@@ -4161,7 +4261,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         rimeEngine.clear()
         t9InputBuffer.clear()
         candidateBar.visibility = View.GONE
-        updateStatus("Cesia 已就绪")
+        updateStatus(statusIdleText)
         // UI 立即切换，schema 切换放后台（轻量 reload，保留 build 缓存）
         if (keyboardMode == KeyboardMode.NUMBER) {
             switchToKeyboard(KeyboardMode.QWERTY)
@@ -4225,7 +4325,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             t9InputBuffer.clear()
             // symbolShiftLocked 保留
             candidateBar.visibility = View.GONE
-            updateStatus("Cesia 已就绪")
+            updateStatus(statusIdleText)
         }
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
@@ -4284,7 +4384,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
         updateCandidateBar()
-        updateStatus("Cesia 已就绪")
+        updateStatus(statusIdleText)
     }
 
     // 数字键盘长按通过 popupCharacters 走 startLongPressDetection
@@ -4505,7 +4605,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 退出对调模式
             isSwapMode = false
             swapFirstKey = null
-            updateStatus("Cesia 已就绪")
+            updateStatus(statusIdleText)
             keyboardView.invalidateAllKeys()
         }
     }
@@ -4642,6 +4742,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            // 如果星星菜单打开着，先关闭它
+            if (smartWritingPopup != null && smartWritingPopup?.isShowing == true) {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+            }
             showClipboardManagerPopup()
         }.also {
             sendKeyHandler.postDelayed(it, 800)
@@ -5944,6 +6049,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 return
             }
             loadSettings()
+
+            // 读取个性化设置
+            val sPrefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            val idleText = sPrefs.getString("status_idle", "") ?: ""
+            if (idleText.isNotEmpty()) statusIdleText = idleText
+            val swLabel = sPrefs.getString("smart_writing_label", "") ?: ""
+            if (swLabel.isNotEmpty()) smartWritingLabel = swLabel
+            val mbTitle = sPrefs.getString("magic_book_title", "") ?: ""
+            if (mbTitle.isNotEmpty()) magicBookTitle = mbTitle
+
             val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getInt(PREF_THEME_MODE, THEME_LIGHT)
             isDarkTheme = themeMode == THEME_DARK
@@ -5970,6 +6085,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // 同传按钮：AI 模型文件已下载时显示（TTS 使用系统自带）
             btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
+
+            // 重置星星按钮状态（防止重启后残留高亮）
+            btnMagic.setBackgroundColor(0xFFF5F5F5.toInt())
+            btnMagic.clearColorFilter()
+            btnMagic.clearAnimation()
         } catch (e: Throwable) {
             Log.e("Cesia", "onStartInputView 异常(已忽略)", e)
         }
@@ -6381,6 +6501,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             trimmed.endsWith(VoiceEngine.cmdFinish) -> {
                 Pair(trimmed.dropLast(VoiceEngine.cmdFinish.length).trimEnd(), "finish")
+            }
+            trimmed.endsWith(VoiceEngine.cmdWriting) -> {
+                val beforeWriting = trimmed.dropLast(VoiceEngine.cmdWriting.length).trimEnd()
+                Pair(beforeWriting, "writing")
             }
             else -> null
         }

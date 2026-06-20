@@ -41,6 +41,13 @@ class HistoryActivity : AppCompatActivity() {
         }
 
         val btnClear = Button(this).apply {
+            text = "📖 大纲"
+            setOnClickListener {
+                showGrammarGuideDialog()
+            }
+        }
+
+        val btnClearAll = Button(this).apply {
             text = "🗑️ 清空"
             setOnClickListener {
                 AlertDialog.Builder(this@HistoryActivity)
@@ -57,6 +64,7 @@ class HistoryActivity : AppCompatActivity() {
 
         topBar.addView(btnBack)
         topBar.addView(btnClear)
+        topBar.addView(btnClearAll)
         root.addView(topBar)
 
         tvEmpty = TextView(this).apply {
@@ -168,5 +176,20 @@ class HistoryActivity : AppCompatActivity() {
         }
 
         override fun getItemCount() = records.size
+    }
+
+    private fun showGrammarGuideDialog() {
+        val guideMgr = com.cesia.input.stats.GrammarGuideManager(this)
+        val content = guideMgr.content
+        val message = if (content.isNotEmpty()) {
+            "版本 ${guideMgr.version} | 基于最近润色记录自动生成\n\n$content"
+        } else {
+            "暂无语法大纲\n\n请先使用几次润色功能，系统每5条记录会自动生成个人语法纲要。"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("📖 个人语法纲要")
+            .setMessage(message)
+            .setPositiveButton("关闭", null)
+            .show()
     }
 }
