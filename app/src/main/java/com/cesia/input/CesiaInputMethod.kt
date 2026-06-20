@@ -1268,38 +1268,53 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 智能写作按钮（星星/四角星）：短按执行第一项命令，长按弹出设置弹窗
+        // 复用魔法书按钮的触摸处理模式
         btnMagic.setOnClickListener { toggleMagicMode() }
         btnMagic.setOnTouchListener { v, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
+                    magicBookLongPressTriggered = false
                     // 开始发光（复用魔法书按钮效果）
                     btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
                     btnMagic.setTextColor(0xFFFFFFFF.toInt())
                     btnMagic.elevation = 6f
                     startMagicButtonGlow()
-                    false // 不消费，让 OnLongClickListener 也能收到
+                    // 延迟触发长按弹窗
+                    magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
+                    magicBookRunnable = Runnable {
+                        magicBookLongPressTriggered = true
+                        keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        showSmartWritingPopup()
+                    }.also {
+                        magicBookHandler.postDelayed(it, 600)
+                    }
+                    true
                 }
                 android.view.MotionEvent.ACTION_UP -> {
-                    // 松手停止发光（如果没有触发长按）
-                    stopMagicButtonGlow()
-                    btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
-                    btnMagic.setTextColor(0xFF888888.toInt())
-                    btnMagic.elevation = 0f
-                    false
+                    magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
+                    magicBookRunnable = null
+                    if (!magicBookLongPressTriggered) {
+                        // 短按：停止发光，执行第一项命令
+                        stopMagicButtonGlow()
+                        btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+                        btnMagic.setTextColor(0xFF888888.toInt())
+                        btnMagic.elevation = 0f
+                        v.performClick()
+                    }
+                    // 长按已触发：保持高光（持续到popup关闭）
+                    true
                 }
                 android.view.MotionEvent.ACTION_CANCEL -> {
+                    magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
+                    magicBookRunnable = null
                     stopMagicButtonGlow()
                     btnMagic.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
                     btnMagic.setTextColor(0xFF888888.toInt())
                     btnMagic.elevation = 0f
-                    false
+                    true
                 }
                 else -> false
             }
-        }
-        btnMagic.setOnLongClickListener {
-            showSmartWritingPopup()
-            true
         }
 
         // 发送按钮
@@ -2152,8 +2167,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
 
-            // 智能写作命令列表
-            val lvRecords = popupView.findViewById<ListView>(R.id.lv_smart_records)
+            // 智能写作命令列表（GridView 2列，与魔法书一致）
+            val gvRecords = popupView.findViewById<android.widget.GridView>(R.id.gv_smart_records)
             val smartRecords = mutableListOf<String>()
             loadSmartRecords(smartRecords)
 
@@ -2162,28 +2177,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 override fun getItem(p: Int) = smartRecords[p]
                 override fun getItemId(p: Int) = p.toLong()
                 override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
-                    val v = cv ?: android.widget.TextView(parent?.context).apply {
-                        setPadding(12, 8, 12, 8)
-                        textSize = 13f
-                        setTextColor(0xFF555555.toInt())
-                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    }
-                    (v as android.widget.TextView).text = "• ${smartRecords[p]}"
+                    val v = cv ?: android.view.LayoutInflater.from(this@CesiaInputMethod)
+                        .inflate(R.layout.item_smart_command, parent, false)
+                    val tvCommand = v.findViewById<android.widget.TextView>(R.id.tv_smart_command)
+                    tvCommand.text = smartRecords[p]
                     return v
                 }
             }
-            lvRecords.adapter = recordAdapter
+            gvRecords.adapter = recordAdapter
 
             // 追踪当前编辑状态
             var editingPosition = -1
             var hasFocusedEdit = false
 
             fun notifyChanged() {
-                (lvRecords.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                (gvRecords.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
             }
 
             // 长按：置顶/删除（和魔法书一致）
-            lvRecords.setOnItemLongClickListener { _, view, position, _ ->
+            gvRecords.setOnItemLongClickListener { _, view, position, _ ->
                 if (position < smartRecords.size) {
                     val item = smartRecords[position]
                     smartRecords.removeAt(position)
@@ -2196,7 +2208,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // 单击：直接执行该命令（调用AI）
-            lvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+            gvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
                 if (position < smartRecords.size) {
                     val command = smartRecords[position]
                     smartWritingPopup?.dismiss()
@@ -2310,7 +2322,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 列表高度 = 总高度 - 标题 - 选项区 - 分隔线 - 底部按钮
             val listHeightPx = (totalHeight - titleHeightPx - optionsHeightPx - barHeightPx).coerceAtLeast(80)
 
-            lvRecords.layoutParams = LinearLayout.LayoutParams(
+            gvRecords.layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, listHeightPx
             )
 
@@ -3296,7 +3308,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         recognizedText = ""
         pendingAiMode = null
         setStatusDot("recording")
-        startVoiceWave()
+        // 锁定模式不显示绿色圆点，避免按钮偏移
+        // startVoiceWave() 已禁用
         keyboardView.visibility = View.GONE
         candidateBar.visibility = View.GONE
         voiceStartTime = System.currentTimeMillis()

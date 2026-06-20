@@ -23,13 +23,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="8dp">
+        android:padding="12dp">
 
         <TextView
             android:id="@+id/opt_clipboard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="10dp"
+            android:padding="12dp"
             android:text="○ 📋 剪贴板首条"
             android:textSize="14sp"
             android:textColor="#333333"
@@ -40,7 +40,7 @@
             android:id="@+id/opt_grammar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="10dp"
+            android:padding="12dp"
             android:text="○ 📖 语法大纲"
             android:textSize="14sp"
             android:textColor="#333333"
@@ -51,7 +51,7 @@
             android:id="@+id/opt_search"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="10dp"
+            android:padding="12dp"
             android:text="○ 🌐 互联网搜索"
             android:textSize="14sp"
             android:textColor="#333333"
@@ -66,17 +66,19 @@
         android:background="#CCCCCC"
         android:layout_marginHorizontal="12dp" />
 
-    <!-- 智能写作命令列表 -->
-    <ListView
-        android:id="@+id/lv_smart_records"
+    <!-- 智能写作命令列表（GridView 2列，与魔法书一致） -->
+    <GridView
+        android:id="@+id/gv_smart_records"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:divider="#EEEEEE"
-        android:dividerHeight="1dp"
-        android:paddingHorizontal="8dp"
+        android:numColumns="2"
+        android:horizontalSpacing="4dp"
+        android:verticalSpacing="2dp"
+        android:padding="6dp"
         android:scrollbars="vertical"
-        android:listSelector="@android:color/transparent" />
+        android:listSelector="@android:color/transparent"
+        android:stretchMode="columnWidth" />
 
     <!-- 底部按钮栏：＋ 置顶 删除 ⨯ -->
     <LinearLayout

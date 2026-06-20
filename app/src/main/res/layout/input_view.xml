@@ -238,7 +238,7 @@
             android:insetBottom="0dp"
             android:layout_marginStart="4dp"
             android:layout_marginEnd="4dp"
-            app:cornerRadius="20dp" />
+            app:cornerRadius="8dp" />
 
         <!-- 智能修改：笔图标 -->
         <ImageButton
