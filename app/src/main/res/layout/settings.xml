@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#FAFAFA"
     android:fillViewport="true">
 
     <LinearLayout
@@ -10,299 +12,342 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- 标题 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎙️ Cesia 输入法设置"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="4dp" />
-
-        <!-- 版本信息 + 更新检查 -->
+        <!-- ═══════════ 头部 ═══════════ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Cesia 输入法"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:textColor="#333333" />
 
             <TextView
                 android:id="@+id/tv_version"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="版本: 1.0.0"
-                android:textSize="13sp"
-                android:textColor="#888888" />
-
-            <!-- 更新红点 -->
-            <View
-                android:id="@+id/v_update_dot"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:background="@drawable/status_dot_error"
-                android:visibility="gone"
-                android:layout_marginEnd="8dp" />
-
-            <Button
-                android:id="@+id/btn_check_update"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="检查更新"
+                android:layout_height="wrap_content"
+                android:text="v1.0.0"
                 android:textSize="12sp"
-                android:minWidth="0dp"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp" />
+                android:textColor="#81D8D0"
+                android:background="#E0F7F5"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
         </LinearLayout>
 
-        <!-- ==================== 润色统计 ==================== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📊 润色统计"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
+        <!-- ═══════════ 统计卡片 ═══════════ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="#F0F4FF"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_tiffany"
             android:padding="12dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 使用统计"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#81D8D0"
+                android:layout_marginBottom="8dp" />
 
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_input_chars"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#4488FF" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="输入字数"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
-            </LinearLayout>
+                android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_output_chars"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#44AA44" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="返回字数"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
-            </LinearLayout>
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_input_chars"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="输入字数"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_count"
-                    android:layout_width="wrap_content"
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:background="#E0E0E0"
+                    android:layout_gravity="center_vertical" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#FF8844" />
-                <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_output_chars"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="返回字数"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:background="#E0E0E0"
+                    android:layout_gravity="center_vertical" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="润色次数"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="润色次数"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
-        <!-- ==================== 语音统计 ==================== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎙️ 语音输入统计"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="8dp" />
-
+        <!-- 语音统计 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="#FFF3E0"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_tiffany"
             android:padding="12dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎙️ 语音统计"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#81D8D0"
+                android:layout_marginBottom="8dp" />
 
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_voice_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0分钟"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="#FF8800" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="语音时长"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
-            </LinearLayout>
+                android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_saved_time"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="0分钟"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="#44AA44" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="节省时间"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
-            </LinearLayout>
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_voice_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0分钟"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="语音时长"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center">
-                <TextView
-                    android:id="@+id/tv_stat_voice_speed"
-                    android:layout_width="wrap_content"
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:background="#E0E0E0"
+                    android:layout_gravity="center_vertical" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="0字/分"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="#AA44FF" />
-                <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_saved_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0分钟"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="节省时间"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="32dp"
+                    android:background="#E0E0E0"
+                    android:layout_gravity="center_vertical" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="输入速度"
-                    android:textSize="11sp"
-                    android:textColor="#888" />
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView
+                        android:id="@+id/tv_stat_voice_speed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0字/分"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="#81D8D0" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="输入速度"
+                        android:textSize="10sp"
+                        android:textColor="#999999" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
-        <Button
+        <!-- 历史记录按钮 -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_history"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:text="📜 查看历史记录"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_marginBottom="8dp" />
+            android:textSize="13sp"
+            android:textColor="#81D8D0"
+            app:backgroundTint="#FFFFFF"
+            app:strokeColor="#81D8D0"
+            app:strokeWidth="1dp"
+            app:cornerRadius="10dp"
+            android:layout_marginBottom="16dp" />
 
-        <!-- ==================== API 设置 ==================== -->
+        <!-- ═══════════ 分隔 ═══════════ -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ═══════════ 润色 API ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🔗 润色 API 设置"
-            android:textSize="16sp"
+            android:text="🔗 润色 API"
+            android:textSize="14sp"
             android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="API URL"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_api_url"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
+                android:textSize="12sp"
                 android:text="https://openrouter.ai/api/v1/chat/completions" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- OpenRouter API Key -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="OpenRouter API Key (sk-or-v1-...)"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            android:hint="OpenRouter API Key"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_openrouter_key"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textPassword"
+                android:textSize="12sp"
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Groq API Key (云端语音) -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Groq API Key (云端语音识别, gsk_...)"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            android:hint="Groq API Key（云端语音）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_groq_key"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textPassword"
+                android:textSize="12sp"
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 云端模型选择（下拉菜单） -->
+        <!-- 云端模型 -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="云端 AI 模型"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginTop="8dp"
+            android:textSize="12sp"
+            android:textColor="#666666"
             android:layout_marginBottom="4dp" />
 
         <Spinner
             android:id="@+id/spinner_cloud_model"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginBottom="4dp"
+            android:layout_height="40dp"
+            android:layout_marginBottom="2dp"
             android:padding="8dp"
             android:background="@android:drawable/btn_dropdown" />
 
@@ -310,55 +355,65 @@
             android:id="@+id/tv_model_info"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="#888888"
-            android:layout_marginBottom="8dp" />
+            android:textSize="10sp"
+            android:textColor="#999999"
+            android:layout_marginBottom="6dp" />
 
-        <!-- Tavily Search API Key（互联网搜索） -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Tavily API Key（互联网搜索，tvly-...）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            android:hint="Tavily API Key（互联网搜索）"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_brave_api_key"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textPassword"
+                android:textSize="12sp"
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- AI 润色 Prompt（云端+本地共用） -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="AI 润色 Prompt（云端与本地共用）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            android:hint="AI 润色 Prompt"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_polish_prompt"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textMultiLine"
-                android:minLines="4"
+                android:minLines="3"
                 android:gravity="top"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:fontFamily="monospace"
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- ==================== 语音命令词设置 ==================== -->
+        <!-- ═══════════ 分隔 ═══════════ -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="12dp" />
+
+        <!-- ═══════════ 语音命令词 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🎙️ 语音命令词"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="#333333"
+            android:layout_marginBottom="8dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -372,6 +427,8 @@
                 android:layout_weight="1"
                 android:hint="退出"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginEnd="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -388,6 +445,8 @@
                 android:layout_weight="1"
                 android:hint="润色"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp">
 
@@ -405,6 +464,8 @@
                 android:layout_weight="1"
                 android:hint="结束"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -428,6 +489,8 @@
                 android:layout_weight="1"
                 android:hint="发送"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginEnd="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -444,6 +507,8 @@
                 android:layout_weight="1"
                 android:hint="指令"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp">
 
@@ -461,6 +526,8 @@
                 android:layout_weight="1"
                 android:hint="写作"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -476,26 +543,36 @@
             android:id="@+id/tv_command_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:padding="6dp"
-            android:background="#F5F5F5"
-            android:layout_marginBottom="16dp" />
+            android:textSize="10sp"
+            android:textColor="#999999"
+            android:padding="4dp"
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 个性化设置 ==================== -->
+        <!-- ═══════════ 分隔 ═══════════ -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="12dp" />
+
+        <!-- ═══════════ 个性化 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="✨ 个性化设置"
+            android:text="✨ 个性化"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:layout_marginBottom="4dp" />
+            android:textColor="#333333"
+            android:layout_marginBottom="8dp" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:hint="初始状态文字（默认：cesia 已就绪）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+            android:hint="初始状态文字"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="4dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_status_idle"
@@ -508,9 +585,11 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:hint="智能写作按钮文字（默认：智能写作）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+            android:hint="智能写作按钮文字"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="4dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_smart_writing_label"
@@ -523,9 +602,11 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:hint="魔法书弹窗标题（默认：芙莉莲的魔法书）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+            android:hint="魔法书弹窗标题"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_magic_book_title"
@@ -535,57 +616,75 @@
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 分隔线 -->
+        <!-- ═══════════ 分隔 ═══════════ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
-            android:layout_marginTop="8dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- ═══════════ 测试区 ═══════════ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🧪 测试"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
-        <!-- 测试文本输入框 -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="输入要润色的文本（测试用）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            android:hint="输入要润色的文本"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_test_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textMultiLine"
-                android:minLines="3"
+                android:minLines="2"
                 android:gravity="top"
+                android:textSize="12sp"
                 android:text="嗯那个我今天去了一个很好吃的餐厅然后我们点了很多菜真的很好吃你会推荐什么菜呢" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 测试按钮行 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:layout_marginBottom="6dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_test_api"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:text="📡 API 润色"
-                android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="11sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="8dp"
                 android:layout_marginEnd="4dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_test_local_ai"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:text="🤖 本地 AI"
-                android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="11sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="8dp"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
@@ -593,124 +692,136 @@
             android:id="@+id/tv_api_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:padding="8dp"
-            android:background="#FFF3E0"
-            android:textSize="12sp"
+            android:background="#E0F7F5"
+            android:textSize="11sp"
+            android:textColor="#81D8D0"
+            android:layout_marginBottom="12dp"
             android:text="API 状态：未测试" />
 
+        <!-- ═══════════ 分隔 ═══════════ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 语音与 AI 本地化 ==================== -->
+        <!-- ═══════════ 语音与 AI 本地化 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🎤 语音与 AI 本地化"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
-        <!-- ===== 语音引擎状态 ===== -->
         <TextView
             android:id="@+id/tv_bridge_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="检测中..."
-            android:textSize="12sp"
-            android:textColor="#999999"
-            android:background="#FFF8E1"
-            android:padding="10dp"
-            android:layout_marginBottom="8dp" />
+            android:textSize="11sp"
+            android:textColor="#81D8D0"
+            android:background="#E0F7F5"
+            android:padding="8dp"
+            android:layout_marginBottom="6dp" />
 
-        <!-- 分隔线 -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#E0E0E0"
-            android:layout_marginBottom="8dp" />
-
-        <!-- 硬件检测推荐 -->
         <TextView
             android:id="@+id/tv_hardware_info"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="硬件检测中..."
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textColor="#666666"
-            android:background="#F0F7FF"
-            android:padding="10dp"
-            android:layout_marginBottom="8dp" />
+            android:background="#F5F5F5"
+            android:padding="8dp"
+            android:layout_marginBottom="6dp" />
 
-        <!-- 语音模型状态 -->
-        <TextView
-            android:id="@+id/tv_voice_model_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="未安装"
-            android:textSize="12sp"
-            android:textColor="#999999"
-            android:layout_marginBottom="4dp" />
-
-        <!-- AI 模型状态 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="AI 润色模型"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <TextView
-            android:id="@+id/tv_ai_model_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="未安装"
-            android:textSize="12sp"
-            android:textColor="#999999"
-            android:layout_marginBottom="8dp" />
-
-        <!-- 下载/卸载按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginBottom="4dp">
 
-            <Button
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="语音模型"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <TextView
+                android:id="@+id/tv_voice_model_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未安装"
+                android:textSize="12sp"
+                android:textColor="#999999" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="AI 润色模型"
+                android:textSize="12sp"
+                android:textColor="#666666" />
+
+            <TextView
+                android:id="@+id/tv_ai_model_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未安装"
+                android:textSize="12sp"
+                android:textColor="#999999" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_download_voice"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
-                android:text="⬇ 下载语音识别"
-                android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:text="⬇ 语音识别"
+                android:textSize="11sp"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#81D8D0"
+                app:cornerRadius="8dp"
                 android:layout_marginEnd="4dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_download_ai"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
                 android:layout_weight="1"
-                android:text="⬇ 下载语音润色"
-                android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:text="⬇ 语音润色"
+                android:textSize="11sp"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#81D8D0"
+                app:cornerRadius="8dp"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
-        <!-- 下载进度 -->
         <TextView
             android:id="@+id/tv_download_progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text=""
-            android:textSize="12sp"
-            android:textColor="#2196F3"
+            android:textSize="11sp"
+            android:textColor="#81D8D0"
             android:layout_marginBottom="4dp"
             android:visibility="gone" />
 
@@ -718,28 +829,28 @@
             android:id="@+id/pb_download"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="4dp"
             android:max="100"
             android:progress="0"
-            android:layout_marginBottom="8dp"
-            android:visibility="gone" />
+            android:layout_marginBottom="12dp"
+            android:visibility="gone"
+            android:progressTint="#81D8D0" />
 
-
-        <!-- GPU 加速已移除 -->
+        <!-- ═══════════ 分隔 ═══════════ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 主题设置 ==================== -->
+        <!-- ═══════════ 主题 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🎨 主题设置"
-            android:textSize="16sp"
+            android:text="🎨 主题"
+            android:textSize="14sp"
             android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -747,31 +858,38 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="☀️ 当前：明亮模式"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textColor="#666666"
             android:layout_marginBottom="8dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_theme_toggle"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="36dp"
             android:text="🌙 切换到黑暗模式"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_marginBottom="16dp" />
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            app:backgroundTint="#FFFFFF"
+            app:strokeColor="#81D8D0"
+            app:strokeWidth="1dp"
+            app:cornerRadius="8dp"
+            android:layout_marginBottom="12dp" />
 
+        <!-- ═══════════ 分隔 ═══════════ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 词库管理 ==================== -->
+        <!-- ═══════════ 词库 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="📚 词库管理"
-            android:textSize="16sp"
+            android:text="📚 词库"
+            android:textSize="14sp"
             android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -779,107 +897,141 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="加载中..."
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textColor="#666666"
             android:background="#F5F5F5"
-            android:padding="10dp"
+            android:padding="8dp"
             android:layout_marginBottom="8dp" />
 
-        <!-- 词库按钮：一行四个 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="12dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_download_dict"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:text="📥下载"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="10sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="6dp"
                 android:layout_marginEnd="2dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_import_dict"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:text="📂导入"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="10sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="6dp"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_export_dict"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:text="📤导出"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="10sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="6dp"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_cloud_backup"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:text="☁️备份"
-                android:textSize="11sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:textSize="10sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="6dp"
                 android:layout_marginStart="2dp" />
         </LinearLayout>
 
+        <!-- ═══════════ 分隔 ═══════════ -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#E0E0E0"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 操作按钮 ==================== -->
+        <!-- ═══════════ 操作按钮 ═══════════ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_save"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="40dp"
                 android:layout_weight="1"
                 android:text="💾 保存"
-                android:layout_marginEnd="8dp" />
+                android:textSize="13sp"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#81D8D0"
+                app:cornerRadius="10dp"
+                android:layout_marginEnd="6dp" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_reset"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="40dp"
                 android:layout_weight="1"
                 android:text="🔄 重置"
-                android:layout_marginStart="8dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:textSize="13sp"
+                android:textColor="#81D8D0"
+                app:backgroundTint="#FFFFFF"
+                app:strokeColor="#81D8D0"
+                app:strokeWidth="1dp"
+                app:cornerRadius="10dp"
+                android:layout_marginStart="6dp" />
         </LinearLayout>
 
-        <View
+        <!-- 检查更新 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_check_update"
             android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#E0E0E0"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp" />
+            android:layout_height="36dp"
+            android:text="🔍 检查更新"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            app:backgroundTint="#FFFFFF"
+            app:strokeColor="#81D8D0"
+            app:strokeWidth="1dp"
+            app:cornerRadius="8dp"
+            android:layout_marginBottom="12dp" />
 
-        <!-- ==================== 运行日志 ==================== -->
+        <!-- ═══════════ 日志 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="📝 运行日志"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+            android:textColor="#333333"
+            android:layout_marginBottom="6dp" />
 
         <TextView
             android:id="@+id/tv_log"
@@ -887,11 +1039,17 @@
             android:layout_height="wrap_content"
             android:background="#F5F5F5"
             android:padding="8dp"
-            android:textSize="11sp"
-            android:maxLines="12"
+            android:textSize="10sp"
+            android:textColor="#666666"
+            android:maxLines="10"
             android:scrollbars="vertical"
             android:textIsSelectable="true"
             android:text="等待操作..." />
+
+        <!-- 底部留白 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="24dp" />
 
     </LinearLayout>
 </ScrollView>

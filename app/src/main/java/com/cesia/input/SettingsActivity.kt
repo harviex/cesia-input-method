@@ -116,7 +116,6 @@ class SettingsActivity : AppCompatActivity() {
 
     // 检查更新
     private lateinit var btnCheckUpdate: Button
-    private lateinit var vUpdateDot: View
 
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
 
@@ -245,7 +244,6 @@ class SettingsActivity : AppCompatActivity() {
         // 检查更新
         try {
             btnCheckUpdate = findViewById(R.id.btn_check_update)
-            vUpdateDot = findViewById(R.id.v_update_dot)
         } catch (_: Exception) {}
 
         // === 语音与 AI 本地化视图 ===
@@ -1265,10 +1263,8 @@ class SettingsActivity : AppCompatActivity() {
                 runOnUiThread {
                     showVersion()
                     if (!isUpToDate && latestVersionCode > 0) {
-                        vUpdateDot?.visibility = View.VISIBLE
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        vUpdateDot?.visibility = View.GONE
                         tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
                         appendLog("✅ 已是最新版本")
                     }

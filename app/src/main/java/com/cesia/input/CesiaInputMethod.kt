@@ -66,6 +66,9 @@ import kotlinx.coroutines.*
 // region 视图与UI
 class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
+    // 单线程 Executor，用于串行执行 Rime 引擎操作（防止多线程并发崩溃）
+    private val rimeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     // ======================== 视图 ========================
     private lateinit var keyboardView: CesiaKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
@@ -2489,6 +2492,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     if (result != null && result.isNotEmpty() && result != "null") {
                         ic.commitText(result, 1)
                         updateStatus("✅ 智能写作已完成")
+                        // 保存命令到智能写作历史记录
+                        try {
+                            val smartRecords = mutableListOf<String>()
+                            loadSmartRecords(smartRecords)
+                            // 去重：如果已存在先移除
+                            smartRecords.remove(command)
+                            // 插入到第一位
+                            smartRecords.add(0, command)
+                            // 最多保留50条
+                            if (smartRecords.size > 50) {
+                                smartRecords.subList(50, smartRecords.size).clear()
+                            }
+                            saveSmartRecords(smartRecords)
+                        } catch (e: Exception) {
+                            Log.e("Cesia", "保存智能写作记录失败", e)
+                        }
                     } else {
                         updateStatus("⚠️ 无输出")
                     }
@@ -2752,6 +2771,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         smartWritingPopup = null
         clipboardPopup?.dismiss()
         clipboardPopup = null
+        // 清除所有按钮高亮状态
+        stopMagicButtonGlow()
+        btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
+        btnMagic.clearColorFilter()
+        stopMagicBookGlow()
     }
 
 // endregion 候选适配器
@@ -3483,8 +3507,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 1. 先 finishComposingText 确认当前组合文本
                             ic.finishComposingText()
 
-                            // 2. 删除末尾 2 个字符（命令词）
-                            ic.deleteSurroundingText(2, 0)
+                            // 2. 删除末尾的命令词（长度 = 完整识别文本 - 去掉命令词后的文本）
+                            val cmdWordLength = recognizedText.length - text.length
+                            if (cmdWordLength > 0) {
+                                ic.deleteSurroundingText(cmdWordLength, 0)
+                            }
 
                             // 3. 更新 recognizedText（去掉命令词后的文本）
                             recognizedText = text
@@ -3566,12 +3593,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         // 延迟1秒执行，让用户看到状态提示
                                         CoroutineScope(Dispatchers.Main).launch {
                                             delay(1000)
-                                            // 删除命令内容（recognizedText 是命令词前的文本）
-                                            val ic = currentInputConnection
-                                            if (ic != null && recognizedText.isNotEmpty()) {
-                                                // 删除已上屏的命令文字
-                                                ic.deleteSurroundingText(recognizedText.length, 0)
-                                            }
                                             executeSmartCommand(text)
                                             // 退出语音输入模式（除非锁定）
                                             if (isVoiceLocked) {
@@ -4263,19 +4284,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         candidateBar.visibility = View.GONE
         updateStatus(statusIdleText)
         // UI 立即切换，schema 切换放后台（轻量 reload，保留 build 缓存）
+        // 使用单线程 Executor 串行执行，防止多线程并发操作 Rime 引擎导致崩溃
         if (keyboardMode == KeyboardMode.NUMBER) {
             switchToKeyboard(KeyboardMode.QWERTY)
-            Thread {
+            rimeExecutor.execute {
                 rimeEngine.selectSchema("pinyin")
                 rimeEngine.reload()
-            }.start()
+            }
         } else {
             switchToKeyboard(KeyboardMode.NUMBER)
-            Thread {
+            rimeExecutor.execute {
                 rimeEngine.selectSchema("t9_pinyin")
                 rimeEngine.reload()
                 Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
-            }.start()
+            }
         }
     }
 
@@ -6087,7 +6109,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
 
             // 重置星星按钮状态（防止重启后残留高亮）
-            btnMagic.setBackgroundColor(0xFFF5F5F5.toInt())
+            btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
             btnMagic.clearColorFilter()
             btnMagic.clearAnimation()
         } catch (e: Throwable) {
