@@ -388,45 +388,88 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * 显示新闻源管理弹窗（按门类的复选框）
+     * 显示 RSS 新闻源管理弹窗
      */
     private fun showNewsSourceDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_news_sources, null)
-        val container = dialogView.findViewById<LinearLayout>(R.id.container_news_sources)
+        val etRssName = dialogView.findViewById<android.widget.EditText>(R.id.et_rss_name)
+        val etRssUrl = dialogView.findViewById<android.widget.EditText>(R.id.et_rss_url)
+        val btnAddRss = dialogView.findViewById<Button>(R.id.btn_add_rss)
+        val spinnerCategory = dialogView.findViewById<android.widget.Spinner>(R.id.spinner_rss_category)
+        val container = dialogView.findViewById<LinearLayout>(R.id.container_rss_sources)
+        val btnLoadDefaults = dialogView.findViewById<Button>(R.id.btn_load_defaults)
         val btnConfirm = dialogView.findViewById<Button>(R.id.btn_confirm)
         val btnCancel = dialogView.findViewById<Button>(R.id.btn_cancel)
 
-        // 加载已保存的选择
-        val selectedSources = prefs.getStringSet("news_sources_selected", null) ?: emptySet()
+        // 分类 Spinner
+        val adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, RSS_CATEGORIES)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerCategory.adapter = adapter
 
-        // 按门类分组渲染
-        val catPrefs = getSharedPreferences("cesia_news_sources", MODE_PRIVATE)
-        val enabledCategories = catPrefs.getStringSet("enabled_categories", null) ?: emptySet()
+        // 加载已保存的 RSS 列表
+        val rssPrefs = getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+        val savedSourcesJson = rssPrefs.getString("rss_sources", "[]") ?: "[]"
+        val savedSources = parseRssSourcesFromJson(savedSourcesJson)
 
-        for (category in NEWS_CATEGORIES) {
-            // 门类标题
-            val catTitle = android.widget.TextView(this).apply {
-                text = "📍 $category"
-                textSize = 14f
-                setTypeface(null, android.graphics.Typeface.BOLD)
-                setTextColor(0xFF333333.toInt())
-                setPadding(0, 16, 0, 4)
-            }
-            container.addView(catTitle)
-
-            // 获取该门类下的网站
-            val sourcesForCategory = DEFAULT_NEWS_SOURCES.filter { it.category == category }
-            for (source in sourcesForCategory) {
-                val checkBox = android.widget.CheckBox(this).apply {
-                    text = "${source.name} (${source.language})"
-                    textSize = 13f
-                    setTextColor(0xFF555555.toInt())
-                    isChecked = selectedSources.contains(source.id)
-                    tag = source.id
-                    setPadding(24, 2, 0, 2)
+        // 渲染已保存的列表
+        fun renderList() {
+            container.removeAllViews()
+            for (source in savedSources) {
+                val row = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    setPadding(8, 4, 8, 4)
                 }
-                container.addView(checkBox)
+                val checkBox = android.widget.CheckBox(this).apply {
+                    text = "${source.name} [${source.category}]"
+                    textSize = 12f
+                    setTextColor(0xFF555555.toInt())
+                    isChecked = source.enabled
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                val btnDelete = android.widget.Button(this).apply {
+                    text = "✕"
+                    textSize = 12f
+                    setTextColor(0xFFFF4444.toInt())
+                    setBackgroundColor(0x00000000)
+                    layoutParams = android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 36)
+                }
+                btnDelete.setOnClickListener {
+                    val newList = savedSources.filter { it.id != source.id }
+                    savedSources.clear()
+                    savedSources.addAll(newList)
+                    saveRssSources(savedSources)
+                    renderList()
+                }
+                row.addView(checkBox)
+                row.addView(btnDelete)
+                container.addView(row)
             }
+        }
+        renderList()
+
+        // 添加新 RSS
+        btnAddRss.setOnClickListener {
+            val name = etRssName.text?.toString()?.trim() ?: ""
+            val url = etRssUrl.text?.toString()?.trim() ?: ""
+            val category = spinnerCategory.selectedItem?.toString() ?: "综合"
+
+            if (name.isNotEmpty() && url.isNotEmpty()) {
+                val id = "rss_${System.currentTimeMillis()}"
+                val newSource = RssSource(id, name, url, category)
+                savedSources.add(newSource)
+                saveRssSources(savedSources)
+                etRssName.text?.clear()
+                etRssUrl.text?.clear()
+                renderList()
+            }
+        }
+
+        // 加载推荐
+        btnLoadDefaults.setOnClickListener {
+            savedSources.clear()
+            savedSources.addAll(DEFAULT_RSS_SOURCES)
+            saveRssSources(savedSources)
+            renderList()
         }
 
         val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
@@ -435,21 +478,56 @@ class SettingsActivity : AppCompatActivity() {
             .create()
 
         btnConfirm.setOnClickListener {
-            val newSelected = mutableSetOf<String>()
-            for (i in 0 until container.childCount) {
-                val child = container.getChildAt(i)
-                if (child is android.widget.CheckBox && child.isChecked) {
-                    newSelected.add(child.tag as String)
-                }
+            // 保存启用状态
+            val updatedSources = savedSources.mapIndexed { index, source ->
+                val row = container.getChildAt(index) as? android.widget.LinearLayout
+                val cb = row?.getChildAt(0) as? android.widget.CheckBox
+                source.copy(enabled = cb?.isChecked ?: source.enabled)
             }
-            prefs.edit().putStringSet("news_sources_selected", newSelected).apply()
-            appendLog("已保存新闻源选择：${newSelected.size} 个网站")
+            saveRssSources(updatedSources)
+            appendLog("已保存 RSS 源：${updatedSources.count { it.enabled }} 个启用 / ${updatedSources.size} 个总计")
             dialog.dismiss()
         }
 
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         dialog.show()
+    }
+
+    private fun parseRssSourcesFromJson(json: String): MutableList<RssSource> {
+        try {
+            val list = mutableListOf<RssSource>()
+            // 简单 JSON 解析
+            val items = json.removePrefix("[").removeSuffix("]").split("},{")
+            for (item in items) {
+                val clean = item.removePrefix("{").removeSuffix("}")
+                val fields = clean.split(",").associate {
+                    val (key, value) = it.split(":", limit = 2)
+                    key.trim('"') to value.trim('"')
+                }
+                if (fields.containsKey("id") && fields.containsKey("name") && fields.containsKey("url")) {
+                    list.add(RssSource(
+                        id = fields["id"] ?: "",
+                        name = fields["name"] ?: "",
+                        url = fields["url"] ?: "",
+                        category = fields["category"] ?: "综合",
+                        language = fields["language"] ?: "zh",
+                        enabled = fields["enabled"]?.toBoolean() ?: true
+                    ))
+                }
+            }
+            return list
+        } catch (e: Exception) {
+            return mutableListOf()
+        }
+    }
+
+    private fun saveRssSources(sources: List<RssSource>) {
+        val json = sources.joinToString(",", "[", "]") { s ->
+            """{"id":"${s.id}","name":"${s.name}","url":"${s.url}","category":"${s.category}","language":"${s.language}","enabled":${s.enabled}}"""
+        }
+        getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+            .edit().putString("rss_sources", json).apply()
     }
 
     private fun setupListeners() {

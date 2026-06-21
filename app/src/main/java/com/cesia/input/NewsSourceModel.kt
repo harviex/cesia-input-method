@@ -1,50 +1,56 @@
 package com.cesia.input
 
 /**
- * 新闻源数据模型
- * @param id 唯一标识
- * @param name 网站名称
- * @param url Firecrawl 抓取地址
- * @param category 门类分类（国际、财经、科技、中国、社会）
- * @param language 语言（zh/en）
- * @param tags AI 匹配用的标签关键词
+ * RSS 新闻源数据模型
  */
-data class NewsSource(
+data class RssSource(
     val id: String,
     val name: String,
     val url: String,
-    val category: String,
+    val category: String = "综合",
     val language: String = "zh",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val enabled: Boolean = true
 )
 
 /**
- * 默认新闻源列表
+ * RSS 解析后的单条新闻
  */
-val DEFAULT_NEWS_SOURCES = listOf(
-    NewsSource("zaobao", "联合早报", "https://www.zaobao.com.sg/realtime/china", "中国", "zh",
-        listOf("中国", "新加坡", "中文", "时事", "社会")),
-    NewsSource("bbc_zh", "BBC中文", "https://www.bbc.com/zhongwen/simp", "国际", "zh",
-        listOf("国际", "英文", "中文", "政治", "社会")),
-    NewsSource("reuters", "路透社", "https://www.reuters.com/world/middle-east/", "国际", "en",
-        listOf("国际", "中东", "政治", "战争", "经济", "英文")),
-    NewsSource("thepaper", "澎湃新闻", "https://www.thepaper.cn", "中国", "zh",
-        listOf("中国", "新闻", "时事", "社会", "法治")),
-    NewsSource("caixin", "财新传媒", "https://www.caixin.com", "财经", "zh",
-        listOf("财经", "经济", "金融", "股市", "投资", "中国")),
-    NewsSource("wsj", "华尔街日报", "https://www.wsj.com/news/types/markets", "财经", "en",
-        listOf("财经", "经济", "股市", "投资", "英文", "国际")),
-    NewsSource("36kr", "36氪", "https://36kr.com", "科技", "zh",
-        listOf("科技", "AI", "创业", "互联网", "人工智能", "软件")),
-    NewsSource("hn", "Hacker News", "https://news.ycombinator.com", "科技", "en",
-        listOf("科技", "AI", "编程", "软件", "互联网", "英文", "创业")),
-    NewsSource("cnn", "CNN", "https://www.cnn.cn/world", "国际", "en",
-        listOf("国际", "英文", "政治", "科学", "健康", "社会")),
-    NewsSource("bloomberg", "彭博社", "https://www.bloomberg.com/markets", "财经", "en",
-        listOf("财经", "经济", "金融", "投资", "英文", "贸易"))
+data class RssItem(
+    val title: String,
+    val link: String = "",
+    val description: String = "",
+    val pubDate: String = ""
 )
 
 /**
- * 门类列表
+ * 默认推荐的 RSS 源
  */
-val NEWS_CATEGORIES = listOf("国际", "财经", "科技", "中国", "社会")
+val DEFAULT_RSS_SOURCES = listOf(
+    RssSource("zaobao_china", "联合早报·中国", "https://rsshub.app/zaobao/realtime/china", "中国", "zh",
+        listOf("中国", "新加坡", "时事", "社会")),
+    RssSource("zaobao_world", "联合早报·国际", "https://rsshub.app/zaobao/realtime/world", "国际", "zh",
+        listOf("国际", "政治", "战争", "外交")),
+    RssSource("bbc_zh", "BBC中文", "https://rsshub.app/bbc/zhongwen/simp", "国际", "zh",
+        listOf("国际", "政治", "社会", "英文")),
+    RssSource("reuters_world", "路透社", "https://rsshub.app/reuters/world", "国际", "en",
+        listOf("国际", "政治", "经济", "英文")),
+    RssSource("36kr", "36氪", "https://rsshub.app/36kr/newsflashes", "科技", "zh",
+        listOf("科技", "AI", "创业", "互联网")),
+    RssSource("hn", "Hacker News", "https://rsshub.app/hacker-news", "科技", "en",
+        listOf("科技", "AI", "编程", "软件", "英文")),
+    RssSource("thepaper", "澎湃新闻", "https://rsshub.app/thepaper/channel/25951", "中国", "zh",
+        listOf("中国", "新闻", "时事", "社会")),
+    RssSource("caixin", "财新", "https://rsshub.app/caixin/article", "财经", "zh",
+        listOf("财经", "经济", "金融", "股市")),
+    RssSource("wsj_markets", "华尔街日报", "https://rsshub.app/wsj/markets", "财经", "en",
+        listOf("财经", "经济", "股市", "英文")),
+    RssSource("cnn_world", "CNN World", "https://rsshub.app/cnn/world", "国际", "en",
+        listOf("国际", "政治", "社会", "英文")),
+    RssSource("ifanr", "爱范儿", "https://rsshub.app/ifanr", "科技", "zh",
+        listOf("科技", "AI", "数码", "互联网")),
+    RssSource("solidot", "Solidot", "https://rsshub.app/solidot", "科技", "zh",
+        listOf("科技", "开源", "软件", "AI"))
+)
+
+val RSS_CATEGORIES = listOf("国际", "财经", "科技", "中国", "社会", "综合")

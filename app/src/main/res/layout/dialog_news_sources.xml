@@ -7,35 +7,88 @@
     android:padding="20dp"
     android:background="#FFFFFF">
 
-    <!-- 标题 -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="📰 新闻源管理"
+        android:text="📰 RSS 新闻源管理"
         android:textSize="18sp"
         android:textStyle="bold"
         android:textColor="#333333"
         android:gravity="center"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="4dp" />
 
-    <!-- 说明 -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="选择 AI 在智能写作时可抓取的新闻网站（按门类分组）"
-        android:textSize="12sp"
+        android:text="添加/管理 RSS 新闻源，智能写作时根据内容自动匹配抓取"
+        android:textSize="11sp"
         android:textColor="#999999"
+        android:gravity="center"
         android:layout_marginBottom="12dp" />
 
-    <!-- 新闻源列表（可滚动） -->
+    <!-- 添加新 RSS 区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <EditText
+            android:id="@+id/et_rss_name"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:hint="名称（如：36氪）"
+            android:textSize="12sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="@android:drawable/editbox_background"
+            android:layout_marginEnd="4dp"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/et_rss_url"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="2"
+            android:hint="RSS URL"
+            android:textSize="12sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="@android:drawable/editbox_background"
+            android:layout_marginEnd="4dp"
+            android:inputType="textUri" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_add_rss"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="+"
+            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#81D8D0"
+            app:cornerRadius="8dp"
+            android:minWidth="40dp" />
+    </LinearLayout>
+
+    <!-- 分类选择 -->
+    <Spinner
+        android:id="@+id/spinner_rss_category"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginBottom="8dp"
+        android:textSize="12sp"
+        android:paddingStart="4dp" />
+
+    <!-- 已添加的 RSS 列表 -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:maxHeight="400dp">
+        android:maxHeight="300dp">
 
         <LinearLayout
-            android:id="@+id/container_news_sources"
+            android:id="@+id/container_rss_sources"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
@@ -46,8 +99,18 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="8dp"
         android:gravity="end">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_load_defaults"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="加载推荐"
+            android:textSize="11sp"
+            android:textColor="#81D8D0"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_marginEnd="8dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_cancel"
@@ -63,7 +126,7 @@
             android:id="@+id/btn_confirm"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:text="✓ 确定"
+            android:text="✓ 保存"
             android:textSize="12sp"
             android:textColor="#FFFFFF"
             app:backgroundTint="#81D8D0"
