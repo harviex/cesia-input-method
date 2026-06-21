@@ -77,6 +77,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var downloadManager: ModelDownloadManager
     private var etGroqKey: EditText? = null
     private var etBraveApiKey: EditText? = null
+    private var etFirecrawlKey: EditText? = null
     private var tvHardwareInfo: TextView? = null
     private var tvVoiceModelStatus: TextView? = null
     private var tvAiModelStatus: TextView? = null
@@ -137,6 +138,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
         const val PREF_BRAVE_KEY = "tavily_api_key"
+        const val PREF_FIRECRAWL_KEY = "firecrawl_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
     }
@@ -250,6 +252,7 @@ class SettingsActivity : AppCompatActivity() {
         try {
             etGroqKey = findViewById(R.id.et_groq_key)
             etBraveApiKey = findViewById(R.id.et_brave_api_key)
+            etFirecrawlKey = findViewById(R.id.et_firecrawl_key)
             tvHardwareInfo = findViewById(R.id.tv_hardware_info)
             tvVoiceModelStatus = findViewById(R.id.tv_voice_model_status)
             tvAiModelStatus = findViewById(R.id.tv_ai_model_status)
@@ -348,6 +351,7 @@ class SettingsActivity : AppCompatActivity() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
         etBraveApiKey?.setText(prefs.getString(PREF_BRAVE_KEY, ""))
+        etFirecrawlKey?.setText(prefs.getString(PREF_FIRECRAWL_KEY, ""))
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, PolishService.DEFAULT_POLISH_PROMPT))
         // 加载语音命令词
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -385,6 +389,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             val apiKey = etApiKey.text?.toString()?.trim() ?: ""
             val braveApiKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
+            val firecrawlKey = etFirecrawlKey?.text?.toString()?.trim() ?: ""
             val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
                 ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
             val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
@@ -406,6 +411,7 @@ class SettingsActivity : AppCompatActivity() {
                 .putString(PREF_API_URL, url)
                 .putString(PREF_OPENROUTER_KEY, apiKey)
                 .putString(PREF_BRAVE_KEY, braveApiKey)
+                .putString(PREF_FIRECRAWL_KEY, firecrawlKey)
                 .putString(PREF_MODEL_ID, selectedModel)
                 .putString(PREF_POLISH_PROMPT, polishPrompt)
                 .putString("status_idle", statusIdle)

@@ -51,6 +51,13 @@
         <!-- 历史记录页面 -->
         <activity android:name=".HistoryActivity" android:label="润色历史记录" />
 
+        <!-- 本地文库文件选择器（透明辅助 Activity） -->
+        <activity
+            android:name=".FilePickerActivity"
+            android:label="选择文本文件"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
         <!-- FileProvider for OTA installs -->
         <provider
             android:name="androidx.core.content.FileProvider"

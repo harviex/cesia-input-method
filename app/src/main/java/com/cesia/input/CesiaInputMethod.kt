@@ -181,15 +181,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         Log.i("Cesia", "toggleLocalCloudMode: localModeEnabled=$localModeEnabled, run_mode=$newMode")
 
         updateVoiceBackend()
-        updateMicButtonAppearance()
+        localModeEnabled = !localModeEnabled
 
-        if (localModeEnabled) {
-            val voiceFile = modelManager.getInstalledVoiceModelFile()
-            val aiFile = modelManager.getInstalledAiModelFile()
-            updateStatus("📱 本地模式（${voiceFile?.name ?: "?"} + ${aiFile?.name ?: "?"}）")
-        } else {
-            updateStatus("☁️ 云端模式")
-        }
+        // 更新云按钮和麦克风按钮外观
+        updateMicButtonAppearance()
     }
 
     /** 根据当前模式更新语音键图标 */
@@ -2217,7 +2212,30 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
             optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
-            optLocalLib.setOnClickListener { toggleOption(it as TextView, "local_lib", OPT_LOCAL_LIB) }
+            optLocalLib.setOnClickListener {
+                // 如果已选中，再次点击取消；如果未选中，先选文件
+                val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
+                if (current.contains("local_lib")) {
+                    current.remove("local_lib")
+                    smartPrefs.edit().putStringSet("selected_options", current).apply()
+                    savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+                    refreshOption(it as TextView, "local_lib", OPT_LOCAL_LIB)
+                } else {
+                    // 弹出文件选择器（通过透明辅助 Activity）
+                    val intent = android.content.Intent(this, FilePickerActivity::class.java).apply {
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        startActivity(intent)
+                        // 选完后通过 onResume 或 SharedPreferences 回调刷新选中状态
+                        // 简单方案：选完文件后自动标记为已选中
+                        current.add("local_lib")
+                        smartPrefs.edit().putStringSet("selected_options", current).apply()
+                    } catch (e: Exception) {
+                        Log.w("Cesia", "Cannot open file picker: ${e.message}")
+                    }
+                }
+            }
 
             // 智能写作命令列表（2列，可滚动，与魔法书一致）
             val gvRecords = popupView.findViewById<android.widget.GridView>(R.id.gv_smart_records)
@@ -2494,6 +2512,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         updateStatus("❌ 无法获取输入连接")
                     }
                     return@launch
+                }
+
+                // 本地文库：读取选中的 txt 文件内容
+                if (selectedOptions.contains("local_lib")) {
+                    val libPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
+                    val libContent = libPrefs.getString(FilePickerActivity.RESULT_KEY_FILE_CONTENT, "")
+                    val libName = libPrefs.getString(FilePickerActivity.RESULT_KEY_FILE_NAME, "")
+                    if (libContent != null && libContent.isNotEmpty()) {
+                        promptParts.add("【本地文库：$libName】\n${libContent.take(3000)}")
+                        Log.d("Cesia", "LocalLib: loaded $libName (${libContent.length} chars)")
+                    }
                 }
 
                 val textBefore = ic.getTextBeforeCursor(1000, 0)?.toString() ?: ""
