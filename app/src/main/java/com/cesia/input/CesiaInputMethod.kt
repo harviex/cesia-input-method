@@ -1037,6 +1037,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (smartEditMode) {
                 smartEditBuffer.append(selectedDisplay)
                 updateSmartEditStatus()
+            } else if (magicEditMode) {
+                magicEditBuffer.append(selectedDisplay)
+                updateMagicEditStatus()
             } else {
                 commitCandidateText(selectedDisplay)
             }
@@ -1073,6 +1076,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 smartEditBuffer.append(selected)
                 rimeEngine.clear()
                 updateSmartEditStatus()
+            } else if (magicEditMode) {
+                // 魔法编辑模式：写入 buffer 而不是上屏
+                magicEditBuffer.append(selected)
+                rimeEngine.clear()
+                updateMagicEditStatus()
             } else {
                 // 上屏选中的词
                 commitCandidateText(selected)
@@ -1143,7 +1151,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
-        if (!composing && pinyin.isEmpty() && !isAssociationMode) {
+        // 智能写作/魔法编辑模式下不恢复初始状态（避免"已就绪"覆盖编辑中的命令）
+        if (!composing && pinyin.isEmpty() && !isAssociationMode && !smartEditMode && !magicEditMode) {
             if (isAssociationMode) {
                 isAssociationMode = false
                 associationPrefix = ""
