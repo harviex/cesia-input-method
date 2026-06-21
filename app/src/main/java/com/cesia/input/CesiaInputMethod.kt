@@ -1034,7 +1034,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val newAssociations = rimeEngine.getAssociations(newPrefix).take(20)
 
             // 上屏选中的词（追加到已有前缀后面）
-            commitCandidateText(selectedDisplay)
+            if (smartEditMode) {
+                smartEditBuffer.append(selectedDisplay)
+                updateSmartEditStatus()
+            } else {
+                commitCandidateText(selectedDisplay)
+            }
 
             if (newAssociations.isNotEmpty()) {
                 // 继续联想模式
@@ -1063,8 +1068,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         while (curPage > targetPage) { rimeEngine.prevPage() }
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
-            // 上屏选中的词
-            commitCandidateText(selected)
+            if (smartEditMode) {
+                // 智能写作编辑模式：写入 buffer 而不是上屏
+                smartEditBuffer.append(selected)
+                rimeEngine.clear()
+                updateSmartEditStatus()
+            } else {
+                // 上屏选中的词
+                commitCandidateText(selected)
+            }
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
                 rimeEngine.clear()
