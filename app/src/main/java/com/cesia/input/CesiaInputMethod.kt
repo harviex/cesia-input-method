@@ -3514,71 +3514,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 同传按钮点击 */
     private fun onSimulTranslateButtonClick() {
-        if (isRecording && simulTranslateEnabled) {
-            // 同传中 → 停止
-            stopSimulTranslateRecording()
-            updateStatus("同传已停止")
-            updateSimulTranslateButton(false)
-        } else {
-            // 开始同传
-            if (!SherpaOnnxEngine.isLibraryLoaded()) {
-                updateStatus("⚠️ Sherpa 库未加载")
-                return
-            }
-            // 同传需要语音识别模型 + AI 模型（TTS 使用系统自带，无需下载）
-            if (!modelManager.hasVoiceModel()) {
-                updateStatus("⚠️ 请先下载语音识别模型")
-                return
-            }
-            if (!modelManager.hasAiModel()) {
-                updateStatus("⚠️ 请先下载 Qwen 模型")
-                return
-            }
-
-            // 初始化管理器（如果还没初始化）
-            if (simulTranslateManager == null) {
-                simulTranslateManager = SimulTranslateManager(this)
-            }
-            if (!simulTranslateManager!!.isInitialized()) {
-                voiceEngineScope.launch {
-                    // 确保 AI 模型已加载
-                    if (!aiEngine.isModelLoaded()) {
-                        val modelFile = modelManager.getInstalledAiModelFile()
-                        if (modelFile == null) {
-                            withContext(Dispatchers.Main) {
-                                updateStatus("⚠️ AI 模型未找到，请重新下载")
-                            }
-                            return@launch
-                        }
-                        val configPath = if (modelFile.isDirectory) {
-                            java.io.File(modelFile, "config.json").absolutePath
-                        } else {
-                            modelFile.absolutePath
-                        }
-                        Log.i("Cesia", "同传：加载 AI 模型 $configPath")
-                        val loaded = aiEngine.loadLocalModel(configPath)
-                        if (!loaded) {
-                            withContext(Dispatchers.Main) {
-                                updateStatus("⚠️ AI 模型加载失败")
-                            }
-                            return@launch
-                        }
-                        Log.i("Cesia", "同传：AI 模型加载成功")
-                    }
-
-                    val ok = simulTranslateManager!!.initialize(engine = aiEngine)
-                    withContext(Dispatchers.Main) {
-                        if (ok) {
-                            startSimulTranslateRecording()
-                        } else {
-                            updateStatus("⚠️ 同传引擎初始化失败")
-                        }
-                    }
-                }
-            } else {
-                startSimulTranslateRecording()
-            }
-        }
+        // 同声传译功能正在开发中，仅提示用户
+        // 不初始化引擎，避免内存占用导致输入法卡死
+        android.widget.Toast.makeText(
+            this,
+            "🎧 同声传译功能正在开发中，敬请期待",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
     }
 
     /** 更新同传按钮外观 */
@@ -3757,22 +3699,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
                                         updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
                                     }
-                                    // 锁定模式退出
-                                    if (isVoiceLocked) {
-                                        isVoiceLocked = false
-                                        updateMicButtonLockedState()
-                                    }
-                                    resetToIdle()
+                                    // 锁定模式：发送后继续录音
+                                    startRecordingLocked()
                                 }
                                 "ai" -> {
                                     // 润色：对删除命令词后的文本润色
                                     if (text.isEmpty()) {
                                         updateStatus("⚠️ 没有需要润色的文字")
-                                        if (isVoiceLocked) {
-                                            startRecordingLocked()
-                                        } else {
-                                            resetToIdle()
-                                        }
+                                        startRecordingLocked()
                                     } else {
                                         updateStatus("✨ 语音润色中...")
                                         setStatusDot("processing")
@@ -3786,7 +3720,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 命令模式：text 是指令内容（如"翻译成英文"）
                                     if (text.isEmpty()) {
                                         updateStatus("⚠️ 请输入指令")
-                                        resetToIdle()
+                                        startRecordingLocked()
                                     } else {
                                         Log.i("Cesia", "命令模式: 指令='$text'")
                                         executeVoiceCommand(text)
@@ -3795,18 +3729,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 "finish" -> {
                                     // 结束：原文已上屏，直接结束识别
                                     updateStatus("✅ 已上屏")
-                                    if (isVoiceLocked) {
-                                        // 锁定模式下继续录音
-                                        startRecordingLocked()
-                                    } else {
-                                        resetToIdle()
-                                    }
+                                    // 锁定模式下继续录音
+                                    startRecordingLocked()
                                 }
                                 "writing" -> {
                                     // 写作：text 是写作指令（如"帮我写篇文章"）
                                     if (text.isEmpty()) {
                                         updateStatus("⚠️ 请输入写作内容")
-                                        resetToIdle()
+                                        startRecordingLocked()
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$text'")
                                         updateStatus("✨ 语音写作中...")
@@ -3819,14 +3749,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                                 ic2.deleteSurroundingText(text.length, 0)
                                             }
                                             executeSmartCommand(text)
-                                            // 退出语音输入模式（除非锁定）
-                                            if (isVoiceLocked) {
-                                                startRecordingLocked()
-                                            } else {
-                                                isVoiceLocked = false
-                                                updateMicButtonLockedState()
-                                                resetToIdle()
-                                            }
+                                            // 锁定模式下继续录音
+                                            startRecordingLocked()
                                         }
                                     }
                                 }
@@ -4202,11 +4126,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND")
                 updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
             }
-            if (isVoiceLocked) {
-                isVoiceLocked = false
-                updateMicButtonLockedState()
-            }
-            resetToIdle()
+            // 锁定模式：发送后继续录音
+            startRecordingLocked()
             return
         }
 
