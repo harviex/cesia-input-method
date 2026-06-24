@@ -838,7 +838,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         } else {
                             currentInputConnection?.commitText(textBefore, 1)
                             updateStatus("✅ 已上屏")
-                            resetToIdle()
+                            if (isVoiceLocked) {
+                                startRecordingLocked()
+                            } else {
+                                resetToIdle()
+                            }
                         }
                         return@post
                     }
@@ -3699,8 +3703,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
                                         updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
                                     }
-                                    // 锁定模式：发送后继续录音
-                                    startRecordingLocked()
+                                    // 锁定模式：发送后继续录音；非锁定模式：退出语音输入
+                                    if (isVoiceLocked) {
+                                        startRecordingLocked()
+                                    } else {
+                                        resetToIdle()
+                                    }
                                 }
                                 "ai" -> {
                                     // 润色：对删除命令词后的文本润色
@@ -3729,14 +3737,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 "finish" -> {
                                     // 结束：原文已上屏，直接结束识别
                                     updateStatus("✅ 已上屏")
-                                    // 锁定模式下继续录音
-                                    startRecordingLocked()
+                                    // 锁定模式下继续录音，非锁定模式退出
+                                    if (isVoiceLocked) {
+                                        startRecordingLocked()
+                                    } else {
+                                        resetToIdle()
+                                    }
                                 }
                                 "writing" -> {
                                     // 写作：text 是写作指令（如"帮我写篇文章"）
                                     if (text.isEmpty()) {
                                         updateStatus("⚠️ 请输入写作内容")
-                                        startRecordingLocked()
+                                        if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$text'")
                                         updateStatus("✨ 语音写作中...")
@@ -3749,8 +3761,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                                 ic2.deleteSurroundingText(text.length, 0)
                                             }
                                             executeSmartCommand(text)
-                                            // 锁定模式下继续录音
-                                            startRecordingLocked()
+                                            // 锁定模式下继续录音，非锁定模式退出
+                                            if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                                         }
                                     }
                                 }
