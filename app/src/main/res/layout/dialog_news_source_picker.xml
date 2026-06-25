@@ -29,9 +29,7 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_source_picker"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:maxHeight="300dp" />
+        android:layout_height="300dp" />
 
     <View
         android:layout_width="match_parent"
@@ -56,8 +54,7 @@
         android:textColor="#555555"
         android:textColorHint="#AAAAAA"
         android:singleLine="true"
-        android:inputType="textUri"
-        android:visibility="gone" />
+        android:inputType="textUri" />
 
     <LinearLayout
         android:layout_width="match_parent"

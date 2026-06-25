@@ -415,7 +415,6 @@ class SettingsActivity : AppCompatActivity() {
         val adapter = SourcePickerAdapter(allSources, selectedIndex) { pos ->
             selectedIndex = pos
             etCustomUrl.setText("")
-            etCustomUrl.visibility = EditText.GONE
         }
         rvSources.adapter = adapter
 
@@ -427,9 +426,6 @@ class SettingsActivity : AppCompatActivity() {
                 if (!s.isNullOrEmpty()) {
                     selectedIndex = -1
                     adapter.setSelection(-1)
-                    etCustomUrl.visibility = EditText.VISIBLE
-                } else {
-                    etCustomUrl.visibility = EditText.GONE
                 }
             }
         })
