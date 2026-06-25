@@ -38,8 +38,11 @@ import com.cesia.input.model.ModelInfo
 import com.cesia.input.model.ModelManager
 import com.cesia.input.model.ModelRegistry
 import com.cesia.input.voice.VoiceEngine
+import kotlinx.coroutines.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 
 /**
@@ -266,7 +269,7 @@ class SettingsActivity : AppCompatActivity() {
         // 新闻源管理按钮
         try {
             btnNewsSources = findViewById(R.id.btn_news_sources)
-            btnNewsSources?.setOnClickListener { showNewsSourceDialog() }
+            btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
         } catch (_: Exception) {}
 
         // 语音命令词设置（原个性化设置内容）
@@ -388,60 +391,48 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * 显示新闻源 RSS 配置弹窗
-     * 每个分类对应一个 RSS URL 输入框
+     * 显示新闻源选择弹窗（单源选择器）
+     * 显示所有预置源列表（单选）+ 自定义 URL 输入
      */
-    private fun showNewsSourceDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_news_sources, null)
-        val container = dialogView.findViewById<LinearLayout>(R.id.container_rss_urls)
-        val btnLoadDefaults = dialogView.findViewById<Button>(R.id.btn_load_defaults)
-        val btnConfirm = dialogView.findViewById<Button>(R.id.btn_confirm)
-        val btnCancel = dialogView.findViewById<Button>(R.id.btn_cancel)
+    private fun showNewsSourcePicker() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_news_source_picker, null)
+        val rvSources = dialogView.findViewById<RecyclerView>(R.id.rv_source_picker)
+        val etCustomUrl = dialogView.findViewById<EditText>(R.id.et_custom_rss_url)
+        val btnConfirm = dialogView.findViewById<MaterialButton>(R.id.btn_confirm)
+        val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btn_cancel)
 
-        // 加载已保存的 RSS URL（key=分类名, value=URL）
-        val rssPrefs = getSharedPreferences("cesia_category_rss", MODE_PRIVATE)
-        val savedUrls = mutableMapOf<String, String>()
-        for (cat in RSS_CATEGORIES) {
-            val url = rssPrefs.getString(cat, "") ?: ""
-            savedUrls[cat] = url
-        }
+        // 加载所有可用源
+        val allSources = RssFetchManager.getAllSources(this)
 
-        // 为每个分类创建输入框
-        val editTexts = mutableMapOf<String, android.widget.EditText>()
-        for (cat in RSS_CATEGORIES) {
-            val row = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                setPadding(0, 4, 0, 4)
-            }
-            val label = android.widget.TextView(this).apply {
-                text = cat
-                textSize = 13f
-                setTextColor(0xFF333333.toInt())
-                layoutParams = android.widget.LinearLayout.LayoutParams(60, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-            val et = android.widget.EditText(this).apply {
-                hint = "RSS URL（留空则跳过）"
-                textSize = 12f
-                setTextColor(0xFF555555.toInt())
-                setHintTextColor(0xFFAAAAAA.toInt())
-                setSingleLine(true)
-                inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
-                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setText(savedUrls[cat] ?: "")
-            }
-            editTexts[cat] = et
-            row.addView(label)
-            row.addView(et)
-            container.addView(row)
-        }
+        // 当前选中的源
+        val currentSelected = RssFetchManager.getSelectedSource(this)
+        var selectedIndex = currentSelected?.let { selected ->
+            allSources.indexOfFirst { it.name == selected.name }
+        } ?: -1
 
-        // 加载推荐
-        btnLoadDefaults.setOnClickListener {
-            for (cat in RSS_CATEGORIES) {
-                val defaultUrl = DEFAULT_CATEGORY_RSS_URLS[cat] ?: ""
-                editTexts[cat]?.setText(defaultUrl)
-            }
+        // 设置 RecyclerView
+        rvSources.layoutManager = LinearLayoutManager(this)
+        val adapter = SourcePickerAdapter(allSources, selectedIndex) { pos ->
+            selectedIndex = pos
+            etCustomUrl.setText("")
+            etCustomUrl.visibility = EditText.GONE
         }
+        rvSources.adapter = adapter
+
+        // 自定义 URL 输入：如果有内容则清除列表选中
+        etCustomUrl.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!s.isNullOrEmpty()) {
+                    selectedIndex = -1
+                    adapter.setSelection(-1)
+                    etCustomUrl.visibility = EditText.VISIBLE
+                } else {
+                    etCustomUrl.visibility = EditText.GONE
+                }
+            }
+        })
 
         val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setView(dialogView)
@@ -449,13 +440,50 @@ class SettingsActivity : AppCompatActivity() {
             .create()
 
         btnConfirm.setOnClickListener {
-            val editor = rssPrefs.edit()
-            for (cat in RSS_CATEGORIES) {
-                val url = editTexts[cat]?.text?.toString()?.trim() ?: ""
-                editor.putString(cat, url)
+            val json = org.json.JSONObject()
+            val sourceName: String
+            val sourceUrl: String
+
+            val customUrl = etCustomUrl.text?.toString()?.trim() ?: ""
+            if (customUrl.isNotEmpty() && (customUrl.startsWith("http://") || customUrl.startsWith("https://"))) {
+                // 自定义 URL
+                sourceName = "自定义"
+                sourceUrl = customUrl
+                json.put("name", sourceName)
+                json.put("url", sourceUrl)
+            } else if (selectedIndex >= 0 && selectedIndex < allSources.size) {
+                // 预置源
+                val src = allSources[selectedIndex]
+                sourceName = src.name
+                sourceUrl = src.url
+                json.put("name", sourceName)
+                json.put("url", sourceUrl)
+            } else {
+                // 未选择
+                android.widget.Toast.makeText(this, "请选择一个源或填入自定义 URL", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-            editor.apply()
-            appendLog("已保存 ${RSS_CATEGORIES.count { (rssPrefs.getString(it, "") ?: "").isNotEmpty() }} 个分类的 RSS 源")
+
+            // 保存选择到 SharedPreferences
+            val rssPrefs = getSharedPreferences("cesia_rss", MODE_PRIVATE)
+            rssPrefs.edit()
+                .putString("selected_source", sourceName)
+                .putString("selected_url", sourceUrl)
+                .apply()
+
+            // 立即抓取并缓存
+            val selectedSource = RssFetchManager.RssSource(sourceName, sourceUrl, "")
+            CoroutineScope(Dispatchers.IO).launch {
+                RssFetchManager.fetchAndCache(this@SettingsActivity, selectedSource)
+            }
+
+            android.widget.Toast.makeText(
+                this,
+                "已选择: $sourceName，正在抓取...",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+
+            appendLog("已切换新闻源: $sourceName → $sourceUrl")
             dialog.dismiss()
         }
 
@@ -1628,4 +1656,52 @@ class SettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
     }
+
+    /**
+     * 新闻源选择器的 RecyclerView Adapter
+     */
+    private inner class SourcePickerAdapter(
+        val sources: List<RssFetchManager.RssSource>,
+        initialSelected: Int,
+        private val onItemClick: (Int) -> Unit
+    ) : RecyclerView.Adapter<RssSourceViewHolder>() {
+
+        var selectedPos = initialSelected
+
+        fun setSelection(pos: Int) {
+            val old = selectedPos
+            selectedPos = pos
+            if (old >= 0) notifyItemChanged(old)
+            if (pos >= 0) notifyItemChanged(pos)
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RssSourceViewHolder {
+            val view = layoutInflater.inflate(R.layout.item_rss_source, parent, false)
+            return RssSourceViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: RssSourceViewHolder, position: Int) {
+            val src = sources[position]
+            holder.tvName.text = src.name
+            holder.tvCategory.text = src.category
+            holder.rb.isChecked = (position == selectedPos)
+            holder.itemView.setOnClickListener {
+                setSelection(position)
+                onItemClick(position)
+            }
+            holder.rb.setOnClickListener {
+                setSelection(position)
+                onItemClick(position)
+            }
+        }
+
+        override fun getItemCount() = sources.size
+    }
+}
+
+/** RSS 源选择器的 ViewHolder（类级别） */
+class RssSourceViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
+    val rb: android.widget.RadioButton = view.findViewById(com.cesia.input.R.id.rb_source)
+    val tvName: android.widget.TextView = view.findViewById(com.cesia.input.R.id.tv_source_name)
+    val tvCategory: android.widget.TextView = view.findViewById(com.cesia.input.R.id.tv_source_category)
 }
