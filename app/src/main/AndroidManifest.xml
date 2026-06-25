@@ -58,6 +58,12 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="false" />
 
+        <!-- 新闻源管理页面 -->
+        <activity
+            android:name=".NewsSourceActivity"
+            android:label="新闻源管理"
+            android:exported="false" />
+
         <!-- FileProvider for OTA installs -->
         <provider
             android:name="androidx.core.content.FileProvider"

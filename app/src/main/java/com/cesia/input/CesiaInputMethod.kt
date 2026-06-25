@@ -535,7 +535,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_AI_STYLE = "ai_reply_style"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
-        const val PREF_FIRECRAWL_KEY = "firecrawl_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
@@ -2187,11 +2186,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 智能写作选项数据类 */
     private data class SmartOption(val label: String, val tag: String, var isChecked: Boolean = false)
 
-    // 智能写作设置弹窗中的选项标签常量
+    // 智能写作设置弹窗中的选项标签常量（轻量化：4个数据源）
     private val OPT_CLIPBOARD = "📋 剪贴板首条"
-    private val OPT_GRAMMAR = "📖 语法大纲"
+    private val OPT_LOCAL_TEXT = "📄 本地文本"
     private val OPT_SEARCH = "🌐 网络搜索"
     private val OPT_LOCAL_LIB = "📚 本地文库"
+    private val OPT_RSS_CACHE = "📰 RSS 缓存"
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
@@ -2203,11 +2203,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
             tvTitle.text = smartWritingLabel
 
-            // 选项视图
+            // 选项视图（4个数据源：剪贴板、本地文本、网络搜索、RSS缓存）
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
-            val optGrammar = popupView.findViewById<TextView>(R.id.opt_chat_history)
+            val optLocalText = popupView.findViewById<TextView>(R.id.opt_chat_history)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
             val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
+            val optRssCache = popupView.findViewById<TextView>(R.id.opt_rss_news)
 
             // 恢复上次选中状态（持久化）
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
@@ -2221,9 +2222,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.tag = tag
             }
             refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
-            refreshOption(optGrammar, "grammar", OPT_GRAMMAR)
+            refreshOption(optLocalText, "local_text", OPT_LOCAL_TEXT)
             refreshOption(optSearch, "search", OPT_SEARCH)
             refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
+            refreshOption(optRssCache, "rss_cache", OPT_RSS_CACHE)
 
             // 点击切换（直接保存到 SharedPreferences 并刷新 UI）
             fun toggleOption(tv: TextView, tag: String, label: String) {
@@ -2235,8 +2237,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 refreshOption(tv, tag, label)
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
-            optGrammar.setOnClickListener { toggleOption(it as TextView, "grammar", OPT_GRAMMAR) }
+            optLocalText.setOnClickListener { toggleOption(it as TextView, "local_text", OPT_LOCAL_TEXT) }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
+            optRssCache.setOnClickListener { toggleOption(it as TextView, "rss_cache", OPT_RSS_CACHE) }
             optLocalLib.setOnClickListener {
                 // 如果已选中，再次点击取消；如果未选中，先选文件
                 val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
@@ -2454,9 +2457,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 立即显示状态，让用户知道正在处理
         updateStatus("⏳ 智能写作处理中...")
 
-        // 获取剪贴板内容（输入法剪贴板第0位，与系统剪贴板保持一致）
+        // 获取剪贴板内容
         val clipboardText = if (selectedOptions.contains("clipboard")) {
-            // 如果 clipboardItems 为空（弹窗未打开过），先加载
             if (clipboardItems.isEmpty()) {
                 val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                 loadClipboardHistoryToClassMembers(clipboardMgr)
@@ -2474,59 +2476,45 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 1. 用户命令
                 promptParts.add("【指令】\n$command")
 
-                // 2. 剪贴板内容（参考素材）
+                // 2. 剪贴板内容
                 if (clipboardText.isNotEmpty()) {
                     promptParts.add("【参考素材】\n$clipboardText")
                 }
 
-                // 3. 语法纲要
-                if (selectedOptions.contains("grammar")) {
-                    val grammarGuide = buildGrammarGuide()
-                    if (grammarGuide.isNotEmpty()) {
-                        promptParts.add("【语法纲要】\n$grammarGuide")
+                // 3. 本地文本文件
+                if (selectedOptions.contains("local_text")) {
+                    val localTextContent = readLocalTextFile()
+                    if (localTextContent.isNotEmpty()) {
+                        promptParts.add("【本地文本】\n$localTextContent")
                     }
                 }
 
-                // 4. 互联网搜索（智能流程：AI判断门类 → 弹窗确认 → 抓取 → 翻译 → 生成）
+                // 4. RSS 缓存
+                if (selectedOptions.contains("rss_cache")) {
+                    val rssCache = RssFetchManager.readCache(this@CesiaInputMethod)
+                    if (rssCache.isNotBlank()) {
+                        promptParts.add("【RSS 缓存】\n$rssCache")
+                    }
+                }
+
+                // 5. 互联网搜索
                 if (selectedOptions.contains("search")) {
                     val searchQuery = if (clipboardText.isNotEmpty()) {
                         clipboardText.take(80)
                     } else {
                         command.replace(Regex("(续写|扩写|改写|润色|翻译|写作|修改|帮我写|帮我改|帮我润色)"), "").trim()
                     }
+
                     val sdf = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINA)
                     val today = sdf.format(java.util.Date())
                     val finalQuery = "$searchQuery $today"
 
-                    // Tavily 关键词搜索（始终执行）
                     Log.d("Cesia", "SearXNG query: $finalQuery")
                     withContext(Dispatchers.Main) { updateStatus("🔍 正在搜索：${finalQuery.take(20)}...") }
                     val tavilyResults = performSearXNGSearch(finalQuery)
                     Log.d("Cesia", "SearXNG results: ${tavilyResults.length} chars")
                     if (tavilyResults.isNotEmpty()) {
                         promptParts.add("【网络搜索】\n$tavilyResults")
-                    }
-
-                    // RSS 新闻抓取（AI判断分类 → Firecrawl抓取对应RSS → 提取最新5条）
-                    val categoryRssUrls = loadCategoryRssUrls()
-                    if (categoryRssUrls.isNotEmpty()) {
-                        val aiCategories = aiPredictCategories(command + " " + clipboardText)
-                        Log.d("Cesia", "AI predicted categories: $aiCategories")
-                        // 按分类匹配 RSS URL，逐个抓取
-                        val rssContent = StringBuilder()
-                        for (cat in aiCategories) {
-                            val rssUrl = categoryRssUrls[cat] ?: continue
-                            Log.d("Cesia", "Fetching RSS for category '$cat': $rssUrl")
-                            val items = fetchRssViaFirecrawl(rssUrl)
-                            if (items.isNotBlank()) {
-                                rssContent.appendLine("【$cat】")
-                                rssContent.appendLine(items)
-                                rssContent.appendLine()
-                            }
-                        }
-                        if (rssContent.isNotBlank()) {
-                            promptParts.add("【最新新闻】\n${rssContent.toString().trim()}")
-                        }
                     }
                 }
 
@@ -2565,7 +2553,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 Log.d("Cesia", "executeSmartCommand: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}")
 
                 val result = if (useLocal) {
-                    // 本地 MNN 推理
                     val modelFile = modelManager.getInstalledAiModelFile()
                     if (modelFile != null && modelFile.exists() && !aiEngine.isModelLoaded()) {
                         val configPath = if (modelFile.isDirectory) File(modelFile, "config.json").absolutePath else modelFile.absolutePath
@@ -2573,7 +2560,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     aiEngine.polishWithPrompt(fullPrompt)
                 } else {
-                    // 云端 OpenRouter
                     val polishService = typelessEngine?.getPolishService()
                     Log.d("Cesia", "executeSmartCommand: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}")
                     polishService?.polishWithPrompt(fullPrompt)
@@ -2586,15 +2572,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     if (result != null && result.isNotEmpty() && result != "null") {
                         ic.commitText(result, 1)
                         updateStatus("✅ 智能写作已完成")
-                        // 保存命令到智能写作历史记录
                         try {
                             val smartRecords = mutableListOf<String>()
                             loadSmartRecords(smartRecords)
-                            // 去重：如果已存在先移除
                             smartRecords.remove(command)
-                            // 插入到第一位
                             smartRecords.add(0, command)
-                            // 最多保留50条
                             if (smartRecords.size > 50) {
                                 smartRecords.subList(50, smartRecords.size).clear()
                             }
@@ -2668,111 +2650,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         Log.d("Cesia", "TavilySearch: returning empty")
         return ""
-    }
-
-    /** Firecrawl 抓取单个 URL，返回 Markdown 内容 */
-    private fun performFirecrawlScrape(url: String): String {
-        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        val firecrawlApiKey = prefs.getString("firecrawl_api_key", "") ?: ""
-        if (firecrawlApiKey.isEmpty()) {
-            Log.w("Cesia", "Firecrawl: API key not configured")
-            return ""
-        }
-        try {
-            val jsonBody = org.json.JSONObject().apply {
-                put("url", url)
-                put("onlyMainContent", true)
-            }.toString()
-            val body = jsonBody.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder()
-                .url("https://api.firecrawl.dev/v2/scrape")
-                .addHeader("Authorization", "Bearer $firecrawlApiKey")
-                .post(body)
-                .build()
-            val client = OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            val response = client.newCall(request).execute()
-            val code = response.code
-            Log.d("Cesia", "Firecrawl: HTTP $code for $url")
-            if (code == 200) {
-                val json = response.body?.string() ?: ""
-                val obj = org.json.JSONObject(json)
-                if (obj.optBoolean("success", false)) {
-                    val data = obj.optJSONObject("data") ?: return ""
-                    val markdown = data.optString("markdown", "").trim()
-                    Log.d("Cesia", "Firecrawl: got ${markdown.length} chars from $url")
-                    return markdown
-                }
-            } else {
-                Log.w("Cesia", "Firecrawl error HTTP $code: ${response.body?.string()?.take(200)}")
-            }
-        } catch (e: Exception) {
-            Log.w("Cesia", "Firecrawl failed for $url: ${e.message}")
-        }
-        return ""
-    }
-
-    /** AI 判断内容属于哪些新闻门类 */
-    private suspend fun aiPredictCategories(content: String): List<String> {
-        if (content.isBlank()) return emptyList()
-        val categories = RSS_CATEGORIES.joinToString("、")
-        val prompt = "根据以下内容判断属于哪些新闻门类（只返回门类名称，用逗号分隔，可选：$categories）：\n\n${content.take(200)}"
-        return try {
-            val result = withContext(Dispatchers.IO) {
-                val polishService = typelessEngine?.getPolishService()
-                if (polishService != null) {
-                    polishService.polishWithPrompt(prompt, maxTokens = 20) ?: ""
-                } else {
-                    ""
-                }
-            }
-            if (result.isNotBlank()) {
-                result.split(",", "，", "、").map { it.trim() }.filter { it in RSS_CATEGORIES }
-            } else {
-                emptyList()
-            }
-        } catch (e: Exception) {
-            Log.w("Cesia", "aiPredictCategories failed: ${e.message}")
-            emptyList()
-        }
-    }
-
-    /** 加载分类→RSS URL 映射 */
-    private fun loadCategoryRssUrls(): Map<String, String> {
-        val prefs = getSharedPreferences("cesia_category_rss", MODE_PRIVATE)
-        val map = mutableMapOf<String, String>()
-        for (cat in RSS_CATEGORIES) {
-            val url = prefs.getString(cat, "") ?: ""
-            if (url.isNotBlank()) map[cat] = url
-        }
-        return map
-    }
-
-    /** 通过 Firecrawl 抓取 RSS feed，提取最新5条新闻标题 */
-    private fun fetchRssViaFirecrawl(rssUrl: String): String {
-        val markdown = performFirecrawlScrape(rssUrl)
-        if (markdown.isBlank()) return ""
-        // RSS feed 被 Firecrawl 转成 Markdown，提取条目标题
-        // 常见格式：### 标题 或 - 标题 或 **标题**
-        val titles = mutableListOf<String>()
-        for (line in markdown.lines()) {
-            val trimmed = line.trim()
-            if (trimmed.isEmpty()) continue
-            // 去掉 Markdown 标题符号
-            val clean = trimmed
-                .replace(Regex("^#{1,6}\\s*"), "")
-                .replace(Regex("^[-*+]\\s*"), "")
-                .replace(Regex("^\\*\\*|\\*\\*$"), "")
-                .replace(Regex("^\\d+\\.\\s*"), "")
-                .trim()
-            if (clean.length > 5 && clean.length < 200 && !clean.startsWith("http")) {
-                titles.add(clean)
-            }
-            if (titles.size >= 5) break
-        }
-        return if (titles.isNotEmpty()) titles.joinToString("\n") { "• $it" } else ""
     }
 
     /** 检查文本中是否包含今天日期 */
@@ -2896,11 +2773,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 contextParts.add("参考内容：\n$clipboardText")
             }
         }
-        if (selectedOptions.contains("grammar")) {
-            val grammarGuide = buildGrammarGuide()
-            Log.d("Cesia", "executeSmartWriting: grammar=${grammarGuide.length} chars")
-            if (grammarGuide.isNotEmpty()) {
-                contextParts.add("语法纲要：\n$grammarGuide")
+        if (selectedOptions.contains("local_text")) {
+            val localTextContent = readLocalTextFile()
+            Log.d("Cesia", "executeSmartWriting: local_text=${localTextContent.length} chars")
+            if (localTextContent.isNotEmpty()) {
+                contextParts.add("本地文本：\n$localTextContent")
+            }
+        }
+        if (selectedOptions.contains("rss_cache")) {
+            val rssCache = RssFetchManager.readCache(this@CesiaInputMethod)
+            Log.d("Cesia", "executeSmartWriting: rss_cache=${rssCache.length} chars")
+            if (rssCache.isNotBlank()) {
+                contextParts.add("RSS缓存：\n$rssCache")
             }
         }
         if (selectedOptions.contains("search")) {
@@ -2979,6 +2863,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } catch (e: Exception) {
             ""
         }
+    }
+
+    /** 读取本地文本文件内容 */
+    private fun readLocalTextFile(): String {
+        return try {
+            val prefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
+            val fileName = prefs.getString(FilePickerActivity.RESULT_KEY_FILE_NAME, "") ?: ""
+            if (fileName.isNotEmpty()) {
+                val file = java.io.File(fileName)
+                if (file.exists()) file.readText() else ""
+            } else ""
+        } catch (e: Exception) { "" }
     }
 
     /** 弹窗引用（用于长按互斥关闭） */
@@ -3999,7 +3895,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 云端润色封装 */
     private fun polishWithCloud(text: String) {
-        typelessEngine?.polishTextAsync(text) { finalText ->
+        val grammarGuide = buildGrammarGuide()
+        val enhancedText = if (grammarGuide.isNotEmpty()) {
+            "$text\n\n[语法纲要]\n$grammarGuide"
+        } else text
+        typelessEngine?.polishTextAsync(enhancedText) { finalText ->
             Log.d("Cesia", "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'")
             isProcessingResult = false
             replaceTextWithPolish(text, finalText)
