@@ -73,15 +73,13 @@ object RssFetchManager {
         RssSource("BBC中文网", "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "新闻"),
         RssSource("纽约时报中文网", "https://cn.nytimes.com/rss/society.xml", "新闻"),
         RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "新闻"),
-        RssSource("人民日报", "http://paper.people.com.cn/rss", "新闻"),
+        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
         RssSource("新华社", "https://www.xinhuanet.com/rss", "新闻"),
         RssSource("宝玉", "https://baoyu.io/feed.xml", "新闻"),
 
         // 生活/其他
         RssSource("煎蛋", "https://jandan.net/feed", "生活"),
-        RssSource("生活周刊", "https://www.lifeweekly.com/rss", "生活"),
-        RssSource("新华社", "https://www.xinhuanet.com/rss", "新闻"),
-        RssSource("人民日报", "http://paper.people.com.cn/rss", "新闻")
+        RssSource("生活周刊", "https://www.lifeweekly.com/rss", "生活")
     )
 
     // ===== 数据类 =====
