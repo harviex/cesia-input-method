@@ -2,6 +2,7 @@ package com.cesia.input
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -80,15 +81,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var downloadManager: ModelDownloadManager
     private var etGroqKey: EditText? = null
     private var etBraveApiKey: EditText? = null
-    private var etFirecrawlKey: EditText? = null
-    private var tvHardwareInfo: TextView? = null
-    private var tvVoiceModelStatus: TextView? = null
-    private var tvAiModelStatus: TextView? = null
-    private var tvDownloadProgress: TextView? = null
-    private var pbDownload: android.widget.ProgressBar? = null
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
-    private var btnNewsSources: Button? = null
     private var isDownloading = false
 
     // 语音命令词
@@ -118,6 +112,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnExportDict: Button
     private lateinit var btnCloudBackup: Button
     private lateinit var tvDictInfo: TextView
+    private var btnNewsSources: Button? = null
 
     // 检查更新
     private lateinit var btnCheckUpdate: Button
@@ -134,7 +129,8 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_MODEL_ID = "model_id"
         const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
         const val PERMISSION_REQUEST_CODE = 1001
-        const val PREF_THEME_MODE = "theme_mode"
+        const val TYPE_HEADER = 0
+        const val TYPE_SOURCE = 1
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
         const val IMPORT_DICT_REQUEST = 2001
@@ -142,9 +138,9 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
         const val PREF_BRAVE_KEY = "tavily_api_key"
-        const val PREF_FIRECRAWL_KEY = "firecrawl_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
+        const val PREF_THEME_MODE = "theme_mode"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,14 +156,8 @@ class SettingsActivity : AppCompatActivity() {
         // 语音与 AI 本地化设置 helper
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
         aiSettingsHelper.bindViews(
-            etGroqKey, tvHardwareInfo,
-            tvVoiceModelStatus, tvAiModelStatus,
-            btnDownloadVoice, btnDownloadAi,
-            tvDownloadProgress, pbDownload
-        )
-        // 绑定桥梁状态视图（仅显示状态，不下载）
-        aiSettingsHelper.bindBridgeViews(
-            findViewById(R.id.tv_bridge_status)
+            etGroqKey,
+            btnDownloadVoice, btnDownloadAi
         )
 
         statsManager = PolishStatsManager(this)
@@ -194,6 +184,11 @@ class SettingsActivity : AppCompatActivity() {
         updateThemeUI()
 
         checkAndRequestPermission()
+
+        // 从智能写作 RSS 源点击跳转时，自动弹出新闻源选择器
+        if (intent?.getBooleanExtra("open_news_picker", false) == true) {
+            showNewsSourcePicker()
+        }
 
         // 每天自动检查一次更新
         checkUpdateDaily()
@@ -256,20 +251,9 @@ class SettingsActivity : AppCompatActivity() {
         try {
             etGroqKey = findViewById(R.id.et_groq_key)
             etBraveApiKey = findViewById(R.id.et_brave_api_key)
-            etFirecrawlKey = findViewById(R.id.et_firecrawl_key)
-            tvHardwareInfo = findViewById(R.id.tv_hardware_info)
-            tvVoiceModelStatus = findViewById(R.id.tv_voice_model_status)
-            tvAiModelStatus = findViewById(R.id.tv_ai_model_status)
-            tvDownloadProgress = findViewById(R.id.tv_download_progress)
-            pbDownload = findViewById(R.id.pb_download)
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
-        } catch (_: Exception) {}
-
-        // 新闻源管理按钮
-        try {
             btnNewsSources = findViewById(R.id.btn_news_sources)
-            btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
         } catch (_: Exception) {}
 
         // 语音命令词设置（原个性化设置内容）
@@ -361,7 +345,7 @@ class SettingsActivity : AppCompatActivity() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
         etBraveApiKey?.setText(prefs.getString(PREF_BRAVE_KEY, ""))
-        etFirecrawlKey?.setText(prefs.getString(PREF_FIRECRAWL_KEY, ""))
+
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, PolishService.DEFAULT_POLISH_PROMPT))
         // 加载语音命令词
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -391,41 +375,49 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * 显示新闻源选择弹窗（单源选择器）
-     * 显示所有预置源列表（单选）+ 自定义 URL 输入
+     * 显示新闻源选择弹窗（折叠分类选择器）
+     * 按分类折叠展示，点击类别展开/折叠，单选预置源 + 自定义 URL 输入
+     * @param onSourceSelected 选择完成回调（null 表示取消）
      */
-    private fun showNewsSourcePicker() {
+    fun showNewsSourcePicker(onSourceSelected: ((RssFetchManager.RssSource?) -> Unit)? = null) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_news_source_picker, null)
         val rvSources = dialogView.findViewById<RecyclerView>(R.id.rv_source_picker)
         val etCustomUrl = dialogView.findViewById<EditText>(R.id.et_custom_rss_url)
         val btnConfirm = dialogView.findViewById<MaterialButton>(R.id.btn_confirm)
         val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btn_cancel)
 
-        // 加载所有可用源
-        val allSources = RssFetchManager.getAllSources(this)
+        val sourcesByCategory = RssFetchManager.getSourcesByCategory(this)
+        val categories = sourcesByCategory.keys.toList()
 
-        // 当前选中的源
-        val currentSelected = RssFetchManager.getSelectedSource(this)
-        var selectedIndex = currentSelected?.let { selected ->
-            allSources.indexOfFirst { it.name == selected.name }
-        } ?: -1
+        val adapterItems = mutableListOf<CategoryAdapterItem>()
+        val expandedCategories = mutableSetOf<String>()
+        if (categories.isNotEmpty()) expandedCategories.add(categories[0])
 
-        // 设置 RecyclerView
-        rvSources.layoutManager = LinearLayoutManager(this)
-        val adapter = SourcePickerAdapter(allSources, selectedIndex) { pos ->
-            selectedIndex = pos
-            etCustomUrl.setText("")
+        for (category in categories) {
+            adapterItems.add(CategoryAdapterItem.Header(category, sourcesByCategory[category]?.size ?: 0))
+            if (expandedCategories.contains(category)) {
+                sourcesByCategory[category]?.forEach { source ->
+                    adapterItems.add(CategoryAdapterItem.SourceItem(source))
+                }
+            }
         }
+
+        val currentSelected = RssFetchManager.getSelectedSource(this)
+        val selectedSourceRef = MutableRef<RssFetchManager.RssSource?>(currentSelected)
+
+        rvSources.layoutManager = LinearLayoutManager(this)
+        val adapter = CategorySourceAdapter(
+            adapterItems, expandedCategories, categories, sourcesByCategory, etCustomUrl, selectedSourceRef
+        )
         rvSources.adapter = adapter
 
-        // 自定义 URL 输入：如果有内容则清除列表选中
         etCustomUrl.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 if (!s.isNullOrEmpty()) {
-                    selectedIndex = -1
-                    adapter.setSelection(-1)
+                    selectedSourceRef.value = null
+                    adapter.notifyDataSetChanged()
                 }
             }
         })
@@ -436,59 +428,51 @@ class SettingsActivity : AppCompatActivity() {
             .create()
 
         btnConfirm.setOnClickListener {
-            val json = org.json.JSONObject()
             val sourceName: String
             val sourceUrl: String
-
             val customUrl = etCustomUrl.text?.toString()?.trim() ?: ""
             if (customUrl.isNotEmpty() && (customUrl.startsWith("http://") || customUrl.startsWith("https://"))) {
-                // 自定义 URL
                 sourceName = "自定义"
                 sourceUrl = customUrl
-                json.put("name", sourceName)
-                json.put("url", sourceUrl)
-            } else if (selectedIndex >= 0 && selectedIndex < allSources.size) {
-                // 预置源
-                val src = allSources[selectedIndex]
-                sourceName = src.name
-                sourceUrl = src.url
-                json.put("name", sourceName)
-                json.put("url", sourceUrl)
+            } else if (selectedSourceRef.value != null) {
+                sourceName = selectedSourceRef.value!!.name
+                sourceUrl = selectedSourceRef.value!!.url
             } else {
-                // 未选择
                 android.widget.Toast.makeText(this, "请选择一个源或填入自定义 URL", android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // 保存选择到 SharedPreferences
             val rssPrefs = getSharedPreferences("cesia_rss", MODE_PRIVATE)
             rssPrefs.edit()
                 .putString("selected_source", sourceName)
                 .putString("selected_url", sourceUrl)
                 .apply()
 
-            // 立即抓取并缓存
-            val selectedSource = RssFetchManager.RssSource(sourceName, sourceUrl, "")
-            CoroutineScope(Dispatchers.IO).launch {
-                RssFetchManager.fetchAndCache(this@SettingsActivity, selectedSource)
-            }
+            val cacheFile = java.io.File(filesDir, "rss_cache.txt")
+            if (cacheFile.exists()) cacheFile.delete()
+            android.widget.Toast.makeText(this, "已选择: $sourceName，正在抓取...", android.widget.Toast.LENGTH_SHORT).show()
 
-            android.widget.Toast.makeText(
-                this,
-                "已选择: $sourceName，正在抓取...",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
+            val newSource = RssFetchManager.RssSource(sourceName, sourceUrl, "")
+            CoroutineScope(Dispatchers.IO).launch {
+                RssFetchManager.fetchAndCache(this@SettingsActivity, newSource)
+            }
 
             appendLog("已切换新闻源: $sourceName → $sourceUrl")
             dialog.dismiss()
+            onSourceSelected?.invoke(newSource)
         }
 
-        btnCancel.setOnClickListener { dialog.dismiss() }
-
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+            onSourceSelected?.invoke(null)
+        }
         dialog.show()
     }
 
     private fun setupListeners() {
+        // 新闻源管理按钮
+        btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
+
         btnSave.setOnClickListener {
             val url = etApiUrl.text?.toString()?.trim() ?: ""
             if (url.isEmpty()) { etApiUrl.error = "请输入 API 地址"; return@setOnClickListener }
@@ -497,7 +481,6 @@ class SettingsActivity : AppCompatActivity() {
             }
             val apiKey = etApiKey.text?.toString()?.trim() ?: ""
             val braveApiKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
-            val firecrawlKey = etFirecrawlKey?.text?.toString()?.trim() ?: ""
             val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
                 ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
             val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
@@ -519,7 +502,6 @@ class SettingsActivity : AppCompatActivity() {
                 .putString(PREF_API_URL, url)
                 .putString(PREF_OPENROUTER_KEY, apiKey)
                 .putString(PREF_BRAVE_KEY, braveApiKey)
-                .putString(PREF_FIRECRAWL_KEY, firecrawlKey)
                 .putString(PREF_MODEL_ID, selectedModel)
                 .putString(PREF_POLISH_PROMPT, polishPrompt)
                 .putString("status_idle", statusIdle)
@@ -614,6 +596,9 @@ class SettingsActivity : AppCompatActivity() {
         btnDownloadVoice?.text = "下载中..."
         tvStatus.text = "🔄 下载语音模型中..."
         appendLog("⬇ 开始下载语音模型: ${modelInfo.name}")
+        // 记录下载状态，用于 Activity 恢复时检测
+        getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+            .putBoolean("voice_downloading", true).commit()
 
         Thread {
             try {
@@ -631,6 +616,8 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 runOnUiThread {
                     btnDownloadVoice?.isEnabled = true
+                    getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                        .putBoolean("voice_downloading", false).commit()
                     if (result.isSuccess) {
                         tvStatus.text = "✅ 语音模型下载完成"
                         appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
@@ -642,6 +629,8 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
+                getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                    .putBoolean("voice_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadVoice?.isEnabled = true
                     btnDownloadVoice?.text = "📥 下载语音模型"
@@ -659,6 +648,9 @@ class SettingsActivity : AppCompatActivity() {
         btnDownloadAi?.text = "下载中..."
         tvStatus.text = "🔄 下载 AI 模型中..."
         appendLog("⬇ 开始下载 AI 模型: ${modelInfo.name} (${modelInfo.sizeBytes / 1024 / 1024}MB)")
+        // 记录下载状态，用于 Activity 恢复时检测
+        getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+            .putBoolean("ai_downloading", true).commit()
 
         Thread {
             try {
@@ -676,6 +668,8 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 runOnUiThread {
                     btnDownloadAi?.isEnabled = true
+                    getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                        .putBoolean("ai_downloading", false).commit()
                     if (result.isSuccess) {
                         tvStatus.text = "✅ AI 模型下载完成"
                         appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
@@ -687,6 +681,8 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
+                getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                    .putBoolean("ai_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadAi?.isEnabled = true
                     btnDownloadAi?.text = "📥 下载 AI 模型"
@@ -739,13 +735,20 @@ class SettingsActivity : AppCompatActivity() {
             "词库: 使用内置精简版\n提示: 点击下载词库按钮获取完整词库（~50MB）\n来源: 内置"
         }
         tvDictInfo?.text = statusText
-        btnDownloadDict?.text = if (info.downloaded) "🔄 更新词库" else "📥 下载词库"
+        btnDownloadDict?.text = if (info.downloaded) "🔄 重新下载" else "📥 下载词库"
     }
 
     private fun downloadDict() {
+        val alreadyDownloaded = dictManager.hasDownloadedDict()
+        val title = if (alreadyDownloaded) "重新下载词库" else "下载完整词库"
+        val message = if (alreadyDownloaded) {
+            "将重新下载 rime-ice 完整词库（覆盖现有文件）。\n\n当前词库将被覆盖，操作不可撤销。"
+        } else {
+            "将下载 rime-ice 完整词库（full.zip，约 16MB 压缩包，解压后约 50MB）。\n\n词库包含：\n• 基础词库（~55万词条）\n• 扩展词库（41448字表）\n• 腾讯词库（~100万词条）\n• 英文词库\n• OpenCC 转换表\n• Lua 脚本\n\n下载完成后需重启输入法生效。\n\n来源：iDvel/rime-ice，GPL-3.0"
+        }
         AlertDialog.Builder(this)
-            .setTitle("下载完整词库")
-            .setMessage("将下载 rime-ice 完整词库（full.zip，约 16MB 压缩包，解压后约 50MB）。\n\n词库包含：\n• 基础词库（~55万词条）\n• 扩展词库（41448字表）\n• 腾讯词库（~100万词条）\n• 英文词库\n• OpenCC 转换表\n• Lua 脚本\n\n下载完成后需重启输入法生效。\n\n来源：iDvel/rime-ice，GPL-3.0")
+            .setTitle(title)
+            .setMessage(message)
             .setPositiveButton("下载") { _, _ ->
                 startFullDictDownload()
             }
@@ -761,9 +764,18 @@ class SettingsActivity : AppCompatActivity() {
         appendLog("📋 词库来源：rime-ice (iDvel/rime-ice)")
         appendLog("⚖️  许可证：GPL-3.0（词库数据，不影响本应用）")
 
+        // 显示进度条
+        val pbDict = findViewById<android.widget.ProgressBar>(R.id.pb_dict_download)
+        val tvDictProgress = findViewById<android.widget.TextView>(R.id.tv_dict_download_progress)
+        pbDict?.visibility = android.view.View.VISIBLE
+        tvDictProgress?.visibility = android.view.View.VISIBLE
+        pbDict?.progress = 0
+
         dictManager.downloadFullDict(
-            onProgress = { msg ->
+            onProgress = { percent, downloadedBytes, totalBytes, msg ->
                 runOnUiThread {
+                    pbDict?.progress = percent
+                    tvDictProgress?.text = "$msg ($percent%)"
                     tvStatus.text = msg
                     appendLog(msg)
                 }
@@ -771,6 +783,8 @@ class SettingsActivity : AppCompatActivity() {
             onComplete = { success, msg ->
                 runOnUiThread {
                     btnDownloadDict?.isEnabled = true
+                    pbDict?.visibility = android.view.View.GONE
+                    tvDictProgress?.visibility = android.view.View.GONE
                     refreshDictInfo()
                     if (success) {
                         tvStatus.text = "✅ $msg"
@@ -1268,6 +1282,31 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         refreshStats()
         refreshDictInfo()
+        // 检测上次下载是否被系统终止（Activity 后台时被 kill）
+        checkInterruptedDownloads()
+    }
+
+    /**
+     * 检查是否有被中断的下载（Activity 进入后台导致 Thread 被 kill）
+     */
+    private fun checkInterruptedDownloads() {
+        val prefs = getSharedPreferences("cesia_download", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("voice_downloading", false)) {
+            Log.w("SettingsActivity", "检测到语音下载在上次会话中被中断")
+            prefs.edit().putBoolean("voice_downloading", false).apply()
+            tvStatus.text = "❌ 语音模型下载被中断（Activity 进入后台）"
+            appendLog("⚠️ 语音模型下载在上次会话中被系统终止，请保持前台重新下载")
+            btnDownloadVoice?.isEnabled = true
+            btnDownloadVoice?.text = "📥 下载语音模型"
+        }
+        if (prefs.getBoolean("ai_downloading", false)) {
+            Log.w("SettingsActivity", "检测到 AI 模型下载在上次会话中被中断")
+            prefs.edit().putBoolean("ai_downloading", false).apply()
+            tvStatus.text = "❌ AI 模型下载被中断（Activity 进入后台）"
+            appendLog("⚠️ AI 模型下载在上次会话中被系统终止，请保持前台重新下载")
+            btnDownloadAi?.isEnabled = true
+            btnDownloadAi?.text = "📥 下载 AI 模型"
+        }
     }
 
     private fun refreshStats() {
@@ -1656,48 +1695,107 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * 新闻源选择器的 RecyclerView Adapter
      */
-    private inner class SourcePickerAdapter(
-        val sources: List<RssFetchManager.RssSource>,
-        initialSelected: Int,
-        private val onItemClick: (Int) -> Unit
-    ) : RecyclerView.Adapter<RssSourceViewHolder>() {
+    // ===== 折叠分类选择器 =====
 
-        var selectedPos = initialSelected
-
-        fun setSelection(pos: Int) {
-            val old = selectedPos
-            selectedPos = pos
-            if (old >= 0) notifyItemChanged(old)
-            if (pos >= 0) notifyItemChanged(pos)
-        }
-
-        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RssSourceViewHolder {
-            val view = layoutInflater.inflate(R.layout.item_rss_source, parent, false)
-            return RssSourceViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: RssSourceViewHolder, position: Int) {
-            val src = sources[position]
-            holder.tvName.text = src.name
-            holder.tvCategory.text = src.category
-            holder.rb.isChecked = (position == selectedPos)
-            holder.itemView.setOnClickListener {
-                setSelection(position)
-                onItemClick(position)
-            }
-            holder.rb.setOnClickListener {
-                setSelection(position)
-                onItemClick(position)
-            }
-        }
-
-        override fun getItemCount() = sources.size
+    /** 列表项类型：分类头 或 源条目 */
+    private sealed class CategoryAdapterItem {
+        data class Header(val category: String, val count: Int) : CategoryAdapterItem()
+        data class SourceItem(val source: RssFetchManager.RssSource) : CategoryAdapterItem()
     }
-}
 
-/** RSS 源选择器的 ViewHolder（类级别） */
-class RssSourceViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
-    val rb: android.widget.RadioButton = view.findViewById(com.cesia.input.R.id.rb_source)
-    val tvName: android.widget.TextView = view.findViewById(com.cesia.input.R.id.tv_source_name)
-    val tvCategory: android.widget.TextView = view.findViewById(com.cesia.input.R.id.tv_source_category)
+    /** 简单的可变引用包装（让 adapter 和 Activity 共享同一变量） */
+    private class MutableRef<T>(var value: T)
+
+    /** 折叠分类适配器 */
+    private inner class CategorySourceAdapter(
+        private val items: MutableList<CategoryAdapterItem>,
+        private val expandedCategories: MutableSet<String>,
+        private val categories: List<String>,
+        private val sourcesByCategory: Map<String, List<RssFetchManager.RssSource>>,
+        private val etCustomUrl: android.widget.EditText,
+        private val selectedSourceRef: MutableRef<RssFetchManager.RssSource?>
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        override fun getItemViewType(position: Int): Int {
+            return when (items[position]) {
+                is CategoryAdapterItem.Header -> TYPE_HEADER
+                is CategoryAdapterItem.SourceItem -> TYPE_SOURCE
+            }
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == TYPE_HEADER) {
+                val view = layoutInflater.inflate(R.layout.item_rss_category, parent, false)
+                HeaderViewHolder(view)
+            } else {
+                val view = layoutInflater.inflate(R.layout.item_rss_source, parent, false)
+                SourceViewHolder(view)
+            }
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (val item = items[position]) {
+                is CategoryAdapterItem.Header -> {
+                    val h = holder as HeaderViewHolder
+                    h.tvCategoryName.text = "📂 ${item.category}"
+                    h.tvCategoryCount.text = "${item.count} 个源"
+                    val arrow = if (expandedCategories.contains(item.category)) "▼" else "▶"
+                    h.tvCategoryArrow.text = arrow
+                    h.itemView.setOnClickListener { toggleCategory(item.category) }
+                }
+                is CategoryAdapterItem.SourceItem -> {
+                    val h = holder as SourceViewHolder
+                    h.tvName.text = item.source.name
+                    h.tvCategory.text = item.source.category
+                    val currentSelected = selectedSourceRef.value
+                    val isSelected = currentSelected?.name == item.source.name && currentSelected?.url == item.source.url
+                    h.rb.isChecked = isSelected
+                    h.itemView.setOnClickListener { selectSource(item.source) }
+                    h.rb.setOnClickListener { selectSource(item.source) }
+                }
+            }
+        }
+
+        fun toggleCategory(category: String) {
+            if (expandedCategories.contains(category)) {
+                expandedCategories.remove(category)
+            } else {
+                expandedCategories.add(category)
+            }
+            rebuildItems()
+            notifyDataSetChanged()
+        }
+
+        fun selectSource(source: RssFetchManager.RssSource) {
+            selectedSourceRef.value = source
+            etCustomUrl.setText("")
+            notifyDataSetChanged()
+        }
+
+        private fun rebuildItems() {
+            items.clear()
+            for (category in categories) {
+                items.add(CategoryAdapterItem.Header(category, sourcesByCategory[category]?.size ?: 0))
+                if (expandedCategories.contains(category)) {
+                    sourcesByCategory[category]?.forEach { source ->
+                        items.add(CategoryAdapterItem.SourceItem(source))
+                    }
+                }
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        inner class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val tvCategoryArrow: TextView = view.findViewById(R.id.tv_category_arrow)
+            val tvCategoryName: TextView = view.findViewById(R.id.tv_category_name)
+            val tvCategoryCount: TextView = view.findViewById(R.id.tv_category_count)
+        }
+
+        inner class SourceViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val rb: RadioButton = view.findViewById(R.id.rb_source)
+            val tvName: TextView = view.findViewById(R.id.tv_source_name)
+            val tvCategory: TextView = view.findViewById(R.id.tv_source_category)
+        }
+    }
 }

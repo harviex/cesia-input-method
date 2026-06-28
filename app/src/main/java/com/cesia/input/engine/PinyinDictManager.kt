@@ -47,20 +47,21 @@ class PinyinDictManager(private val context: Context) {
     }
 
     /**
-     * 下载完整词库（full.zip）
+     * 下载完整词库（full.zip），流式下载带进度回调
+     * @param onProgress 进度回调 (进度百分比 0-100, 已下载字节, 总字节, 状态文字)
      */
     fun downloadFullDict(
-        onProgress: (String) -> Unit,
+        onProgress: (percent: Int, downloadedBytes: Long, totalBytes: Long, message: String) -> Unit,
         onComplete: (Boolean, String) -> Unit
     ) {
         Thread {
             try {
                 val rimeDir = getRimeDir()
 
-                onProgress("正在下载完整词库（full.zip）...")
+                onProgress(0, 0, 0, "正在连接服务器...")
                 Log.i(TAG, "开始下载: $FULL_DICT_URL")
 
-                val request = Request.Builder().url(FULL_DICT_URL).get().build()
+                val request = Request.Builder().url(FULL_DICT_URL).build()
                 val response = client.newCall(request).execute()
 
                 if (!response.isSuccessful) {
@@ -68,21 +69,44 @@ class PinyinDictManager(private val context: Context) {
                     return@Thread
                 }
 
-                val body = response.body?.bytes() ?: run {
+                val body = response.body ?: run {
                     onComplete(false, "下载失败: 空响应")
                     return@Thread
                 }
-                Log.i(TAG, "下载完成: ${body.size / 1024 / 1024}MB")
 
-                onProgress("正在解压词库文件...")
+                val totalBytes = body.contentLength()
+                onProgress(0, 0, totalBytes, "正在下载词库 (${formatSize(totalBytes)})...")
+
+                // 流式下载，边写边更新进度
+                val tempZip = File(rimeDir, "full.zip.tmp")
+                var downloadedBytes = 0L
+                val buffer = ByteArray(8192)
+                body.byteStream().use { input ->
+                    tempZip.outputStream().use { output ->
+                        var bytesRead: Int
+                        var lastCallbackTime = 0L
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+                            val now = System.currentTimeMillis()
+                            if (now - lastCallbackTime > 200) {
+                                lastCallbackTime = now
+                                val pct = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt().coerceAtMost(99) else 0
+                                onProgress(pct, downloadedBytes, totalBytes, "下载中... ${formatSize(downloadedBytes)} / ${formatSize(totalBytes)}")
+                            }
+                        }
+                    }
+                }
+                body.close()
+
+                onProgress(99, downloadedBytes, totalBytes, "正在解压词库文件...")
 
                 // 解压全部文件，保持目录结构
                 var extracted = 0
-                val zis = ZipInputStream(body.inputStream())
+                val zis = ZipInputStream(tempZip.inputStream())
                 var entry: ZipEntry? = zis.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        // 保持 zip 内的目录结构（如 cn_dicts/, en_dicts/, lua/, opencc/）
                         val outFile = File(rimeDir, entry.name)
                         outFile.parentFile?.mkdirs()
                         outFile.outputStream().use { output ->
@@ -95,6 +119,7 @@ class PinyinDictManager(private val context: Context) {
                     entry = zis.nextEntry
                 }
                 zis.close()
+                tempZip.delete()
 
                 if (extracted == 0) {
                     onComplete(false, "解压失败: 未提取到任何文件")
@@ -111,6 +136,7 @@ class PinyinDictManager(private val context: Context) {
 
                 // 统计词库信息
                 val info = getDictInfo()
+                onProgress(100, totalBytes, totalBytes, "词库下载完成！")
                 onComplete(true, "词库下载完成！共 $extracted 个文件，${info.dictCount} 条词条")
 
             } catch (e: Exception) {
@@ -120,10 +146,19 @@ class PinyinDictManager(private val context: Context) {
         }.start()
     }
 
+    private fun formatSize(bytes: Long): String {
+        return when {
+            bytes >= 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
+            bytes >= 1024L -> "%.1f KB".format(bytes / 1024.0)
+            else -> "$bytes B"
+        }
+    }
+
     fun getDictInfo(): DictInfo {
         val rimeDir = getRimeDir()
-        val totalSize = rimeDir.listFiles()?.sumOf { it.length() } ?: 0
-        val fileCount = rimeDir.listFiles()?.size ?: 0
+        // 递归统计所有子目录中的文件大小
+        val totalSize = rimeDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        val fileCount = rimeDir.walkTopDown().filter { it.isFile }.count()
 
         // 统计 .dict.yaml 文件中的词条数
         var dictCount = 0

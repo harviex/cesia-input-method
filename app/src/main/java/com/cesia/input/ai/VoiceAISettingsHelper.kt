@@ -7,10 +7,8 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
 import android.view.View
-import android.widget.EditText
 import android.widget.Button
-import android.widget.ProgressBar
-import android.widget.TextView
+import android.widget.EditText
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.cesia.input.R
@@ -21,7 +19,6 @@ import com.cesia.input.model.ModelRegistry
 import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * 语音与 AI 本地化设置辅助类
@@ -39,43 +36,20 @@ class VoiceAISettingsHelper(
 
     // 视图引用
     var etGroqKey: EditText? = null
-    var tvHardwareInfo: TextView? = null
-    var tvVoiceModelStatus: TextView? = null
-    var tvAiModelStatus: TextView? = null
     var btnDownloadVoice: Button? = null
     var btnDownloadAi: Button? = null
-    var tvDownloadProgress: TextView? = null
-    var pbDownload: ProgressBar? = null
-
-    // 桥梁状态视图
-    var tvBridgeStatus: TextView? = null
 
     private var isDownloading = false
 
     /** 初始化所有视图引用 */
     fun bindViews(
         etGroqKey: EditText?,
-        tvHardwareInfo: TextView?,
-        tvVoiceModelStatus: TextView?,
-        tvAiModelStatus: TextView?,
         btnDownloadVoice: Button?,
-        btnDownloadAi: Button?,
-        tvDownloadProgress: TextView?,
-        pbDownload: ProgressBar?
+        btnDownloadAi: Button?
     ) {
         this.etGroqKey = etGroqKey
-        this.tvHardwareInfo = tvHardwareInfo
-        this.tvVoiceModelStatus = tvVoiceModelStatus
-        this.tvAiModelStatus = tvAiModelStatus
         this.btnDownloadVoice = btnDownloadVoice
         this.btnDownloadAi = btnDownloadAi
-        this.tvDownloadProgress = tvDownloadProgress
-        this.pbDownload = pbDownload
-    }
-
-    /** 绑定桥梁状态视图 */
-    fun bindBridgeViews(tvBridgeStatus: TextView?) {
-        this.tvBridgeStatus = tvBridgeStatus
     }
 
     /** 加载已保存的设置 */
@@ -89,8 +63,6 @@ class VoiceAISettingsHelper(
         etGroqKey?.setText(prefs.getString("groq_api_key", "") ?: "")
         // 刷新 UI
         refreshModelStatus()
-        refreshBridgeStatus()
-        detectHardware()
     }
 
     /** 保存设置 */
@@ -143,20 +115,12 @@ class VoiceAISettingsHelper(
         btnDownloadVoice?.setOnLongClickListener {
             val voiceInstalled = modelManager.getInstalledVoiceModelFile()
             if (voiceInstalled != null) {
-                AlertDialog.Builder(activity)
-                    .setTitle("卸载语音识别模型")
-                    .setMessage("确定要卸载已安装的语音识别模型吗？")
-                    .setPositiveButton("卸载") { _, _ ->
-                        val deleted = downloadManager.deleteModel("sherpa-zipformer")
-                        refreshModelStatus()
-                        Toast.makeText(
-                            activity,
-                            if (deleted) "已卸载语音识别模型" else "卸载失败",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
+                showUninstallDialog(
+                    title = "卸载语音识别模型",
+                    modelType = ModelInfo.ModelType.VOICE,
+                    modelId = "sherpa-zipformer",
+                    fallbackNote = "卸载后将回退到 Google 语音识别"
+                )
                 true
             } else {
                 false
@@ -167,25 +131,13 @@ class VoiceAISettingsHelper(
         btnDownloadAi?.setOnLongClickListener {
             val aiInstalled = modelManager.getInstalledAiModelFile()
             if (aiInstalled != null) {
-                AlertDialog.Builder(activity)
-                    .setTitle("卸载 AI 润色模型")
-                    .setMessage("确定要卸载已安装的 AI 润色模型吗？")
-                    .setPositiveButton("卸载") { _, _ ->
-                        val installedAiId = modelManager.installedAiModelId
-                        val deleted = if (installedAiId != null) {
-                            downloadManager.deleteModel(installedAiId)
-                        } else {
-                            listOf("qwen35-2b-mnn", "qwen25-1.5b-mnn").any { downloadManager.deleteModel(it) }
-                        }
-                        refreshModelStatus()
-                        Toast.makeText(
-                            activity,
-                            if (deleted) "已卸载 AI 润色模型" else "卸载失败",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
+                val installedAiId = modelManager.installedAiModelId ?: "qwen35-2b-mnn"
+                showUninstallDialog(
+                    title = "卸载 AI 润色模型",
+                    modelType = ModelInfo.ModelType.AI,
+                    modelId = installedAiId,
+                    fallbackNote = "卸载后将回退到云端润色"
+                )
                 true
             } else {
                 false
@@ -193,120 +145,104 @@ class VoiceAISettingsHelper(
         }
     }
 
-    /** 刷新模型安装状态 */
-    private fun refreshModelStatus() {
-        // 语音模型
-        val voiceInstalled = modelManager.getInstalledVoiceModelFile()
-        tvVoiceModelStatus?.text = if (voiceInstalled != null) {
-            if (voiceInstalled.isDirectory) {
-                // Zipformer/Paraformer 多文件模型 — 计算目录总大小
-                val totalBytes = voiceInstalled.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-                val files = voiceInstalled.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
-                val modelLabel = if (files.contains("joiner.onnx")) "Zipformer" else "Paraformer"
-                "✅ $modelLabel 已安装 (${ModelDownloadManager.Formatter.formatSize(totalBytes)})\n   ${files.joinToString(", ")}"
-            } else {
-                "✅ 已安装: ${voiceInstalled.name} (${ModelDownloadManager.Formatter.formatSize(voiceInstalled.length())})"
+    /**
+     * 显示详细的卸载确认弹窗（含模型名、路径、大小、文件列表）
+     */
+    private fun showUninstallDialog(
+        title: String,
+        modelType: ModelInfo.ModelType,
+        modelId: String,
+        fallbackNote: String
+    ) {
+        val modelInfo = ModelRegistry.getById(modelId)
+        val installedFile = if (modelType == ModelInfo.ModelType.VOICE) {
+            modelManager.getInstalledVoiceModelFile()
+        } else {
+            modelManager.getInstalledAiModelFile()
+        } ?: return
+
+        // 构建文件列表
+        val fileItems = if (installedFile.isDirectory) {
+            installedFile.listFiles()?.filter { it.isFile }?.sortedByDescending { it.length() } ?: emptyList()
+        } else {
+            listOf(installedFile)
+        }
+        val totalBytes = fileItems.sumOf { it.length() }
+        val fileCount = fileItems.size
+
+        // 模型名称
+        val modelName = modelInfo?.name ?: modelId
+        val bridgeStatus = if (modelType == ModelInfo.ModelType.VOICE) {
+            val loaded = SherpaOnnxEngine.isLibraryLoaded()
+            "Sherpa-onnx 库：${if (loaded) "已加载 ✅" else "未加载 ❌"}"
+        } else {
+            ""
+        }
+
+        // 构建显示文本
+        val message = buildString {
+            appendLine("模型：$modelName")
+            appendLine("路径：${installedFile.absolutePath}")
+            appendLine("大小：${ModelDownloadManager.Formatter.formatSize(totalBytes)}")
+            appendLine("文件：$fileCount/${fileCount} 已下载")
+            appendLine()
+            for (file in fileItems) {
+                val sizeStr = ModelDownloadManager.Formatter.formatSize(file.length())
+                appendLine("├ ${file.name}  $sizeStr ✅")
             }
-        } else {
-            "❌ 未安装（将使用 Google 语音识别）"
+            if (bridgeStatus.isNotEmpty()) {
+                appendLine()
+                append(bridgeStatus)
+            }
+            appendLine()
+            appendLine("确定要卸载${if (modelType == ModelInfo.ModelType.VOICE) "语音识别" else "AI 润色"}模型吗？")
+            append(fallbackNote)
         }
 
-        // AI 模型
-        val aiInstalled = modelManager.getInstalledAiModelFile()
-        tvAiModelStatus?.text = if (aiInstalled != null) {
-            "✅ 已安装: ${aiInstalled.name} (${ModelDownloadManager.Formatter.formatSize(aiInstalled.length())})"
-        } else {
-            "❌ 未安装（将使用 OpenRouter 云端润色）"
-        }
+        AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("卸载") { _, _ ->
+                val deleted = downloadManager.deleteModel(modelId)
+                refreshModelStatus()
+                Toast.makeText(
+                    activity,
+                    if (deleted) "已卸载${if (modelType == ModelInfo.ModelType.VOICE) "语音识别" else "AI 润色"}模型" else "卸载失败",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
 
+    /** 刷新模型安装状态（仅更新按钮文字） */
+    private fun refreshModelStatus() {
         // 更新语音识别下载按钮
+        val voiceInstalled = modelManager.getInstalledVoiceModelFile()
         if (voiceInstalled != null) {
             btnDownloadVoice?.text = "✅ 语音识别已安装"
-            btnDownloadVoice?.isEnabled = true  // 保持可点击，支持长按卸载
-            btnDownloadVoice?.setTextColor(0xFF888888.toInt())  // 灰色文字表示已安装
+            btnDownloadVoice?.isEnabled = true
+            btnDownloadVoice?.setTextColor(0xFF888888.toInt())
         } else {
-            val ram = getTotalRamGB()
-            val recommended = if (ram >= 6) "Large" else "Small"
-            btnDownloadVoice?.text = "⬇ 下载语音识别 ($recommended)"
+            btnDownloadVoice?.text = "⬇ 下载语音识别"
             btnDownloadVoice?.isEnabled = !isDownloading
-            btnDownloadVoice?.setTextColor(0xFF4488FF.toInt())  // 蓝色文字表示可下载
+            btnDownloadVoice?.setTextColor(0xFF4488FF.toInt())
         }
 
         // 更新 AI 润色下载按钮
+        val aiInstalled = modelManager.getInstalledAiModelFile()
         if (aiInstalled != null) {
             btnDownloadAi?.text = "✅ 语音润色已安装"
-            btnDownloadAi?.isEnabled = true  // 保持可点击，支持长按卸载
-            btnDownloadAi?.setTextColor(0xFF888888.toInt())  // 灰色文字表示已安装
+            btnDownloadAi?.isEnabled = true
+            btnDownloadAi?.setTextColor(0xFF888888.toInt())
         } else {
-            val ram = getTotalRamGB()
-            val recommended = if (ram >= 6) "2B" else "0.8B"
-            btnDownloadAi?.text = "⬇ 下载语音润色 ($recommended)"
+            btnDownloadAi?.text = "⬇ 下载语音润色"
             btnDownloadAi?.isEnabled = !isDownloading
-            btnDownloadAi?.setTextColor(0xFF4488FF.toInt())  // 蓝色文字表示可下载
-        }
-
-    }
-
-    /** 刷新桥梁状态（显示框架+模型的完整连接信息） */
-    fun refreshBridgeStatus() {
-        val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
-        val bridgeError = SherpaOnnxEngine.getLibraryLoadError()
-        val voiceModel = modelManager.getInstalledVoiceModelFile()
-        val modelId = modelManager.installedVoiceModelId
-
-        val aiModelFile = modelManager.getInstalledAiModelFile()
-
-        if (!bridgeLoaded) {
-            val reason = bridgeError ?: "未知错误"
-            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 库未加载\n原因: $reason"
-            tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
-            tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
-        } else if (voiceModel == null) {
-            tvBridgeStatus?.text = "⚠️ Sherpa-onnx 已加载，但语音模型未安装\n请下载语音识别模型"
-            tvBridgeStatus?.setTextColor(0xFFE65100.toInt())
-            tvBridgeStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
-        } else {
-            val aiModel = modelManager.getInstalledAiModelFile()
-            val aiText = if (aiModel != null) "MNN: ${aiModel.name}" else "MNN: 未安装"
-            val modelInfo = modelId?.let { id ->
-                ModelRegistry.getById(id)?.let { info ->
-                    "\n模型: ${info.name} (${info.description})"
-                }
-            } ?: ""
-            tvBridgeStatus?.text = buildString {
-                appendLine("✅ Sherpa-onnx 已加载")
-                appendLine("语音: ${voiceModel.name}")
-                append("路径: ${voiceModel.parent}")
-                if (modelInfo.isNotEmpty()) appendLine(modelInfo) else appendLine()
-                append(aiText)
-            }
-            tvBridgeStatus?.setTextColor(0xFF2E7D32.toInt())
-            tvBridgeStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
+            btnDownloadAi?.setTextColor(0xFF4488FF.toInt())
         }
     }
 
-    /** 硬件检测 + 推荐 */
-    private fun detectHardware() {
-        val ram = getTotalRamGB()
-        val recommendation = when {
-            ram >= 6 -> "RAM ${ram}GB — 推荐下载 Large / 2B 版本"
-            ram >= 3 -> "RAM ${ram}GB — 推荐下载 Small / 0.8B 版本"
-            else -> "RAM ${ram}GB — 建议使用云端模式"
-        }
-        tvHardwareInfo?.text = "📱 $recommendation"
-    }
 
-    private fun getTotalRamGB(): Double {
-        return try {
-            val reader = File("/proc/meminfo").bufferedReader()
-            val firstLine = reader.readLine() ?: return 0.0
-            reader.close()
-            val kb = firstLine.trim().split("\\s+".toRegex())[1].toDoubleOrNull() ?: 0.0
-            Math.round(kb / 1000.0 / 1000.0 * 10.0) / 10.0
-        } catch (_: Exception) {
-            0.0
-        }
-    }
 
     /** 下载 Zipformer 语音识别模型（多文件） */
     private fun downloadVoiceModel() {
@@ -315,10 +251,9 @@ class VoiceAISettingsHelper(
             return
         }
         isDownloading = true
-        tvDownloadProgress?.visibility = View.VISIBLE
-        pbDownload?.visibility = View.VISIBLE
-        Log.i("VoiceAISettings", "downloadVoiceModel: pbDownload=$pbDownload, tvDownloadProgress=$tvDownloadProgress")
-        tvDownloadProgress?.text = "正在下载 Zipformer 语音识别模型..."
+        btnDownloadVoice?.text = "下载中..."
+        btnDownloadVoice?.isEnabled = false
+        Log.i("VoiceAISettings", "downloadVoiceModel: starting")
 
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
@@ -326,27 +261,20 @@ class VoiceAISettingsHelper(
             val result = downloadManager.downloadZipformer { fileName, overallPercent, downloadedBytes, totalBytes ->
                 Log.i("VoiceAISettings", "downloadZipformer: onProgress $fileName $overallPercent%")
                 activity.runOnUiThread {
-                    pbDownload?.progress = overallPercent.toInt()
                     val pctStr = String.format("%.1f%%", overallPercent)
-                    val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
-                    val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                    tvDownloadProgress?.text = "下载 $fileName: $pctStr ($dlStr / $totalStr)"
+                    btnDownloadVoice?.text = "下载中... $fileName $pctStr"
                 }
             }
 
             isDownloading = false
 
             activity.runOnUiThread {
-                pbDownload?.visibility = View.GONE
                 if (result.isSuccess) {
-                    tvDownloadProgress?.text = "✅ Zipformer 模型下载完成"
                     refreshModelStatus()
-                    refreshBridgeStatus()
                     Toast.makeText(activity,
                         "Zipformer 安装成功，支持流式语音识别（边说边出字）", Toast.LENGTH_SHORT).show()
                 } else {
-                    tvDownloadProgress?.text =
-                        "❌ 下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}"
+                    refreshModelStatus()
                     Toast.makeText(activity,
                         "下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}",
                         Toast.LENGTH_LONG).show()
@@ -362,10 +290,9 @@ class VoiceAISettingsHelper(
             return
         }
         isDownloading = true
-        tvDownloadProgress?.visibility = View.VISIBLE
-        pbDownload?.visibility = View.VISIBLE
-        tvDownloadProgress?.text = "正在下载 AI 润色模型..."
-        Log.i("VoiceAISettings", "downloadAiModel: pbDownload=$pbDownload, starting AI model download")
+        btnDownloadAi?.text = "下载中..."
+        btnDownloadAi?.isEnabled = false
+        Log.i("VoiceAISettings", "downloadAiModel: starting AI model download")
 
         val appCompat = activity as? androidx.appcompat.app.AppCompatActivity ?: return
         appCompat.lifecycleScope.launch {
@@ -373,25 +300,19 @@ class VoiceAISettingsHelper(
             val result = downloadManager.downloadAiModel(model) { modelName, percent, downloadedBytes, totalBytes ->
                 Log.i("VoiceAISettings", "downloadAiModel: onProgress $modelName $percent% ($downloadedBytes/$totalBytes)")
                 activity.runOnUiThread {
-                    pbDownload?.progress = percent.toInt()
                     val pctStr = String.format("%.1f%%", percent)
-                    val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
-                    val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                    tvDownloadProgress?.text = "下载 $modelName: $pctStr ($dlStr / $totalStr)"
+                    btnDownloadAi?.text = "下载中... $modelName $pctStr"
                 }
             }
 
             isDownloading = false
 
             activity.runOnUiThread {
-                pbDownload?.visibility = View.GONE
                 if (result.isSuccess) {
-                    tvDownloadProgress?.text = "✅ AI 润色模型下载完成"
                     refreshModelStatus()
                     Toast.makeText(activity, "AI 润色模型安装成功", Toast.LENGTH_SHORT).show()
                 } else {
-                    tvDownloadProgress?.text =
-                        "❌ 下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}"
+                    refreshModelStatus()
                     Toast.makeText(activity,
                         "下载失败: ${result.exceptionOrNull()?.message ?: "请检查网络"}",
                         Toast.LENGTH_LONG).show()

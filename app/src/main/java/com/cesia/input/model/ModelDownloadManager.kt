@@ -227,7 +227,7 @@ class ModelDownloadManager(private val context: Context) {
                                     output.write(buffer, 0, bytesRead)
                                     fileDownloaded += bytesRead
                                     val overallDownloaded = downloadedBytes + fileDownloaded
-                                    val pct = if (grandTotal > 0) overallDownloaded.toDouble() / grandTotal * 100 else 0.0
+                                    val pct = if (grandTotal > 0) (overallDownloaded.toDouble() / grandTotal * 100).coerceAtMost(99.9) else 0.0
                                     // 节流：每 200ms 或每 1% 更新一次 UI
                                     val now = System.currentTimeMillis()
                                     if (now - lastCallbackTime > 200) {
@@ -241,7 +241,8 @@ class ModelDownloadManager(private val context: Context) {
                         if (spec.destFile.exists()) spec.destFile.delete()
                         tempFile.renameTo(spec.destFile)
                         downloadedBytes += spec.destFile.length()
-                        onProgress?.invoke(spec.localName, Math.round(downloadedBytes.toDouble() / grandTotal * 1000.0) / 10.0, downloadedBytes, grandTotal)
+                        val filePct = if (grandTotal > 0) (downloadedBytes.toDouble() / grandTotal * 100).coerceAtMost(100.0) else 100.0
+                        onProgress?.invoke(spec.localName, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
                         success = true
                         Log.i(TAG, "Zipformer file downloaded: ${spec.localName} (${spec.destFile.length()} bytes)")
                         break
@@ -364,7 +365,7 @@ class ModelDownloadManager(private val context: Context) {
                                     output.write(buffer, 0, bytesRead)
                                     fileDownloaded += bytesRead
                                     val overallDownloaded = downloadedBytes + fileDownloaded
-                                    val pct = if (grandTotal > 0) overallDownloaded.toDouble() / grandTotal * 100 else 0.0
+                                    val pct = if (grandTotal > 0) (overallDownloaded.toDouble() / grandTotal * 100).coerceAtMost(99.9) else 0.0
                                     // 节流：每 200ms 更新一次 UI，避免频繁刷新
                                     val now = System.currentTimeMillis()
                                     if (now - lastCallbackTime > 200) {
@@ -379,7 +380,8 @@ class ModelDownloadManager(private val context: Context) {
                         tempFile.renameTo(spec.destFile)
                         downloadedBytes += spec.destFile.length()
                         // 文件完成时强制回调一次
-                        onProgress?.invoke(spec.name, Math.round(downloadedBytes.toDouble() / grandTotal * 1000.0) / 10.0, downloadedBytes, grandTotal)
+                        val filePct = if (grandTotal > 0) (downloadedBytes.toDouble() / grandTotal * 100).coerceAtMost(100.0) else 100.0
+                        onProgress?.invoke(spec.name, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
                         success = true
                         Log.i(TAG, "MNN file downloaded: ${spec.name} (${spec.destFile.length()} bytes)")
                         break

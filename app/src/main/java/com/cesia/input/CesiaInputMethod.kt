@@ -2186,12 +2186,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 智能写作选项数据类 */
     private data class SmartOption(val label: String, val tag: String, var isChecked: Boolean = false)
 
-    // 智能写作设置弹窗中的选项标签常量（轻量化：4个数据源）
+    // 智能写作设置弹窗中的选项标签常量
     private val OPT_CLIPBOARD = "📋 剪贴板首条"
-    private val OPT_LOCAL_TEXT = "📄 本地文本"
+    private val OPT_RSS_SOURCE = "📰 RSS源"
     private val OPT_SEARCH = "🌐 网络搜索"
     private val OPT_LOCAL_LIB = "📚 本地文库"
-    private val OPT_RSS_CACHE = "📰 RSS 缓存"
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
@@ -2203,12 +2202,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
             tvTitle.text = smartWritingLabel
 
-            // 选项视图（4个数据源：剪贴板、本地文本、网络搜索、RSS缓存）
+            // 选项视图（4个数据源：剪贴板、RSS源、网络搜索、本地文库）
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
-            val optLocalText = popupView.findViewById<TextView>(R.id.opt_chat_history)
+            val optRssSource = popupView.findViewById<TextView>(R.id.opt_rss_news)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
             val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
-            val optRssCache = popupView.findViewById<TextView>(R.id.opt_rss_news)
 
             // 恢复上次选中状态（持久化）
             val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
@@ -2222,10 +2220,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.tag = tag
             }
             refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
-            refreshOption(optLocalText, "local_text", OPT_LOCAL_TEXT)
+            refreshOption(optRssSource, "rss_cache", OPT_RSS_SOURCE)
             refreshOption(optSearch, "search", OPT_SEARCH)
             refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
-            refreshOption(optRssCache, "rss_cache", OPT_RSS_CACHE)
 
             // 点击切换（直接保存到 SharedPreferences 并刷新 UI）
             fun toggleOption(tv: TextView, tag: String, label: String) {
@@ -2237,9 +2234,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 refreshOption(tv, tag, label)
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
-            optLocalText.setOnClickListener { toggleOption(it as TextView, "local_text", OPT_LOCAL_TEXT) }
+            optRssSource.setOnClickListener {
+                // RSS源：打开设置页的新闻源选择器
+                try {
+                    val intent = android.content.Intent(this@CesiaInputMethod, SettingsActivity::class.java).apply {
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        putExtra("open_news_picker", true)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w("Cesia", "无法打开新闻源选择器: ${e.message}")
+                }
+                smartWritingPopup?.dismiss()
+            }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
-            optRssCache.setOnClickListener { toggleOption(it as TextView, "rss_cache", OPT_RSS_CACHE) }
             optLocalLib.setOnClickListener {
                 // 如果已选中，再次点击取消；如果未选中，先选文件
                 val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
@@ -6222,10 +6230,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
             // 每次输入法激活时更新语音后端并预加载模型
+            Log.d("Cesia", "onStartInputView: step1 updateVoiceBackend")
             modelManager.scanExistingModels()
             updateVoiceBackend()
+            Log.d("Cesia", "onStartInputView: step2 preloadModels")
             preloadWhisperModel()
             preloadAiModel()
+
+            // RSS 自动抓取：如果缓存不存在或过期（>1h），后台自动刷新
+            Log.d("Cesia", "onStartInputView: step3 autoRefreshRssCache")
+            autoRefreshRssCache()
+            Log.d("Cesia", "onStartInputView: step4 done")
 
             // 同传按钮：AI 模型文件已下载时显示（TTS 使用系统自带）
             btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
@@ -6269,6 +6284,29 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (e: Throwable) {
                 Log.e("Cesia", "AI 模型预加载失败", e)
             }
+        }
+    }
+
+    /** 自动刷新 RSS 缓存（缓存不存在或超过1小时则后台抓取） */
+    private fun autoRefreshRssCache() {
+        try {
+            val cacheFile = java.io.File(filesDir, "rss_cache.txt")
+            val cacheExpired = if (cacheFile.exists()) {
+                System.currentTimeMillis() - cacheFile.lastModified() > 60 * 60 * 1000L
+            } else true
+            if (!cacheExpired) return
+            val source = RssFetchManager.getSelectedSource(this) ?: return
+            Log.d("Cesia", "autoRefreshRssCache: cache ${if (cacheFile.exists()) "expired" else "missing"}, fetching ${source.name}")
+            voiceEngineScope.launch {
+                try {
+                    val success = RssFetchManager.fetchAndCache(this@CesiaInputMethod, source)
+                    Log.d("Cesia", "autoRefreshRssCache: ${if (success) "success" else "failed"}")
+                } catch (e: Throwable) {
+                    Log.w("Cesia", "autoRefreshRssCache error: ${e.message}")
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w("Cesia", "autoRefreshRssCache exception: ${e.message}")
         }
     }
 
@@ -6705,4 +6743,3 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } catch (_: Exception) {}
     }
 }
-// endregion UI辅助

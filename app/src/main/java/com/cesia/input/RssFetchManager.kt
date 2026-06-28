@@ -47,39 +47,45 @@ object RssFetchManager {
         RssSource("IT之家", "https://www.ithome.com/rss/", "科技"),
         RssSource("36氪", "https://36kr.com/feed", "科技"),
         RssSource("少数派", "https://sspai.com/feed", "科技"),
-        RssSource("V2EX", "https://www.v2ex.com/index.xml", "科技"),
-        RssSource("Readhub", "https://api.readhub.cn/feed", "科技"),
-        RssSource("极客公园", "https://www.geekpark.net/rss", "科技"),
         RssSource("虎嗅", "https://www.huxiu.com/feed", "科技"),
-        RssSource("创业邦", "https://www.cyzone.cn/feed", "科技"),
-        RssSource("界面新闻", "https://www.jiemian.com/rss/newslist.xml", "科技"),
         RssSource("钛媒体", "https://www.tmtpost.com/rss", "科技"),
-        RssSource("PingCode", "https://pingcode.com/rss", "科技"),
+        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "科技"),
+        RssSource("量子位", "https://www.qbitai.com/feed", "科技"),
+        RssSource("V2EX", "https://www.v2ex.com/index.xml", "科技"),
+        RssSource("cnBeta", "https://feedx.net/rss/cnbeta", "科技"),
+        RssSource("Hacker News", "https://hnrss.org/frontpage", "科技"),
 
         // AI
         RssSource("Hacker News", "https://hnrss.org/frontpage", "AI"),
-        RssSource("机器之心", "https://www.jiqizhixin.com/rss", "AI"),
         RssSource("量子位", "https://www.qbitai.com/feed", "AI"),
         RssSource("OpenAI Blog", "https://openai.com/blog/rss.xml", "AI"),
         RssSource("Google AI Blog", "https://blog.google/technology/ai/rss/", "AI"),
+        RssSource("机器之心", "https://www.jiqizhixin.com/rss/news", "AI"),
 
         // 财经
-        RssSource("华尔街见闻", "https://wallstreetcn.com/rss", "财经"),
-        RssSource("财新", "https://www.caixin.com/rss/10000.xml", "财经"),
-        RssSource("第一财经", "https://www.yicai.com/rss", "财经"),
-        RssSource("经济观察网", "http://www.eeo.com.cn/rss", "财经"),
+        RssSource("华尔街见闻", "https://dedicated.wallstreetcn.com/rss.xml", "财经"),
+        RssSource("虎嗅", "https://feedx.net/rss/huxiu.xml", "财经"),
+        RssSource("36氪", "https://36kr.com/feed", "财经"),
+        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "财经"),
+        RssSource("钛媒体", "https://www.tmtpost.com/rss", "财经"),
 
         // 新闻/综合
+        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
         RssSource("BBC中文网", "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "新闻"),
+        RssSource("联合早报", "https://feedx.net/rss/zaobao.xml", "新闻"),
         RssSource("纽约时报中文网", "https://cn.nytimes.com/rss/society.xml", "新闻"),
         RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "新闻"),
-        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
-        RssSource("新华社", "https://www.xinhuanet.com/rss", "新闻"),
         RssSource("宝玉", "https://baoyu.io/feed.xml", "新闻"),
 
+        // 国际
+        RssSource("BBC中文网", "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "国际"),
+        RssSource("纽约时报中文网", "https://cn.nytimes.com/rss/society.xml", "国际"),
+        RssSource("联合早报", "https://feedx.net/rss/zaobao.xml", "国际"),
+        RssSource("华尔街日报中文版", "https://feedx.net/rss/wsj.xml", "国际"),
+
         // 生活/其他
-        RssSource("煎蛋", "https://jandan.net/feed", "生活"),
-        RssSource("生活周刊", "https://www.lifeweekly.com/rss", "生活")
+        RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "生活"),
+        RssSource("宝玉", "https://baoyu.io/feed.xml", "生活")
     )
 
     // ===== 数据类 =====

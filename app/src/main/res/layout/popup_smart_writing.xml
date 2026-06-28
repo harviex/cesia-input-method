@@ -25,7 +25,7 @@
         android:orientation="horizontal"
         android:padding="12dp">
 
-        <!-- 第一列：剪贴板、聊天记录 -->
+        <!-- 第一列：剪贴板、RSS源 -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -44,15 +44,15 @@
                 android:tag="clipboard" />
 
             <TextView
-                android:id="@+id/opt_chat_history"
+                android:id="@+id/opt_rss_news"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:padding="12dp"
-                android:text="○ 💬 聊天记录"
+                android:text="○ 📰 RSS源"
                 android:textSize="14sp"
                 android:textColor="#333333"
                 android:background="?attr/selectableItemBackground"
-                android:tag="chat_history" />
+                android:tag="rss_news" />
         </LinearLayout>
 
         <!-- 第二列：网络搜索、本地文库 -->
@@ -85,19 +85,6 @@
                 android:tag="local_lib" />
         </LinearLayout>
     </LinearLayout>
-
-    <!-- 新闻源 RSS 选项（全宽，独立一行） -->
-    <TextView
-        android:id="@+id/opt_rss_news"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="12dp"
-        android:padding="12dp"
-        android:text="○ 📰 新闻源 RSS"
-        android:textSize="14sp"
-        android:textColor="#333333"
-        android:background="?attr/selectableItemBackground"
-        android:tag="rss_news" />
 
     <!-- 分隔线 -->
     <View
