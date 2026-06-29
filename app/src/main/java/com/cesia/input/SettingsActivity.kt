@@ -1817,5 +1817,19 @@ class SettingsActivity : AppCompatActivity() {
         if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
         val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
         if (bgTint == tiffany) view.backgroundTintList = tintList
+        // Handle TextInputLayout boxStrokeColor and hintTextColor
+        if (view is com.google.android.material.textfield.TextInputLayout) {
+            try {
+                if (view.boxStrokeColor == tiffany) {
+                    view.boxStrokeColor = accent
+                }
+            } catch (_: Exception) {}
+            try {
+                val hintColor = view.hintTextColor?.defaultColor ?: 0
+                if (hintColor == tiffany) {
+                    view.hintTextColor = android.content.res.ColorStateList.valueOf(accent)
+                }
+            } catch (_: Exception) {}
+        }
     }
 }

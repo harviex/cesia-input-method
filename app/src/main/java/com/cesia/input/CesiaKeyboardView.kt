@@ -187,6 +187,11 @@ class CesiaKeyboardView @JvmOverloads constructor(
     private var popupTextSize = 12f
     private var t9MainTextSize = 14f
 
+    var textScaleFactor: Float = 1f
+    var keyTextColor: Int = 0xFF333333.toInt()
+    private var labelTextColor: Int = 0xFF999999.toInt()
+    private var t9MainTextColor: Int = 0xFF555555.toInt()
+
     fun setFunctionalLabels(labels: Map<Int, String>) {
         functionalLabels = labels
         invalidateAllKeys()
@@ -240,19 +245,21 @@ class CesiaKeyboardView @JvmOverloads constructor(
         }
 
         val spSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, labelTextSize, resources.displayMetrics
+            TypedValue.COMPLEX_UNIT_SP, labelTextSize * textScaleFactor, resources.displayMetrics
         )
         labelPaint.textSize = spSize
+        labelPaint.color = labelTextColor
 
         val popupSpSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, popupTextSize, resources.displayMetrics
+            TypedValue.COMPLEX_UNIT_SP, popupTextSize * textScaleFactor, resources.displayMetrics
         )
         popupPaint.textSize = popupSpSize
 
         val t9MainSpSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, t9MainTextSize, resources.displayMetrics
+            TypedValue.COMPLEX_UNIT_SP, t9MainTextSize * textScaleFactor, resources.displayMetrics
         )
         t9MainPaint.textSize = t9MainSpSize
+        t9MainPaint.color = t9MainTextColor
 
         val keys = this.keyboard?.keys ?: return
         // 长按高亮：在 super.onDraw 之前绘制高亮背景
@@ -359,6 +366,29 @@ class CesiaKeyboardView @JvmOverloads constructor(
         } catch (_: Exception) {
             // 反射失败，回退到 XML 默认
         }
+        // Auto-contrast: if key background is dark, use light text; if light, use dark text
+        updateKeyTextColor(keyGrayVal)
         invalidateAllKeys()
+    }
+
+    fun updateKeyTextColor(keyGrayVal: Int) {
+        if (keyGrayVal < 128) {
+            // Dark key → light text
+            keyTextColor = 0xFFE0E0E0.toInt()
+            labelTextColor = 0xFFAAAAAA.toInt()
+            t9MainTextColor = 0xFFCCCCCC.toInt()
+        } else {
+            // Light key → dark text
+            keyTextColor = 0xFF333333.toInt()
+            labelTextColor = 0xFF999999.toInt()
+            t9MainTextColor = 0xFF555555.toInt()
+        }
+        // Apply to KeyboardView's internal mKeyTextPaint via reflection
+        try {
+            val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
+            paintField.isAccessible = true
+            val paint = paintField.get(this) as? android.graphics.Paint
+            paint?.color = keyTextColor
+        } catch (_: Exception) {}
     }
 }

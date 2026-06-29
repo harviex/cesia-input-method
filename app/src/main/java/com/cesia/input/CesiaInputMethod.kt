@@ -99,6 +99,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var themePopup: PopupWindow? = null
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
+    private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大
 
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -106,6 +107,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         themeBgGrayBase = prefs.getInt("theme_bg_gray", 0xE0)
         themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xF0)
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
+        textThemeSize = prefs.getInt("theme_text_size", 1)
     }
 
     /**
@@ -126,14 +128,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
         val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
         if (bgTint == tiffany) view.backgroundTintList = tintList
+        // Handle TextInputLayout boxStrokeColor and hintTextColor
+        if (view is com.google.android.material.textfield.TextInputLayout) {
+            try {
+                if (view.boxStrokeColor == tiffany) {
+                    view.boxStrokeColor = accent
+                }
+            } catch (_: Exception) {}
+            try {
+                val hintColor = view.hintTextColor?.defaultColor ?: 0
+                if (hintColor == tiffany) {
+                    view.hintTextColor = android.content.res.ColorStateList.valueOf(accent)
+                }
+            } catch (_: Exception) {}
+        }
     }
-
     private fun saveThemeColors() {
         getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
             .putInt("theme_accent", themeAccent)
             .putInt("theme_bg_gray", themeBgGrayBase)
             .putInt("theme_key_gray", themeKeyGrayBase)
             .putFloat("theme_accent_hue", accentHue)
+            .putInt("theme_text_size", textThemeSize)
             .apply()
     }
 
@@ -631,6 +647,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val KEYCODE_BACK_KEY = -999
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
+        const val THEME_AUTO = 2
     }
 
 // endregion 常量配置
@@ -641,7 +658,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onCreate() {
         val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt(PREF_THEME_MODE, THEME_LIGHT)
-        isDarkTheme = themeMode == THEME_DARK
+        isDarkTheme = themeMode == THEME_DARK || (themeMode == THEME_AUTO && isSystemDark())
         setTheme(if (isDarkTheme) R.style.Theme_Cesia_Dark else R.style.Theme_Cesia)
         super.onCreate()
     }
@@ -1018,7 +1035,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isDarkTheme) {
             keyboardView.setBackgroundColor(0xFF0F0F23.toInt())
             (statusText.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
-            statusText.setTextColor(0xFFE0E0E0.toInt())
             candidateBar.setBackgroundColor(0xFF16213E.toInt())
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
@@ -1026,12 +1042,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val base = themeBgGrayBase
             keyboardView.setBackgroundColor(colorGray(base))
             (statusText.parent as? View)?.setBackgroundColor(colorGray((base - 8).coerceIn(0, 255)))
-            statusText.setTextColor(0xFF555555.toInt())
             candidateBar.setBackgroundColor(colorGray((base + 16).coerceIn(0, 255)))
             (btnClipboard.parent as? View)?.setBackgroundColor(colorGray(base))
             // root_layout
             (keyboardView.parent as? View)?.setBackgroundColor(colorGray((base + 23).coerceIn(0, 255)))
         }
+    }
+
+    private fun isSystemDark(): Boolean {
+        return (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
     }
 
     private fun colorGray(v: Int): Int {
@@ -1065,7 +1084,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // ③ 按键灰度 —— 底栏按钮、键盘按键背景
-        val keyBg = colorGray(themeKeyGrayBase)
+        val keyBgRaw = if (isDarkTheme) 0x2A else themeKeyGrayBase
+        val keyBg = colorGray(keyBgRaw)
         val keyBgList = android.content.res.ColorStateList.valueOf(keyBg)
         // 底栏按钮默认背景（仅非高亮状态才设按键灰度）
         if (!magicIsWaitingForVoice && !isRecording) {
@@ -1082,8 +1102,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (::keyboardView.isInitialized) {
             keyboardView.updateKeyBackground(keyBg)
             keyboardView.themeAccent = accent
+            // 文字大小缩放
+            keyboardView.textScaleFactor = when (textThemeSize) {
+                0 -> 0.85f
+                2 -> 1.2f
+                else -> 1f
+            }
             keyboardView.invalidateAllKeys()
         }
+
+        // ④ 自动对比文字颜色（根据背景灰度）
+        applyAutoContrast()
 
         // 语音锁定高亮状态也用主题色
         if (simulTranslateEnabled) {
@@ -1092,6 +1121,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 持久化
         saveThemeColors()
+    }
+
+    /** 根据背景灰度自动调整文字颜色（暗背景→亮字，亮背景→暗字） */
+    private fun applyAutoContrast() {
+        val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
+        val textColor = if (bgGray < 128) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
+
+        // 状态栏文字
+        statusText.setTextColor(textColor)
+
+        // 候选栏文字（遍历子元素）
+        if (::candidateBar.isInitialized) {
+            for (i in 0 until candidateBar.childCount) {
+                val child = candidateBar.getChildAt(i)
+                if (child is android.widget.TextView) {
+                    child.setTextColor(textColor)
+                }
+            }
+        }
+
+        // 底栏按钮图标颜色
+        val iconColor = if (bgGray < 128) 0xFFCCCCCC.toInt() else 0xFF555555.toInt()
+        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnDelete.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
     }
 
     /** 主题色调节弹窗 */
@@ -1117,10 +1172,68 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val tvHue = view.findViewById<android.widget.TextView>(R.id.tv_hue_preview)
         val btnReset = view.findViewById<android.widget.TextView>(R.id.btn_reset_theme)
 
+        // 明暗模式按钮
+        val btnThemeLight = view.findViewById<android.widget.TextView>(R.id.btn_theme_light)
+        val btnThemeDark = view.findViewById<android.widget.TextView>(R.id.btn_theme_dark)
+        val btnThemeAuto = view.findViewById<android.widget.TextView>(R.id.btn_theme_auto)
+
+        // 文字大小按钮
+        val btnTextSmall = view.findViewById<android.widget.TextView>(R.id.btn_text_small)
+        val btnTextMedium = view.findViewById<android.widget.TextView>(R.id.btn_text_medium)
+        val btnTextLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_large)
+
         // 初始化为当前值（不是默认值，解决重开不同步问题）
         seekHue.progress = accentHue.toInt()
         seekGray.progress = themeBgGrayBase
         seekKey.progress = themeKeyGrayBase
+
+        // 初始化明暗模式按钮状态
+        val currentThemeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt(PREF_THEME_MODE, THEME_LIGHT)
+        updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, currentThemeMode)
+
+        // 初始化文字大小按钮状态
+        updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, textThemeSize)
+
+        // 明暗模式切换
+        btnThemeLight.setOnClickListener {
+            isDarkTheme = false
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_LIGHT)
+            applyThemeColors()
+        }
+        btnThemeDark.setOnClickListener {
+            isDarkTheme = true
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_DARK).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_DARK)
+            applyThemeColors()
+        }
+        btnThemeAuto.setOnClickListener {
+            isDarkTheme = isSystemDark()
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_AUTO).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_AUTO)
+            applyThemeColors()
+        }
+
+        // 文字大小切换
+        btnTextSmall.setOnClickListener {
+            textThemeSize = 0
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 0)
+            applyThemeColors()
+        }
+        btnTextMedium.setOnClickListener {
+            textThemeSize = 1
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
+            applyThemeColors()
+        }
+        btnTextLarge.setOnClickListener {
+            textThemeSize = 2
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 2)
+            applyThemeColors()
+        }
 
         seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
@@ -1160,14 +1273,38 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             themeAccent = 0xFF81D8D0.toInt()
             themeBgGrayBase = 0xE0
             themeKeyGrayBase = 0xF0
+            textThemeSize = 1
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
             applyThemeColors()
         }
 
         popup.setOnDismissListener { themePopup = null }
         popup.showAtLocation(keyboardView, android.view.Gravity.CENTER, 0, 0)
+    }
+
+    private fun updateThemeModeButtons(btnLight: android.widget.TextView, btnDark: android.widget.TextView, btnAuto: android.widget.TextView, mode: Int) {
+        val accent = themeAccent
+        val inactiveColor = 0xFF666666.toInt()
+        btnLight.setTextColor(if (mode == THEME_LIGHT) accent else inactiveColor)
+        btnLight.setTypeface(null, if (mode == THEME_LIGHT) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        btnDark.setTextColor(if (mode == THEME_DARK) accent else inactiveColor)
+        btnDark.setTypeface(null, if (mode == THEME_DARK) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        btnAuto.setTextColor(if (mode == THEME_AUTO) accent else inactiveColor)
+        btnAuto.setTypeface(null, if (mode == THEME_AUTO) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+    }
+
+    private fun updateTextSizeButtons(btnSmall: android.widget.TextView, btnMedium: android.widget.TextView, btnLarge: android.widget.TextView, size: Int) {
+        val accent = themeAccent
+        val inactiveColor = 0xFF666666.toInt()
+        btnSmall.setTextColor(if (size == 0) accent else inactiveColor)
+        btnSmall.setTypeface(null, if (size == 0) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        btnMedium.setTextColor(if (size == 1) accent else inactiveColor)
+        btnMedium.setTypeface(null, if (size == 1) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        btnLarge.setTextColor(if (size == 2) accent else inactiveColor)
+        btnLarge.setTypeface(null, if (size == 2) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
 
     // ======================== 候选栏 ========================
@@ -1635,8 +1772,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     if (!magicBookLongPressTriggered) {
                         // 短按：停止发光，执行第一项命令
                         stopMagicButtonGlow()
-                        btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-                        btnMagic.clearColorFilter()
+                        btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                        btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                         v.performClick()
                     }
                     // 长按已触发：保持高光（持续到popup关闭）
@@ -1646,8 +1783,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
                     magicBookRunnable = null
                     stopMagicButtonGlow()
-                    btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-                    btnMagic.clearColorFilter()
+                    btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                    btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                     true
                 }
                 else -> false
@@ -1926,8 +2063,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicModeGlowing = false
         stopMagicButtonGlow()
         try {
-            btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-            btnMagic.clearColorFilter()
+            btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+            btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         } catch (_: Exception) {}
     }
 
@@ -2698,8 +2835,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.setOnDismissListener {
                 smartWritingPopup = null
                 stopMagicButtonGlow()
-                btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-                btnMagic.clearColorFilter()
+                btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
@@ -3164,8 +3301,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         themePopup = null
         // 清除所有按钮高亮状态
         stopMagicButtonGlow()
-        btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-        btnMagic.clearColorFilter()
+        btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         stopMagicBookGlow()
     }
 
@@ -5119,7 +5256,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopSendButtonGlow() {
         sendButtonGlowing = false
         btnSend.clearAnimation()
-        btnSend.setBackgroundColor(0xFFE0E0E0.toInt())
+        btnSend.setBackgroundColor(colorGray(themeKeyGrayBase))
     }
 
     private fun startMagicBookLongPress() {
@@ -5153,7 +5290,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopMagicBookGlow() {
         magicBookGlowing = false
         btnClipboard.clearAnimation()
-        btnClipboard.setBackgroundColor(0xFFE0E0E0.toInt())
+        btnClipboard.setBackgroundColor(colorGray(themeKeyGrayBase))
     }
 
     // ====== 语音按钮发光（锁定模式） ======
@@ -5194,7 +5331,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopDeleteButtonGlow() {
         deleteButtonGlowing = false
         btnDelete.clearAnimation()
-        btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFE0E0E0.toInt())
+        btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(colorGray(themeKeyGrayBase))
         btnDelete.elevation = 0f
     }
 
@@ -6477,7 +6614,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getInt(PREF_THEME_MODE, THEME_LIGHT)
-            isDarkTheme = themeMode == THEME_DARK
+            isDarkTheme = themeMode == THEME_DARK || (themeMode == THEME_AUTO && isSystemDark())
             applyKeyboardTheme()
             aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getString(PREF_AI_STYLE, "自然") ?: "自然"
@@ -6510,8 +6647,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             btnTheme?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
 
             // 重置星星按钮状态（防止重启后残留高亮）
-            btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
-            btnMagic.clearColorFilter()
+            btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+            btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             btnMagic.clearAnimation()
         } catch (e: Throwable) {
             Log.e("Cesia", "onStartInputView 异常(已忽略)", e)

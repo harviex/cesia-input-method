@@ -227,7 +227,7 @@
             android:layout_height="40dp"
             android:layout_weight="0.75"
             android:src="@drawable/ic_star"
-            android:background="#E0E0E0"
+            android:background="@drawable/button_background_gray"
             android:scaleType="centerInside"
             android:contentDescription="智能写作"
             android:layout_marginStart="4dp"

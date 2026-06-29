@@ -87,7 +87,119 @@
         android:progress="240"
         android:progressTint="#888888"
         android:thumbTint="#888888"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="8dp" />
+
+    <!-- 明暗模式切换 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="明暗模式"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:id="@+id/theme_mode_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/btn_theme_light"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="☀ 明亮"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_theme_dark"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="🌑 黑暗"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_theme_auto"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="🔄 随系统"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <!-- 文字大小调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="文字大小"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:id="@+id/text_size_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/btn_text_small"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="小"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_text_medium"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="中"
+            android:textSize="13sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_text_large"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="大"
+            android:textSize="15sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
 
     <!-- 重置按钮 -->
     <TextView
