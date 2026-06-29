@@ -1266,7 +1266,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 updateCandidateBar()
             } else {
                 try {
-                    currentInputConnection?.deleteSurroundingText(Integer.MAX_VALUE, 0)
+                    // Android IME 框架对单次 deleteSurroundingText 有限制，循环删除直到清空
+                    val ic = currentInputConnection ?: return@setOnClickListener
+                    // 先删除选中文字（如果有选区）
+                    val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
+                    val selStart = extracted?.selectionStart ?: -1
+                    val selEnd = extracted?.selectionEnd ?: -1
+                    if (selStart >= 0 && selEnd >= 0 && selStart != selEnd) {
+                        ic.commitText("", 1)
+                    } else {
+                        // 删除光标前全部文字
+                        while (true) {
+                            val before = ic.getTextBeforeCursor(1000, 0)
+                            if (before.isNullOrEmpty()) break
+                            val len = before.length
+                            ic.deleteSurroundingText(len, 0)
+                            if (len < 1000) break // 已删完
+                        }
+                    }
                 } catch (_: Exception) { /* 安全忽略 */ }
             }
         }
@@ -1289,10 +1306,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 updateCandidateBar()
                             } else {
                                 val ic = currentInputConnection ?: return@Runnable
-                                val afterCursor = ic.getTextAfterCursor(10000, 0)
-                                if (afterCursor != null && afterCursor.isNotEmpty()) {
-                                    val deleteLen = minOf(afterCursor.length, 1000)
-                                    ic.deleteSurroundingText(0, deleteLen)
+                                // 先删除选中文字（如果有选区）
+                                val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
+                                val selStart = extracted?.selectionStart ?: -1
+                                val selEnd = extracted?.selectionEnd ?: -1
+                                if (selStart >= 0 && selEnd >= 0 && selStart != selEnd) {
+                                    ic.commitText("", 1)
+                                } else {
+                                    // 长按：删除光标后全部文字，循环删除避免字数限制
+                                    while (true) {
+                                        val after = ic.getTextAfterCursor(1000, 0)
+                                        if (after.isNullOrEmpty()) break
+                                        val len = after.length
+                                        ic.deleteSurroundingText(0, len)
+                                        if (len < 1000) break // 已删完
+                                    }
                                 }
                             }
                         } catch (_: Exception) { /* 安全忽略 */ }
