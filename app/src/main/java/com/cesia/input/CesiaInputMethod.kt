@@ -89,8 +89,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
     private lateinit var voiceWave: View
-    private lateinit var btnSimulTranslate: TextView
+    private lateinit var btnTheme: TextView
     private lateinit var btnCloud: TextView
+
+    // ---- 主题色动态可调 ----
+    private var themeAccent: Int = 0xFF81D8D0.toInt()     // 主色（蒂芙尼蓝），可通过色相调节改变
+    private var themeBgGrayBase: Int = 0xE8                // 背景灰度基础值（0-255），拖动调整
+    private var themePopup: PopupWindow? = null
+    private val defaultAccentHsl = hslOf(themeAccent) // 默认蒂芙尼蓝 HSL 缓存
+    private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
 
     // 云按钮状态
     enum class CloudMode {
@@ -126,6 +133,45 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var gvCandidates: GridView
     private var panelAdapter: ArrayAdapter<String>? = null
     private var isPanelExpanded = false
+
+    // ---- HSL 工具函数 ----
+    private fun hslOf(color: Int): FloatArray {
+        val r = ((color shr 16) and 0xFF) / 255f
+        val g = ((color shr 8) and 0xFF) / 255f
+        val b = (color and 0xFF) / 255f
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        val l = (max + min) / 2f
+        var h = 0f; var s = 0f
+        if (max != min) {
+            val d = max - min
+            s = if (l > 0.5f) d / (2f - max - min) else d / (max + min)
+            h = when (max) {
+                r -> ((g - b) / d + (if (g < b) 6 else 0)) / 6f
+                g -> ((b - r) / d + 2) / 6f
+                else -> ((r - g) / d + 4) / 6f
+            }
+        }
+        return floatArrayOf(h * 360f, s, l)
+    }
+
+    private fun hslToColor(h: Float, s: Float, l: Float): Int {
+        val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
+        val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+        val m = l - c / 2f
+        val (r, g, b) = when {
+            h < 60 -> Triple(c, x, 0f)
+            h < 120 -> Triple(x, c, 0f)
+            h < 180 -> Triple(0f, c, x)
+            h < 240 -> Triple(0f, x, c)
+            h < 300 -> Triple(x, 0f, c)
+            else -> Triple(c, 0f, x)
+        }
+        val ri = ((r + m) * 255).toInt().coerceIn(0, 255)
+        val gi = ((g + m) * 255).toInt().coerceIn(0, 255)
+        val bi = ((b + m) * 255).toInt().coerceIn(0, 255)
+        return 0xFF000000.toInt() or (ri shl 16) or (gi shl 8) or bi
+    }
 
 // endregion 视图与UI
 
@@ -596,7 +642,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statusDot = view.findViewById(R.id.v_status_dot)
         statusText = view.findViewById(R.id.tv_status)
         voiceWave = view.findViewById(R.id.v_voice_wave)
-        btnSimulTranslate = view.findViewById(R.id.btn_simul_translate)
+        btnTheme = view.findViewById(R.id.btn_theme)
 
         // 本地/云端模式切换已移除，统一使用长按语音键切换
 
@@ -932,12 +978,91 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             candidateBar.setBackgroundColor(0xFF16213E.toInt())
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
-            keyboardView.setBackgroundColor(0xFFE8E8E8.toInt())
-            (statusText.parent as? View)?.setBackgroundColor(0xFFEEEEEE.toInt())
+            // 使用动态背景灰度
+            val base = themeBgGrayBase
+            keyboardView.setBackgroundColor(colorGray(base))
+            (statusText.parent as? View)?.setBackgroundColor(colorGray((base - 8).coerceIn(0, 255)))
             statusText.setTextColor(0xFF555555.toInt())
-            candidateBar.setBackgroundColor(0xFFF0F0F0.toInt())
-            (btnClipboard.parent as? View)?.setBackgroundColor(0xFFE0E0E0.toInt())
+            candidateBar.setBackgroundColor(colorGray((base + 8).coerceIn(0, 255)))
+            (btnClipboard.parent as? View)?.setBackgroundColor(colorGray((base - 16).coerceIn(0, 255)))
+            // root_layout
+            (keyboardView.parent as? View)?.setBackgroundColor(colorGray((base + 15).coerceIn(0, 255)))
         }
+    }
+
+    private fun colorGray(v: Int): Int {
+        val c = v.coerceIn(0, 255)
+        return 0xFF000000.toInt() or (c shl 16) or (c shl 8) or c
+    }
+
+    /** 实时应用主题色 + 背景灰度到所有UI元素 */
+    private fun applyThemeColors() {
+        // 背景灰度
+        applyKeyboardTheme()
+        // 主题色应用到当前可见的高亮元素
+        if (isTraditional) {
+            btnTraditional.setTextColor(themeAccent)
+        }
+        // 更新发送按钮（如果处于高亮状态）
+        // 更新语音锁定按钮
+        if (simulTranslateEnabled) {
+            micButton?.setBackgroundColor(themeAccent)
+        }
+    }
+
+    /** 主题色调节弹窗 */
+    private fun showThemePopup() {
+        dismissAllPopups()
+        val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
+        val popup = PopupWindow(
+            view,
+            (resources.displayMetrics.widthPixels * 0.85f).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            true
+        )
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+        popup.isOutsideTouchable = true
+        themePopup = popup
+
+        val seekHue = view.findViewById<android.widget.SeekBar>(R.id.seek_hue)
+        val seekGray = view.findViewById<android.widget.SeekBar>(R.id.seek_gray)
+        val tvHue = view.findViewById<android.widget.TextView>(R.id.tv_hue_preview)
+        val btnReset = view.findViewById<android.widget.TextView>(R.id.btn_reset_theme)
+
+        seekHue.progress = (accentHue.toInt())
+        seekGray.progress = themeBgGrayBase
+
+        seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                accentHue = progress.toFloat()
+                themeAccent = hslToColor(accentHue, defaultAccentHsl[1], defaultAccentHsl[2])
+                tvHue.setBackgroundColor(themeAccent)
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        seekGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                themeBgGrayBase = progress
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        btnReset.setOnClickListener {
+            accentHue = defaultAccentHsl[0]
+            themeAccent = 0xFF81D8D0.toInt()
+            themeBgGrayBase = 0xE8
+            seekHue.progress = accentHue.toInt()
+            seekGray.progress = themeBgGrayBase
+            applyThemeColors()
+        }
+
+        popup.setOnDismissListener { themePopup = null }
+        popup.showAtLocation(keyboardView, android.view.Gravity.CENTER, 0, 0)
     }
 
     // ======================== 候选栏 ========================
@@ -1256,7 +1381,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnTraditional.setOnClickListener { toggleTraditionalSimplified() }
         btnCloud.setOnClickListener { onCloudButtonClick() }
         btnCloud.setOnLongClickListener { onCloudButtonLongClick(); true }
-        btnSimulTranslate.setOnClickListener { onSimulTranslateButtonClick() }
+        btnTheme.setOnClickListener { showThemePopup() }
 
         deleteLongPressTriggered = false
 
@@ -1294,7 +1419,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     deleteLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 立即高亮清空按钮
-                    btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF81D8D0.toInt())
+                    btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(themeAccent)
                     btnDelete.elevation = 6f
                     startDeleteButtonGlow()
                     deleteButtonGlowRunnable = Runnable {
@@ -1385,7 +1510,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 开始发光（与魔法书按钮一致：青色背景+白色图标）
-                    btnMagic.setBackgroundColor(0xFF81D8D0.toInt())
+                    btnMagic.setBackgroundColor(themeAccent)
                     btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
                     startMagicButtonGlow()
                     // 延迟触发长按弹窗
@@ -1594,7 +1719,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 高亮按钮表示正在录音 + 脉冲发光动画
         magicIsWaitingForVoice = true
         magicModeGlowing = true
-        btnMagic.setBackgroundColor(0xFF81D8D0.toInt())
+        btnMagic.setBackgroundColor(themeAccent)
         btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
         startMagicButtonGlow()
 
@@ -2073,7 +2198,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                     } else {
                         tv.text = displayText
-                        tv.setTextColor(if (isActive) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
+                        tv.setTextColor(if (isActive) themeAccent else 0xFF333333.toInt())
                         tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                     }
                     tv.textSize = 13f
@@ -2243,7 +2368,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             fun refreshOption(tv: TextView, tag: String, label: String) {
                 val checked = savedOptions.contains(tag)
                 tv.text = if (checked) "✓ $label" else "○ $label"
-                tv.setTextColor(if (checked) 0xFF81D8D0.toInt() else 0xFF333333.toInt())
+                tv.setTextColor(if (checked) themeAccent else 0xFF333333.toInt())
                 tv.setTypeface(null, if (checked) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                 tv.tag = tag
             }
@@ -2928,6 +3053,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         smartWritingPopup = null
         clipboardPopup?.dismiss()
         clipboardPopup = null
+        themePopup?.dismiss()
+        themePopup = null
         // 清除所有按钮高亮状态
         stopMagicButtonGlow()
         btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
@@ -3236,8 +3363,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (::btnTraditional.isInitialized) {
             // 简体模式显示"简"字，正体模式显示"正"字
             btnTraditional.text = if (isTraditional) "正" else "简"
-            btnTraditional.setTextColor(if (isTraditional) 0xFF81D8D0.toInt() else 0xFF888888.toInt())
-            btnTraditional.setBackgroundColor(if (isTraditional) 0x2281D8D0.toInt() else 0x00000000)
+            btnTraditional.setTextColor(if (isTraditional) themeAccent else 0xFF888888.toInt())
+            btnTraditional.setBackgroundColor(if (isTraditional) (themeAccent and 0x00FFFFFF) or 0x22000000 else 0x00000000)
             if (isTraditional && !traditionalGlowing) {
                 traditionalGlowing = true
                 val pulse = android.view.animation.ScaleAnimation(
@@ -3462,8 +3589,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 更新同传按钮外观 */
     private fun updateSimulTranslateButton(active: Boolean) {
         simulTranslateEnabled = active
-        btnSimulTranslate?.text = if (active) "🔴" else "🌐"
-        btnSimulTranslate?.alpha = if (active) 1.0f else 0.6f
+        btnTheme?.text = if (active) "🔴" else "🎨"
+        btnTheme?.alpha = if (active) 1.0f else 0.6f
     }
 
     /**
@@ -4851,7 +4978,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
         // 立即高亮发送按钮
-        btnSend.setBackgroundColor(0xFF81D8D0.toInt())
+        btnSend.setBackgroundColor(themeAccent)
         startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
@@ -4890,7 +5017,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun startMagicBookLongPress() {
         cancelMagicBookLongPress()
         // 立即高亮魔法书按钮
-        btnClipboard.setBackgroundColor(0xFF81D8D0.toInt())
+        btnClipboard.setBackgroundColor(themeAccent)
         startMagicBookGlow()
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
@@ -5176,7 +5303,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun updateClipboardSearchBtn(btnSearch: TextView) {
         if (clipboardSearchFilter.isNotEmpty()) {
             btnSearch.text = "🔍 $clipboardSearchFilter"
-            btnSearch.setTextColor(0xFF81D8D0.toInt())
+            btnSearch.setTextColor(themeAccent)
         } else {
             btnSearch.text = "🔍 点击搜索..."
             btnSearch.setTextColor(0xFF999999.toInt())
@@ -6271,7 +6398,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             Log.d("Cesia", "onStartInputView: step4 done")
 
             // 同传按钮：AI 模型文件已下载时显示（TTS 使用系统自带）
-            btnSimulTranslate?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
+            btnTheme?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
 
             // 重置星星按钮状态（防止重启后残留高亮）
             btnMagic.setBackgroundColor(0xFFE0E0E0.toInt())
@@ -6447,7 +6574,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     btn.isEnabled = false
                     btn.alpha = 1.0f
                     btn.text = "云"
-                    btn.setTextColor(0xFF81D8D0.toInt()) // 青色高亮
+                    btn.setTextColor(themeAccent) // 青色高亮
                 }
                 !localPolish && cloudPolish -> {
                     // 只有云端润色 → 强制云端
@@ -6455,7 +6582,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     btn.isEnabled = false
                     btn.alpha = 1.0f
                     btn.text = "云"
-                    btn.setTextColor(0xFF81D8D0.toInt())
+                    btn.setTextColor(themeAccent)
                 }
                 localPolish && !cloudPolish -> {
                     // 只有本地润色 → 强制本地
@@ -6476,11 +6603,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         }
                         CloudMode.CLOUD -> {
                             btn.text = "云"
-                            btn.setTextColor(0xFF81D8D0.toInt())
+                            btn.setTextColor(themeAccent)
                         }
                         CloudMode.LOCAL_LOCKED -> {
                             btn.text = "本"
-                            btn.setTextColor(0xFF81D8D0.toInt())
+                            btn.setTextColor(themeAccent)
                         }
                     }
                 }
@@ -6676,7 +6803,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         micButton?.let { btn ->
             if (isVoiceLocked) {
                 // 锁定状态：高亮显示 + 脉冲发光动画
-                btn.setBackgroundColor(0xFF81D8D0.toInt()) // 青色背景
+                btn.setBackgroundColor(themeAccent) // 青色背景
                 btn.setTextColor(0xFFFFFFFF.toInt()) // 白色文字
                 btn.elevation = 6f
                 startMicButtonGlow()

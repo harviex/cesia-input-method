@@ -63,17 +63,16 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="云端本地切换" />
 
-        <!-- 同传按钮 -->
+        <!-- 主题色按钮 -->
         <TextView
-            android:id="@+id/btn_simul_translate"
+            android:id="@+id/btn_theme"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:text="🌐"
+            android:text="🎨"
             android:textSize="14sp"
             android:gravity="center"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="同声传译"
-            android:visibility="gone" />
+            android:contentDescription="主题色" />
 
         <ImageButton
             android:id="@+id/btn_settings"
