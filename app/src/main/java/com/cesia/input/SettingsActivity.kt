@@ -151,6 +151,11 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.settings)
         setTitle("Cesia 输入法设置")
 
+        // 应用动态主题色到所有硬编码的蒂芙尼蓝元素
+        val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())
+        applyAccentToViewTree(window.decorView, accent)
+
         initViews()
 
         // 语音与 AI 本地化设置 helper
@@ -1797,5 +1802,20 @@ class SettingsActivity : AppCompatActivity() {
             val tvName: TextView = view.findViewById(R.id.tv_source_name)
             val tvCategory: TextView = view.findViewById(R.id.tv_source_category)
         }
+    }
+
+    /** 遍历 view 树，将蒂芙尼蓝替换为主题色 */
+    private fun applyAccentToViewTree(view: android.view.View, accent: Int) {
+        val tintList = android.content.res.ColorStateList.valueOf(accent)
+        val tiffany = 0xFF81D8D0.toInt()
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                applyAccentToViewTree(view.getChildAt(i), accent)
+            }
+        }
+        val defaultColor = (view as? android.widget.TextView)?.textColors?.defaultColor ?: 0
+        if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
+        val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
+        if (bgTint == tiffany) view.backgroundTintList = tintList
     }
 }

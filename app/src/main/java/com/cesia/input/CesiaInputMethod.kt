@@ -100,6 +100,43 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
 
+    private fun loadThemeColors() {
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        themeAccent = prefs.getInt("theme_accent", 0xFF81D8D0.toInt())
+        themeBgGrayBase = prefs.getInt("theme_bg_gray", 0xE0)
+        themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xF0)
+        accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
+    }
+
+    /**
+     * 遍历 view 树，将蒂芙尼蓝替换为当前主题色
+     * 覆盖所有 XML 中硬编码的 #81D8D0
+     */
+    private fun applyAccentToViewTree(view: View, accent: Int) {
+        val tintList = android.content.res.ColorStateList.valueOf(accent)
+        val tiffany = 0xFF81D8D0.toInt()
+        when (view) {
+            is android.view.ViewGroup -> {
+                for (i in 0 until view.childCount) {
+                    applyAccentToViewTree(view.getChildAt(i), accent)
+                }
+            }
+        }
+        val defaultColor = (view as? android.widget.TextView)?.textColors?.defaultColor ?: 0
+        if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
+        val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
+        if (bgTint == tiffany) view.backgroundTintList = tintList
+    }
+
+    private fun saveThemeColors() {
+        getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+            .putInt("theme_accent", themeAccent)
+            .putInt("theme_bg_gray", themeBgGrayBase)
+            .putInt("theme_key_gray", themeKeyGrayBase)
+            .putFloat("theme_accent_hue", accentHue)
+            .apply()
+    }
+
     // 云按钮状态
     enum class CloudMode {
         LOCAL,       // 本地模式（本字，不高亮）
@@ -625,6 +662,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun createInputViewSafe(): View {
+        // 优先加载保存的主题色（必须在 inflate 之前）
+        loadThemeColors()
         val inflater = LayoutInflater.from(this)
         val view = inflater.inflate(R.layout.input_view, null)
 
@@ -963,6 +1002,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rimeEngine.selectSchema("t9_pinyin")
         rimeEngine.reload()
 
+        // 应用动态主题色到主输入视图树
+        applyAccentToViewTree(view, themeAccent)
+        applyThemeColors()
+
         return view
     }
 
@@ -1046,12 +1089,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (simulTranslateEnabled) {
             micButton?.setBackgroundColor(accent)
         }
+
+        // 持久化
+        saveThemeColors()
     }
 
     /** 主题色调节弹窗 */
     private fun showThemePopup() {
         dismissAllPopups()
         val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
+        // 立刻应用当前主题色到弹窗内所有硬编码的蒂芙尼蓝元素
+        applyAccentToViewTree(view, themeAccent)
         val popup = PopupWindow(
             view,
             (resources.displayMetrics.widthPixels * 0.85f).toInt(),
@@ -1613,7 +1661,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val text = if (rimeEngine.hasCandidates) {
                     rimeEngine.selectCandidate(0).ifEmpty { rimeEngine.composingText }
                 } else { rimeEngine.composingText }
-                if (text.isNotEmpty()) { ic.commitText(text, 1) }
+                if (text.isNotEmpty()) { commitCandidateText(text) }
                 rimeEngine.clear()
                 updateCandidateBar()
             }
@@ -2130,6 +2178,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun showMagicHistoryPopupInternal(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+        applyAccentToViewTree(popupView, themeAccent)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
         val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)
@@ -2408,6 +2457,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
+            applyAccentToViewTree(popupView, themeAccent)
 
             val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
             tvTitle.text = smartWritingLabel
@@ -3266,6 +3316,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val inflater = android.view.LayoutInflater.from(this)
             val dialogView = inflater.inflate(R.layout.dialog_ai_style_picker, null)
+            applyAccentToViewTree(dialogView, themeAccent)
 
             val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
                 .setView(dialogView)
@@ -5170,6 +5221,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val inflater2 = android.view.LayoutInflater.from(this)
             clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
+            applyAccentToViewTree(clipboardPopupView!!, themeAccent)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.btn_clipboard_search)
@@ -5934,7 +5986,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (!rimeEngine.isComposing) {
                             val result = rimeEngine.commit()
                             if (result.isNotEmpty()) {
-                                ic?.commitText(result, 1)
+                                commitCandidateText(result)
                             } else {
                                 ic?.commitText(keyChar.toString(), 1)
                             }
@@ -6031,7 +6083,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (cands.isNotEmpty()) {
                             val selected = rimeEngine.selectCandidate(0)
                             if (selected.isNotEmpty()) {
-                                ic?.commitText(selected, 1)
+                                commitCandidateText(selected)
                             }
                         } else {
                             ic?.commitText(" ", 1)
@@ -6066,7 +6118,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (cands.isNotEmpty()) {
                             val selected = rimeEngine.selectCandidate(0)
                             if (selected.isNotEmpty()) {
-                                ic?.commitText(selected, 1)
+                                commitCandidateText(selected)
                             } else {
                                 ic?.commitText(" ", 1)
                             }
@@ -6131,7 +6183,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     } else if (hasCands) {
                         val selected = rimeEngine.selectCandidate(0)
                         if (selected.isNotEmpty()) {
-                            ic?.commitText(selected, 1)
+                            commitCandidateText(selected)
                         }
                     }
                     rimeEngine.clear()
@@ -6245,7 +6297,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun commitAndClear() {
         val text = rimeEngine.commit()
         if (text.isNotEmpty()) {
-            currentInputConnection?.commitText(text, 1)
+            commitCandidateText(text)
         }
         rimeEngine.clear()
         if (isPanelExpanded) collapseCandidatePanel()

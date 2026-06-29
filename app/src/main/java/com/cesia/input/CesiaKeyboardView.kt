@@ -169,11 +169,11 @@ class CesiaKeyboardView @JvmOverloads constructor(
         color = 0xFF999999.toInt()
     }
 
-    // popupCharacters 副字符画笔（tiffany蓝，加粗）
+    // popupCharacters 副字符画笔（主题色，加粗）
     private val popupPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.RIGHT
-        color = 0xFF81D8D0.toInt()
+        color = themeAccent
     }
 
     // T9 主字符画笔（大号字母，居中）
@@ -205,13 +205,17 @@ class CesiaKeyboardView @JvmOverloads constructor(
         invalidate(key.x, key.y, key.x + key.width, key.y + key.height)
     }
 
-    // 长按高亮画笔
+    // 长按高亮画笔（主题色半透明）
     private val longPressHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x4081D8D0.toInt()
+        color = (themeAccent and 0x00FFFFFF) or 0x40000000  // 主题色 + 25% alpha
         style = Paint.Style.FILL
     }
 
     override fun onDraw(canvas: Canvas) {
+        // 动态更新主题色画笔
+        popupPaint.color = themeAccent
+        longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
+
         // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写
         val kb = this.keyboard
         if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
