@@ -22,6 +22,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : KeyboardView(context, attrs, defStyleAttr) {
 
+    // 动态主题色（由 CesiaInputMethod 设置）
+    var themeAccent: Int = 0xFF81D8D0.toInt()
+
     // 功能键长按副字符
     private var functionalLabels = mapOf<Int, String>()
 
@@ -314,7 +317,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
             // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
             if ((code == -104 || code == -1) && isShiftLocked) {
                 val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = 0xFF81D8D0.toInt()
+                    color = themeAccent
                     style = Paint.Style.FILL
                 }
                 val dotX = key.x + key.width - 30f
@@ -331,5 +334,27 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
             // ===== 5. (剪贴板字符已合并到 section 3) =====
         }
+    }
+
+    /** 动态更新按键背景色 */
+    fun updateKeyBackground(keyBgColor: Int) {
+        val keyGrayVal = (keyBgColor and 0xFF)
+        val strokeGray = (keyGrayVal - 16).coerceIn(0, 255)
+        val strokeColor = 0xFF000000.toInt() or (strokeGray shl 16) or (strokeGray shl 8) or strokeGray
+        val drawable = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            setColor(keyBgColor)
+            cornerRadius = 6f * resources.displayMetrics.density
+            setStroke((1 * resources.displayMetrics.density).toInt(), strokeColor)
+        }
+        // KeyboardView 内部用 mKeyBackground 字段存储按键背景 Drawable
+        try {
+            val field = KeyboardView::class.java.getDeclaredField("mKeyBackground")
+            field.isAccessible = true
+            field.set(this, drawable.constantState?.newDrawable()?.mutate() ?: drawable)
+        } catch (_: Exception) {
+            // 反射失败，回退到 XML 默认
+        }
+        invalidateAllKeys()
     }
 }

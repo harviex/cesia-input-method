@@ -64,7 +64,27 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:max="255"
-        android:progress="232"
+        android:progress="224"
+        android:progressTint="#888888"
+        android:thumbTint="#888888"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 按键灰度调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="按键灰度"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <android.widget.SeekBar
+        android:id="@+id/seek_key"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255"
+        android:progress="240"
         android:progressTint="#888888"
         android:thumbTint="#888888"
         android:layout_marginBottom="16dp" />

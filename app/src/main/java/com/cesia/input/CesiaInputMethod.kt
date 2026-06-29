@@ -92,11 +92,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnTheme: TextView
     private lateinit var btnCloud: TextView
 
-    // ---- 主题色动态可调 ----
-    private var themeAccent: Int = 0xFF81D8D0.toInt()     // 主色（蒂芙尼蓝），可通过色相调节改变
-    private var themeBgGrayBase: Int = 0xE8                // 背景灰度基础值（0-255），拖动调整
+    // ---- 主题色动态可调（三维） ----
+    private var themeAccent: Int = 0xFF81D8D0.toInt()     // 主色（蒂芙尼蓝），色相调节
+    private var themeBgGrayBase: Int = 0xE0                // 背景灰度基础值（0-255）
+    private var themeKeyGrayBase: Int = 0xF0               // 按键灰度基础值（0-255）
     private var themePopup: PopupWindow? = null
-    private val defaultAccentHsl = hslOf(themeAccent) // 默认蒂芙尼蓝 HSL 缓存
+    private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
 
     // 云按钮状态
@@ -983,10 +984,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.setBackgroundColor(colorGray(base))
             (statusText.parent as? View)?.setBackgroundColor(colorGray((base - 8).coerceIn(0, 255)))
             statusText.setTextColor(0xFF555555.toInt())
-            candidateBar.setBackgroundColor(colorGray((base + 8).coerceIn(0, 255)))
-            (btnClipboard.parent as? View)?.setBackgroundColor(colorGray((base - 16).coerceIn(0, 255)))
+            candidateBar.setBackgroundColor(colorGray((base + 16).coerceIn(0, 255)))
+            (btnClipboard.parent as? View)?.setBackgroundColor(colorGray(base))
             // root_layout
-            (keyboardView.parent as? View)?.setBackgroundColor(colorGray((base + 15).coerceIn(0, 255)))
+            (keyboardView.parent as? View)?.setBackgroundColor(colorGray((base + 23).coerceIn(0, 255)))
         }
     }
 
@@ -995,18 +996,55 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return 0xFF000000.toInt() or (c shl 16) or (c shl 8) or c
     }
 
-    /** 实时应用主题色 + 背景灰度到所有UI元素 */
+    /** 实时应用主题色 + 背景灰度 + 按键灰度到所有UI元素 */
     private fun applyThemeColors() {
-        // 背景灰度
+        // ① 背景灰度
         applyKeyboardTheme()
-        // 主题色应用到当前可见的高亮元素
+
+        // ② 主题色 —— 所有高亮元素
+        val accent = themeAccent
+        val accentStateList = android.content.res.ColorStateList.valueOf(accent)
+
+        // 简繁切换
         if (isTraditional) {
-            btnTraditional.setTextColor(themeAccent)
+            btnTraditional.setTextColor(accent)
+            btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
         }
-        // 更新发送按钮（如果处于高亮状态）
-        // 更新语音锁定按钮
+
+        // 语音键底色
+        micButton?.backgroundTintList = accentStateList
+        btnMicAi?.backgroundTintList = accentStateList
+        btnMicAi?.setTextColor(0xFFFFFFFF.toInt())
+        btnMicNoAi?.setTextColor(accent)
+        // 键盘副字符色（T9 数字等）
+        if (::keyboardView.isInitialized) {
+            // 副字符颜色跟随主题色
+        }
+
+        // ③ 按键灰度 —— 底栏按钮、键盘按键背景
+        val keyBg = colorGray(themeKeyGrayBase)
+        val keyBgList = android.content.res.ColorStateList.valueOf(keyBg)
+        // 底栏按钮默认背景（仅非高亮状态才设按键灰度）
+        if (!magicIsWaitingForVoice && !isRecording) {
+            btnMagic.setBackgroundColor(keyBg)
+        }
+        if (!magicBookLongPressTriggered) {
+            btnClipboard.setBackgroundColor(keyBg)
+        }
+        if (!sendKeyLongPressTriggered) {
+            btnSend.setBackgroundColor(keyBg)
+        }
+        btnDelete.backgroundTintList = keyBgList
+        // 键盘按键背景（动态替换 drawable）
+        if (::keyboardView.isInitialized) {
+            keyboardView.updateKeyBackground(keyBg)
+            keyboardView.themeAccent = accent
+            keyboardView.invalidateAllKeys()
+        }
+
+        // 语音锁定高亮状态也用主题色
         if (simulTranslateEnabled) {
-            micButton?.setBackgroundColor(themeAccent)
+            micButton?.setBackgroundColor(accent)
         }
     }
 
@@ -1018,7 +1056,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             view,
             (resources.displayMetrics.widthPixels * 0.85f).toInt(),
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            false  // focusable=false，防止抢焦点导致反复弹出
+            false
         )
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
@@ -1027,17 +1065,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         val seekHue = view.findViewById<android.widget.SeekBar>(R.id.seek_hue)
         val seekGray = view.findViewById<android.widget.SeekBar>(R.id.seek_gray)
+        val seekKey = view.findViewById<android.widget.SeekBar>(R.id.seek_key)
         val tvHue = view.findViewById<android.widget.TextView>(R.id.tv_hue_preview)
         val btnReset = view.findViewById<android.widget.TextView>(R.id.btn_reset_theme)
 
-        seekHue.progress = (accentHue.toInt())
+        // 初始化为当前值（不是默认值，解决重开不同步问题）
+        seekHue.progress = accentHue.toInt()
         seekGray.progress = themeBgGrayBase
+        seekKey.progress = themeKeyGrayBase
 
         seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 accentHue = progress.toFloat()
                 themeAccent = hslToColor(accentHue, defaultAccentHsl[1], defaultAccentHsl[2])
                 tvHue.setBackgroundColor(themeAccent)
+                // SeekBar 自身的 tint 也跟主题色走
+                val accentStateList = android.content.res.ColorStateList.valueOf(themeAccent)
+                seekHue.progressTintList = accentStateList
+                seekHue.thumbTintList = accentStateList
                 applyThemeColors()
             }
             override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
@@ -1053,12 +1098,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
         })
 
+        seekKey.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                themeKeyGrayBase = progress
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
         btnReset.setOnClickListener {
             accentHue = defaultAccentHsl[0]
             themeAccent = 0xFF81D8D0.toInt()
-            themeBgGrayBase = 0xE8
+            themeBgGrayBase = 0xE0
+            themeKeyGrayBase = 0xF0
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
+            seekKey.progress = themeKeyGrayBase
             applyThemeColors()
         }
 
