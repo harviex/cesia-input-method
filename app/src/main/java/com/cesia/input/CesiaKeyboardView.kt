@@ -221,6 +221,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
         popupPaint.color = themeAccent
         longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
 
+        // 确保 mKeyTextPaint 颜色正确（super.onDraw 可能重置它）
+        applyKeyTextPaintColor()
+
         // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写
         val kb = this.keyboard
         if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
@@ -306,12 +309,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(symbol, x, y, popupPaint)
             }
 
-            // ===== 3. T9 1键/剪贴板键 表面文字（统一灰色12px） =====
+            // ===== 3. T9 1键/剪贴板键 表面文字（主题感知 + 缩放） =====
             if (isT9Mode && (code == 49 || code == -108 || code == -109)) {
                 val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     textAlign = Paint.Align.CENTER
-                    textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics)
-                    color = 0xFF888888.toInt()
+                    textSize = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_SP, 12f * textScaleFactor, resources.displayMetrics
+                    )
+                    color = labelTextColor
                 }
                 val cx = key.x + key.width / 2f
                 val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
@@ -384,6 +389,21 @@ class CesiaKeyboardView @JvmOverloads constructor(
             t9MainTextColor = 0xFF555555.toInt()
         }
         // Apply to KeyboardView's internal mKeyTextPaint via reflection
+        applyKeyTextPaintColor()
+    }
+
+    /**
+     * Public method to dynamically update text colors when dark mode changes.
+     * Can be called directly from CesiaInputMethod when theme toggles.
+     */
+    fun updateTextColor(isDark: Boolean) {
+        val keyGrayVal = if (isDark) 0 else 200  // 0 = pure dark, 200 = light
+        updateKeyTextColor(keyGrayVal)
+        invalidateAllKeys()
+    }
+
+    /** Apply keyTextColor to KeyboardView's internal mKeyTextPaint via reflection */
+    private fun applyKeyTextPaintColor() {
         try {
             val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
             paintField.isAccessible = true

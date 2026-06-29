@@ -22,7 +22,7 @@
         android:layout_height="wrap_content"
         android:text="⤒"
         android:textSize="10sp"
-        android:textColor="#81D8D0"
+        android:textColor="#666666"
         android:layout_gravity="end"
         android:visibility="gone" />
 

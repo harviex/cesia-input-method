@@ -1097,7 +1097,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (!sendKeyLongPressTriggered) {
             btnSend.setBackgroundColor(keyBg)
         }
-        btnDelete.backgroundTintList = keyBgList
+        btnDelete.setBackgroundColor(keyBg)
         // 键盘按键背景（动态替换 drawable）
         if (::keyboardView.isInitialized) {
             keyboardView.updateKeyBackground(keyBg)
@@ -1147,6 +1147,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnDelete.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+
+        // 键盘按键文字颜色（自动对比）
+        if (::keyboardView.isInitialized) {
+            keyboardView.updateTextColor(isDarkTheme)
+        }
     }
 
     /** 主题色调节弹窗 */
@@ -1186,6 +1191,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         seekHue.progress = accentHue.toInt()
         seekGray.progress = themeBgGrayBase
         seekKey.progress = themeKeyGrayBase
+
+        // 初始化 SeekBar 色调和预览框背景（使用当前 themeAccent）
+        val initialAccentList = android.content.res.ColorStateList.valueOf(themeAccent)
+        seekHue.progressTintList = initialAccentList
+        seekHue.thumbTintList = initialAccentList
+        tvHue.setBackgroundColor(themeAccent)
 
         // 初始化明暗模式按钮状态
         val currentThemeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -1270,7 +1281,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnReset.setOnClickListener {
             accentHue = defaultAccentHsl[0]
-            themeAccent = 0xFF81D8D0.toInt()
+            themeAccent = hslToColor(defaultAccentHsl[0], defaultAccentHsl[1], defaultAccentHsl[2])
             themeBgGrayBase = 0xE0
             themeKeyGrayBase = 0xF0
             textThemeSize = 1
@@ -1661,7 +1672,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     deleteLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 立即高亮清空按钮
-                    btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                    btnDelete.setBackgroundColor(themeAccent)
                     btnDelete.elevation = 6f
                     startDeleteButtonGlow()
                     deleteButtonGlowRunnable = Runnable {
@@ -3468,7 +3479,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 item.findViewById<TextView>(R.id.tv_style_name).text = name
                 item.findViewById<TextView>(R.id.tv_style_desc).text = desc
                 if (name == aiReplyStyle) {
-                    item.setBackgroundColor(0xFFE0F7FA.toInt())
+                    btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                    btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                 }
                 item.setOnClickListener {
                     aiReplyStyle = name
@@ -5331,7 +5343,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopDeleteButtonGlow() {
         deleteButtonGlowing = false
         btnDelete.clearAnimation()
-        btnDelete.backgroundTintList = android.content.res.ColorStateList.valueOf(colorGray(themeKeyGrayBase))
+        btnDelete.setBackgroundColor(colorGray(themeKeyGrayBase))
         btnDelete.elevation = 0f
     }
 
@@ -5771,6 +5783,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         private val items: List<ClipboardItem>,
         private val context: CesiaInputMethod
     ) : android.widget.BaseAdapter() {
+        private val accentColor = context.themeAccent
         override fun getCount() = items.size
         override fun getItem(p: Int) = items[p]
         override fun getItemId(p: Int) = items[p].text.hashCode().toLong()
@@ -5790,6 +5803,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.textSize = 13f
                 tvPin.visibility = if (item.isPinned) View.VISIBLE else View.GONE
                 tvPin.setTypeface(null, if (item.isPinned) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                tvPin.setTextColor(accentColor)
             }
             return v
         }
@@ -6602,6 +6616,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 return
             }
             loadSettings()
+            loadThemeColors()
 
             // 读取个性化设置
             val sPrefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)

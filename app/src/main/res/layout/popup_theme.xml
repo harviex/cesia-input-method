@@ -37,16 +37,13 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="360"
-            android:progressTint="#81D8D0"
-            android:thumbTint="#81D8D0" />
+            android:max="360" />
 
         <TextView
             android:id="@+id/tv_hue_preview"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:layout_marginStart="12dp"
-            android:background="#81D8D0" />
+            android:layout_marginStart="12dp" />
     </LinearLayout>
 
     <!-- 背景灰度调节 -->

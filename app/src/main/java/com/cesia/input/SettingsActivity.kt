@@ -103,8 +103,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var aiSettingsHelper: VoiceAISettingsHelper
 
     // 主题
-    private lateinit var btnThemeToggle: Button
-    private lateinit var tvThemeLabel: TextView
+    // Theme section removed - theme is now adjusted via IME popup
 
     // 词库管理
     private lateinit var btnDownloadDict: Button
@@ -186,7 +185,6 @@ class SettingsActivity : AppCompatActivity() {
         refreshStats()
         loadOpenRouterFreeModels()
         refreshDictInfo()
-        updateThemeUI()
 
         checkAndRequestPermission()
 
@@ -231,12 +229,6 @@ class SettingsActivity : AppCompatActivity() {
         tvStatOutputChars = findViewById(R.id.tv_stat_output_chars)
         tvStatCount = findViewById(R.id.tv_stat_count)
         btnHistory = findViewById(R.id.btn_history)
-
-        // 主题切换
-        try {
-            btnThemeToggle = findViewById(R.id.btn_theme_toggle)
-            tvThemeLabel = findViewById(R.id.tv_theme_label)
-        } catch (_: Exception) {}
 
         // 词库管理
         try {
@@ -572,11 +564,6 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
 
-        // 主题切换
-        btnThemeToggle?.setOnClickListener {
-            toggleTheme()
-        }
-
         // 词库管理
         btnDownloadDict?.setOnClickListener { downloadDict() }
         btnImportDict?.setOnClickListener { showImportDialog() }
@@ -696,28 +683,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }.start()
-    }
-
-    // ======================== 主题切换 ========================
-
-    private fun toggleTheme() {
-        val currentTheme = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
-        val newTheme = if (currentTheme == THEME_LIGHT) THEME_DARK else THEME_LIGHT
-        prefs.edit().putInt(PREF_THEME_MODE, newTheme).apply()
-        updateThemeUI()
-        // 重启Activity以应用新主题
-        recreate()
-    }
-
-    private fun updateThemeUI() {
-        val currentTheme = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
-        if (currentTheme == THEME_DARK) {
-            tvThemeLabel?.text = "🌙 当前：黑暗模式"
-            btnThemeToggle?.text = "☀️ 切换到明亮模式"
-        } else {
-            tvThemeLabel?.text = "☀️ 当前：明亮模式"
-            btnThemeToggle?.text = "🌙 切换到黑暗模式"
-        }
     }
 
     // ======================== 词库管理 ========================
