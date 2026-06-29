@@ -1018,9 +1018,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             view,
             (resources.displayMetrics.widthPixels * 0.85f).toInt(),
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
+            false  // focusable=false，防止抢焦点导致反复弹出
         )
-        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.isOutsideTouchable = true
         themePopup = popup
 
