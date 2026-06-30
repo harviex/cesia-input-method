@@ -117,6 +117,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnCheckUpdate: Button
 
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
+    private var accentColor: Int = 0xFF81D8D0.toInt()
 
     private val testClient = OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
@@ -151,9 +152,9 @@ class SettingsActivity : AppCompatActivity() {
         setTitle("Cesia 输入法设置")
 
         // 应用动态主题色到所有硬编码的蒂芙尼蓝元素
-        val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        accentColor = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt("theme_accent", 0xFF81D8D0.toInt())
-        applyAccentToViewTree(window.decorView, accent)
+        applyAccentToViewTree(window.decorView, accentColor)
 
         initViews()
 
@@ -378,6 +379,7 @@ class SettingsActivity : AppCompatActivity() {
      */
     fun showNewsSourcePicker(onSourceSelected: ((RssFetchManager.RssSource?) -> Unit)? = null) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_news_source_picker, null)
+        applyAccentToViewTree(dialogView, accentColor)
         val rvSources = dialogView.findViewById<RecyclerView>(R.id.rv_source_picker)
         val etCustomUrl = dialogView.findViewById<EditText>(R.id.et_custom_rss_url)
         val btnConfirm = dialogView.findViewById<MaterialButton>(R.id.btn_confirm)
@@ -1782,6 +1784,29 @@ class SettingsActivity : AppCompatActivity() {
         if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
         val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
         if (bgTint == tiffany) view.backgroundTintList = tintList
+        // Handle solid background color
+        try {
+            val bg = view.background
+            if (bg is android.graphics.drawable.ColorDrawable && bg.color == tiffany) {
+                view.setBackgroundColor(accent)
+            }
+        } catch (_: Exception) {}
+        // Handle MaterialButton strokeColor
+        if (view is com.google.android.material.button.MaterialButton) {
+            try {
+                if (view.strokeColor?.defaultColor == tiffany) {
+                    view.strokeColor = tintList
+                }
+            } catch (_: Exception) {}
+        }
+        // Handle RadioButton buttonTint
+        if (view is android.widget.RadioButton) {
+            try {
+                if (view.buttonTintList?.defaultColor == tiffany) {
+                    view.buttonTintList = tintList
+                }
+            } catch (_: Exception) {}
+        }
         // Handle TextInputLayout boxStrokeColor and hintTextColor
         if (view is com.google.android.material.textfield.TextInputLayout) {
             try {

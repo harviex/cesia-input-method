@@ -237,8 +237,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        // 副字符保持主题色（不受灰度影响）
-        popupPaint.color = themeAccent
+        // 副字符使用主题色 + 亮度缩放（保持色相，调节明暗）
+        popupPaint.color = scaleBrightness(themeAccent, textGrayScale)
         longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
 
         // 确保 mKeyTextPaint 颜色正确（super.onDraw 可能重置它）
@@ -436,6 +436,21 @@ class CesiaKeyboardView @JvmOverloads constructor(
         val g = ((argb shr 8) and 0xFF).let { (it * (1f - amount)).toInt() }
         val b = (argb and 0xFF).let { (it * (1f - amount)).toInt() }
         return (a shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    /** Scale brightness of a color (0=暗, 0.5=原色, 1=亮) while preserving hue */
+    private fun scaleBrightness(argb: Int, scale: Float): Int {
+        val a = (argb ushr 24) and 0xFF
+        val r = ((argb shr 16) and 0xFF)
+        val g = ((argb shr 8) and 0xFF)
+        val b = (argb and 0xFF)
+        val t = scale.coerceIn(0f, 1f)
+        // 0→暗(乘0.3), 0.5→原色(乘1.0), 1→亮(乘1.8+白mix)
+        val factor = if (t <= 0.5f) 0.3f + t * 1.4f else 1.0f + (t - 0.5f) * 1.6f
+        val sr = (r * factor).toInt().coerceIn(0, 255)
+        val sg = (g * factor).toInt().coerceIn(0, 255)
+        val sb = (b * factor).toInt().coerceIn(0, 255)
+        return (a shl 24) or (sr shl 16) or (sg shl 8) or sb
     }
 
     /**

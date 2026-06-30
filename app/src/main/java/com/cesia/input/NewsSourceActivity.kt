@@ -22,6 +22,11 @@ class NewsSourceActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_news_source)
 
+        // 应用动态主题色
+        val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())
+        applyAccentToViewTree(window.decorView, accent)
+
         // 获取所有源（预置 + 自定义）
         allSources.clear()
         allSources.addAll(RssFetchManager.getAllSources(this))
@@ -99,5 +104,40 @@ class NewsSourceActivity : AppCompatActivity() {
         }
 
         override fun getItemCount() = items.size
+    }
+
+    private fun applyAccentToViewTree(view: android.view.View, accent: Int) {
+        val tintList = android.content.res.ColorStateList.valueOf(accent)
+        val tiffany = 0xFF81D8D0.toInt()
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                applyAccentToViewTree(view.getChildAt(i), accent)
+            }
+        }
+        val defaultColor = (view as? android.widget.TextView)?.textColors?.defaultColor ?: 0
+        if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
+        val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
+        if (bgTint == tiffany) view.backgroundTintList = tintList
+        // Handle solid background color
+        try {
+            val bg = view.background
+            if (bg is android.graphics.drawable.ColorDrawable && bg.color == tiffany) {
+                view.setBackgroundColor(accent)
+            }
+        } catch (_: Exception) {}
+        if (view is com.google.android.material.button.MaterialButton) {
+            try {
+                if (view.strokeColor?.defaultColor == tiffany) {
+                    view.strokeColor = tintList
+                }
+            } catch (_: Exception) {}
+        }
+        if (view is android.widget.RadioButton) {
+            try {
+                if (view.buttonTintList?.defaultColor == tiffany) {
+                    view.buttonTintList = tintList
+                }
+            } catch (_: Exception) {}
+        }
     }
 }
