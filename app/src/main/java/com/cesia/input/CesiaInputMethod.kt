@@ -1200,6 +1200,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
+        // 候选栏 RecyclerView 文字大小和颜色
+        if (rvCandidates != null && candidateAdapter != null) {
+            val candScale = when (textThemeSize) {
+                0 -> 0.85f
+                2 -> 1.2f
+                else -> 1f
+            }
+            candidateAdapter!!.textScaleFactor = candScale
+            candidateAdapter!!.textColor = scaleGray(baseColor, scale)
+            candidateAdapter!!.notifyDataSetChanged()
+        }
+
         // 键盘按键灰阶
         if (::keyboardView.isInitialized) {
             keyboardView.textGrayScale = scale

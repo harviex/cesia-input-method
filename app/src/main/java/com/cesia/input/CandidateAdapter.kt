@@ -16,6 +16,8 @@ class CandidateAdapter(
 ) : RecyclerView.Adapter<CandidateAdapter.ViewHolder>() {
 
     private val items = mutableListOf<String>()
+    var textScaleFactor: Float = 1f
+    var textColor: Int = Color.parseColor("#333333")
 
     inner class ViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
 
@@ -28,8 +30,8 @@ class CandidateAdapter(
             )
             gravity = Gravity.CENTER_VERTICAL
             setPadding(16, 0, 16, 0)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setTextColor(Color.parseColor("#333333"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
+            setTextColor(textColor)
             // 使用系统 selectableItemBackground，通过 theme resolve 避免 Resources$NotFoundException
             val typedValue = TypedValue()
             val resolved = ctx.theme.resolveAttribute(
@@ -50,6 +52,8 @@ class CandidateAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val text = items[position]
         holder.textView.text = text
+        holder.textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
+        holder.textView.setTextColor(textColor)
         holder.textView.setOnClickListener { onItemClick(position, text) }
     }
 

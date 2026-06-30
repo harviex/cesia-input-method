@@ -252,6 +252,8 @@ class SettingsActivity : AppCompatActivity() {
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
             btnNewsSources = findViewById(R.id.btn_news_sources)
+            // 确保新闻源按钮跟随主题色
+            btnNewsSources?.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
         } catch (_: Exception) {}
 
         // 语音命令词设置（原个性化设置内容）
