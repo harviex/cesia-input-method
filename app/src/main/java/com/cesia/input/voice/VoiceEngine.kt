@@ -323,17 +323,17 @@ class VoiceEngine(private val context: Context) {
         val sb = StringBuilder()
         sb.appendLine("=== 语音识别诊断 ===")
         sb.appendLine("框架: Sherpa-onnx")
-        sb.appendLine("库加载: ${if (SherpaOnnxEngine.isLibraryLoaded()) "✅ 已加载" else "❌ 未加载"}")
+        sb.appendLine("库加载: ${if (SherpaOnnxEngine.isLibraryLoaded()) " 已加载" else "❌ 未加载"}")
         if (!SherpaOnnxEngine.isLibraryLoaded()) {
             sb.appendLine("  错误: ${SherpaOnnxEngine.getLibraryLoadError() ?: "未知"}")
         }
         sb.appendLine("已注册模型ID: ${modelManager.installedVoiceModelId ?: "无"}")
 
         val installedFile = modelManager.getInstalledVoiceModelFile()
-        sb.appendLine("ModelManager模型: ${installedFile?.let { "✅ ${it.name} (${it.length()/1024/1024}MB)" } ?: "❌ 无"}")
+        sb.appendLine("ModelManager模型: ${installedFile?.let { " ${it.name} (${it.length()/1024/1024}MB)" } ?: "❌ 无"}")
 
         val foundDir = findModelDir()
-        sb.appendLine("VoiceEngine查找: ${foundDir?.let { "✅ ${it.absolutePath}" } ?: "❌ 未找到"}")
+        sb.appendLine("VoiceEngine查找: ${foundDir?.let { " ${it.absolutePath}" } ?: "❌ 未找到"}")
 
         // 列出 local_models/ 目录内容
         val modelsDir = File(context.filesDir, "local_models")

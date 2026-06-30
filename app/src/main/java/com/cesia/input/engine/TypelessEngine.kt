@@ -118,7 +118,7 @@ class TypelessEngine(
         fallbackRecognizer = FallbackRecognizer(context)
 
         if (fallbackRecognizer?.init() == true) {
-            log("✅ Cesia 已就绪")
+            log(" Cesia 已就绪")
         } else {
             log("❌ Cesia 初始化失败")
         }
@@ -228,7 +228,7 @@ class TypelessEngine(
         }
         withContext(Dispatchers.Main) {
             ic.commitText(text, 1)
-            log("✅ 已上屏: ${text.take(50)}")
+            log(" 已上屏: ${text.take(50)}")
             _state.value = State.IDLE
         }
     }

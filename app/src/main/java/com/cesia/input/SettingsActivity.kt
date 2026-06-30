@@ -326,7 +326,7 @@ class SettingsActivity : AppCompatActivity() {
                 this, arrayOf(Manifest.permission.RECORD_AUDIO), PERMISSION_REQUEST_CODE)
             appendLog("🔐 请求录音权限...")
         } else {
-            appendLog("✅ 录音权限已授予")
+            appendLog(" 录音权限已授予")
         }
     }
 
@@ -334,7 +334,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                appendLog("✅ 录音权限已授予")
+                appendLog(" 录音权限已授予")
             } else {
                 appendLog("❌ 录音权限被拒绝")
             }
@@ -615,8 +615,8 @@ class SettingsActivity : AppCompatActivity() {
                     getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                         .putBoolean("voice_downloading", false).commit()
                     if (result.isSuccess) {
-                        tvStatus.text = "✅ 语音模型下载完成"
-                        appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        tvStatus.text = " 语音模型下载完成"
+                        appendLog(" 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
@@ -667,8 +667,8 @@ class SettingsActivity : AppCompatActivity() {
                     getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                         .putBoolean("ai_downloading", false).commit()
                     if (result.isSuccess) {
-                        tvStatus.text = "✅ AI 模型下载完成"
-                        appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        tvStatus.text = " AI 模型下载完成"
+                        appendLog(" AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
@@ -761,8 +761,8 @@ class SettingsActivity : AppCompatActivity() {
                     tvDictProgress?.visibility = android.view.View.GONE
                     refreshDictInfo()
                     if (success) {
-                        tvStatus.text = "✅ $msg"
-                        appendLog("✅ $msg")
+                        tvStatus.text = " $msg"
+                        appendLog(" $msg")
                         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         // 触发 Rime 重新部署
                         try {
@@ -924,7 +924,7 @@ class SettingsActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (response.isSuccessful) {
                         val gistUrl = JSONObject(body).optString("html_url", "")
-                        tvStatus.text = "✅ 备份成功！"
+                        tvStatus.text = " 备份成功！"
                         appendLog("云端备份成功: $gistUrl")
                         Toast.makeText(this, "备份成功！\nGist: $gistUrl", Toast.LENGTH_LONG).show()
                     } else {
@@ -1021,7 +1021,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
 
                     runOnUiThread {
-                        tvStatus.text = "✅ 恢复成功！"
+                        tvStatus.text = " 恢复成功！"
                         appendLog("云端恢复成功")
                         refreshDictInfo()
                         Toast.makeText(this, "恢复成功！重启输入法后生效", Toast.LENGTH_LONG).show()
@@ -1122,14 +1122,14 @@ class SettingsActivity : AppCompatActivity() {
                             }
                             if (polished.isNotEmpty() && polished != inputText) {
                                 etTestText.setText(polished)
-                                tvStatus.text = "✅ API 润色成功"
+                                tvStatus.text = " API 润色成功"
                                 appendLog("润色成功: $polished")
                             } else {
                                 tvStatus.text = "⚠️ API 返回但内容无变化"
                                 appendLog("API 返回无变化: ${body.take(200)}")
                             }
                         } catch (e: Exception) {
-                            tvStatus.text = "✅ API 成功 (原始响应)"
+                            tvStatus.text = " API 成功 (原始响应)"
                             appendLog("API 响应: ${body.take(200)}")
                         }
                     } else {
@@ -1230,7 +1230,7 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("推理超时（${inferTime}ms），请尝试更短的文本或更小的模型")
                     } else if (result.isNotEmpty() && result != inputText) {
                         etTestText.setText(result)
-                        tvStatus.text = "✅ 本地 AI 润色成功 (${inferTime}ms)"
+                        tvStatus.text = " 本地 AI 润色成功 (${inferTime}ms)"
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
                     } else {
                         tvStatus.text = "⚠️ 润色结果为空"
@@ -1392,8 +1392,8 @@ class SettingsActivity : AppCompatActivity() {
                     if (!isUpToDate && latestVersionCode > 0) {
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
-                        appendLog("✅ 已是最新版本")
+                        tvStatus.text = " 已是最新版本 ($latestVersionName)"
+                        appendLog(" 已是最新版本")
                     }
                 }
             } catch (e: Exception) {
@@ -1455,7 +1455,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    tvStatus.text = "✅ 下载完成，正在安装..."
+                    tvStatus.text = " 下载完成，正在安装..."
                     appendLog("APK下载完成: ${apkFile.absolutePath}")
                 }
 
@@ -1537,7 +1537,7 @@ class SettingsActivity : AppCompatActivity() {
             com.cesia.input.voice.VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing)
         } catch (_: Exception) {}
 
-        tvCommandStatus?.text = "✅ 已保存：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command, 写作=$writing"
+        tvCommandStatus?.text = " 已保存：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command, 写作=$writing"
         tvCommandStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
         Toast.makeText(this, "命令词已保存", Toast.LENGTH_SHORT).show()
     }

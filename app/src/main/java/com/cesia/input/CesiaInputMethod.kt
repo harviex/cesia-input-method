@@ -99,7 +99,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var themePopup: PopupWindow? = null
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
-    private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大
+    private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大, 3=超大
     var textGrayScale: Float = 0.5f                        // 0=纯黑, 0.5=基准灰(默认), 1=纯白
 
     private fun loadThemeColors() {
@@ -523,7 +523,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val result = toUpperCaseText(selectedText)
         ic.commitText(result, 1)
-        updateStatus("✅ 已转换 ${selectedText.length} 字")
+        updateStatus(" 已转换 ${selectedText.length} 字")
     }
 
     /** 大小写/数字切换：英文小写↔大写，阿拉伯数字↔中文小写数字（一二三四五六七八九零） */
@@ -883,7 +883,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     btnMicNoAi.visibility = View.GONE
                     keyboardView.visibility = View.VISIBLE
                     setStatusDot("idle")
-                    updateStatus("✅ 已完成")
+                    updateStatus(" 已完成")
                 }
             }
             engine.onRecognitionComplete = { text ->
@@ -942,7 +942,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             }
                         } else {
                             currentInputConnection?.commitText(textBefore, 1)
-                            updateStatus("✅ 已上屏")
+                            updateStatus(" 已上屏")
                             if (isVoiceLocked) {
                                 startRecordingLocked()
                             } else {
@@ -1121,6 +1121,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.textScaleFactor = when (textThemeSize) {
                 0 -> 0.85f
                 2 -> 1.2f
+                3 -> 1.5f
                 else -> 1f
             }
             keyboardView.invalidateAllKeys()
@@ -1205,6 +1206,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val candScale = when (textThemeSize) {
                 0 -> 0.85f
                 2 -> 1.2f
+                3 -> 1.5f
                 else -> 1f
             }
             candidateAdapter!!.textScaleFactor = candScale
@@ -1271,6 +1273,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnTextSmall = view.findViewById<android.widget.TextView>(R.id.btn_text_small)
         val btnTextMedium = view.findViewById<android.widget.TextView>(R.id.btn_text_medium)
         val btnTextLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_large)
+        val btnTextXLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_xlarge)
 
         // 初始化为当前值（不是默认值，解决重开不同步问题）
         seekHue.progress = accentHue.toInt()
@@ -1289,7 +1292,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, currentThemeMode)
 
         // 初始化文字大小按钮状态
-        updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, textThemeSize)
+        updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, textThemeSize)
 
         // 明暗模式切换
         btnThemeLight.setOnClickListener {
@@ -1317,17 +1320,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 文字大小切换
         btnTextSmall.setOnClickListener {
             textThemeSize = 0
-            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 0)
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 0)
             applyThemeColors()
         }
         btnTextMedium.setOnClickListener {
             textThemeSize = 1
-            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 1)
             applyThemeColors()
         }
         btnTextLarge.setOnClickListener {
             textThemeSize = 2
-            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 2)
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 2)
+            applyThemeColors()
+        }
+        btnTextXLarge.setOnClickListener {
+            textThemeSize = 3
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 3)
             applyThemeColors()
         }
 
@@ -1389,7 +1397,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
-            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 1)
             seekTextGray.progress = 50
             textGrayScale = 0.5f
             tvTextGrayPreview.text = "0.5"
@@ -1411,7 +1419,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnAuto.setTypeface(null, if (mode == THEME_AUTO) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
 
-    private fun updateTextSizeButtons(btnSmall: android.widget.TextView, btnMedium: android.widget.TextView, btnLarge: android.widget.TextView, size: Int) {
+    private fun updateTextSizeButtons(btnSmall: android.widget.TextView, btnMedium: android.widget.TextView, btnLarge: android.widget.TextView, btnXLarge: android.widget.TextView, size: Int) {
         val accent = themeAccent
         val inactiveColor = 0xFF666666.toInt()
         btnSmall.setTextColor(if (size == 0) accent else inactiveColor)
@@ -1420,6 +1428,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMedium.setTypeface(null, if (size == 1) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         btnLarge.setTextColor(if (size == 2) accent else inactiveColor)
         btnLarge.setTypeface(null, if (size == 2) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        btnXLarge.setTextColor(if (size == 3) accent else inactiveColor)
+        btnXLarge.setTypeface(null, if (size == 3) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
 
     // ======================== 候选栏 ========================
@@ -3091,7 +3101,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     isAiProcessing = false
                     if (result != null && result.isNotEmpty() && result != "null") {
                         ic.commitText(result, 1)
-                        updateStatus("✅ 智能写作已完成")
+                        updateStatus(" 智能写作已完成")
                         try {
                             val smartRecords = mutableListOf<String>()
                             loadSmartRecords(smartRecords)
@@ -3355,7 +3365,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     isAiProcessing = false
                     if (result != null && result.isNotEmpty()) {
                         ic.commitText(result, 1)
-                        updateStatus("✅ 智能写作已完成")
+                        updateStatus(" 智能写作已完成")
                     } else {
                         updateStatus("⚠️ 智能写作无输出")
                     }
@@ -3457,7 +3467,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (text.isNotEmpty()) {
                 magicEditMgr!!.addRecord(text)
                 currentMagicPrompt = text
-                updateStatus("✅ 已保存魔法：${text.take(20)}")
+                updateStatus(" 已保存魔法：${text.take(20)}")
             }
         } else {
             if (magicEditMode) updateStatus("❌ 已取消新增魔法")
@@ -3494,7 +3504,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 list.add(0, text)
                 if (list.size > 50) list.removeAt(list.size - 1)
                 prefs.edit().putString("records", list.joinToString("\n")).apply()
-                updateStatus("✅ 已保存并执行：${text.take(20)}")
+                updateStatus(" 已保存并执行：${text.take(20)}")
                 // 保存后直接执行
                 if (execute) {
                     executeSmartCommand(text)
@@ -3529,13 +3539,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 空槽输入了新内容 → 新增魔法 + 自动追加空槽（由 rebuildItems 完成）
                 mgr.addRecord(text)
                 currentMagicPrompt = text
-                updateStatus("✅ 已新增魔法：${text.take(20)}")
+                updateStatus(" 已新增魔法：${text.take(20)}")
             } else {
                 // 编辑已有魔法
                 if (text != record.instruction) {
                     mgr.removeRecord(record.id)
                     mgr.addRecord(text)
-                    updateStatus("✅ 已修改魔法：${text.take(20)}")
+                    updateStatus(" 已修改魔法：${text.take(20)}")
                 }
             }
         }
@@ -3590,7 +3600,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     aiReplyStyle = name
                     getSharedPreferences("cesia_settings", MODE_PRIVATE)
                         .edit().putString(PREF_AI_STYLE, aiReplyStyle).apply()
-                    updateStatus("✅ 已切换为「$aiReplyStyle」风格")
+                    updateStatus(" 已切换为「$aiReplyStyle」风格")
                     dialog.dismiss()
                 }
                 container.addView(item)
@@ -3602,7 +3612,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             aiReplyStyle = styleNames.getOrElse((currentIdx + 1) % styleNames.size) { "自然" }
             getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .edit().putString(PREF_AI_STYLE, aiReplyStyle).apply()
-            updateStatus("✅ 已切换为「$aiReplyStyle」风格")
+            updateStatus(" 已切换为「$aiReplyStyle」风格")
         }
     }
 
@@ -3668,7 +3678,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             setStatusDot("idle")
             if (success && result.isNotEmpty()) {
                 ic.commitText(result, 1)
-                updateStatus("✅ AI已生成建议内容")
+                updateStatus(" AI已生成建议内容")
             } else {
                 updateStatus("⚠️ AI未生成有效内容，请重试")
             }
@@ -3703,7 +3713,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 简繁切换：通过 Rime 原生 OpenCC 转换（候选词和输出均自动转换） */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
-        updateStatus(if (isTraditional) "✅ 已切换为繁体输出" else "✅ 已切换为简体输出")
+        updateStatus(if (isTraditional) " 已切换为繁体输出" else " 已切换为简体输出")
         updateTraditionalButton()
         // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
         updateCandidateBar()
@@ -3788,7 +3798,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_SHERPA)
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
             Log.i("Cesia", "语音后端: 本地 Sherpa-onnx ($modeLabel, $modelName)")
-            updateStatus("🎤 语音: 本地 ✅")
+            updateStatus("🎤 语音: 本地 ")
             // 异步预热 OnlineRecognizer，避免首次点击语音键的延迟
             voiceEngine.warmupRecognizer()
             return
@@ -4121,7 +4131,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
                                     } else {
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
-                                        updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
+                                        updateStatus(" 已上屏（当前输入框不支持自动发送）")
                                     }
                                     // 锁定模式：发送后继续录音；非锁定模式：退出语音输入
                                     if (isVoiceLocked) {
@@ -4156,7 +4166,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "finish" -> {
                                     // 结束：原文已上屏，直接结束识别
-                                    updateStatus("✅ 已上屏")
+                                    updateStatus(" 已上屏")
                                     // 锁定模式下继续录音，非锁定模式退出
                                     if (isVoiceLocked) {
                                         startRecordingLocked()
@@ -4241,7 +4251,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 polishRecognizedText(text)
             } else {
                 // 无润色服务 → 原文已上屏（finishComposingText），直接结束
-                updateStatus("✅ 已上屏")
+                updateStatus(" 已上屏")
             }
             // 锁定模式下自动重新开始录音
             if (isVoiceLocked) {
@@ -4560,7 +4570,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 currentInputConnection?.performEditorAction(EditorInfo.IME_ACTION_SEND)
             } else {
                 Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND")
-                updateStatus("✅ 已上屏（当前输入框不支持自动发送）")
+                updateStatus(" 已上屏（当前输入框不支持自动发送）")
             }
             // 锁定模式：发送后继续录音
             startRecordingLocked()
@@ -4632,7 +4642,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             }
                             ic.commitText(cleaned, 1)
                         }
-                        updateStatus("✅ 已执行：$cmdLabel")
+                        updateStatus(" 已执行：$cmdLabel")
                         // 将指令加入魔法书历史第1位
                         magicHistoryManager?.addRecord(cmdLabel)
                     } else {
@@ -7236,7 +7246,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         Log.d("Cesia", "updateStatus: msg='$msg', isRecording=$isRecording, lines=${statusLines.size}")
         try {
             if (isRecording) {
-                if (msg.startsWith("🎤") || msg.startsWith("⏳") || msg.startsWith("🔄") || msg.startsWith("✅")) {
+                if (msg.startsWith("🎤") || msg.startsWith("⏳") || msg.startsWith("🔄") || msg.startsWith("")) {
                     if (statusLines.isNotEmpty() && !statusLines.last().startsWith("📝")) {
                         statusLines[statusLines.size - 1] = msg
                     } else {

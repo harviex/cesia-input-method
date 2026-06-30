@@ -174,7 +174,7 @@ class VoiceAISettingsHelper(
         val modelName = modelInfo?.name ?: modelId
         val bridgeStatus = if (modelType == ModelInfo.ModelType.VOICE) {
             val loaded = SherpaOnnxEngine.isLibraryLoaded()
-            "Sherpa-onnx 库：${if (loaded) "已加载 ✅" else "未加载 ❌"}"
+            "Sherpa-onnx 库：${if (loaded) "已加载 " else "未加载 ❌"}"
         } else {
             ""
         }
@@ -188,7 +188,7 @@ class VoiceAISettingsHelper(
             appendLine()
             for (file in fileItems) {
                 val sizeStr = ModelDownloadManager.Formatter.formatSize(file.length())
-                appendLine("├ ${file.name}  $sizeStr ✅")
+                appendLine("├ ${file.name}  $sizeStr ")
             }
             if (bridgeStatus.isNotEmpty()) {
                 appendLine()
@@ -220,7 +220,7 @@ class VoiceAISettingsHelper(
         // 更新语音识别下载按钮
         val voiceInstalled = modelManager.getInstalledVoiceModelFile()
         if (voiceInstalled != null) {
-            btnDownloadVoice?.text = "✅ 语音识别已安装"
+            btnDownloadVoice?.text = " 语音识别已安装"
             btnDownloadVoice?.isEnabled = true
             btnDownloadVoice?.setTextColor(0xFF888888.toInt())
         } else {
@@ -232,7 +232,7 @@ class VoiceAISettingsHelper(
         // 更新 AI 润色下载按钮
         val aiInstalled = modelManager.getInstalledAiModelFile()
         if (aiInstalled != null) {
-            btnDownloadAi?.text = "✅ 语音润色已安装"
+            btnDownloadAi?.text = " 语音润色已安装"
             btnDownloadAi?.isEnabled = true
             btnDownloadAi?.setTextColor(0xFF888888.toInt())
         } else {

@@ -47,7 +47,7 @@ class NewsSourceActivity : AppCompatActivity() {
                     if (success) {
                         Toast.makeText(
                             this@NewsSourceActivity,
-                            "✅ ${source.name} 抓取成功",
+                            " ${source.name} 抓取成功",
                             Toast.LENGTH_SHORT
                         ).show()
                         finish()

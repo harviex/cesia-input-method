@@ -72,7 +72,7 @@
             android:id="@+id/btn_confirm"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:text="✓ 保存"
+            android:text=" 保存"
             android:textSize="12sp"
             android:textColor="#FFFFFF"
             app:backgroundTint="#81D8D0"
