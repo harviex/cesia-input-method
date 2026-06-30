@@ -157,7 +157,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="16dp">
+        android:layout_marginBottom="8dp">
 
         <TextView
             android:id="@+id/btn_text_small"
@@ -196,6 +196,44 @@
             android:gravity="center"
             android:background="?android:attr/selectableItemBackground"
             android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <!-- 文字灰阶调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="文字灰阶"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <android.widget.SeekBar
+            android:id="@+id/seek_text_gray"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="50"
+            android:progressTint="#888888"
+            android:thumbTint="#888888" />
+
+        <TextView
+            android:id="@+id/tv_text_gray_preview"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="1.0"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <!-- 重置按钮 -->

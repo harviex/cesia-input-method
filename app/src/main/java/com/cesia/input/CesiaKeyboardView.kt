@@ -24,6 +24,18 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // 动态主题色（由 CesiaInputMethod 设置）
     var themeAccent: Int = 0xFF81D8D0.toInt()
+    var textGrayScale: Float = 1f
+        set(value) {
+            field = value
+            // Re-apply text colors with the new scale
+            if (lastKeyGrayVal > 0) {
+                updateKeyTextColor(lastKeyGrayVal)
+            }
+            invalidateAllKeys()
+        }
+
+    // Store last key gray value for re-applying text gray scale
+    private var lastKeyGrayVal: Int = 0
 
     // 功能键长按副字符
     private var functionalLabels = mapOf<Int, String>()
@@ -316,7 +328,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     textSize = TypedValue.applyDimension(
                         TypedValue.COMPLEX_UNIT_SP, 12f * textScaleFactor, resources.displayMetrics
                     )
-                    color = labelTextColor
+                    color = scaleGrayColor(labelTextColor, textGrayScale)
                 }
                 val cx = key.x + key.width / 2f
                 val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
@@ -377,6 +389,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     fun updateKeyTextColor(keyGrayVal: Int) {
+        lastKeyGrayVal = keyGrayVal
         if (keyGrayVal < 128) {
             // Dark key → light text
             keyTextColor = 0xFFE0E0E0.toInt()
@@ -388,8 +401,21 @@ class CesiaKeyboardView @JvmOverloads constructor(
             labelTextColor = 0xFF999999.toInt()
             t9MainTextColor = 0xFF555555.toInt()
         }
+        // Apply text gray scale factor
+        keyTextColor = scaleGrayColor(keyTextColor, textGrayScale)
+        labelTextColor = scaleGrayColor(labelTextColor, textGrayScale)
+        t9MainTextColor = scaleGrayColor(t9MainTextColor, textGrayScale)
         // Apply to KeyboardView's internal mKeyTextPaint via reflection
         applyKeyTextPaintColor()
+    }
+
+    /** Scale RGB channels of a color by the given factor, clamping to 0-255 */
+    private fun scaleGrayColor(argb: Int, scale: Float): Int {
+        val a = (argb ushr 24) and 0xFF
+        val r = ((argb shr 16) and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
+        val g = ((argb shr 8) and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
+        val b = (argb and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
+        return (a shl 24) or (r shl 16) or (g shl 8) or b
     }
 
     /**

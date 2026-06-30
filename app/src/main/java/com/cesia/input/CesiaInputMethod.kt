@@ -100,6 +100,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
     private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大
+    var textGrayScale: Float = 1f                          // 0.5=深, 1=默认, 1.5=浅
 
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -108,6 +109,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xF0)
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
         textThemeSize = prefs.getInt("theme_text_size", 1)
+        textGrayScale = prefs.getFloat("text_gray_scale", 1f)
     }
 
     /**
@@ -150,6 +152,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .putInt("theme_key_gray", themeKeyGrayBase)
             .putFloat("theme_accent_hue", accentHue)
             .putInt("theme_text_size", textThemeSize)
+            .putFloat("text_gray_scale", textGrayScale)
             .apply()
     }
 
@@ -1068,9 +1071,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val accentStateList = android.content.res.ColorStateList.valueOf(accent)
 
         // 简繁切换
-        if (isTraditional) {
-            btnTraditional.setTextColor(accent)
-            btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
+        if (::btnTraditional.isInitialized) {
+            if (isTraditional) {
+                btnTraditional.setTextColor(accent)
+                btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
+            } else {
+                btnTraditional.setTextColor(0xFF888888.toInt())
+                btnTraditional.setBackgroundColor(0x00000000)
+            }
+        }
+
+        // 云/本地切换按钮
+        if (::btnCloud.isInitialized) {
+            val cloudActive = cloudMode == CloudMode.CLOUD || cloudMode == CloudMode.LOCAL_LOCKED
+            // 云模式或本地锁定 → 高亮主题色；本地模式 → 灰色
+            btnCloud.setTextColor(if (cloudActive) accent else 0xFF888888.toInt())
         }
 
         // 语音键底色
@@ -1114,6 +1129,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // ④ 自动对比文字颜色（根据背景灰度）
         applyAutoContrast()
 
+        // ⑤ 文字灰阶缩放
+        applyTextGrayScale()
+
         // 语音锁定高亮状态也用主题色
         if (simulTranslateEnabled) {
             micButton?.setBackgroundColor(accent)
@@ -1152,6 +1170,52 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (::keyboardView.isInitialized) {
             keyboardView.updateTextColor(isDarkTheme)
         }
+    }
+
+    /** 将文字灰阶缩放应用到各 UI 组件 */
+    private fun applyTextGrayScale() {
+        val scale = textGrayScale
+
+        // 辅助函数：对单个 RGB 通道应用灰阶缩放并 clamp 到 0-255
+        fun scaleChannel(c: Int): Int = (c * scale).toInt().coerceIn(0, 255)
+
+        // 辅助函数：对 ARGB 颜色整体应用灰阶缩放
+        fun scaleColor(argb: Int): Int {
+            val a = (argb ushr 24) and 0xFF
+            val r = scaleChannel((argb shr 16) and 0xFF)
+            val g = scaleChannel((argb shr 8) and 0xFF)
+            val b = scaleChannel(argb and 0xFF)
+            return (a shl 24) or (r shl 16) or (g shl 8) or b
+        }
+
+        // 状态栏文字
+        val baseStatusColor = statusText.textColors.defaultColor
+        statusText.setTextColor(scaleColor(baseStatusColor))
+
+        // 候选栏文字
+        if (::candidateBar.isInitialized) {
+            for (i in 0 until candidateBar.childCount) {
+                val child = candidateBar.getChildAt(i)
+                if (child is android.widget.TextView) {
+                    val baseColor = child.textColors.defaultColor
+                    child.setTextColor(scaleColor(baseColor))
+                }
+            }
+        }
+
+        // 键盘按键灰阶
+        if (::keyboardView.isInitialized) {
+            keyboardView.textGrayScale = scale
+        }
+
+        // 底栏按钮图标颜色
+        val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
+        val baseIconColor = if (bgGray < 128) 0xFFCCCCCC.toInt() else 0xFF555555.toInt()
+        val scaledIconColor = scaleColor(baseIconColor)
+        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnClipboard.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnSend.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnDelete.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
     }
 
     /** 主题色调节弹窗 */
@@ -1246,6 +1310,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             applyThemeColors()
         }
 
+        // 文字灰阶调节
+        val seekTextGray = view.findViewById<android.widget.SeekBar>(R.id.seek_text_gray)
+        val tvTextGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_text_gray_preview)
+        seekTextGray.progress = ((textGrayScale * 100f).toInt() - 50).coerceIn(0, 100)
+        tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
+        seekTextGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                textGrayScale = (progress + 50) / 100f
+                tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
+                applyTextGrayScale()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
         seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 accentHue = progress.toFloat()
@@ -1285,10 +1364,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             themeBgGrayBase = 0xE0
             themeKeyGrayBase = 0xF0
             textThemeSize = 1
+            textGrayScale = 1f
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
             updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
+            seekTextGray.progress = 50
+            tvTextGrayPreview.text = "1.0"
             applyThemeColors()
         }
 

@@ -35,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:text="v1.0.0"
                 android:textSize="12sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
                 android:paddingTop="2dp"
@@ -57,7 +57,7 @@
                 android:text="使用统计"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 android:layout_marginBottom="8dp" />
 
             <LinearLayout
@@ -78,7 +78,7 @@
                         android:text="0"
                         android:textSize="22sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -106,7 +106,7 @@
                         android:text="0"
                         android:textSize="22sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -134,7 +134,7 @@
                         android:text="0"
                         android:textSize="22sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -160,7 +160,7 @@
                 android:text="语音统计"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 android:layout_marginBottom="8dp" />
 
             <LinearLayout
@@ -181,7 +181,7 @@
                         android:text="0分钟"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -209,7 +209,7 @@
                         android:text="0分钟"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -237,7 +237,7 @@
                         android:text="0字/分"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#666666" />
+                        android:textColor="#81D8D0" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -255,9 +255,9 @@
             android:layout_height="40dp"
             android:text="查看历史记录"
             android:textSize="13sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             app:backgroundTint="#FFFFFF"
-            app:strokeColor="#CCCCCC"
+            app:strokeColor="#81D8D0"
             app:strokeWidth="1dp"
             app:cornerRadius="10dp"
             android:layout_marginBottom="16dp" />
@@ -284,8 +284,8 @@
             android:layout_height="wrap_content"
             android:hint="API URL"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -302,8 +302,8 @@
             android:layout_height="wrap_content"
             android:hint="OpenRouter API Key"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -320,8 +320,8 @@
             android:layout_height="wrap_content"
             android:hint="Groq API Key（云端语音）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -339,7 +339,7 @@
             android:layout_height="wrap_content"
             android:text="云端 AI 模型"
             android:textSize="12sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:layout_marginBottom="4dp" />
 
         <Spinner
@@ -363,8 +363,8 @@
             android:layout_height="wrap_content"
             android:hint="Tavily API Key（互联网搜索）"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -384,7 +384,7 @@
             android:layout_marginBottom="12dp"
             android:text="新闻源管理"
             android:textSize="13sp"
-            android:backgroundTint="#666666"
+            android:backgroundTint="#81D8D0"
             android:textColor="#FFFFFF" />
 
 
@@ -393,8 +393,8 @@
             android:layout_height="wrap_content"
             android:hint="AI 润色 Prompt"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -438,8 +438,8 @@
                 android:layout_weight="1"
                 android:hint="退出"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginEnd="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -456,8 +456,8 @@
                 android:layout_weight="1"
                 android:hint="润色"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp">
 
@@ -475,8 +475,8 @@
                 android:layout_weight="1"
                 android:hint="结束"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -500,8 +500,8 @@
                 android:layout_weight="1"
                 android:hint="发送"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginEnd="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -518,8 +518,8 @@
                 android:layout_weight="1"
                 android:hint="指令"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp"
                 android:layout_marginEnd="2dp">
 
@@ -537,8 +537,8 @@
                 android:layout_weight="1"
                 android:hint="写作"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#CCCCCC"
-                app:hintTextColor="#CCCCCC"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
                 android:layout_marginStart="2dp">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -581,8 +581,8 @@
             android:layout_height="wrap_content"
             android:hint="初始状态文字"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="4dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -598,8 +598,8 @@
             android:layout_height="wrap_content"
             android:hint="智能写作按钮文字"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="4dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -615,8 +615,8 @@
             android:layout_height="wrap_content"
             android:hint="魔法书弹窗标题"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -649,8 +649,8 @@
             android:layout_height="wrap_content"
             android:hint="输入要润色的文本"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#CCCCCC"
-            app:hintTextColor="#CCCCCC"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
             android:layout_marginBottom="6dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -677,9 +677,9 @@
                 android:layout_weight="1"
                 android:text="API 润色"
                 android:textSize="11sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
                 android:layout_marginEnd="4dp" />
@@ -691,9 +691,9 @@
                 android:layout_weight="1"
                 android:text="本地 AI"
                 android:textSize="11sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
                 android:layout_marginStart="4dp" />
@@ -742,7 +742,7 @@
                 android:text="语音识别"
                 android:textSize="11sp"
                 android:textColor="#FFFFFF"
-                app:backgroundTint="#666666"
+                app:backgroundTint="#81D8D0"
                 app:cornerRadius="8dp"
                 android:layout_marginEnd="4dp" />
 
@@ -754,7 +754,7 @@
                 android:text="语音润色"
                 android:textSize="11sp"
                 android:textColor="#FFFFFF"
-                app:backgroundTint="#666666"
+                app:backgroundTint="#81D8D0"
                 app:cornerRadius="8dp"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
@@ -789,7 +789,7 @@
             android:layout_height="wrap_content"
             android:text="加载中..."
             android:textSize="11sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:background="#F5F5F5"
             android:padding="8dp"
             android:layout_marginBottom="8dp" />
@@ -803,7 +803,7 @@
             android:progress="0"
             android:layout_marginBottom="4dp"
             android:visibility="gone"
-            android:progressTint="#CCCCCC" />
+            android:progressTint="#81D8D0" />
 
         <TextView
             android:id="@+id/tv_dict_download_progress"
@@ -811,7 +811,7 @@
             android:layout_height="wrap_content"
             android:text=""
             android:textSize="11sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:layout_marginBottom="8dp"
             android:visibility="gone" />
 
@@ -828,9 +828,9 @@
                 android:layout_weight="1"
                 android:text="🔄更新"
                 android:textSize="10sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="6dp"
                 android:layout_marginEnd="2dp" />
@@ -842,9 +842,9 @@
                 android:layout_weight="1"
                 android:text="导入"
                 android:textSize="10sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="6dp"
                 android:layout_marginStart="2dp"
@@ -857,9 +857,9 @@
                 android:layout_weight="1"
                 android:text="导出"
                 android:textSize="10sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="6dp"
                 android:layout_marginStart="2dp"
@@ -872,9 +872,9 @@
                 android:layout_weight="1"
                 android:text="备份"
                 android:textSize="10sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="6dp"
                 android:layout_marginStart="2dp" />
@@ -902,7 +902,7 @@
                 android:text="保存"
                 android:textSize="13sp"
                 android:textColor="#FFFFFF"
-                app:backgroundTint="#666666"
+                app:backgroundTint="#81D8D0"
                 app:cornerRadius="10dp"
                 android:layout_marginEnd="6dp" />
 
@@ -913,9 +913,9 @@
                 android:layout_weight="1"
                 android:text="重置"
                 android:textSize="13sp"
-                android:textColor="#666666"
+                android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
-                app:strokeColor="#CCCCCC"
+                app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="10dp"
                 android:layout_marginStart="6dp" />
@@ -928,9 +928,9 @@
             android:layout_height="36dp"
             android:text="检查更新"
             android:textSize="12sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             app:backgroundTint="#FFFFFF"
-            app:strokeColor="#CCCCCC"
+            app:strokeColor="#81D8D0"
             app:strokeWidth="1dp"
             app:cornerRadius="8dp"
             android:layout_marginBottom="12dp" />
@@ -952,7 +952,7 @@
             android:background="#F5F5F5"
             android:padding="8dp"
             android:textSize="10sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:maxLines="10"
             android:scrollbars="vertical"
             android:textIsSelectable="true"
