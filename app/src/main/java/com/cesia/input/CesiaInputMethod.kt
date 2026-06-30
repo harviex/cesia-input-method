@@ -1141,10 +1141,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         saveThemeColors()
     }
 
+    // 统一的文字/图标基准颜色（深背景→亮色，浅背景→暗色）
+    // 所有文字/图标最终颜色由 unifiedTextColor * textGrayScale 得到
+    val unifiedTextColor: Int
+        get() {
+            val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
+            return if (bgGray < 128) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
+        }
+
     /** 根据背景灰度自动调整文字颜色（暗背景→亮字，亮背景→暗字） */
     private fun applyAutoContrast() {
-        val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
-        val textColor = if (bgGray < 128) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
+        val textColor = unifiedTextColor
 
         // 状态栏文字
         statusText.setTextColor(textColor)
@@ -1159,46 +1166,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // 底栏按钮图标颜色
-        val iconColor = if (bgGray < 128) 0xFFCCCCCC.toInt() else 0xFF555555.toInt()
+        // 底栏按钮图标颜色（使用统一颜色）
+        val iconColor = textColor
         btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnDelete.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
 
-        // 键盘按键文字颜色（自动对比）
+        // 键盘按键文字颜色（使用统一颜色）
         if (::keyboardView.isInitialized) {
+            keyboardView.unifiedKeyColor = textColor
             keyboardView.updateTextColor(isDarkTheme)
         }
     }
 
-    /** 将文字灰阶缩放应用到各 UI 组件 */
+    /** 将文字灰阶缩放应用到各 UI 组件（统一基准颜色） */
     private fun applyTextGrayScale() {
         val scale = textGrayScale
-
-        // 辅助函数：对单个 RGB 通道应用灰阶缩放并 clamp 到 0-255
-        fun scaleChannel(c: Int): Int = (c * scale).toInt().coerceIn(0, 255)
-
-        // 辅助函数：对 ARGB 颜色整体应用灰阶缩放
-        fun scaleColor(argb: Int): Int {
-            val a = (argb ushr 24) and 0xFF
-            val r = scaleChannel((argb shr 16) and 0xFF)
-            val g = scaleChannel((argb shr 8) and 0xFF)
-            val b = scaleChannel(argb and 0xFF)
-            return (a shl 24) or (r shl 16) or (g shl 8) or b
-        }
+        val baseColor = unifiedTextColor
 
         // 状态栏文字
-        val baseStatusColor = statusText.textColors.defaultColor
-        statusText.setTextColor(scaleColor(baseStatusColor))
+        statusText.setTextColor(scaleGray(baseColor, scale))
 
         // 候选栏文字
         if (::candidateBar.isInitialized) {
             for (i in 0 until candidateBar.childCount) {
                 val child = candidateBar.getChildAt(i)
                 if (child is android.widget.TextView) {
-                    val baseColor = child.textColors.defaultColor
-                    child.setTextColor(scaleColor(baseColor))
+                    child.setTextColor(scaleGray(baseColor, scale))
                 }
             }
         }
@@ -1209,13 +1204,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 底栏按钮图标颜色
-        val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
-        val baseIconColor = if (bgGray < 128) 0xFFCCCCCC.toInt() else 0xFF555555.toInt()
-        val scaledIconColor = scaleColor(baseIconColor)
-        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnClipboard.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnSend.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnDelete.setColorFilter(scaledIconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        val scaledIcon = scaleGray(baseColor, scale)
+        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnClipboard.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnSend.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnDelete.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
+    }
+
+    /** 对基准颜色应用灰阶缩放 */
+    private fun scaleGray(argb: Int, scale: Float): Int {
+        val r = ((argb shr 16) and 0xFF)
+        val g = ((argb shr 8) and 0xFF)
+        val b = (argb and 0xFF)
+        val a = ((argb ushr 24) and 0xFF)
+        val sr = (r * scale).toInt().coerceIn(0, 255)
+        val sg = (g * scale).toInt().coerceIn(0, 255)
+        val sb = (b * scale).toInt().coerceIn(0, 255)
+        return (a shl 24) or (sr shl 16) or (sg shl 8) or sb
     }
 
     /** 主题色调节弹窗 */
