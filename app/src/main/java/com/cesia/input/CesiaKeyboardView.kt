@@ -24,12 +24,16 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // 动态主题色（由 CesiaInputMethod 设置）
     var themeAccent: Int = 0xFF81D8D0.toInt()
-    var textGrayScale: Float = 1f
+    var textGrayScale: Float = 0.5f
         set(value) {
             field = value
-            // Re-apply text colors with the new scale
             if (lastKeyGrayVal > 0) {
                 updateKeyTextColor(lastKeyGrayVal)
+                // Apply gray scale to the computed base colors
+                keyTextColor = scaleGrayColor(keyTextColor, value)
+                labelTextColor = scaleGrayColor(labelTextColor, value)
+                t9MainTextColor = scaleGrayColor(t9MainTextColor, value)
+                applyKeyTextPaintColor()
             }
             invalidateAllKeys()
         }
@@ -233,8 +237,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        // 动态更新画笔颜色（副字符使用统一基准颜色 + 灰阶）
-        popupPaint.color = scaleGrayColor(unifiedKeyColor, textGrayScale)
+        // 副字符保持主题色（不受灰度影响）
+        popupPaint.color = themeAccent
         longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
 
         // 确保 mKeyTextPaint 颜色正确（super.onDraw 可能重置它）
@@ -394,33 +398,26 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     fun updateKeyTextColor(keyGrayVal: Int) {
         lastKeyGrayVal = keyGrayVal
-        // 所有文字颜色基于统一的基准颜色，根据背景轻微偏移
-        if (keyGrayVal < 128) {
-            // Dark key: 基准色稍亮
-            keyTextColor = lighten(unifiedKeyColor, 0.6f)
-            labelTextColor = lighten(unifiedKeyColor, 0.45f)
-            t9MainTextColor = lighten(unifiedKeyColor, 0.5f)
-        } else {
-            // Light key: 基准色稍暗
-            keyTextColor = unifiedKeyColor
-            labelTextColor = darken(unifiedKeyColor, 0.3f)
-            t9MainTextColor = darken(unifiedKeyColor, 0.15f)
-        }
-        // 应用文字灰阶缩放
-        keyTextColor = scaleGrayColor(keyTextColor, textGrayScale)
-        labelTextColor = scaleGrayColor(labelTextColor, textGrayScale)
-        t9MainTextColor = scaleGrayColor(t9MainTextColor, textGrayScale)
-        // Apply to KeyboardView's internal mKeyTextPaint via reflection
+        // 所有文字颜色基于统一的基准颜色（由 CesiaInputMethod 设置）
+        keyTextColor = unifiedKeyColor
+        labelTextColor = darken(unifiedKeyColor, 0.3f)
+        t9MainTextColor = darken(unifiedKeyColor, 0.15f)
+        // Apply key text paint via reflection
         applyKeyTextPaintColor()
     }
 
-    /** Scale RGB channels of a color by the given factor, clamping to 0-255 */
-    private fun scaleGrayColor(argb: Int, scale: Float): Int {
-        val a = (argb ushr 24) and 0xFF
-        val r = ((argb shr 16) and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
-        val g = ((argb shr 8) and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
-        val b = (argb and 0xFF).let { (it * scale).toInt().coerceIn(0, 255) }
-        return (a shl 24) or (r shl 16) or (g shl 8) or b
+    /** Scale color by interpolating between black and white through the base color */
+    private fun scaleGrayColor(baseColor: Int, scale: Float): Int {
+        val a = (baseColor ushr 24) and 0xFF
+        val br = ((baseColor shr 16) and 0xFF)
+        val bg = ((baseColor shr 8) and 0xFF)
+        val bb = (baseColor and 0xFF)
+        // scale 0→黑, 0.5→baseColor, 1→白
+        val t = scale.coerceIn(0f, 1f)
+        val r = if (t <= 0.5f) (br * (t * 2)).toInt() else (br + (255 - br) * ((t - 0.5f) * 2)).toInt()
+        val g = if (t <= 0.5f) (bg * (t * 2)).toInt() else (bg + (255 - bg) * ((t - 0.5f) * 2)).toInt()
+        val b = if (t <= 0.5f) (bb * (t * 2)).toInt() else (bb + (255 - bb) * ((t - 0.5f) * 2)).toInt()
+        return (a shl 24) or (r.coerceIn(0,255) shl 16) or (g.coerceIn(0,255) shl 8) or b.coerceIn(0,255)
     }
 
     /** Lighten a color by mixing with white (0-1, where 1 = white) */

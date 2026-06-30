@@ -100,7 +100,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
     private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大
-    var textGrayScale: Float = 1f                          // 0.5=深, 1=默认, 1.5=浅
+    var textGrayScale: Float = 0.5f                        // 0=纯黑, 0.5=基准灰(默认), 1=纯白
 
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -109,7 +109,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xF0)
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
         textThemeSize = prefs.getInt("theme_text_size", 1)
-        textGrayScale = prefs.getFloat("text_gray_scale", 1f)
+        textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
     }
 
     /**
@@ -1142,7 +1142,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     // 统一的文字/图标基准颜色（深背景→亮色，浅背景→暗色）
-    // 所有文字/图标最终颜色由 unifiedTextColor * textGrayScale 得到
+    // textGrayScale: 0=纯黑, 0.5=基准灰(自动对比色), 1.0=纯白
+    // 最终颜色 = lerp(黑, 基准灰, textGrayScale*2) when scale<=0.5
+    //           lerp(基准灰, 白, (textGrayScale-0.5)*2) when scale>0.5
     val unifiedTextColor: Int
         get() {
             val bgGray = if (isDarkTheme) 20 else themeBgGrayBase
@@ -1211,16 +1213,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnDelete.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
     }
 
-    /** 对基准颜色应用灰阶缩放 */
-    private fun scaleGray(argb: Int, scale: Float): Int {
-        val r = ((argb shr 16) and 0xFF)
-        val g = ((argb shr 8) and 0xFF)
-        val b = (argb and 0xFF)
-        val a = ((argb ushr 24) and 0xFF)
-        val sr = (r * scale).toInt().coerceIn(0, 255)
-        val sg = (g * scale).toInt().coerceIn(0, 255)
-        val sb = (b * scale).toInt().coerceIn(0, 255)
-        return (a shl 24) or (sr shl 16) or (sg shl 8) or sb
+    /** 对基准颜色应用灰阶缩放（在黑白之间插值） */
+    private fun scaleGray(baseColor: Int, scale: Float): Int {
+        val a = (baseColor ushr 24) and 0xFF
+        val br = ((baseColor shr 16) and 0xFF)
+        val bg = ((baseColor shr 8) and 0xFF)
+        val bb = (baseColor and 0xFF)
+        // scale 0→黑, 0.5→baseColor, 1→白
+        val t = scale.coerceIn(0f, 1f)
+        val r = if (t <= 0.5f) (br * (t * 2)).toInt() else (br + (255 - br) * ((t - 0.5f) * 2)).toInt()
+        val g = if (t <= 0.5f) (bg * (t * 2)).toInt() else (bg + (255 - bg) * ((t - 0.5f) * 2)).toInt()
+        val b = if (t <= 0.5f) (bb * (t * 2)).toInt() else (bb + (255 - bb) * ((t - 0.5f) * 2)).toInt()
+        return (a shl 24) or (r.coerceIn(0,255) shl 16) or (g.coerceIn(0,255) shl 8) or b.coerceIn(0,255)
     }
 
     /** 主题色调节弹窗 */
@@ -1318,11 +1322,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 文字灰阶调节
         val seekTextGray = view.findViewById<android.widget.SeekBar>(R.id.seek_text_gray)
         val tvTextGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_text_gray_preview)
-        seekTextGray.progress = ((textGrayScale * 100f).toInt() - 50).coerceIn(0, 100)
+        seekTextGray.progress = (textGrayScale * 100f).toInt().coerceIn(0, 100)
         tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
         seekTextGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                textGrayScale = (progress + 50) / 100f
+                textGrayScale = progress / 100f
                 tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
                 applyTextGrayScale()
             }
@@ -1375,7 +1379,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             seekKey.progress = themeKeyGrayBase
             updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, 1)
             seekTextGray.progress = 50
-            tvTextGrayPreview.text = "1.0"
+            textGrayScale = 0.5f
+            tvTextGrayPreview.text = "0.5"
             applyThemeColors()
         }
 
