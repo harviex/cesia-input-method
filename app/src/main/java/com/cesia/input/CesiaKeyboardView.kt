@@ -204,6 +204,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
     private var t9MainTextSize = 14f
 
     var textScaleFactor: Float = 1f
+        set(value) {
+            field = value
+            applyKeyTextPaintSize()
+            invalidateAllKeys()
+        }
+
+    // 缓存 AOSP KeyboardView 原始 mLabelTextSize（px），避免多次缩放失真
+    private var cachedBaseLabelSize = -1f
 
     // 统一基准颜色（由 CesiaInputMethod 设置）
     var unifiedKeyColor: Int = 0xFF333333.toInt()
@@ -404,6 +412,31 @@ class CesiaKeyboardView @JvmOverloads constructor(
         t9MainTextColor = darken(unifiedKeyColor, 0.15f)
         // Apply key text paint via reflection
         applyKeyTextPaintColor()
+    }
+
+    /** 同步 AOSP mLabelTextSize / mKeyTextPaint，使按键主字符跟随 textScaleFactor */
+    private fun applyKeyTextPaintSize() {
+        if (cachedBaseLabelSize < 0) {
+            try {
+                val field = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mLabelTextSize")
+                field.isAccessible = true
+                cachedBaseLabelSize = field.getFloat(this)
+            } catch (_: Exception) {
+                cachedBaseLabelSize = 14f * resources.displayMetrics.scaledDensity
+            }
+        }
+        val scaled = cachedBaseLabelSize * textScaleFactor
+        try {
+            val field = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mLabelTextSize")
+            field.isAccessible = true
+            field.setFloat(this, scaled)
+        } catch (_: Exception) {}
+        try {
+            val ktp = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
+            ktp.isAccessible = true
+            val paint = ktp.get(this) as? android.graphics.Paint
+            paint?.textSize = scaled
+        } catch (_: Exception) {}
     }
 
     /** Scale color by interpolating between black and white through the base color */

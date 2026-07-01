@@ -1219,6 +1219,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.textGrayScale = scale
         }
 
+        // 候选栏展开面板（GridView）刷新大小和颜色
+        panelAdapter?.notifyDataSetChanged()
+
         // 底栏按钮图标颜色
         val scaledIcon = scaleGray(baseColor, scale)
         btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
@@ -1451,7 +1454,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 缓存列宽，首次测量后固定
             private var columnWidthPx = 0
             private val minTextSp = 10f
-            private val maxTextSp = 14f
 
 // endregion 主题
 
@@ -1476,17 +1478,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     }
                 }
 
+                // 基础字号由文字大小档位决定
+                val baseSp = when (textThemeSize) {
+                    0 -> 12f
+                    2 -> 16f
+                    3 -> 18f
+                    else -> 14f
+                }
                 // 自动缩小字号：如果文字宽度超过列宽，按比例缩小
                 val text = getItem(position) ?: ""
+                var size = baseSp
                 if (text.isNotEmpty() && columnWidthPx > 0) {
-                    var size = maxTextSp
                     tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
                     val paint = tv.paint
                     while (size > minTextSp && paint.measureText(text) > columnWidthPx) {
                         size -= 0.5f
                         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
                     }
+                } else {
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
                 }
+                tv.setTextColor(scaleGray(unifiedTextColor, textGrayScale))
 
                 return tv
             }
