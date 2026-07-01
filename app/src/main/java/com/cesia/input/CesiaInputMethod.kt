@@ -1352,6 +1352,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 textGrayScale = progress / 100f
                 tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
                 applyTextGrayScale()
+                saveThemeColors()
             }
             override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
             override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
@@ -3810,7 +3811,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             voiceEngine.setBackend(VoiceEngine.Backend.LOCAL_SHERPA)
             val modeLabel = if (localModeEnabled) "本地模式" else "云端模式+本地加速"
             Log.i("Cesia", "语音后端: 本地 Sherpa-onnx ($modeLabel, $modelName)")
-            updateStatus("🎤 语音: 本地 ")
             // 异步预热 OnlineRecognizer，避免首次点击语音键的延迟
             voiceEngine.warmupRecognizer()
             return

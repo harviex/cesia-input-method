@@ -410,6 +410,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
         keyTextColor = unifiedKeyColor
         labelTextColor = darken(unifiedKeyColor, 0.3f)
         t9MainTextColor = darken(unifiedKeyColor, 0.15f)
+        // Apply textGrayScale to all text colors (main chars, labels, T9)
+        keyTextColor = scaleGrayColor(keyTextColor, textGrayScale)
+        labelTextColor = scaleGrayColor(labelTextColor, textGrayScale)
+        t9MainTextColor = scaleGrayColor(t9MainTextColor, textGrayScale)
         // Apply key text paint via reflection
         applyKeyTextPaintColor()
     }
