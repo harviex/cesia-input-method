@@ -503,15 +503,20 @@ class CesiaKeyboardView @JvmOverloads constructor(
     /** Apply keyTextColor to KeyboardView's internal mPaint and mKeyTextColor via reflection */
     private fun applyKeyTextPaintColor() {
         try {
-            // 1. 设置 mPaint.color（onBufferDraw 中实际绘制用的 paint）
-            val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mPaint")
-            paintField.isAccessible = true
-            val paint = paintField.get(this) as? android.graphics.Paint
-            paint?.color = keyTextColor
+            // 1. 设置 mKeyTextPaint.color（AOSP 真正绘制 key label 用的 paint）
+            val keyTextPaintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
+            keyTextPaintField.isAccessible = true
+            val keyTextPaint = keyTextPaintField.get(this) as? android.graphics.Paint
+            keyTextPaint?.color = keyTextColor
             // 2. 同步设置 mKeyTextColor（onBufferDraw 中 paint.setColor(mKeyTextColor) 会调用）
             val colorField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextColor")
             colorField.isAccessible = true
             colorField.setInt(this, keyTextColor)
+            // 3. 兼容：mPaint 可能用于其他绘制
+            val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mPaint")
+            paintField.isAccessible = true
+            val paint = paintField.get(this) as? android.graphics.Paint
+            paint?.color = keyTextColor
         } catch (_: Exception) {}
     }
 }
