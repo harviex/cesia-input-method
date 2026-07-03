@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "com.cesia.input.engine.rime"
     compileSdk = 34
+    ndkVersion = "25.2.9519653"
 
     defaultConfig {
         minSdk = 24

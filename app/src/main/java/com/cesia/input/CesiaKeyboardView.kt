@@ -29,10 +29,37 @@ class CesiaKeyboardView @JvmOverloads constructor(
             field = value
             if (lastKeyGrayVal > 0) {
                 updateKeyTextColor(lastKeyGrayVal)
-                // Apply gray scale to the computed base colors
-                keyTextColor = scaleGrayColor(keyTextColor, value)
-                labelTextColor = scaleGrayColor(labelTextColor, value)
-                t9MainTextColor = scaleGrayColor(t9MainTextColor, value)
+                applyKeyTextPaintColor()
+            }
+            invalidateAllKeys()
+        }
+
+    // 三套独立的主字符灰度控制（0=纯黑, 0.5=基准灰, 1=纯白）
+    var fullKeyboardMainGrayScale: Float = 0.5f
+        set(value) {
+            field = value
+            if (lastKeyGrayVal > 0) {
+                updateKeyTextColor(lastKeyGrayVal)
+                applyKeyTextPaintColor()
+            }
+            invalidateAllKeys()
+        }
+
+    var symbolKeyboardMainGrayScale: Float = 0.5f
+        set(value) {
+            field = value
+            if (lastKeyGrayVal > 0) {
+                updateKeyTextColor(lastKeyGrayVal)
+                applyKeyTextPaintColor()
+            }
+            invalidateAllKeys()
+        }
+
+    var t9SymbolKeyMainGrayScale: Float = 0.5f
+        set(value) {
+            field = value
+            if (lastKeyGrayVal > 0) {
+                updateKeyTextColor(lastKeyGrayVal)
                 applyKeyTextPaintColor()
             }
             invalidateAllKeys()
@@ -49,6 +76,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // T9 模式标志 — 只有 T9 数字键盘才绘制字母主字符
     var isT9Mode = false
+
+    // 当前键盘模式（用于应用不同的主字符灰度）
+    var keyboardMode: Int = 0  // 0=QWERTY, 1=SYMBOL_CN, 2=SYMBOL_EN, 3=NUMBER
 
     // Shift 模式标志 — 全键盘字母键主字符绘制为大写
     var isShiftMode = false
@@ -410,10 +440,13 @@ class CesiaKeyboardView @JvmOverloads constructor(
         keyTextColor = unifiedKeyColor
         labelTextColor = darken(unifiedKeyColor, 0.3f)
         t9MainTextColor = darken(unifiedKeyColor, 0.15f)
-        // Apply textGrayScale to all text colors (main chars, labels, T9)
-        keyTextColor = scaleGrayColor(keyTextColor, textGrayScale)
+        // Apply separate grayscale scales for each keyboard type
+        keyTextColor = scaleGrayColor(keyTextColor, fullKeyboardMainGrayScale)
+        symbolKeyTextColor = scaleGrayColor(keyTextColor, symbolKeyboardMainGrayScale)
+        // labelTextColor keeps using textGrayScale for backward compatibility
         labelTextColor = scaleGrayColor(labelTextColor, textGrayScale)
-        t9MainTextColor = scaleGrayColor(t9MainTextColor, textGrayScale)
+        t9MainTextColor = scaleGrayColor(t9MainTextColor, t9SymbolKeyMainGrayScale)
+        t9SymbolKeyTextColor = scaleGrayColor(unifiedKeyColor, t9SymbolKeyMainGrayScale)
         // Apply key text paint via reflection
         applyKeyTextPaintColor()
     }
@@ -502,21 +535,37 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     /** Apply keyTextColor to KeyboardView's internal mPaint and mKeyTextColor via reflection */
     private fun applyKeyTextPaintColor() {
+        // Choose the correct text color based on current keyboard mode
+        val colorToApply = when (keyboardMode) {
+            1, 2 -> symbolKeyTextColor  // SYMBOL_CN, SYMBOL_EN
+            3 -> t9SymbolKeyTextColor   // NUMBER (T9 symbol keys)
+            else -> keyTextColor        // QWERTY (full keyboard)
+        }
         try {
             // 1. 设置 mKeyTextPaint.color（AOSP 真正绘制 key label 用的 paint）
             val keyTextPaintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
             keyTextPaintField.isAccessible = true
             val keyTextPaint = keyTextPaintField.get(this) as? android.graphics.Paint
-            keyTextPaint?.color = keyTextColor
+            keyTextPaint?.color = colorToApply
             // 2. 同步设置 mKeyTextColor（onBufferDraw 中 paint.setColor(mKeyTextColor) 会调用）
             val colorField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextColor")
             colorField.isAccessible = true
-            colorField.setInt(this, keyTextColor)
+            colorField.setInt(this, colorToApply)
             // 3. 兼容：mPaint 可能用于其他绘制
             val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mPaint")
             paintField.isAccessible = true
             val paint = paintField.get(this) as? android.graphics.Paint
-            paint?.color = keyTextColor
+            paint?.color = colorToApply
         } catch (_: Exception) {}
     }
+
+    /** 根据当前键盘模式刷新主字符颜色（切换键盘时调用） */
+    fun refreshTextColorForCurrentMode() {
+        applyKeyTextPaintColor()
+        invalidateAllKeys()
+    }
+
+    // 三套主字符颜色（分别应用不同灰度）
+    private var symbolKeyTextColor: Int = 0xFF333333.toInt()
+    private var t9SymbolKeyTextColor: Int = 0xFF555555.toInt()
 }

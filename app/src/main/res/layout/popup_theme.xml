@@ -248,6 +248,120 @@
             android:layout_marginStart="8dp" />
     </LinearLayout>
 
+    <!-- 全键盘主字符灰度调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="全键盘主字符灰度"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <android.widget.SeekBar
+            android:id="@+id/seek_full_kbd_gray"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="50"
+            android:progressTint="#888888"
+            android:thumbTint="#888888" />
+
+        <TextView
+            android:id="@+id/tv_full_kbd_gray_preview"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="1.0"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- 符号键盘主字符灰度调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="符号键盘主字符灰度"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <android.widget.SeekBar
+            android:id="@+id/seek_symbol_kbd_gray"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="50"
+            android:progressTint="#888888"
+            android:thumbTint="#888888" />
+
+        <TextView
+            android:id="@+id/tv_symbol_kbd_gray_preview"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="1.0"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- T9符号键主字符灰度调节 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="T9符号键主字符灰度"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <android.widget.SeekBar
+            android:id="@+id/seek_t9_symbol_gray"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="50"
+            android:progressTint="#888888"
+            android:thumbTint="#888888" />
+
+        <TextView
+            android:id="@+id/tv_t9_symbol_gray_preview"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="1.0"
+            android:textSize="11sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
     <!-- 重置按钮 -->
     <TextView
         android:id="@+id/btn_reset_theme"
