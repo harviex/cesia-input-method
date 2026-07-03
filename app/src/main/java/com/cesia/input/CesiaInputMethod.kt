@@ -102,11 +102,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大, 3=超大
     var textGrayScale: Float = 0.5f                        // 0=纯黑, 0.5=基准灰(默认), 1=纯白
 
-    // 三套独立的主字符灰度控制（0=纯黑, 0.5=基准灰, 1=纯白）
-    private var fullKeyboardMainGrayScale: Float = 0.5f
-    private var symbolKeyboardMainGrayScale: Float = 0.5f
-    private var t9SymbolKeyMainGrayScale: Float = 0.5f
-
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         themeAccent = prefs.getInt("theme_accent", 0xFF81D8D0.toInt())
@@ -115,9 +110,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
         textThemeSize = prefs.getInt("theme_text_size", 1)
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
-        fullKeyboardMainGrayScale = prefs.getFloat("full_keyboard_main_gray_scale", 0.5f)
-        symbolKeyboardMainGrayScale = prefs.getFloat("symbol_keyboard_main_gray_scale", 0.5f)
-        t9SymbolKeyMainGrayScale = prefs.getFloat("t9_symbol_key_main_gray_scale", 0.5f)
     }
 
     /**
@@ -161,9 +153,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .putFloat("theme_accent_hue", accentHue)
             .putInt("theme_text_size", textThemeSize)
             .putFloat("text_gray_scale", textGrayScale)
-            .putFloat("full_keyboard_main_gray_scale", fullKeyboardMainGrayScale)
-            .putFloat("symbol_keyboard_main_gray_scale", symbolKeyboardMainGrayScale)
-            .putFloat("t9_symbol_key_main_gray_scale", t9SymbolKeyMainGrayScale)
             .apply()
     }
 
@@ -1191,10 +1180,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (::keyboardView.isInitialized) {
             keyboardView.unifiedKeyColor = textColor
             keyboardView.updateTextColor(isDarkTheme)
-            // 应用三套独立的主字符灰度
-            keyboardView.fullKeyboardMainGrayScale = fullKeyboardMainGrayScale
-            keyboardView.symbolKeyboardMainGrayScale = symbolKeyboardMainGrayScale
-            keyboardView.t9SymbolKeyMainGrayScale = t9SymbolKeyMainGrayScale
         }
     }
 
@@ -1312,22 +1297,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化文字大小按钮状态
         updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, textThemeSize)
 
-        // 初始化三套主字符灰度 SeekBar
-        val seekFullKbdGray = view.findViewById<android.widget.SeekBar>(R.id.seek_full_kbd_gray)
-        val tvFullKbdGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_full_kbd_gray_preview)
-        seekFullKbdGray.progress = (fullKeyboardMainGrayScale * 100f).toInt().coerceIn(0, 100)
-        tvFullKbdGrayPreview.text = String.format("%.1f", fullKeyboardMainGrayScale)
-
-        val seekSymbolKbdGray = view.findViewById<android.widget.SeekBar>(R.id.seek_symbol_kbd_gray)
-        val tvSymbolKbdGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_symbol_kbd_gray_preview)
-        seekSymbolKbdGray.progress = (symbolKeyboardMainGrayScale * 100f).toInt().coerceIn(0, 100)
-        tvSymbolKbdGrayPreview.text = String.format("%.1f", symbolKeyboardMainGrayScale)
-
-        val seekT9SymbolGray = view.findViewById<android.widget.SeekBar>(R.id.seek_t9_symbol_gray)
-        val tvT9SymbolGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_t9_symbol_gray_preview)
-        seekT9SymbolGray.progress = (t9SymbolKeyMainGrayScale * 100f).toInt().coerceIn(0, 100)
-        tvT9SymbolGrayPreview.text = String.format("%.1f", t9SymbolKeyMainGrayScale)
-
         // 明暗模式切换
         btnThemeLight.setOnClickListener {
             isDarkTheme = false
@@ -1389,48 +1358,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
                 })
 
-                // 全键盘主字符灰度调节
-                seekFullKbdGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                        fullKeyboardMainGrayScale = progress / 100f
-                        tvFullKbdGrayPreview.text = String.format("%.1f", fullKeyboardMainGrayScale)
-                        if (::keyboardView.isInitialized) {
-                            keyboardView.fullKeyboardMainGrayScale = fullKeyboardMainGrayScale
-                        }
-                        saveThemeColors()
-                    }
-                    override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
-                    override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
-                })
-
-                // 符号键盘主字符灰度调节
-                        seekSymbolKbdGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                                symbolKeyboardMainGrayScale = progress / 100f
-                                tvSymbolKbdGrayPreview.text = String.format("%.1f", symbolKeyboardMainGrayScale)
-                                if (::keyboardView.isInitialized) {
-                                    keyboardView.symbolKeyboardMainGrayScale = symbolKeyboardMainGrayScale
-                                }
-                                saveThemeColors()
-                            }
-                            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
-                            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
-                        })
-
-                        // T9符号键主字符灰度调节
-                        seekT9SymbolGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                                t9SymbolKeyMainGrayScale = progress / 100f
-                                tvT9SymbolGrayPreview.text = String.format("%.1f", t9SymbolKeyMainGrayScale)
-                                if (::keyboardView.isInitialized) {
-                                    keyboardView.t9SymbolKeyMainGrayScale = t9SymbolKeyMainGrayScale
-                                }
-                                saveThemeColors()
-                            }
-                            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
-                            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
-                        })
-
         seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 accentHue = progress.toFloat()
@@ -1471,9 +1398,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             themeKeyGrayBase = 0xF0
             textThemeSize = 1
             textGrayScale = 1f
-            fullKeyboardMainGrayScale = 0.5f
-            symbolKeyboardMainGrayScale = 0.5f
-            t9SymbolKeyMainGrayScale = 0.5f
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
@@ -1481,15 +1405,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             seekTextGray.progress = 50
             textGrayScale = 0.5f
             tvTextGrayPreview.text = "0.5"
-            seekFullKbdGray.progress = 50
-            fullKeyboardMainGrayScale = 0.5f
-            tvFullKbdGrayPreview.text = "0.5"
-            seekSymbolKbdGray.progress = 50
-            symbolKeyboardMainGrayScale = 0.5f
-            tvSymbolKbdGrayPreview.text = "0.5"
-            seekT9SymbolGray.progress = 50
-            t9SymbolKeyMainGrayScale = 0.5f
-            tvT9SymbolGrayPreview.text = "0.5"
             applyThemeColors()
         }
 
@@ -5008,15 +4923,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         keyboardView.keyboard = currentKeyboard
         // 只有 NUMBER 模式（T9 数字键盘）才绘制字母主字符
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
-        // 更新键盘模式以应用对应的主字符灰度
-        keyboardView.keyboardMode = when (mode) {
-            KeyboardMode.QWERTY -> 0
-            KeyboardMode.SYMBOL_CN -> 1
-            KeyboardMode.SYMBOL_EN -> 2
-            KeyboardMode.NUMBER -> 3
-        }
-        // 刷新当前键盘的主字符颜色
-        keyboardView.refreshTextColorForCurrentMode()
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
         if (mode == KeyboardMode.NUMBER) {
             // 进入 T9：只操作 T9 相关状态
