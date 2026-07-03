@@ -13,6 +13,10 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     companion object {
         private const val TAG = "RimeEngine"
+        /** 最小权重阈值：只保留 weight >= 50 的词，过滤低频噪音 */
+        private const val MIN_WEIGHT_THRESHOLD = 50
+        /** 每个首字桶最多保留的词条数：只保留权重最高的 300 个 */
+        private const val MAX_ENTRIES_PER_BUCKET = 300
     }
 
     private var session: RimeSession? = null
@@ -247,7 +251,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     private var dictIndexBuilt = false
     private var dictIndexBuildTime = 0L
 
-    /** 构建词库索引：按首字分桶，桶内按权重降序（在后台线程执行） */
+    /** 构建词库索引：按首字分桶，桶内按权重降序，只保留高频词（在后台线程执行） */
     private fun buildDictIndex(): Map<String, List<AssociationEntry>> {
         val index = mutableMapOf<String, MutableList<AssociationEntry>>()
         val rimeDir = java.io.File(context.getExternalFilesDir(null), "rime")
@@ -265,10 +269,11 @@ class RimeEngine(private val context: Context) : InputEngine {
                             if (trimmed.startsWith("name:") || trimmed.startsWith("version:") || trimmed.startsWith("sort:") || trimmed.startsWith("use_preset_")) return@forEach
 
                             val parts = trimmed.split("\t")
-                            if (parts.size >= 2) {
+                            if (parts.size >= 3) {
                                 val word = parts[0]
                                 if (word.length < 2) return@forEach // 跳过单字词
-                                val weight = if (parts.size >= 4) parts[3].toIntOrNull() ?: 0 else 0
+                                val weight = parts[2].toIntOrNull() ?: 0
+                                if (weight < MIN_WEIGHT_THRESHOLD) return@forEach // 过滤低频词
                                 val bucket = word.substring(0, 1)
                                 val entry = AssociationEntry(word, "", weight)
                                 index.getOrPut(bucket) { mutableListOf() }.add(entry)
@@ -279,30 +284,45 @@ class RimeEngine(private val context: Context) : InputEngine {
                 } catch (_: Exception) {}
             }
 
-        index.forEach { (_, list) -> list.sortByDescending { it.weight } }
-        Log.d(TAG, "联想索引: ${index.size} 桶, $entryCount 词条, 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
-        return index
+        // 每个桶只保留权重最高的 MAX_ENTRIES_PER_BUCKET 个词
+        val limitedIndex = mutableMapOf<String, List<AssociationEntry>>()
+        var limitedCount = 0
+        index.forEach { (bucket, list) ->
+            list.sortByDescending { it.weight }
+            if (list.size > MAX_ENTRIES_PER_BUCKET) {
+                limitedIndex[bucket] = list.take(MAX_ENTRIES_PER_BUCKET)
+            } else {
+                limitedIndex[bucket] = list
+            }
+            limitedCount += limitedIndex[bucket]!!.size
+        }
+        Log.d(TAG, "联想索引: ${limitedIndex.size} 桶, $limitedCount 词条 (原 $entryCount 词条, 过滤 weight<$MIN_WEIGHT_THRESHOLD + 每桶限制 $MAX_ENTRIES_PER_BUCKET), 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
+        return limitedIndex
     }
 
     /**
      * 词语联想：查询以 prefix 为前缀的词语
-     * 首次调用时主线程构建索引（词库加载），单字不联想减少触发
-     * 如果索引构建时间超过 timeoutMs，返回空列表避免长时间卡住
+     * 如果索引未构建完成，直接返回空列表（不阻塞主线程），后台会自动构建
      * @return 去掉前缀后的显示词列表，按权重降序，去重
      */
     fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 500): List<String> {
         if (prefix.length < 2) return emptyList() // 至少两个字才联想
 
         if (!dictIndexBuilt) {
-            dictIndexBuildTime = System.currentTimeMillis()
-            dictIndex = buildDictIndex()
-            dictIndexBuilt = true
-            // 如果构建时间太长，说明词库很大，返回空避免卡顿
-            val elapsed = System.currentTimeMillis() - dictIndexBuildTime
-            if (elapsed > timeoutMs) {
-                Log.w(TAG, "联想索引构建耗时 ${elapsed}ms 超过 ${timeoutMs}ms，放弃本次联想")
-                return emptyList()
+            // 索引未完成：触发后台构建，直接返回空避免卡顿
+            if (dictIndex == null) {
+                Thread {
+                    try {
+                        dictIndexBuildTime = System.currentTimeMillis()
+                        dictIndex = buildDictIndex()
+                        dictIndexBuilt = true
+                        Log.d(TAG, "联想索引后台构建完成")
+                    } catch (_: Exception) {
+                        Log.e(TAG, "联想索引后台构建失败")
+                    }
+                }.start()
             }
+            return emptyList()
         }
 
         val index = dictIndex ?: return emptyList()
