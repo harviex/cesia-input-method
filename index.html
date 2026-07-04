@@ -134,7 +134,7 @@ footer a{color:var(--text);text-decoration:none}
 <footer><p>Cesia 输入法 · <a href="https://github.com/harviex" target="_blank">@harviex</a> · 2026 · <a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></p></footer>
 <script>
 function downloadLatestApk(){
-  fetch("./latest.json?t=" + Date.now())
+  fetch("./docs/latest.json?t=" + Date.now())
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(data && data.apk_url){ window.location.href = data.apk_url; }
