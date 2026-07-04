@@ -9,11 +9,17 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
+import android.animation.Animator
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -149,7 +155,6 @@ class SettingsActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings)
-        setTitle("Cesia 输入法设置")
 
         // 先加载主题模式
         themeMode = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
@@ -279,7 +284,20 @@ class SettingsActivity : AppCompatActivity() {
         try {
             btnResetPrompt = findViewById(R.id.btn_reset_prompt)
         } catch (_: Exception) {}
+
+        // 版本号容器和圆点
+        try {
+            llVersionContainer = findViewById(R.id.ll_version_container)
+            versionDot = findViewById(R.id.version_dot)
+            tvVersionWithDot = findViewById(R.id.tv_version_with_dot)
+        } catch (_: Exception) {}
     }
+
+    private var llVersionContainer: View? = null
+    private var versionDot: View? = null
+    private var tvVersionWithDot: TextView? = null
+    private var versionCheckHandler: Handler? = null
+    private var pulseAnimator: Animator? = null
 
     private fun showVersion() {
         val displayVersion = try {
@@ -290,40 +308,145 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         val versionText = if (!displayVersion.isNullOrEmpty() && displayVersion != "null") {
-            "版本: $displayVersion"
+            "● v$displayVersion"
         } else {
-            "版本: 开发版"
+            "● 开发版"
         }
         tvVersion.text = versionText
-        Log.d("SettingsActivity", "显示版本(固定): $displayVersion")
+        tvVersionWithDot?.text = "v$displayVersion"
+        Log.d("SettingsActivity", "显示版本: $displayVersion")
+
+        // 检查是否有缓存的远端版本
+        checkCachedRemoteVersion()
+
+        // 启动版本检查
         fetchGitHubVersion()
     }
 
-    private fun fetchGitHubVersion() {
-        Thread {
-            try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val request = Request.Builder()
-                    .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
-                    .addHeader("User-Agent", "CesiaIME/1.0")
-                    .get()
-                    .build()
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-                if (response.isSuccessful) {
-                    val json = JSONObject(body)
-                    val tagName = json.optString("tag_name", "").removePrefix("v")
-                    if (tagName.isNotEmpty()) {
-                        prefs.edit().putString("github_version_name", tagName).apply()
-                        // 只更新远端版本缓存，不覆盖本地版本显示
-                        Log.d("SettingsActivity", "远端版本已缓存: $tagName")
-                    }
-                }
-            } catch (_: Exception) {}
-        }.start()
+    private fun checkCachedRemoteVersion() {
+        val remoteVersion = prefs.getString("github_version_name", "") ?: ""
+        if (remoteVersion.isNotEmpty()) {
+            val localVersion = try {
+                BuildConfig.VERSION_NAME
+            } catch (_: Exception) {
+                ""
+            }
+            if (compareVersions(remoteVersion, localVersion) > 0) {
+                showUpdateIndicator(true)
+            }
+        }
     }
+
+    private fun showUpdateIndicator(hasUpdate: Boolean) {
+        runOnUiThread {
+            if (hasUpdate) {
+                tvVersion.visibility = View.GONE
+                llVersionContainer?.visibility = View.VISIBLE
+                startPulseAnimation()
+            } else {
+                tvVersion.visibility = View.VISIBLE
+                llVersionContainer?.visibility = View.GONE
+                stopPulseAnimation()
+            }
+        }
+    }
+
+    private fun startPulseAnimation() {
+        versionDot?.let { dot ->
+            stopPulseAnimation()
+            val animator = ObjectAnimator.ofPropertyValuesHolder(
+                dot,
+                PropertyValuesHolder.ofFloat("scaleX", 1f, 1.5f, 1f),
+                PropertyValuesHolder.ofFloat("scaleY", 1f, 1.5f, 1f),
+                PropertyValuesHolder.ofFloat("alpha", 1f, 0.3f, 1f)
+            ).apply {
+                duration = 1000
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.RESTART
+                start()
+            }
+            pulseAnimator = animator
+        }
+    }
+
+    private fun stopPulseAnimation() {
+        pulseAnimator?.cancel()
+        pulseAnimator = null
+    }
+
+    private fun compareVersions(v1: String, v2: String): Int {
+        val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
+        val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+        val maxLen = maxOf(parts1.size, parts2.size)
+        for (i in 0 until maxLen) {
+            val p1 = if (i < parts1.size) parts1[i] else 0
+            val p2 = if (i < parts2.size) parts2[i] else 0
+            if (p1 != p2) return p1 - p2
+        }
+        return 0
+    }
+
+    private fun fetchGitHubVersion() {
+            Thread {
+                try {
+                    val client = OkHttpClient.Builder()
+                        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    val request = Request.Builder()
+                        .url("https://api.github.com/repos/harviex/cesia-input-method/releases/latest")
+                        .addHeader("User-Agent", "CesiaIME/1.0")
+                        .get()
+                        .build()
+                    val response = client.newCall(request).execute()
+                    val body = response.body?.string() ?: ""
+                    if (response.isSuccessful) {
+                        val json = JSONObject(body)
+                        val tagName = json.optString("tag_name", "").removePrefix("v")
+                        if (tagName.isNotEmpty()) {
+                            prefs.edit().putString("github_version_name", tagName).apply()
+                            // 检查是否有更新
+                            val localVersion = try { BuildConfig.VERSION_NAME } catch (e: Exception) { "0" }
+                            runOnUiThread { checkAndShowUpdate(tagName, localVersion) }
+                            Log.d("SettingsActivity", "远端版本已缓存: $tagName")
+                        }
+                    }
+                } catch (_: Exception) {}
+            }.start()
+        }
+
+        private fun checkAndShowUpdate(remoteVersion: String, localVersion: String) {
+            val cmp = compareVersions(remoteVersion, localVersion)
+            val llVersionContainer = findViewById<LinearLayout>(R.id.ll_version_container)
+            val versionDot = findViewById<View>(R.id.version_dot)
+            val tvVersionWithDot = findViewById<TextView>(R.id.tv_version_with_dot)
+            val tvVersion = findViewById<TextView>(R.id.tv_version)
+
+            if (cmp > 0) {
+                // 有更新：显示带圆点的版本，启动脉冲动画
+                tvVersion.visibility = View.GONE
+                llVersionContainer.visibility = View.VISIBLE
+                tvVersionWithDot.text = "v$remoteVersion 可用"
+                startPulseAnimation(versionDot)
+            } else {
+                // 无更新：显示原版本号
+                tvVersion.visibility = View.VISIBLE
+                llVersionContainer.visibility = View.GONE
+                tvVersion.text = "v$localVersion"
+            }
+        }
+
+        private fun startPulseAnimation(view: View) {
+            val animator = ObjectAnimator.ofPropertyValuesHolder(
+                view,
+                PropertyValuesHolder.ofFloat("scaleX", 1f, 1.5f, 1f),
+                PropertyValuesHolder.ofFloat("scaleY", 1f, 1.5f, 1f),
+                PropertyValuesHolder.ofFloat("alpha", 1f, 0.3f, 1f)
+            )
+            animator.duration = 1500
+            animator.repeatCount = ValueAnimator.INFINITE
+            animator.repeatMode = ValueAnimator.RESTART
+            animator.start()
+        }
 
     private fun checkAndRequestPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -369,7 +492,7 @@ class SettingsActivity : AppCompatActivity() {
         etMagicBookTitle?.setText(prefs.getString("magic_book_title", "芙莉莲的魔法书"))
 
         // 加载设置标题
-        etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia 输入法设置"))
+        etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia AI智能输入法"))
 
         // 更新 VoiceEngine 命令词
         VoiceEngine.updateCommandWords(
@@ -782,7 +905,7 @@ class SettingsActivity : AppCompatActivity() {
             "词库: 使用内置精简版\n提示: 点击下载词库按钮获取完整词库（~50MB）\n来源: 内置"
         }
         tvDictInfo?.text = statusText
-        btnDownloadDict?.text = if (info.downloaded) "🔄 重新下载" else "📥 下载词库"
+        btnDownloadDict?.text = if (info.downloaded) "重新下载" else "下载词库"
     }
 
     private fun downloadDict() {
@@ -1207,8 +1330,8 @@ class SettingsActivity : AppCompatActivity() {
                     if (!isUpToDate && latestVersionCode > 0) {
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
-                        appendLog("✅ 已是最新版本")
+                        tvStatus.text = "已是最新版本 ($latestVersionName)"
+                        appendLog("已是最新版本")
                     }
                 }
             } catch (e: Exception) {
