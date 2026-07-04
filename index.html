@@ -50,11 +50,7 @@ nav .links a:hover{color:var(--text)}
 .step .num{width:36px;height:36px;border-radius:50%;border:1px solid var(--accent);color:var(--accent);font-weight:700;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:.8rem}
 .step h4{font-size:.95rem;font-weight:600;margin-bottom:.3rem}
 .step p{font-size:.82rem;color:var(--muted)}
-.download{padding:6rem 2rem;max-width:680px;margin:0 auto;text-align:center}
-.download-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2.8rem 2rem}
-.download-btns{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap}
-.download-btns .btn{font-size:.88rem;padding:.7rem 1.4rem}
-.version-info{margin-top:1.2rem;font-size:.75rem;color:var(--muted)}
+
 footer{padding:3rem 2rem;border-top:1px solid var(--border);text-align:center;font-size:.8rem;color:var(--muted)}
 footer a{color:var(--text);text-decoration:none}
 @media(max-width:640px){.steps{grid-template-columns:1fr;gap:1.5rem}.feature-grid{grid-template-columns:1fr}.phone-mockup{width:240px;height:480px}nav .links{display:none}}
@@ -110,18 +106,7 @@ footer a{color:var(--text);text-decoration:none}
 <h2 class="section-title">输入法不应该只负责打字</h2>
 <p class="section-desc" style="margin:0 auto 1.2rem;">真正的效率工具，应该在你需要的时候帮你把思想变成文字，而不是只负责把拼音变成汉字。</p>
 </section>
-<section class="download" id="download">
-<div class="download-card">
-<div class="download-btns">
-<a href="javascript:void(0)" onclick="downloadLatestApk()" class="btn btn-primary">Android 版</a>
-<a class="btn btn-ghost" style="opacity:.45;pointer-events:none;cursor:not-allowed">iOS 版</a>
-<a class="btn btn-ghost" style="opacity:.45;pointer-events:none;cursor:not-allowed">macOS 版</a>
-<a class="btn btn-ghost" style="opacity:.45;pointer-events:none;cursor:not-allowed">Windows 版</a>
-<a class="btn btn-ghost" style="opacity:.45;pointer-events:none;cursor:not-allowed">Linux 版</a>
-</div>
-<div class="version-info" style="margin-top:1.2rem;font-size:.75rem;color:var(--muted)">已上线版本 · Android 8+ · ARM64</div>
-</div>
-</section>
+
 <footer><p>Cesia 输入法 · <a href="https://github.com/harviex" target="_blank">@harviex</a> · 2026 · <a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></p></footer>
 <script>
 var CESIA_APK_URL = "https://github.com/harviex/cesia-input-method/releases/download/v1.1.648/Cesia-1.1.648-debug.apk";
