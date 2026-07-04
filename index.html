@@ -17,9 +17,9 @@ nav .links a:hover{color:var(--text)}
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6rem 2rem 4rem;position:relative}
 .hero::before{content:"";position:absolute;width:600px;height:600px;background:radial-gradient(circle,var(--glow) 0%,transparent 70%);top:10%;left:50%;transform:translateX(-50%);pointer-events:none}
 .hero .badge{display:inline-flex;align-items:center;gap:.4rem;background:var(--accent-dim);border:1px solid rgba(129,216,208,0.2);border-radius:100px;padding:.35rem .9rem;font-size:.78rem;color:var(--accent);font-weight:500;margin-bottom:1.8rem}
-.hero h1{font-size:clamp(2.4rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1.1;max-width:700px;margin-bottom:1.2rem}
+.hero h1{font-size:clamp(2.2rem,5vw,3.6rem);font-weight:700;letter-spacing:-.03em;line-height:1.15;max-width:720px;margin-bottom:1.2rem}
 .hero h1 .highlight{background:linear-gradient(135deg,var(--accent) 0%,#a78bfa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero .subtitle{font-size:1.1rem;color:var(--muted);max-width:520px;margin-bottom:2.4rem;line-height:1.7}
+.hero .subtitle{font-size:1.1rem;color:var(--muted);max-width:540px;margin-bottom:2.4rem;line-height:1.7}
 .hero .cta-row{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
 .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 1.8rem;border-radius:10px;font-size:.95rem;font-weight:600;text-decoration:none;transition:all .2s;cursor:pointer;border:none}
 .btn-primary{background:var(--accent);color:#0a0a0f;box-shadow:0 0 30px var(--glow)}
@@ -44,7 +44,7 @@ nav .links a:hover{color:var(--text)}
 .feature-card .icon{width:40px;height:40px;border-radius:10px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:1rem}
 .feature-card h3{font-size:1rem;font-weight:600;margin-bottom:.4rem}
 .feature-card p{font-size:.87rem;color:var(--muted);line-height:1.6}
-.how-it-works{padding:6rem 2rem;max-width:800px;margin:0 auto;text-align:center}
+.how-it-works{padding:6rem 2rem;max-width:860px;margin:0 auto;text-align:center}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem}
 .step .num{width:36px;height:36px;border-radius:50%;border:1px solid var(--accent);color:var(--accent);font-weight:700;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:.8rem}
 .step h4{font-size:.95rem;font-weight:600;margin-bottom:.3rem}
@@ -70,20 +70,20 @@ footer a{color:var(--text);text-decoration:none}
 <body>
 <nav>
 <a href="#" class="logo">Cesia<span>.</span></a>
-<div class="links"><a href="#features">功能</a><a href="#how">怎么用</a><a href="#download">下载</a><a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></div>
+<div class="links"><a href="#scenarios">场景</a><a href="#features">功能</a><a href="#download">下载</a><a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></div>
 </nav>
 <section class="hero">
-<div class="badge">✨ AI · 隐私优先 · 完全可控</div>
-<h1>输入法，<br>不该只是<span class="highlight">打字</span></h1>
-<p class="subtitle">Cesia 把 AI 直接放进输入流程里。你说大白话，AI 帮你润色成好文字；选中文字，一句话让 AI 帮你改。按键不出设备，模型你自己选。</p>
+<div class="badge">✨ 离线 AI · 隐私优先 · 完全可控</div>
+<h1>在<span class="highlight">任何地方</span>，<br>都能直接和 AI 对话</h1>
+<p class="subtitle">地铁里、飞机上、会议室里——没网也能用 AI。说话、打字、选中文字，甚至叫一声命令词，AI 直接帮你把意思变成可以发出去的句子。</p>
 <div class="cta-row">
 <a href="#download" class="btn btn-primary">↓ 下载 APK</a>
-<a href="https://github.com/harviex/cesia-input-method" class="btn btn-ghost" target="_blank">View on GitHub →</a>
+<a href="https://github.com/harviex/cesia-input-method" class="btn btn-ghost" target="_blank">GitHub →</a>
 </div>
 <div class="phone-mockup">
-<div class="status-bar">Cesia &nbsp;·&nbsp; 12:00</div>
+<div class="status-bar">Cesia · 离线模式 · AI 就绪</div>
 <div class="app-demo">
-<div class="demo-input">今天和团队开了三小时会，结论是先把需求文档对齐再排期</div>
+<div class="demo-input">刚开完会，帮我写一段给客户的跟进邮件，语气正式一点</div>
 <div class="demo-keyboard">
 <div class="key">Q</div><div class="key">W</div><div class="key">E</div><div class="key">R</div><div class="key">T</div>
 <div class="key">Y</div><div class="key">U</div><div class="key">I</div><div class="key">O</div><div class="key">P</div>
@@ -95,27 +95,38 @@ footer a{color:var(--text);text-decoration:none}
 </div>
 </div>
 </section>
+<section class="features" id="scenarios">
+<div class="section-label">Scenarios</div>
+<h2 class="section-title">无论哪种场景，<br>AI 都在你指尖</h2>
+<p class="section-desc">有些事只有输入法能做，因为输入法一直在你输入的时候在场。</p>
+<div class="feature-grid">
+<div class="feature-card"><div class="icon">✈️</div><h3>没网的时候，AI 照样用</h3><p>飞机上、地铁里、 rural 老房子——断网了？没关系。本地 Qwen 模型 + 离线语音识别，润色、改写、写作全都能跑。</p></div>
+<div class="feature-card"><div class="icon">🤐</div><h3>不方便说话，打字也能唤醒 AI</h3><p>开会、图书馆、安静的办公室。选中文字，一句话指令，AI 直接改写。不用出声，比打字快。</p></div>
+<div class="feature-card"><div class="icon">🌐</div><h3>有网的时候，免费 AI 随便用</h3><p>OpenRouter 免费模型不限流，润色、翻译、写作、搜索——全走你自己配置的 API Key，想换模型就换。</p></div>
+<div class="feature-card"><div class="icon">🎤</div><h3>说一句，直接上屏</h3><p>按住麦克风，说大白话。AI 自动润色，润完直接进输入框。不需要你复制粘贴，不需要切 App。</p></div>
+<div class="feature-card"><div class="icon">📋</div><h3>剪贴板、RSS、搜索，都能喂给 AI</h3><p>智能写作能直接读你的剪贴板、浏览器内容、订阅 RSS，结合本地历史一起写。不是孤立润色，是真正帮你成文。</p></div>
+<div class="feature-card"><div class="icon">⌨️</div><h3>全键 / 双拼 / T9，怎么舒服怎么来</h3><p>Rime 引擎，标准全键盘、双拼、T9 九宫格都能用。滑动切布局，词库自己说了算。</p></div>
+</div>
+</section>
 <section class="features" id="features">
 <div class="section-label">Features</div>
 <h2 class="section-title">不只是输入法</h2>
-<p class="section-desc">别的输入法只负责把拼音变成汉字。Cesia 负责把你脑子里的意思变成可以发出去的句子。</p>
+<p class="section-desc">Cesia 的定位不是"更准的词库"，而是你设备上的 AI 交互入口。输入只是其中一种方式。</p>
 <div class="feature-grid">
-<div class="feature-card"><div class="icon">🎤</div><h3>语音润色</h3><p>按住麦克风，说大白话。AI 自动帮你改成得体文字，润色完直接上屏，不需要手改。</p></div>
-<div class="feature-card"><div class="icon">✨</div><h3>智能修改</h3><p>选中任何一段文字，一句话让 AI 改写：翻译、换语气、扩写、缩句、加序号……直接替换，不用复制粘贴。</p></div>
-<div class="feature-card"><div class="icon">📝</div><h3>智能写作</h3><p>唤醒「写作」模式，AI 根据你的剪贴板、浏览内容、RSS 订阅和本地历史，帮你写邮件、写周报、写回复。</p></div>
-<div class="feature-card"><div class="icon">📖</div><h3>快捷指令</h3><p>把常用的改写指令保存下来，置顶常用项。越用越顺，不用每次都重新描述需求。</p></div>
-<div class="feature-card"><div class="icon">⌨️</div><h3>全键盘 / 双拼 / T9</h3><p>基于 Rime 引擎，支持拼音、双拼、模糊音、T9 九宫格。词库自己说了算，想换就换。</p></div>
-<div class="feature-card"><div class="icon">🛡️</div><h3>隐私优先</h3><p>按键内容不出设备。AI 用你自己的 OpenRouter Key，想换模型就换。也可以断网用本地模型。</p></div>
+<div class="feature-card"><div class="icon">✨</div><h3>智能修改</h3><p>选中文字，一句话让 AI 改：翻译、换语气、扩写、缩句、加序号、去冗余。直接替换，不用复制粘贴。</p></div>
+<div class="feature-card"><div class="icon">📝</div><h3>智能写作</h3><p>唤醒写作模式，AI 结合剪贴板、RSS、历史记录帮你起稿。写周报、写邮件、写回复，不再是空白文档。</p></div>
+<div class="feature-card"><div class="icon">📖</div><h3>快捷指令</h3><p>把常用的改写指令保存下来，置顶常用项。越用越顺手，不用每次重新描述需求。</p></div>
+<div class="feature-card"><div class="icon">🗣️</div><h3>语音命令，一叫即应</h3><p>说「写作」「魔法」「发送」等自定义命令词，直接唤醒对应功能。不用动手找按钮。</p></div>
+<div class="feature-card"><div class="icon">🎨</div><h3>从 wrist 到键盘，全都你说了算</h3><p>主题颜色、字符灰度、字体大小、简繁体、词库、命令词、AI 模型、API Key——全都能改。</p></div>
+<div class="feature-card"><div class="icon">🔒</div><h3>数据全在本地，完全属于你</h3><p>按键内容、剪贴板、润色历史全存本地。开源可审计。AI 请求走你自己的 Key，不想用云端就断网用本地模型。</p></div>
 </div>
 </section>
 <section class="how-it-works" id="how">
-<div class="section-label">How it works</div>
-<h2 class="section-title">一步到位</h2>
-<p class="section-desc" style="margin:0 auto 0;">按一下，说/选，直接出最终文字。没有中间确认页。</p>
-<div class="steps">
-<div class="step"><div class="num">1</div><h4>触发</h4><p>点麦克风说一段话，或选中已有文字发一条指令。也可以直接说「写作」「魔法」等自定义命令词唤醒。</p></div>
-<div class="step"><div class="num">2</div><h4>处理</h4><p>AI 根据你选好的模式（润色/改写/写作），自动处理：查资料、调剪贴板、读历史、起稿、翻译。</p></div>
-<div class="step"><div class="num">3</div><h4>上屏</h4><p>最终文字自动填入输入框，你直接点发送。不需要复制、切换 App、手动粘贴。</p></div>
+<div class="section-label">Philosophy</div>
+<h2 class="section-title">输入法不应该只负责打字</h2>
+<p class="section-desc" style="margin:0 auto 1.2rem;">真正的效率工具，应该在你需要的时候帮你把意思变成文字，而不是只负责把拼音变成汉字。</p>
+<div class="steps" style="grid-template-columns:1fr;max-width:420px;margin-left:auto;margin-right:auto">
+<div class="step"><div class="num" style="border-color:var(--accent);color:var(--accent)">⇢</div><h4>触发</h4><p>说一段话、选中一段文字、或叫一声命令词。AI 立刻处理，最终文字直接进输入框。</p></div>
 </div>
 </section>
 <section class="download" id="download">
