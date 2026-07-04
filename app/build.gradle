@@ -4,6 +4,13 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.22'
 }
 
+// Java 17 toolchain (avoids machine-specific java.home)
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 // ===== 版本号计算（配置期执行，-PapkVersion 由 CI 传入）=====
 def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION")
 def apkVer = apkVerRaw?.trim()
