@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cesia 输入法 — 把 AI 真正融入输入体验</title>
 <meta name="description" content="Cesia 是一款把 AI 真正融入输入体验的 Android 输入法。语音润色、智能修改、智能写作、Rime 引擎、双拼/T9，隐私优先。" />
-<meta name="cache-bust" content="2026-07-04-03" />
+<meta name="cache-bust" content="2026-07-04-04" />
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#e4e4ef;--muted:#787890;--accent:#81D8D0;--accent-dim:rgba(129,216,208,0.12);--glow:rgba(129,216,208,0.25)}
@@ -133,14 +133,15 @@ footer a{color:var(--text);text-decoration:none}
 </section>
 <footer><p>Cesia 输入法 · <a href="https://github.com/harviex" target="_blank">@harviex</a> · 2026 · <a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a></p></footer>
 <script>
+var CESIA_APK_URL = "https://github.com/harviex/cesia-input-method/releases/download/v1.1.648/Cesia-1.1.648-debug.apk";
 function downloadLatestApk(){
   fetch("./docs/latest.json?t=" + Date.now())
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(data && data.apk_url){ window.location.href = data.apk_url; }
-      else{ alert("未找到最新 APK，请前往 Releases 页面手动下载。"); }
+      else{ window.location.href = CESIA_APK_URL; }
     })
-    .catch(function(){ alert("获取最新版本失败，请稍后再试。"); });
+    .catch(function(){ window.location.href = CESIA_APK_URL; });
 }
 </script>
 <script>document.querySelectorAll("a[href^=\"#\"]").forEach(a=>{a.addEventListener("click",e=>{e.preventDefault();const el=document.querySelector(a.getAttribute("href"));el&&el.scrollIntoView({behavior:"smooth"})})})</script>
