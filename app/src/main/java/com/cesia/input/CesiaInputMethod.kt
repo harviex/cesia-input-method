@@ -649,8 +649,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val KEYCODE_SWITCH_SYMBOL_LANG = -105
         const val KEYCODE_BACK_KEY = -999
         const val THEME_LIGHT = 0
-        const val THEME_DARK = 1
-        const val THEME_AUTO = 2
+            const val THEME_DARK = 1
     }
 
 // endregion 常量配置
@@ -661,7 +660,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     override fun onCreate() {
         val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt(PREF_THEME_MODE, THEME_LIGHT)
-        isDarkTheme = themeMode == THEME_DARK || (themeMode == THEME_AUTO && isSystemDark())
+        isDarkTheme = themeMode == THEME_DARK
         setTheme(if (isDarkTheme) R.style.Theme_Cesia_Dark else R.style.Theme_Cesia)
         super.onCreate()
     }
@@ -1244,7 +1243,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return (a shl 24) or (r.coerceIn(0,255) shl 16) or (g.coerceIn(0,255) shl 8) or b.coerceIn(0,255)
     }
 
-    /** 主题色调节弹窗 */
+    /** 主题菜单弹窗 */
     private fun showThemePopup() {
         dismissAllPopups()
         val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
@@ -1267,16 +1266,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val tvHue = view.findViewById<android.widget.TextView>(R.id.tv_hue_preview)
         val btnReset = view.findViewById<android.widget.TextView>(R.id.btn_reset_theme)
 
-        // 明暗模式按钮
+        // 明暗模式按钮（仅明亮/黑暗，去掉随系统）
         val btnThemeLight = view.findViewById<android.widget.TextView>(R.id.btn_theme_light)
         val btnThemeDark = view.findViewById<android.widget.TextView>(R.id.btn_theme_dark)
-        val btnThemeAuto = view.findViewById<android.widget.TextView>(R.id.btn_theme_auto)
 
         // 文字大小按钮
         val btnTextSmall = view.findViewById<android.widget.TextView>(R.id.btn_text_small)
         val btnTextMedium = view.findViewById<android.widget.TextView>(R.id.btn_text_medium)
         val btnTextLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_large)
         val btnTextXLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_xlarge)
+
+        // 文字灰度调节
+        val seekTextGray = view.findViewById<android.widget.SeekBar>(R.id.seek_text_gray)
+        val tvTextGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_text_gray_preview)
 
         // 初始化为当前值（不是默认值，解决重开不同步问题）
         seekHue.progress = accentHue.toInt()
@@ -1292,31 +1294,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化明暗模式按钮状态
         val currentThemeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt(PREF_THEME_MODE, THEME_LIGHT)
-        updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, currentThemeMode)
+        updateThemeModeButtons(btnThemeLight, btnThemeDark, currentThemeMode)
 
         // 初始化文字大小按钮状态
         updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, textThemeSize)
 
-        // 明暗模式切换
+        // 初始化文字灰度滑块
+        seekTextGray.progress = (textGrayScale * 100f).toInt().coerceIn(0, 100)
+        tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
+
+        // 明暗模式切换（仅明亮/黑暗）
         btnThemeLight.setOnClickListener {
             isDarkTheme = false
             getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
                 .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
-            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_LIGHT)
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_LIGHT)
             applyThemeColors()
         }
         btnThemeDark.setOnClickListener {
             isDarkTheme = true
             getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
                 .putInt(PREF_THEME_MODE, THEME_DARK).apply()
-            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_DARK)
-            applyThemeColors()
-        }
-        btnThemeAuto.setOnClickListener {
-            isDarkTheme = isSystemDark()
-            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
-                .putInt(PREF_THEME_MODE, THEME_AUTO).apply()
-            updateThemeModeButtons(btnThemeLight, btnThemeDark, btnThemeAuto, THEME_AUTO)
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_DARK)
             applyThemeColors()
         }
 
@@ -1342,21 +1341,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             applyThemeColors()
         }
 
-        // 文字灰阶调节
-                val seekTextGray = view.findViewById<android.widget.SeekBar>(R.id.seek_text_gray)
-                val tvTextGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_text_gray_preview)
-                seekTextGray.progress = (textGrayScale * 100f).toInt().coerceIn(0, 100)
+        // 文字灰度调节
+        seekTextGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                textGrayScale = progress / 100f
                 tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
-                seekTextGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                        textGrayScale = progress / 100f
-                        tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
-                        applyTextGrayScale()
-                        saveThemeColors()
-                    }
-                    override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
-                    override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
-                })
+                applyTextGrayScale()
+                saveThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
 
         seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
@@ -1392,19 +1387,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         })
 
         btnReset.setOnClickListener {
+            // 默认值：主题色蒂芙尼蓝，背景/按键灰度1.0(255)，文字灰度0.7，文字大小"小"(0)，明暗模式"明亮"
             accentHue = defaultAccentHsl[0]
             themeAccent = hslToColor(defaultAccentHsl[0], defaultAccentHsl[1], defaultAccentHsl[2])
-            themeBgGrayBase = 0xE0
-            themeKeyGrayBase = 0xF0
-            textThemeSize = 1
-            textGrayScale = 1f
+            themeBgGrayBase = 0xFF
+            themeKeyGrayBase = 0xFF
+            textThemeSize = 0
+            textGrayScale = 0.7f
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
-            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 1)
-            seekTextGray.progress = 50
-            textGrayScale = 0.5f
-            tvTextGrayPreview.text = "0.5"
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 0)
+            seekTextGray.progress = 70
+            textGrayScale = 0.7f
+            tvTextGrayPreview.text = "0.7"
+            // 重置明暗模式为明亮
+            isDarkTheme = false
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_LIGHT)
             applyThemeColors()
         }
 
@@ -1412,15 +1413,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         popup.showAtLocation(keyboardView, android.view.Gravity.CENTER, 0, 0)
     }
 
-    private fun updateThemeModeButtons(btnLight: android.widget.TextView, btnDark: android.widget.TextView, btnAuto: android.widget.TextView, mode: Int) {
+    private fun updateThemeModeButtons(btnLight: android.widget.TextView, btnDark: android.widget.TextView, mode: Int) {
         val accent = themeAccent
         val inactiveColor = 0xFF666666.toInt()
         btnLight.setTextColor(if (mode == THEME_LIGHT) accent else inactiveColor)
         btnLight.setTypeface(null, if (mode == THEME_LIGHT) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         btnDark.setTextColor(if (mode == THEME_DARK) accent else inactiveColor)
         btnDark.setTypeface(null, if (mode == THEME_DARK) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-        btnAuto.setTextColor(if (mode == THEME_AUTO) accent else inactiveColor)
-        btnAuto.setTypeface(null, if (mode == THEME_AUTO) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
 
     private fun updateTextSizeButtons(btnSmall: android.widget.TextView, btnMedium: android.widget.TextView, btnLarge: android.widget.TextView, btnXLarge: android.widget.TextView, size: Int) {
@@ -6755,7 +6754,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getInt(PREF_THEME_MODE, THEME_LIGHT)
-            isDarkTheme = themeMode == THEME_DARK || (themeMode == THEME_AUTO && isSystemDark())
+            isDarkTheme = themeMode == THEME_DARK
             applyKeyboardTheme()
             aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getString(PREF_AI_STYLE, "自然") ?: "自然"
