@@ -118,6 +118,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
     private var accentColor: Int = 0xFF81D8D0.toInt()
+    private var themeMode: Int = THEME_LIGHT
 
     private val testClient = OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
@@ -150,6 +151,11 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings)
         setTitle("Cesia 输入法设置")
+
+        // 先加载主题模式
+        themeMode = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
+        // 应用深色/浅色主题的文本和背景色
+        applyThemeColorsToViewTree(window.decorView)
 
         // 应用动态主题色到所有硬编码的蒂芙尼蓝元素
         accentColor = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -1770,6 +1776,128 @@ class SettingsActivity : AppCompatActivity() {
             val rb: RadioButton = view.findViewById(R.id.rb_source)
             val tvName: TextView = view.findViewById(R.id.tv_source_name)
             val tvCategory: TextView = view.findViewById(R.id.tv_source_category)
+        }
+    }
+
+    /** 遍历 view 树，应用深色/浅色主题的文本颜色和背景色 */
+    private fun applyThemeColorsToViewTree(view: android.view.View) {
+        val isDark = themeMode == THEME_DARK
+        val textPrimary = if (isDark) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
+        val textSecondary = if (isDark) 0xFFB0B0B0.toInt() else 0xFF666666.toInt()
+        val textTertiary = if (isDark) 0xFF888888.toInt() else 0xFF999999.toInt()
+        val textHint = if (isDark) 0xFF888888.toInt() else 0xFF999999.toInt()
+        val bgPrimary = if (isDark) 0xFF1A1A2E.toInt() else 0xFFFAFAFA.toInt()
+        val bgSecondary = if (isDark) 0xFF16213E.toInt() else 0xFFFFFFFF.toInt()
+        val bgCard = if (isDark) 0xFF1A1A2E.toInt() else 0xFFFFFFFF.toInt()
+        val dividerColor = if (isDark) 0xFF333333.toInt() else 0xFFE0E0E0.toInt()
+        val cardAccentBg = if (isDark) 0xFF1A1A2E.toInt() else 0xFFE8F5F5.toInt() // Tiffany tint for cards
+
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                applyThemeColorsToViewTree(view.getChildAt(i))
+            }
+        }
+
+        // TextView text colors
+        if (view is android.widget.TextView) {
+            val currentColor = view.currentTextColor
+            // Replace hardcoded light theme colors with theme-aware colors
+            when (currentColor) {
+                0xFF333333.toInt(), 0xFF444444.toInt(), 0xFF555555.toInt() -> view.setTextColor(textPrimary)
+                0xFF666666.toInt(), 0xFF888888.toInt(), 0xFF999999.toInt(), 0xFFAAAAAA.toInt() -> view.setTextColor(textSecondary)
+                0xFFCCCCCC.toInt(), 0xFFDDDDDD.toInt(), 0xFFEEEEEE.toInt() -> view.setTextColor(textTertiary)
+                0xFFFFFFFF.toInt() -> view.setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
+                else -> {
+                    // Check hint color
+                    val hintColor = view.hintTextColors?.defaultColor ?: 0
+                    if (hintColor == 0xFF999999.toInt() || hintColor == 0xFF888888.toInt() || hintColor == 0xFFAAAAAA.toInt()) {
+                        view.setHintTextColor(textHint)
+                    }
+                }
+            }
+        }
+
+        // Background colors
+        try {
+            val bg = view.background
+            if (bg is android.graphics.drawable.ColorDrawable) {
+                val bgColor = bg.color
+                when (bgColor) {
+                    0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
+                        // Light backgrounds -> use bgPrimary for root, bgSecondary for cards
+                        view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgSecondary else bgPrimary)
+                    }
+                    0xFF0F0F23.toInt(), 0xFF1A1A2E.toInt(), 0xFF16213E.toInt() -> {
+                        // Dark backgrounds already dark, keep or update
+                        view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgCard else bgPrimary)
+                    }
+                    0xFFE0E0E0.toInt(), 0xFFCCCCCC.toInt() -> {
+                        // Divider-like backgrounds
+                        view.setBackgroundColor(dividerColor)
+                    }
+                    0xFFE8F5F5.toInt() -> {
+                        // Tiffany tinted card background
+                        view.setBackgroundColor(cardAccentBg)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // View backgrounds (solid colors set via setBackgroundColor)
+        try {
+            val bg = view.background
+            if (bg is android.graphics.drawable.ColorDrawable) {
+                val bgColor = bg.color
+                when (bgColor) {
+                    0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
+                        view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgSecondary else bgPrimary)
+                    }
+                    0xFF0F0F23.toInt(), 0xFF1A1A2E.toInt(), 0xFF16213E.toInt() -> {
+                        view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgCard else bgPrimary)
+                    }
+                    0xFFE0E0E0.toInt(), 0xFFCCCCCC.toInt() -> {
+                        view.setBackgroundColor(dividerColor)
+                    }
+                    0xFFE8F5F5.toInt() -> {
+                        view.setBackgroundColor(cardAccentBg)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // Dividers (View with small height/width)
+        if (view is android.view.View) {
+            val lp = view.layoutParams
+            if ((lp is android.view.ViewGroup.LayoutParams && lp.height == 1 && lp.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) ||
+                (lp is android.view.ViewGroup.LayoutParams && lp.width == 1 && lp.height == android.view.ViewGroup.LayoutParams.MATCH_PARENT)) {
+                view.setBackgroundColor(dividerColor)
+            }
+        }
+
+        // MaterialButton text color
+        if (view is com.google.android.material.button.MaterialButton) {
+            val currentTextColor = view.currentTextColor
+            if (currentTextColor == 0xFF333333.toInt() || currentTextColor == 0xFFFFFFFF.toInt()) {
+                view.setTextColor(textPrimary)
+            }
+        }
+
+        // TextInputLayout hint/text colors
+        if (view is com.google.android.material.textfield.TextInputLayout) {
+            view.defaultHintTextColor = android.content.res.ColorStateList.valueOf(textHint)
+            // boxStrokeColor handled by applyAccentToViewTree
+        }
+
+        // EditText text color
+        if (view is android.widget.EditText) {
+            val currentColor = view.currentTextColor
+            if (currentColor == 0xFF333333.toInt() || currentColor == 0xFFFFFFFF.toInt()) {
+                view.setTextColor(textPrimary)
+            }
+            val hintColor = view.hintTextColors?.defaultColor ?: 0
+            if (hintColor == 0xFF999999.toInt() || hintColor == 0xFF888888.toInt()) {
+                view.setHintTextColor(textHint)
+            }
         }
     }
 

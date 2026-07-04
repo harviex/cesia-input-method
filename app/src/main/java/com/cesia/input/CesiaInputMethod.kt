@@ -1169,8 +1169,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // 底栏按钮图标颜色（使用统一颜色）
-        val iconColor = textColor
+        // 底栏按钮图标颜色（深色模式用主题色，避免过亮）
+        val iconColor = if (isDarkTheme) themeAccent else textColor
         btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
@@ -1222,12 +1222,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 候选栏展开面板（GridView）刷新大小和颜色
         panelAdapter?.notifyDataSetChanged()
 
-        // 底栏按钮图标颜色
-        val scaledIcon = scaleGray(baseColor, scale)
-        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnClipboard.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnSend.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        btnDelete.setColorFilter(scaledIcon, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        // 底栏按钮图标颜色（深色模式用主题色，避免过亮）
+        val iconColor = if (isDarkTheme) themeAccent else scaleGray(baseColor, scale)
+        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        btnDelete.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
     }
 
     /** 对基准颜色应用灰阶缩放（在黑白之间插值） */

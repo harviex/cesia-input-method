@@ -174,6 +174,23 @@ class CesiaKeyboardView @JvmOverloads constructor(
         54 to "mno", 55 to "pqrs", 56 to "tuv", 57 to "wxyz"
     )
 
+    // T9 标点主字符映射（复用 t9MainPaint，自动跟随灰度）
+    private val t9PunctLabels = mapOf(
+        65292 to "，",   // 全角逗号
+        12290 to "。",   // 全角句号
+        65281 to "！",   // 全角感叹号
+        65311 to "？"    // 全角问号
+    )
+
+    // T9 功能键主字符映射（复用 t9MainPaint，统一灰度）
+    private val t9FuncLabels = mapOf(
+        -5 to "⌫",      // 退格
+        -104 to "⇧",    // Shift
+        -100 to "符",    // 符号切换
+        -999 to "⌨",    // 全键盘切换
+        10 to "↵"       // 回车
+    )
+
     // 副字符画笔（灰色）
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.DEFAULT
@@ -241,78 +258,131 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        // 副字符使用主题色 + 亮度缩放（保持色相，调节明暗）
-        popupPaint.color = scaleBrightness(themeAccent, textGrayScale)
-        longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
+            // 副字符使用主题色 + 亮度缩放（保持色相，调节明暗）
+            popupPaint.color = scaleBrightness(themeAccent, textGrayScale)
+            longPressHighlightPaint.color = (themeAccent and 0x00FFFFFF) or 0x40000000
 
-        // 确保 mKeyTextPaint 颜色正确（super.onDraw 可能重置它）
-        applyKeyTextPaintColor()
+            // 确保 mKeyTextPaint 颜色正确（super.onDraw 可能重置它）
+            applyKeyTextPaintColor()
 
-        // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写
-        val kb = this.keyboard
-        if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
-            for (key in kb.keys) {
-                val code = key.codes?.firstOrNull() ?: continue
-                if (code in 97..122 && key.label != null && key.label.length == 1) {
-                    key.label = key.label.toString().uppercase()
+            val kb = this.keyboard
+            val keys = kb?.keys ?: emptyList()
+
+            // ===== 全键盘模式：清空 label 让 AOSP 缓存空白按键，改由我们用 t9MainPaint 绘制可变色主字符 =====
+            val originalLabels = mutableMapOf<Int, CharSequence>()
+            if (!isT9Mode && kb != null) {
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    if (key.label != null && key.label.length > 0) {
+                        originalLabels[code] = key.label
+                        key.label = ""
+                    }
                 }
             }
-        }
 
-        super.onDraw(canvas)
-
-        // 恢复原始小写label
-        if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
-            for (key in kb.keys) {
-                val code = key.codes?.firstOrNull() ?: continue
-                if (code in 97..122 && key.label != null && key.label.length == 1) {
-                    key.label = key.label.toString().lowercase()
+            // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写（仅 T9 模式不处理）
+            if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
+                for (key in kb.keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    if (code in 97..122 && key.label != null && key.label.length == 1) {
+                        key.label = key.label.toString().uppercase()
+                    }
                 }
             }
-        }
 
-        val spSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, labelTextSize * textScaleFactor, resources.displayMetrics
-        )
-        labelPaint.textSize = spSize
-        labelPaint.color = labelTextColor
+            super.onDraw(canvas)
 
-        val popupSpSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, popupTextSize * textScaleFactor, resources.displayMetrics
-        )
-        popupPaint.textSize = popupSpSize
+            // 恢复原始小写label（Shift 模式）
+            if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
+                for (key in kb.keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    if (code in 97..122 && key.label != null && key.label.length == 1) {
+                        key.label = key.label.toString().lowercase()
+                    }
+                }
+            }
 
-        val t9MainSpSize = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP, t9MainTextSize * textScaleFactor, resources.displayMetrics
-        )
-        t9MainPaint.textSize = t9MainSpSize
-        t9MainPaint.color = t9MainTextColor
+            // 恢复全键盘原始 label（供下一帧 buffer 重建时使用，虽然 buffer 已缓存空白）
+            if (!isT9Mode) {
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    originalLabels[code]?.let { key.label = it }
+                }
+            }
 
-        val keys = this.keyboard?.keys ?: return
-        // 长按高亮：在 super.onDraw 之前绘制高亮背景
-        val popupKey = currentPopupKey
-        if (popupKey != null) {
-            canvas.drawRect(
-                popupKey.x.toFloat(), popupKey.y.toFloat(),
-                (popupKey.x + popupKey.width).toFloat(), (popupKey.y + popupKey.height).toFloat(),
-                longPressHighlightPaint
+            val spSize = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP, labelTextSize * textScaleFactor, resources.displayMetrics
             )
-        }
-        for (key in keys) {
-            val code = key.codes?.firstOrNull() ?: continue
-            if (key.label == null) continue
+            labelPaint.textSize = spSize
+            labelPaint.color = labelTextColor
 
-            // ===== T9 主字符（大号字母，按键中央） =====
-            if (isT9Mode) {
-                val t9Main = t9MainLabels[code]
-                if (t9Main != null) {
+            val popupSpSize = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP, popupTextSize * textScaleFactor, resources.displayMetrics
+            )
+            popupPaint.textSize = popupSpSize
+
+            val t9MainSpSize = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP, t9MainTextSize * textScaleFactor, resources.displayMetrics
+            )
+            t9MainPaint.textSize = t9MainSpSize
+            t9MainPaint.color = t9MainTextColor
+
+            // 长按高亮：在 super.onDraw 之后绘制高亮背景（覆盖在按键上方）
+            val popupKey = currentPopupKey
+            if (popupKey != null) {
+                canvas.drawRect(
+                    popupKey.x.toFloat(), popupKey.y.toFloat(),
+                    (popupKey.x + popupKey.width).toFloat(), (popupKey.y + popupKey.height).toFloat(),
+                    longPressHighlightPaint
+                )
+            }
+
+            // ===== 全键盘主字符：用 t9MainPaint 绘制（居中、同字号、同灰度、可变色）=====
+            if (!isT9Mode) {
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    val label = originalLabels[code] ?: key.label ?: continue
+                    if (label.isEmpty()) continue
+
+                    // Shift 模式下字母键显示大写
+                    val displayLabel = if ((isShiftMode || isShiftLocked) && code in 97..122 && label.length == 1)
+                        label.toString().uppercase() else label.toString()
+
                     val cx = key.x + key.width / 2f
                     val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
-                    canvas.drawText(t9Main, cx, cy, t9MainPaint)
+                    canvas.drawText(displayLabel, cx, cy, t9MainPaint)
                 }
             }
 
-            val x = key.x + key.width - 10f
+            for (key in keys) {
+                val code = key.codes?.firstOrNull() ?: continue
+                if (key.label == null) continue
+
+                // ===== T9 主字符（大号字母，按键中央）=====
+                if (isT9Mode) {
+                    val t9Main = t9MainLabels[code]
+                    if (t9Main != null) {
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                        canvas.drawText(t9Main, cx, cy, t9MainPaint)
+                    }
+                    // ===== T9 标点主字符（复用 t9MainPaint，自动跟随灰度）=====
+                    val t9Punct = t9PunctLabels[code]
+                    if (t9Punct != null) {
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                        canvas.drawText(t9Punct, cx, cy, t9MainPaint)
+                    }
+                    // ===== T9 功能键主字符（复用 t9MainPaint，统一灰度）=====
+                    val t9Func = t9FuncLabels[code]
+                    if (t9Func != null) {
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                        canvas.drawText(t9Func, cx, cy, t9MainPaint)
+                    }
+                }
+
+                val x = key.x + key.width - 10f
 
             // ===== 1. functionalLabels / t9Labels（灰色，右上角） =====
             val fnLabel = functionalLabels[code] ?: t9Labels[code]
@@ -388,12 +458,23 @@ class CesiaKeyboardView @JvmOverloads constructor(
             setStroke((1 * resources.displayMetrics.density).toInt(), strokeColor)
         }
         // KeyboardView 内部用 mKeyBackground 字段存储按键背景 Drawable
-        try {
-            val field = KeyboardView::class.java.getDeclaredField("mKeyBackground")
-            field.isAccessible = true
-            field.set(this, drawable.constantState?.newDrawable()?.mutate() ?: drawable)
-        } catch (_: Exception) {
-            // 反射失败，回退到 XML 默认
+        // AOSP KeyboardView 实际字段名可能不同，尝试多个可能的字段名
+        val fieldNames = arrayOf("mKeyBackground", "mKeyBackgroundDrawable", "mBackground")
+        var success = false
+        for (fieldName in fieldNames) {
+            try {
+                val field = KeyboardView::class.java.getDeclaredField(fieldName)
+                field.isAccessible = true
+                field.set(this, drawable.constantState?.newDrawable()?.mutate() ?: drawable)
+                android.util.Log.d("CesiaKeyboardView", "updateKeyBackground: set field $fieldName success")
+                success = true
+                break
+            } catch (e: Exception) {
+                android.util.Log.w("CesiaKeyboardView", "updateKeyBackground: field $fieldName not found: ${e.message}")
+            }
+        }
+        if (!success) {
+            android.util.Log.e("CesiaKeyboardView", "updateKeyBackground: ALL reflection attempts failed, keyBgColor=$keyBgColor")
         }
         // Auto-contrast: if key background is dark, use light text; if light, use dark text
         updateKeyTextColor(keyGrayVal)
@@ -499,22 +580,23 @@ class CesiaKeyboardView @JvmOverloads constructor(
     /** Apply keyTextColor to KeyboardView's internal mPaint and mKeyTextColor via reflection */
     private fun applyKeyTextPaintColor() {
         try {
-            // 1. 设置 mKeyTextPaint.color（AOSP 真正绘制 key label 用的 paint）
-            val keyTextPaintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextPaint")
-            keyTextPaintField.isAccessible = true
-            val keyTextPaint = keyTextPaintField.get(this) as? android.graphics.Paint
-            keyTextPaint?.color = keyTextColor
-            // 2. 同步设置 mKeyTextColor（onBufferDraw 中 paint.setColor(mKeyTextColor) 会调用）
-            val colorField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextColor")
-            colorField.isAccessible = true
-            colorField.setInt(this, keyTextColor)
-            // 3. 兼容：mPaint 可能用于其他绘制
+            // AOSP KeyboardView 只用 mPaint 绘制 key label（没有 mKeyTextPaint 字段）
             val paintField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mPaint")
             paintField.isAccessible = true
             val paint = paintField.get(this) as? android.graphics.Paint
-            paint?.color = keyTextColor
+            paint?.apply {
+                color = t9MainTextColor
+                textAlign = android.graphics.Paint.Align.CENTER
+                textSize = TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP, t9MainTextSize * textScaleFactor, resources.displayMetrics
+                )
+            }
+            // 同步设置 mKeyTextColor（onBufferDraw 中 paint.setColor(mKeyTextColor) 会调用）
+            val colorField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mKeyTextColor")
+            colorField.isAccessible = true
+            colorField.setInt(this, t9MainTextColor)
         } catch (_: Exception) {}
-        // 4. 强制 buffer 重绘，使颜色变更生效
+        // 强制 buffer 重绘，使颜色/字号/对齐变更生效
         forceBufferRedraw()
     }
 
