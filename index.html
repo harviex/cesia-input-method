@@ -26,8 +26,9 @@ nav .links a:hover{color:var(--text)}
 .btn-primary:hover{box-shadow:0 0 50px var(--glow);transform:translateY(-1px)}
 .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
 .btn-ghost:hover{border-color:var(--muted)}
-.phone-mockup{margin-top:3rem;width:260px;background:var(--surface);border-radius:32px;border:2px solid var(--border);overflow:hidden;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.4),0 0 60px rgba(129,216,208,0.06)}
-.phone-mockup .demo-input{padding:14px;font-size:.82rem;color:var(--text);border-bottom:1px solid var(--border);background:var(--bg)}
+.phone-mockup{margin-top:3rem;width:320px;background:var(--surface);border-radius:32px;border:2px solid var(--border);overflow:hidden;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.4),0 0 60px rgba(129,216,208,0.06)}
+.phone-mockup{display:flex;flex-direction:column;position:relative}
+.phone-mockup .demo-input{position:absolute;top:38%;left:12px;right:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:10px 14px;font-size:.82rem;color:var(--text);backdrop-filter:blur(2px)}
 .phone-mockup img{width:100%;display:block;border-radius:0}
 .phone-mockup .demo-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
 .phone-mockup .demo-keyboard .key{background:rgba(255,255,255,0.04);border-radius:6px;height:32px;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
