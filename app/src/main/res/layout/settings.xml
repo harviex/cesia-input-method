@@ -284,7 +284,7 @@
                         app:strokeWidth="1dp"
                         app:cornerRadius="10dp" />
 
-                    <Button
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_news_sources"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -292,8 +292,9 @@
                         android:layout_marginStart="4dp"
                         android:text="新闻源管理"
                         android:textSize="13sp"
-                        android:backgroundTint="#81D8D0"
-                        android:textColor="#FFFFFF" />
+                        android:textColor="#FFFFFF"
+                        app:backgroundTint="#81D8D0"
+                        app:cornerRadius="10dp" />
                 </LinearLayout>
 
                 <!-- ═══════════ 分隔 ═══════════ -->
@@ -363,8 +364,8 @@
             android:layout_height="40dp"
             android:layout_marginBottom="2dp"
             android:padding="8dp"
-            android:background="@android:color/transparent"
-            android:popupBackground="#F5F5F5" />
+            android:background="@drawable/spinner_bg_white"
+            android:popupBackground="?android:attr/colorBackground" />
 
         <TextView
             android:id="@+id/tv_model_info"
@@ -560,6 +561,15 @@
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#333333"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="语音输入结尾说出命令词执行"
+                    android:textSize="10sp"
+                    android:textColor="#999999"
+                    android:padding="4dp"
                     android:layout_marginBottom="8dp" />
 
                 <LinearLayout
@@ -690,15 +700,6 @@
                     android:id="@+id/tv_command_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textSize="10sp"
-                    android:textColor="#999999"
-                    android:padding="4dp"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="语音输入结尾说出命令词执行"
                     android:textSize="10sp"
                     android:textColor="#999999"
                     android:padding="4dp"

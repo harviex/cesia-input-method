@@ -607,6 +607,9 @@ class SettingsActivity : AppCompatActivity() {
 
         // 版本号点击检查更新
         tvVersion?.setOnClickListener { checkForUpdates() }
+        // 版本号容器（有更新时显示）也可点击检查更新
+        findViewById<LinearLayout>(R.id.ll_version_container)?.setOnClickListener { checkForUpdates() }
+        findViewById<TextView>(R.id.tv_version_with_dot)?.setOnClickListener { checkForUpdates() }
 
         // 历史记录 + 新闻源管理
         btnHistory?.setOnClickListener { showHistory() }

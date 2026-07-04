@@ -56,7 +56,6 @@ object RssFetchManager {
         RssSource("Hacker News", "https://hnrss.org/frontpage", "科技"),
 
         // AI
-        RssSource("Hacker News", "https://hnrss.org/frontpage", "AI"),
         RssSource("量子位", "https://www.qbitai.com/feed", "AI"),
         RssSource("OpenAI Blog", "https://openai.com/blog/rss.xml", "AI"),
         RssSource("Google AI Blog", "https://blog.google/technology/ai/rss/", "AI"),
@@ -64,10 +63,6 @@ object RssFetchManager {
 
         // 财经
         RssSource("华尔街见闻", "https://dedicated.wallstreetcn.com/rss.xml", "财经"),
-        RssSource("虎嗅", "https://feedx.net/rss/huxiu.xml", "财经"),
-        RssSource("36氪", "https://36kr.com/feed", "财经"),
-        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "财经"),
-        RssSource("钛媒体", "https://www.tmtpost.com/rss", "财经"),
 
         // 新闻/综合
         RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
@@ -78,13 +73,9 @@ object RssFetchManager {
         RssSource("宝玉", "https://baoyu.io/feed.xml", "新闻"),
 
         // 国际
-        RssSource("BBC中文网", "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", "国际"),
-        RssSource("纽约时报中文网", "https://cn.nytimes.com/rss/society.xml", "国际"),
-        RssSource("联合早报", "https://feedx.net/rss/zaobao.xml", "国际"),
         RssSource("华尔街日报中文版", "https://feedx.net/rss/wsj.xml", "国际"),
 
         // 生活/其他
-        RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "生活"),
         RssSource("宝玉", "https://baoyu.io/feed.xml", "生活")
     )
 
