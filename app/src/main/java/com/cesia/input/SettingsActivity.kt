@@ -442,7 +442,6 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSettings() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
-        etBraveApiKey?.setText(prefs.getString(PREF_BRAVE_KEY, ""))
 
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
@@ -502,16 +501,6 @@ class SettingsActivity : AppCompatActivity() {
         // API Key - 焦点离开时自动保存
         etApiKey.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) saveApiKey()
-        }
-
-        // Groq Key - 焦点离开时自动保存
-        etGroqKey?.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) saveGroqKey()
-        }
-
-        // Tavily Key - 焦点离开时自动保存
-        etBraveApiKey?.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) saveBraveKey()
         }
 
         // 润色 Prompt - 焦点离开时自动保存
@@ -580,9 +569,6 @@ class SettingsActivity : AppCompatActivity() {
         // 测试按钮
         btnTestApi.setOnClickListener { testApiConnection() }
         btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
-        btnHistory.setOnClickListener {
-            startActivity(Intent(this, HistoryActivity::class.java))
-        }
 
         // 词库管理 - 只有下载/重新下载按钮
         btnDownloadDict?.setOnClickListener { downloadDict() }
@@ -613,18 +599,6 @@ class SettingsActivity : AppCompatActivity() {
         val apiKey = etApiKey.text?.toString()?.trim() ?: ""
         prefs.edit().putString(PREF_OPENROUTER_KEY, apiKey).apply()
         appendLog("OpenRouter API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
-    }
-
-    private fun saveGroqKey() {
-        val groqKey = etGroqKey?.text?.toString()?.trim() ?: ""
-        prefs.edit().putString(PREF_GROQ_KEY, groqKey).apply()
-        appendLog("Groq API Key: ${if (groqKey.isNotEmpty()) "已设置(${groqKey.take(8)}...)" else "已清除"}")
-    }
-
-    private fun saveBraveKey() {
-        val braveKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
-        prefs.edit().putString(PREF_BRAVE_KEY, braveKey).apply()
-        appendLog("Tavily API Key: ${if (braveKey.isNotEmpty()) "已设置(${braveKey.take(8)}...)" else "已清除"}")
     }
 
     private fun savePolishPrompt() {
@@ -1071,7 +1045,6 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshStats()
         refreshDictInfo()
         // 检测上次下载是否被系统终止（Activity 后台时被 kill）
         checkInterruptedDownloads()
