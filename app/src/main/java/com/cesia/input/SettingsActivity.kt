@@ -113,9 +113,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvDictInfo: TextView
     private var btnNewsSources: Button? = null
 
-    // 检查更新
-    private lateinit var btnCheckUpdate: Button
-
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
     private var accentColor: Int = 0xFF81D8D0.toInt()
     private var themeMode: Int = THEME_LIGHT
@@ -244,11 +241,6 @@ class SettingsActivity : AppCompatActivity() {
             btnExportDict = findViewById(R.id.btn_export_dict)
             btnCloudBackup = findViewById(R.id.btn_cloud_backup)
             tvDictInfo = findViewById(R.id.tv_dict_info)
-        } catch (_: Exception) {}
-
-        // 检查更新
-        try {
-            btnCheckUpdate = findViewById(R.id.btn_check_update)
         } catch (_: Exception) {}
 
         // === 语音与 AI 本地化视图 ===
@@ -580,8 +572,8 @@ class SettingsActivity : AppCompatActivity() {
         btnExportDict?.setOnClickListener { exportDict() }
         btnCloudBackup?.setOnClickListener { showCloudBackupDialog() }
 
-        // 检查更新
-        btnCheckUpdate?.setOnClickListener { checkForUpdates() }
+        // 版本号点击检查更新
+        tvVersion?.setOnClickListener { checkForUpdates() }
 
         // === 语音与 AI 本地化 ===
         btnDownloadVoice?.setOnClickListener { downloadVoiceModel() }
@@ -1332,8 +1324,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun checkForUpdates() {
         prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
-        btnCheckUpdate?.isEnabled = false
-        btnCheckUpdate?.text = "检查中..."
+        tvVersion?.isEnabled = false
+        tvVersion?.text = "版本: 检查中..."
         appendLog("🔍 检查更新...")
 
         Thread {
@@ -1351,8 +1343,8 @@ class SettingsActivity : AppCompatActivity() {
                 val body = response.body?.string() ?: ""
 
                 runOnUiThread {
-                    btnCheckUpdate?.isEnabled = true
-                    btnCheckUpdate?.text = "检查更新"
+                    tvVersion?.isEnabled = true
+                    tvVersion?.text = "版本: ${BuildConfig.VERSION_NAME}"
                 }
 
                 if (!response.isSuccessful) {
@@ -1404,8 +1396,8 @@ class SettingsActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    btnCheckUpdate?.isEnabled = true
-                    btnCheckUpdate?.text = "检查更新"
+                    tvVersion?.isEnabled = true
+                    tvVersion?.text = "版本: ${BuildConfig.VERSION_NAME}"
                     appendLog("❌ 检查更新异常: ${e.message}")
                 }
             }
@@ -1633,18 +1625,14 @@ class SettingsActivity : AppCompatActivity() {
             else if (model.contextLength >= 1000)
                 "${model.contextLength / 1000}K"
             else "${model.contextLength}"
-            val features = buildString {
-                if (model.hasTools) append("🔧")
-                if (model.hasVision) append("👁")
-            }
-            "${model.name} ($ctxStr) $features"
+            "${model.name} ($ctxStr)"
         }
         val adapter = android.widget.ArrayAdapter(
             this,
-            android.R.layout.simple_spinner_item,
+            R.layout.spinner_item_cloud_model,
             displayNames
         )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        adapter.setDropDownViewResource(R.layout.spinner_item_cloud_model)
         spinner.adapter = adapter
 
         // 恢复之前保存的选择

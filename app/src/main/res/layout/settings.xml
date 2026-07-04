@@ -33,13 +33,18 @@
                 android:id="@+id/tv_version"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="v1.0.0"
+                android:text="版本: v1.0.0"
                 android:textSize="12sp"
                 android:textColor="#81D8D0"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="2dp" />
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:drawableEnd="@drawable/ic_refresh_small"
+                android:drawablePadding="4dp" />
         </LinearLayout>
 
         <!-- ═══════════ 统计卡片 ═══════════ -->
@@ -920,20 +925,6 @@
                 app:cornerRadius="10dp"
                 android:layout_marginStart="6dp" />
         </LinearLayout>
-
-        <!-- 检查更新 -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_check_update"
-            android:layout_width="match_parent"
-            android:layout_height="36dp"
-            android:text="检查更新"
-            android:textSize="12sp"
-            android:textColor="#81D8D0"
-            app:backgroundTint="#FFFFFF"
-            app:strokeColor="#81D8D0"
-            app:strokeWidth="1dp"
-            app:cornerRadius="8dp"
-            android:layout_marginBottom="12dp" />
 
         <!-- ═══════════ 日志 ═══════════ -->
         <TextView
