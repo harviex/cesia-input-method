@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.widget.*
@@ -48,18 +50,17 @@ import java.io.File
 
 /**
  * Cesia 输入法设置页面
- * 配置润色 API、测试连接、OTA 更新、词库管理、主题切换
+ * 配置云端功能、测试连接、OTA 更新、词库管理、语音命令词、个性化设置
  */
 class SettingsActivity : AppCompatActivity() {
 
+    // === 云端功能设置 ===
     private lateinit var etApiUrl: TextInputEditText
     private lateinit var etApiKey: TextInputEditText
     private var spinnerCloudModel: Spinner? = null
     private var tvModelInfo: TextView? = null
     private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
-    private lateinit var btnSave: MaterialButton
-    private lateinit var btnReset: MaterialButton
     private lateinit var btnTestApi: MaterialButton
     private var btnTestLocalAi: MaterialButton? = null
     private lateinit var tvStatus: TextView
@@ -83,35 +84,36 @@ class SettingsActivity : AppCompatActivity() {
     private var etBraveApiKey: EditText? = null
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
+    private var btnNewsSources: Button? = null
     private var isDownloading = false
 
-    // 语音命令词
-    private var etCmdExit: TextInputEditText? = null
-    private var etCmdPolish: TextInputEditText? = null
-    private var etCmdFinish: TextInputEditText? = null
-    private var etCmdSend: TextInputEditText? = null
-    private var etCmdCommand: TextInputEditText? = null
-    private var etCmdWriting: TextInputEditText? = null
+    // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式) ===
+    private var etCmdWriting: TextInputEditText? = null    // 智能写作
+    private var etCmdCommand: TextInputEditText? = null   // 智能修改
+    private var etCmdPolish: TextInputEditText? = null    // 智能润色
+    private var etCmdFinish: TextInputEditText? = null    // 结束语音识别
+    private var etCmdSend: TextInputEditText? = null      // 立即发送
+    private var etCmdExit: TextInputEditText? = null      // 退出语音模式
     private var tvCommandStatus: TextView? = null
 
-    // 个性化设置
+    // === 个性化设置 ===
     private var etStatusIdle: TextInputEditText? = null
     private var etSmartWritingLabel: TextInputEditText? = null
     private var etMagicBookTitle: TextInputEditText? = null
 
+    // === 标题可编辑 ===
+    private var etSettingsTitle: TextInputEditText? = null
+    private var tilSettingsTitle: TextInputLayout? = null
+
+    // === 测试区重置按钮 ===
+    private var btnResetPrompt: MaterialButton? = null
+
     // 语音与 AI 本地化设置 helper
     private lateinit var aiSettingsHelper: VoiceAISettingsHelper
 
-    // 主题
-    // Theme section removed - theme is now adjusted via IME popup
-
     // 词库管理
     private lateinit var btnDownloadDict: Button
-    private lateinit var btnImportDict: Button
-    private lateinit var btnExportDict: Button
-    private lateinit var btnCloudBackup: Button
     private lateinit var tvDictInfo: TextView
-    private var btnNewsSources: Button? = null
 
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
     private var accentColor: Int = 0xFF81D8D0.toInt()
@@ -131,14 +133,14 @@ class SettingsActivity : AppCompatActivity() {
         const val TYPE_SOURCE = 1
         const val THEME_LIGHT = 0
         const val THEME_DARK = 1
-        const val IMPORT_DICT_REQUEST = 2001
-        const val IMPORT_PHRASES_REQUEST = 2002
         const val PREF_GROQ_KEY = "groq_api_key"
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
         const val PREF_BRAVE_KEY = "tavily_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val PREF_MODE = "run_mode"
         const val PREF_THEME_MODE = "theme_mode"
+        const val PREF_SETTINGS_TITLE = "settings_title"
+        const val DEFAULT_POLISH_PROMPT = "你是专业的中文润色助手。请润色用户输入的文本，使其更加流畅、自然、符合中文表达习惯，保持原意不变。只输出润色后的文本，不要包含任何解释或额外内容。"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -176,11 +178,11 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
             com.cesia.input.voice.VoiceEngine.updateCommandWords(
-                cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
-                cmdPrefs.getString("cmd_polish", "魔法") ?: "魔法",
-                cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
-                cmdPrefs.getString("cmd_send", "发送") ?: "发送",
-                cmdPrefs.getString("cmd_command", "指令") ?: "指令"
+                cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
+                cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
+                cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
+                cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
+                cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改"
             )
         } catch (_: Exception) {}
         setupListeners()
@@ -217,8 +219,6 @@ class SettingsActivity : AppCompatActivity() {
         tvModelInfo = findViewById(R.id.tv_model_info)
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
-        btnSave = findViewById(R.id.btn_save)
-        btnReset = findViewById(R.id.btn_reset)
         btnTestApi = findViewById(R.id.btn_test_api)
         btnTestLocalAi = findViewById(R.id.btn_test_local_ai)
         tvStatus = findViewById(R.id.tv_api_status)
@@ -234,16 +234,13 @@ class SettingsActivity : AppCompatActivity() {
         tvStatCount = findViewById(R.id.tv_stat_count)
         btnHistory = findViewById(R.id.btn_history)
 
-        // 词库管理
+        // 词库管理 - 只保留下载按钮
         try {
             btnDownloadDict = findViewById(R.id.btn_download_dict)
-            btnImportDict = findViewById(R.id.btn_import_dict)
-            btnExportDict = findViewById(R.id.btn_export_dict)
-            btnCloudBackup = findViewById(R.id.btn_cloud_backup)
             tvDictInfo = findViewById(R.id.tv_dict_info)
         } catch (_: Exception) {}
 
-        // === 语音与 AI 本地化视图 ===
+        // 语音与 AI 本地化视图
         try {
             etGroqKey = findViewById(R.id.et_groq_key)
             etBraveApiKey = findViewById(R.id.et_brave_api_key)
@@ -254,14 +251,14 @@ class SettingsActivity : AppCompatActivity() {
             btnNewsSources?.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
         } catch (_: Exception) {}
 
-        // 语音命令词设置（原个性化设置内容）
+        // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
         try {
-            etCmdExit = findViewById(R.id.et_cmd_exit)
-            etCmdPolish = findViewById(R.id.et_cmd_polish)
-            etCmdFinish = findViewById(R.id.et_cmd_finish)
-            etCmdSend = findViewById(R.id.et_cmd_send)
-            etCmdCommand = findViewById(R.id.et_cmd_command)
-            etCmdWriting = findViewById(R.id.et_cmd_writing)
+            etCmdWriting = findViewById(R.id.et_cmd_writing)      // 智能写作
+            etCmdCommand = findViewById(R.id.et_cmd_command)      // 智能修改
+            etCmdPolish = findViewById(R.id.et_cmd_polish)        // 智能润色
+            etCmdFinish = findViewById(R.id.et_cmd_finish)        // 结束语音识别
+            etCmdSend = findViewById(R.id.et_cmd_send)            // 立即发送
+            etCmdExit = findViewById(R.id.et_cmd_exit)            // 退出语音模式
             tvCommandStatus = findViewById(R.id.tv_command_status)
         } catch (_: Exception) {}
 
@@ -270,6 +267,17 @@ class SettingsActivity : AppCompatActivity() {
             etStatusIdle = findViewById(R.id.et_status_idle)
             etSmartWritingLabel = findViewById(R.id.et_smart_writing_label)
             etMagicBookTitle = findViewById(R.id.et_magic_book_title)
+        } catch (_: Exception) {}
+
+        // 可编辑标题
+        try {
+            etSettingsTitle = findViewById(R.id.et_settings_title)
+            tilSettingsTitle = findViewById(R.id.til_settings_title)
+        } catch (_: Exception) {}
+
+        // 测试区重置 prompt 按钮
+        try {
+            btnResetPrompt = findViewById(R.id.btn_reset_prompt)
         } catch (_: Exception) {}
     }
 
@@ -324,7 +332,7 @@ class SettingsActivity : AppCompatActivity() {
                 this, arrayOf(Manifest.permission.RECORD_AUDIO), PERMISSION_REQUEST_CODE)
             appendLog("🔐 请求录音权限...")
         } else {
-            appendLog(" 录音权限已授予")
+            appendLog("✅ 录音权限已授予")
         }
     }
 
@@ -332,7 +340,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                appendLog(" 录音权限已授予")
+                appendLog("✅ 录音权限已授予")
             } else {
                 appendLog("❌ 录音权限被拒绝")
             }
@@ -344,39 +352,39 @@ class SettingsActivity : AppCompatActivity() {
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
         etBraveApiKey?.setText(prefs.getString(PREF_BRAVE_KEY, ""))
 
-        etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, PolishService.DEFAULT_POLISH_PROMPT))
-        // 加载语音命令词
+        etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
+
+        // 加载语音命令词（新键名，兼容旧键名）
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
-        etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出"))
-        etCmdPolish?.setText(cmdPrefs.getString("cmd_polish", "魔法"))
-        etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束"))
-        etCmdSend?.setText(cmdPrefs.getString("cmd_send", "发送"))
-        etCmdCommand?.setText(cmdPrefs.getString("cmd_command", "指令"))
-        etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "写作"))
+        etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "智能写作"))
+        etCmdCommand?.setText(cmdPrefs.getString("cmd_command", "智能修改"))
+        etCmdPolish?.setText(cmdPrefs.getString("cmd_polish", "智能润色"))
+        etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束语音识别"))
+        etCmdSend?.setText(cmdPrefs.getString("cmd_send", "立即发送"))
+        etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出语音模式"))
 
         // 加载个性化设置
         etStatusIdle?.setText(prefs.getString("status_idle", ""))
         etSmartWritingLabel?.setText(prefs.getString("smart_writing_label", ""))
-        etMagicBookTitle?.setText(prefs.getString("magic_book_title", ""))
+        etMagicBookTitle?.setText(prefs.getString("magic_book_title", "芙莉莲的魔法书"))
+
+        // 加载设置标题
+        etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia 输入法设置"))
 
         // 更新 VoiceEngine 命令词
         VoiceEngine.updateCommandWords(
-            cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
-            cmdPrefs.getString("cmd_polish", "魔法") ?: "魔法",
-            cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
-            cmdPrefs.getString("cmd_send", "发送") ?: "发送",
-            cmdPrefs.getString("cmd_command", "指令") ?: "指令",
-            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
+            cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
+            cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
+            cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
+            cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
+            cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改",
+            cmdPrefs.getString("cmd_writing", "智能写作") ?: "智能写作"
         )
 
         appendLog("已加载设置")
     }
 
-    /**
-     * 显示新闻源选择弹窗（折叠分类选择器）
-     * 按分类折叠展示，点击类别展开/折叠，单选预置源 + 自定义 URL 输入
-     * @param onSourceSelected 选择完成回调（null 表示取消）
-     */
+    /** 显示新闻源选择弹窗（折叠分类选择器） */
     fun showNewsSourcePicker(onSourceSelected: ((RssFetchManager.RssSource?) -> Unit)? = null) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_news_source_picker, null)
         applyAccentToViewTree(dialogView, accentColor)
@@ -472,114 +480,181 @@ class SettingsActivity : AppCompatActivity() {
         // 新闻源管理按钮
         btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
 
-        btnSave.setOnClickListener {
-            val url = etApiUrl.text?.toString()?.trim() ?: ""
-            if (url.isEmpty()) { etApiUrl.error = "请输入 API 地址"; return@setOnClickListener }
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                etApiUrl.error = "URL 必须以 http:// 或 https:// 开头"; return@setOnClickListener
+        // 标题可编辑 - 焦点离开时自动保存
+        etSettingsTitle?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val title = etSettingsTitle?.text?.toString()?.trim()
+                if (title.isNullOrEmpty().not()) {
+                    prefs.edit().putString(PREF_SETTINGS_TITLE, title!!).apply()
+                    appendLog("标题已保存: $title")
+                }
             }
-            val apiKey = etApiKey.text?.toString()?.trim() ?: ""
-            val braveApiKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
-            val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
-                ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
-            val polishPrompt = etPolishPrompt.text?.toString()?.trim() ?: ""
-
-            // 语音命令词
-            val cmdExit = etCmdExit?.text?.toString()?.trim() ?: "退出"
-            val cmdPolish = etCmdPolish?.text?.toString()?.trim() ?: "魔法"
-            val cmdFinish = etCmdFinish?.text?.toString()?.trim() ?: "结束"
-            val cmdSend = etCmdSend?.text?.toString()?.trim() ?: "发送"
-            val cmdCommand = etCmdCommand?.text?.toString()?.trim() ?: "指令"
-            val cmdWriting = etCmdWriting?.text?.toString()?.trim() ?: "写作"
-
-            // 个性化设置
-            val statusIdle = etStatusIdle?.text?.toString()?.trim() ?: ""
-            val smartWritingLabel = etSmartWritingLabel?.text?.toString()?.trim() ?: ""
-            val magicBookTitle = etMagicBookTitle?.text?.toString()?.trim() ?: ""
-
-            prefs.edit()
-                .putString(PREF_API_URL, url)
-                .putString(PREF_OPENROUTER_KEY, apiKey)
-                .putString(PREF_BRAVE_KEY, braveApiKey)
-                .putString(PREF_MODEL_ID, selectedModel)
-                .putString(PREF_POLISH_PROMPT, polishPrompt)
-                .putString("status_idle", statusIdle)
-                .putString("smart_writing_label", smartWritingLabel)
-                .putString("magic_book_title", magicBookTitle)
-                .apply()
-
-            // 保存命令词到 cesia_commands
-            val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
-            cmdPrefs.edit()
-                .putString("cmd_exit", cmdExit)
-                .putString("cmd_polish", cmdPolish)
-                .putString("cmd_finish", cmdFinish)
-                .putString("cmd_send", cmdSend)
-                .putString("cmd_command", cmdCommand)
-                .putString("cmd_writing", cmdWriting)
-                .apply()
-
-            // 更新 VoiceEngine 命令词
-            VoiceEngine.updateCommandWords(cmdExit, cmdPolish, cmdFinish, cmdSend, cmdCommand, cmdWriting)
-
-            aiSettingsHelper.saveSettings()
-            tvStatus.text = "✓ 设置已保存"
-            appendLog("💾 API: $url")
-            appendLog("🔑 API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "未设置"}")
-            appendLog("🤖 模型: $selectedModel")
-            appendLog("🎙️ 命令词: 退出=$cmdExit 润色=$cmdPolish 结束=$cmdFinish 发送=$cmdSend 指令=$cmdCommand 写作=$cmdWriting")
-            if (polishPrompt.isNotEmpty()) {
-                appendLog("📝 Prompt: ${polishPrompt.take(50)}...")
-            }
-            Toast.makeText(this, "设置已保存 ✓", Toast.LENGTH_SHORT).show()
         }
 
-        btnReset.setOnClickListener {
-            etApiUrl.setText(DEFAULT_API_URL)
-            etApiKey.setText("")
-            etBraveApiKey?.setText("")
-            etPolishPrompt.setText("")
-            prefs.edit().putString(PREF_API_URL, DEFAULT_API_URL).apply()
+        // API URL - 焦点离开时自动保存
+        etApiUrl.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) saveApiUrl()
+        }
+        etApiUrl.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {}
+        })
 
-            // 重置命令词
-            etCmdExit?.setText("退出")
-            etCmdPolish?.setText("魔法")
-            etCmdFinish?.setText("结束")
-            etCmdSend?.setText("发送")
-            etCmdCommand?.setText("指令")
-            etCmdWriting?.setText("写作")
-            VoiceEngine.updateCommandWords("退出", "魔法", "结束", "发送", "指令", "写作")
-
-            // 重置个性化设置
-            etStatusIdle?.setText("")
-            etSmartWritingLabel?.setText("")
-            etMagicBookTitle?.setText("")
-
-            tvStatus.text = "已重置"
-            appendLog("🔄 已重置为默认值")
-            Toast.makeText(this, "已重置为默认值", Toast.LENGTH_SHORT).show()
+        // API Key - 焦点离开时自动保存
+        etApiKey.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) saveApiKey()
         }
 
+        // Groq Key - 焦点离开时自动保存
+        etGroqKey?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) saveGroqKey()
+        }
+
+        // Tavily Key - 焦点离开时自动保存
+        etBraveApiKey?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) saveBraveKey()
+        }
+
+        // 润色 Prompt - 焦点离开时自动保存
+        etPolishPrompt.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) savePolishPrompt()
+        }
+
+        // 云端模型选择 - 选择后自动保存
+        spinnerCloudModel?.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val model = cloudModelList?.getOrNull(position)
+                model?.let {
+                    prefs.edit().putString(PREF_MODEL_ID, it.id).apply()
+                    appendLog("模型已保存: ${it.id}")
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        // 语音命令词 - 焦点离开时自动保存
+        val cmdFields = listOf(
+            etCmdWriting to "cmd_writing",
+            etCmdCommand to "cmd_command",
+            etCmdPolish to "cmd_polish",
+            etCmdFinish to "cmd_finish",
+            etCmdSend to "cmd_send",
+            etCmdExit to "cmd_exit"
+        )
+        cmdFields.forEach { (field, key) ->
+            field?.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) {
+                    val value = field.text?.toString()?.trim() ?: ""
+                    if (value.isNotEmpty()) {
+                        val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+                        cmdPrefs.edit().putString(key, value).apply()
+                        updateVoiceEngineCommands()
+                        appendLog("命令词已保存: $key=$value")
+                    }
+                }
+            }
+        }
+
+        // 个性化设置 - 焦点离开时自动保存
+        etStatusIdle?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val value = etStatusIdle?.text?.toString()?.trim() ?: ""
+                prefs.edit().putString("status_idle", value).apply()
+                appendLog("个性化已保存: status_idle=$value")
+            }
+        }
+        etSmartWritingLabel?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val value = etSmartWritingLabel?.text?.toString()?.trim() ?: ""
+                prefs.edit().putString("smart_writing_label", value).apply()
+                appendLog("个性化已保存: smart_writing_label=$value")
+            }
+        }
+        etMagicBookTitle?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val value = etMagicBookTitle?.text?.toString()?.trim() ?: ""
+                prefs.edit().putString("magic_book_title", value).apply()
+                appendLog("个性化已保存: magic_book_title=$value")
+            }
+        }
+
+        // 测试按钮
         btnTestApi.setOnClickListener { testApiConnection() }
         btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
         btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
 
-        // 词库管理
+        // 词库管理 - 只有下载/重新下载按钮
         btnDownloadDict?.setOnClickListener { downloadDict() }
-        btnImportDict?.setOnClickListener { showImportDialog() }
-        btnExportDict?.setOnClickListener { exportDict() }
-        btnCloudBackup?.setOnClickListener { showCloudBackupDialog() }
+
+        // 测试区重置 prompt 按钮
+        btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
 
         // 版本号点击检查更新
         tvVersion?.setOnClickListener { checkForUpdates() }
 
-        // === 语音与 AI 本地化 ===
+        // 语音与 AI 本地化
         btnDownloadVoice?.setOnClickListener { downloadVoiceModel() }
         btnDownloadAi?.setOnClickListener { downloadAiModel() }
-        // 卸载按钮已在 VoiceAISettingsHelper 中绑定
+        // 卸载按钮已在 VoiceAISettingsHelper 中绑定（长按）
+    }
 
+    // ======================== 自动保存辅助方法 ========================
+
+    private fun saveApiUrl() {
+        val url = etApiUrl.text?.toString()?.trim() ?: ""
+        if (url.isNotEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
+            prefs.edit().putString(PREF_API_URL, url).apply()
+            appendLog("API URL 已保存: $url")
+        }
+    }
+
+    private fun saveApiKey() {
+        val apiKey = etApiKey.text?.toString()?.trim() ?: ""
+        prefs.edit().putString(PREF_OPENROUTER_KEY, apiKey).apply()
+        appendLog("OpenRouter API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
+    }
+
+    private fun saveGroqKey() {
+        val groqKey = etGroqKey?.text?.toString()?.trim() ?: ""
+        prefs.edit().putString(PREF_GROQ_KEY, groqKey).apply()
+        appendLog("Groq API Key: ${if (groqKey.isNotEmpty()) "已设置(${groqKey.take(8)}...)" else "已清除"}")
+    }
+
+    private fun saveBraveKey() {
+        val braveKey = etBraveApiKey?.text?.toString()?.trim() ?: ""
+        prefs.edit().putString(PREF_BRAVE_KEY, braveKey).apply()
+        appendLog("Tavily API Key: ${if (braveKey.isNotEmpty()) "已设置(${braveKey.take(8)}...)" else "已清除"}")
+    }
+
+    private fun savePolishPrompt() {
+        val prompt = etPolishPrompt.text?.toString()?.trim() ?: ""
+        prefs.edit().putString(PREF_POLISH_PROMPT, prompt).apply()
+        if (prompt.isNotEmpty()) {
+            appendLog("润色 Prompt 已保存: ${prompt.take(50)}...")
+        }
+    }
+
+    private fun updateVoiceEngineCommands() {
+        val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+        VoiceEngine.updateCommandWords(
+            cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
+            cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
+            cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
+            cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
+            cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改",
+            cmdPrefs.getString("cmd_writing", "智能写作") ?: "智能写作"
+        )
+    }
+
+    private fun resetPolishPrompt() {
+        etPolishPrompt.setText(DEFAULT_POLISH_PROMPT)
+        prefs.edit().putString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT).apply()
+        tvStatus.text = "✅ 润色 Prompt 已重置为默认值"
+        appendLog("🔄 润色 Prompt 已重置为默认值")
+        Toast.makeText(this, "已重置为默认 Prompt", Toast.LENGTH_SHORT).show()
     }
 
     // ======================== 模型下载 ========================
@@ -613,8 +688,8 @@ class SettingsActivity : AppCompatActivity() {
                     getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                         .putBoolean("voice_downloading", false).commit()
                     if (result.isSuccess) {
-                        tvStatus.text = " 语音模型下载完成"
-                        appendLog(" 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        tvStatus.text = "✅ 语音模型下载完成"
+                        appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
@@ -665,8 +740,8 @@ class SettingsActivity : AppCompatActivity() {
                     getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                         .putBoolean("ai_downloading", false).commit()
                     if (result.isSuccess) {
-                        tvStatus.text = " AI 模型下载完成"
-                        appendLog(" AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
+                        tvStatus.text = "✅ AI 模型下载完成"
+                        appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
@@ -759,8 +834,8 @@ class SettingsActivity : AppCompatActivity() {
                     tvDictProgress?.visibility = android.view.View.GONE
                     refreshDictInfo()
                     if (success) {
-                        tvStatus.text = " $msg"
-                        appendLog(" $msg")
+                        tvStatus.text = "✅ $msg"
+                        appendLog("✅ $msg")
                         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         // 触发 Rime 重新部署
                         try {
@@ -778,265 +853,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         )
-    }
-
-    private fun showImportDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("导入词库")
-            .setMessage("当前版本已改用在线下载词库，不再支持本地导入。\n请使用「下载词库」按钮获取完整词库。")
-            .setPositiveButton("确定", null)
-            .show()
-    }
-
-    private fun openFilePicker(requestCode: Int, title: String) {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "application/json"
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        try {
-            startActivityForResult(Intent.createChooser(intent, title), requestCode)
-        } catch (e: Exception) {
-            Toast.makeText(this, "无法打开文件选择器", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        // 文件导入已废弃，不再处理
-    }
-
-    private fun getRealPathFromUri(uri: Uri): String? {
-        try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val idx = cursor.getColumnIndex("_data")
-                if (idx >= 0 && cursor.moveToFirst()) {
-                    return cursor.getString(idx)
-                }
-            }
-        } catch (_: Exception) {}
-        // fallback: copy to cache
-        try {
-            val tempFile = java.io.File(cacheDir, "import_temp_${System.currentTimeMillis()}.json")
-            contentResolver.openInputStream(uri)?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            return tempFile.absolutePath
-        } catch (e: Exception) {
-            appendLog("文件读取失败: ${e.message}")
-        }
-        return null
-    }
-
-    private fun exportDict() {
-        Toast.makeText(this, "当前版本已改用在线下载词库，不再支持本地导出", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showCloudBackupDialog() {
-        val options = arrayOf("上传到云端备份", "从云端恢复")
-        AlertDialog.Builder(this)
-            .setTitle("云端备份")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> cloudUpload()
-                    1 -> cloudDownload()
-                }
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun cloudUpload() {
-        // 云端备份：打包整个 rime 目录为 zip 上传
-        val rimeDir = java.io.File(getExternalFilesDir(null), "rime")
-        if (!rimeDir.exists() || rimeDir.listFiles()?.isEmpty() != false) {
-            Toast.makeText(this, "没有可备份的词库", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        tvStatus.text = "⏳ 正在打包词库..."
-        appendLog("开始云端备份...")
-
-        val editText = EditText(this).apply {
-            hint = "请输入 GitHub Personal Access Token"
-            setText(prefs.getString("github_token", ""))
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("云端备份到 GitHub Gist")
-            .setMessage("将打包整个词库目录（~50MB）上传。\n需要 GitHub Token。Token 只保存在本地。")
-            .setView(editText)
-            .setPositiveButton("上传") { _, _ ->
-                val token = editText.text.toString().trim()
-                if (token.isEmpty()) {
-                    Toast.makeText(this, "Token 不能为空", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                prefs.edit().putString("github_token", token).apply()
-                performCloudUpload(token, rimeDir)
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun performCloudUpload(token: String, rimeDir: java.io.File) {
-        Thread {
-            try {
-                // 打包 rime 目录为 zip
-                val zipFile = java.io.File(cacheDir, "rime_backup.zip")
-                java.util.zip.ZipOutputStream(zipFile.outputStream()).use { zos ->
-                    rimeDir.walkTopDown().forEach { file ->
-                        if (file.isFile) {
-                            val entryName = file.relativeTo(rimeDir).path
-                            zos.putNextEntry(java.util.zip.ZipEntry(entryName))
-                            file.inputStream().use { it.copyTo(zos) }
-                            zos.closeEntry()
-                        }
-                    }
-                }
-
-                // 上传到 GitHub Gist
-                val json = JSONObject()
-                val files = JSONObject()
-                val content = JSONObject()
-                content.put("content", zipFile.readText())
-                files.put("rime_backup.zip", content)
-                json.put("files", files)
-                json.put("description", "Cesia 输入法词库备份 ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())}")
-
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-
-                val request = Request.Builder()
-                    .url("https://api.github.com/gists")
-                    .addHeader("Authorization", "token $token")
-                    .post(json.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-
-                runOnUiThread {
-                    if (response.isSuccessful) {
-                        val gistUrl = JSONObject(body).optString("html_url", "")
-                        tvStatus.text = " 备份成功！"
-                        appendLog("云端备份成功: $gistUrl")
-                        Toast.makeText(this, "备份成功！\nGist: $gistUrl", Toast.LENGTH_LONG).show()
-                    } else {
-                        tvStatus.text = "❌ 备份失败: ${response.code}"
-                        appendLog("云端备份失败: ${response.code} $body")
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    tvStatus.text = "❌ 备份异常"
-                    appendLog("云端备份异常: ${e.message}")
-                }
-            }
-        }.start()
-    }
-
-    private fun cloudDownload() {
-        val editText = EditText(this).apply {
-            hint = "请输入 Gist URL 或 ID"
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("从云端恢复")
-            .setMessage("输入之前备份的 Gist URL 或 ID")
-            .setView(editText)
-            .setPositiveButton("恢复") { _, _ ->
-                val gistInput = editText.text.toString().trim()
-                if (gistInput.isEmpty()) {
-                    Toast.makeText(this, "请输入 Gist URL 或 ID", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                performCloudDownload(gistInput)
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun performCloudDownload(gistInput: String) {
-        tvStatus.text = "⏳ 正在从云端恢复..."
-        appendLog("开始云端恢复...")
-
-        Thread {
-            try {
-                val gistId = if (gistInput.contains("gist.github.com")) {
-                    gistInput.split("/").last()
-                } else {
-                    gistInput
-                }
-
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-
-                val request = Request.Builder()
-                    .url("https://api.github.com/gists/$gistId")
-                    .get()
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
-
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        tvStatus.text = "❌ 恢复失败: ${response.code}"
-                        appendLog("云端恢复失败: ${response.code}")
-                    }
-                    return@Thread
-                }
-
-                val json = JSONObject(body)
-                val files = json.getJSONObject("files")
-
-                // 查找 rime_backup.zip 或旧版 pinyin_dict.json
-                if (files.has("rime_backup.zip")) {
-                    val zipContent = files.getJSONObject("rime_backup.zip").getString("content")
-                    val zipFile = java.io.File(cacheDir, "rime_restore.zip")
-                    zipFile.writeText(zipContent)
-
-                    // 解压到外部存储 rime 目录
-                    val rimeDir = java.io.File(getExternalFilesDir(null), "rime")
-                    rimeDir.mkdirs()
-                    java.util.zip.ZipInputStream(zipFile.inputStream()).use { zis ->
-                        var entry = zis.nextEntry
-                        while (entry != null) {
-                            if (!entry.isDirectory) {
-                                val outFile = java.io.File(rimeDir, entry.name)
-                                outFile.parentFile?.mkdirs()
-                                outFile.outputStream().use { zis.copyTo(it) }
-                            }
-                            zis.closeEntry()
-                            entry = zis.nextEntry
-                        }
-                    }
-
-                    runOnUiThread {
-                        tvStatus.text = " 恢复成功！"
-                        appendLog("云端恢复成功")
-                        refreshDictInfo()
-                        Toast.makeText(this, "恢复成功！重启输入法后生效", Toast.LENGTH_LONG).show()
-                    }
-                } else {
-                    runOnUiThread {
-                        tvStatus.text = "❌ Gist 中未找到词库文件"
-                        appendLog("Gist 中未找到词库文件")
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    tvStatus.text = "❌ 恢复异常"
-                    appendLog("云端恢复异常: ${e.message}")
-                }
-            }
-        }.start()
     }
 
     // ======================== API 测试 ========================
@@ -1059,7 +875,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 val request = if (isOr) {
                     // OpenRouter 格式：使用用户自定义 prompt
-                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: PolishService.DEFAULT_POLISH_PROMPT
+                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: DEFAULT_POLISH_PROMPT
                     val messages = JSONArray().apply {
                         put(JSONObject().apply {
                             put("role", "system")
@@ -1120,14 +936,14 @@ class SettingsActivity : AppCompatActivity() {
                             }
                             if (polished.isNotEmpty() && polished != inputText) {
                                 etTestText.setText(polished)
-                                tvStatus.text = " API 润色成功"
+                                tvStatus.text = "✅ API 润色成功"
                                 appendLog("润色成功: $polished")
                             } else {
                                 tvStatus.text = "⚠️ API 返回但内容无变化"
                                 appendLog("API 返回无变化: ${body.take(200)}")
                             }
                         } catch (e: Exception) {
-                            tvStatus.text = " API 成功 (原始响应)"
+                            tvStatus.text = "✅ API 成功 (原始响应)"
                             appendLog("API 响应: ${body.take(200)}")
                         }
                     } else {
@@ -1135,14 +951,14 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
-                    btnTestApi.text = "📡 测试 API 润色"
+                    btnTestApi.text = "API 润色"
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     tvStatus.text = "❌ 网络错误: ${e.message ?: "未知"}"
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
-                    btnTestApi.text = "📡 测试 API 润色"
+                    btnTestApi.text = "API 润色"
                 }
             }
         }.start()
@@ -1172,7 +988,7 @@ class SettingsActivity : AppCompatActivity() {
                         tvStatus.text = "❌ 未安装 AI 模型"
                         appendLog("本地 AI 失败: 模型未安装")
                         btnTestLocalAi?.isEnabled = true
-                        btnTestLocalAi?.text = "🤖 本地 AI"
+                        btnTestLocalAi?.text = "本地 AI"
                     }
                     return@Thread
                 }
@@ -1204,7 +1020,7 @@ class SettingsActivity : AppCompatActivity() {
                             appendLog("MNN log: $mnnLog")
                         }
                         btnTestLocalAi?.isEnabled = true
-                        btnTestLocalAi?.text = "🤖 本地 AI"
+                        btnTestLocalAi?.text = "本地 AI"
                     }
                     return@Thread
                 }
@@ -1228,14 +1044,14 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("推理超时（${inferTime}ms），请尝试更短的文本或更小的模型")
                     } else if (result.isNotEmpty() && result != inputText) {
                         etTestText.setText(result)
-                        tvStatus.text = " 本地 AI 润色成功 (${inferTime}ms)"
+                        tvStatus.text = "✅ 本地 AI 润色成功 (${inferTime}ms)"
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
                     } else {
                         tvStatus.text = "⚠️ 润色结果为空"
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
                     btnTestLocalAi?.isEnabled = true
-                    btnTestLocalAi?.text = "🤖 本地 AI"
+                    btnTestLocalAi?.text = "本地 AI"
                 }
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
@@ -1243,11 +1059,12 @@ class SettingsActivity : AppCompatActivity() {
                     tvStatus.text = "❌ 异常: ${e.message ?: "未知"}"
                     appendLog("本地 AI 异常: ${e.message}")
                     btnTestLocalAi?.isEnabled = true
-                    btnTestLocalAi?.text = "🤖 本地 AI"
+                    btnTestLocalAi?.text = "本地 AI"
                 }
             }
         }.start()
     }
+
     // ======================== 统计 & 日志 ========================
 
     override fun onResume() {
@@ -1390,8 +1207,8 @@ class SettingsActivity : AppCompatActivity() {
                     if (!isUpToDate && latestVersionCode > 0) {
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        tvStatus.text = " 已是最新版本 ($latestVersionName)"
-                        appendLog(" 已是最新版本")
+                        tvStatus.text = "✅ 已是最新版本 ($latestVersionName)"
+                        appendLog("✅ 已是最新版本")
                     }
                 }
             } catch (e: Exception) {
@@ -1453,7 +1270,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    tvStatus.text = " 下载完成，正在安装..."
+                    tvStatus.text = "✅ 下载完成，正在安装..."
                     appendLog("APK下载完成: ${apkFile.absolutePath}")
                 }
 
@@ -1492,66 +1309,7 @@ class SettingsActivity : AppCompatActivity() {
         }.start()
     }
 
-    // ======================== 语音命令词 ========================
-
-    private fun saveCommandWords() {
-        val exit = etCmdExit?.text?.toString()?.trim() ?: ""
-        val polish = etCmdPolish?.text?.toString()?.trim() ?: ""
-        val finish = etCmdFinish?.text?.toString()?.trim() ?: ""
-        val send = etCmdSend?.text?.toString()?.trim() ?: ""
-        val command = etCmdCommand?.text?.toString()?.trim() ?: ""
-        val writing = etCmdWriting?.text?.toString()?.trim() ?: ""
-
-        val errors = mutableListOf<String>()
-        if (exit.isEmpty()) errors.add("退出命令词不能为空")
-        if (polish.isEmpty()) errors.add("润色命令词不能为空")
-        if (finish.isEmpty()) errors.add("结束命令词不能为空")
-        if (send.isEmpty()) errors.add("发送命令词不能为空")
-        if (command.isEmpty()) errors.add("指令模式词不能为空")
-        if (writing.isEmpty()) errors.add("写作命令词不能为空")
-
-        val words = listOf(exit, polish, finish, send, command, writing)
-        val duplicates = words.groupBy { it }.filter { it.value.size > 1 }.keys
-        if (duplicates.isNotEmpty()) errors.add("命令词不能重复：${duplicates.joinToString("、")}")
-
-        if (errors.isNotEmpty()) {
-            tvCommandStatus?.text = "❌ ${errors.joinToString("\n")}"
-            tvCommandStatus?.setBackgroundColor(0xFFFFEBEE.toInt())
-            return
-        }
-
-        val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
-        cmdPrefs.edit()
-            .putString("cmd_exit", exit)
-            .putString("cmd_polish", polish)
-            .putString("cmd_finish", finish)
-            .putString("cmd_send", send)
-            .putString("cmd_command", command)
-            .putString("cmd_writing", writing)
-            .apply()
-
-        // 立即更新 VoiceEngine
-        try {
-            com.cesia.input.voice.VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing)
-        } catch (_: Exception) {}
-
-        tvCommandStatus?.text = " 已保存：退出=$exit, 润色=$polish, 结束=$finish, 发送=$send, 指令=$command, 写作=$writing"
-        tvCommandStatus?.setBackgroundColor(0xFFE8F5E9.toInt())
-        Toast.makeText(this, "命令词已保存", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun resetCommandWords() {
-        etCmdExit?.setText("退出")
-        etCmdPolish?.setText("魔法")
-        etCmdFinish?.setText("结束")
-        etCmdSend?.setText("发送")
-        etCmdCommand?.setText("指令")
-        etCmdWriting?.setText("写作")
-        tvCommandStatus?.text = "已恢复默认值，请点击保存"
-        tvCommandStatus?.setBackgroundColor(0xFFFFF3E0.toInt())
-    }
-
-    // ==================== 云端模型加载 ====================
+    // ======================== 云端模型加载 ========================
 
     data class CloudModel(
         val id: String,
@@ -1660,9 +1418,8 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 新闻源选择器的 RecyclerView Adapter
-     */
+    // ======================== 新闻源选择器的 RecyclerView Adapter ========================
+
     // ===== 折叠分类选择器 =====
 
     /** 列表项类型：分类头 或 源条目 */
@@ -1671,7 +1428,7 @@ class SettingsActivity : AppCompatActivity() {
         data class SourceItem(val source: RssFetchManager.RssSource) : CategoryAdapterItem()
     }
 
-    /** 简单的可变引用包装（让 adapter 和 Activity 共享同一变量） */
+    /** 简单的可变引用包装（让 adapter 和 Activity 共享同步共享同一变量） */
     private class MutableRef<T>(var value: T)
 
     /** 折叠分类适配器 */

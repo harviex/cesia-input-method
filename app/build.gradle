@@ -1,7 +1,7 @@
 // build.gradle (app level)
 plugins {
-    id 'com.android.application' version '8.4.0'
-    id 'org.jetbrains.kotlin.android' version '1.9.20'
+    id 'com.android.application' version '8.5.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.22'
 }
 
 // ===== 版本号计算（配置期执行，-PapkVersion 由 CI 传入）=====

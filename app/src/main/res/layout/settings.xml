@@ -3,8 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FAFAFA"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:background="#FFFFFF">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -12,40 +12,39 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- ═══════════ 头部 ═══════════ -->
-        <LinearLayout
+        <!-- ═══════════ 标题（可编辑）═══════════ -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_settings_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
+            android:hint="Cesia 输入法设置"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+            app:boxStrokeColor="#81D8D0"
+            app:hintTextColor="#81D8D0"
+            android:layout_marginBottom="4dp">
 
-            <TextView
-                android:layout_width="0dp"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_settings_title"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Cesia 输入法"
-                android:textSize="24sp"
+                android:textSize="22sp"
                 android:textStyle="bold"
-                android:textColor="#333333" />
+                android:textColor="#333333"
+                android:gravity="center"
+                android:inputType="text"
+                android:singleLine="true"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-            <TextView
-                android:id="@+id/tv_version"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="版本: v1.0.0"
-                android:textSize="12sp"
-                android:textColor="#81D8D0"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:drawableEnd="@drawable/ic_refresh_small"
-                android:drawablePadding="4dp" />
-        </LinearLayout>
+        <TextView
+            android:id="@+id/tv_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="v1.1.644"
+            android:textSize="11sp"
+            android:textColor="#999999"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
 
         <!-- ═══════════ 统计卡片 ═══════════ -->
         <LinearLayout
@@ -274,11 +273,11 @@
             android:background="#E0E0E0"
             android:layout_marginBottom="16dp" />
 
-        <!-- ═══════════ 润色 API ═══════════ -->
+        <!-- ═══════════ 云端功能设置 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🔗 润色 API"
+            android:text="云端功能设置"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#333333"
@@ -414,13 +413,6 @@
                 android:text="" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- ═══════════ 分隔 ═══════════ -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#E0E0E0"
-            android:layout_marginBottom="12dp" />
-
         <!-- ═══════════ 测试区 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
@@ -484,6 +476,18 @@
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
                 android:layout_marginStart="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset_prompt"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="重置prompt"
+                android:textSize="11sp"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#FF6B6B"
+                app:cornerRadius="8dp"
+                android:layout_marginStart="4dp" />
         </LinearLayout>
 
         <TextView
@@ -510,8 +514,15 @@
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#333333"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="4dp" />
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="长按按钮可卸载模型"
+                    android:textSize="10sp"
+                    android:textColor="#999999"
+                    android:layout_marginBottom="8dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -571,14 +582,14 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="退出"
+                        android:hint="智能写作"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                         app:boxStrokeColor="#81D8D0"
                         app:hintTextColor="#81D8D0"
                         android:layout_marginEnd="2dp">
 
                         <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/et_cmd_exit"
+                            android:id="@+id/et_cmd_writing"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textSize="12sp"
@@ -589,69 +600,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="润色"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                        app:boxStrokeColor="#81D8D0"
-                        app:hintTextColor="#81D8D0"
-                        android:layout_marginStart="2dp"
-                        android:layout_marginEnd="2dp">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/et_cmd_polish"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:textSize="12sp"
-                            android:inputType="text" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="结束"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                        app:boxStrokeColor="#81D8D0"
-                        app:hintTextColor="#81D8D0"
-                        android:layout_marginStart="2dp">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/et_cmd_finish"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:textSize="12sp"
-                            android:inputType="text" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="4dp">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="发送"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                        app:boxStrokeColor="#81D8D0"
-                        app:hintTextColor="#81D8D0"
-                        android:layout_marginEnd="2dp">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/et_cmd_send"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:textSize="12sp"
-                            android:inputType="text" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="指令"
+                        android:hint="智能修改"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                         app:boxStrokeColor="#81D8D0"
                         app:hintTextColor="#81D8D0"
@@ -670,18 +619,80 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="写作"
+                        android:hint="智能润色"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                         app:boxStrokeColor="#81D8D0"
                         app:hintTextColor="#81D8D0"
                         android:layout_marginStart="2dp">
 
                         <com.google.android.material.textfield.TextInputEditText
-                                            android:id="@+id/et_cmd_writing"
-                                            android:layout_width="match_parent"
-                                            android:layout_height="wrap_content"
-                                            android:textSize="12sp"
-                                            android:inputType="text" />
+                            android:id="@+id/et_cmd_polish"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="4dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="结束语音识别"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginEnd="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_finish"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="立即发送"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_send"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="退出语音模式"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginStart="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_exit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
 
@@ -815,65 +826,20 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="12dp"
+            android:gravity="end">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_download_dict"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="🔄更新"
+                android:text="🔄 重新下载"
                 android:textSize="10sp"
                 android:textColor="#81D8D0"
                 app:backgroundTint="#FFFFFF"
                 app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
-                app:cornerRadius="6dp"
-                android:layout_marginEnd="2dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_import_dict"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="导入"
-                android:textSize="10sp"
-                android:textColor="#81D8D0"
-                app:backgroundTint="#FFFFFF"
-                app:strokeColor="#81D8D0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="6dp"
-                android:layout_marginStart="2dp"
-                android:layout_marginEnd="2dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_export_dict"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="导出"
-                android:textSize="10sp"
-                android:textColor="#81D8D0"
-                app:backgroundTint="#FFFFFF"
-                app:strokeColor="#81D8D0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="6dp"
-                android:layout_marginStart="2dp"
-                android:layout_marginEnd="2dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_cloud_backup"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:text="备份"
-                android:textSize="10sp"
-                android:textColor="#81D8D0"
-                app:backgroundTint="#FFFFFF"
-                app:strokeColor="#81D8D0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="6dp"
-                android:layout_marginStart="2dp" />
+                app:cornerRadius="6dp" />
         </LinearLayout>
 
         <!-- ═══════════ 分隔 ═══════════ -->
@@ -882,40 +848,6 @@
             android:layout_height="1dp"
             android:background="#E0E0E0"
             android:layout_marginBottom="12dp" />
-
-        <!-- ═══════════ 操作按钮 ═══════════ -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_save"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:text="保存"
-                android:textSize="13sp"
-                android:textColor="#FFFFFF"
-                app:backgroundTint="#81D8D0"
-                app:cornerRadius="10dp"
-                android:layout_marginEnd="6dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_reset"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:text="重置"
-                android:textSize="13sp"
-                android:textColor="#81D8D0"
-                app:backgroundTint="#FFFFFF"
-                app:strokeColor="#81D8D0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="10dp"
-                android:layout_marginStart="6dp" />
-        </LinearLayout>
 
         <!-- ═══════════ 日志 ═══════════ -->
         <TextView
