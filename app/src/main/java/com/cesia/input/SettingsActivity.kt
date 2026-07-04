@@ -97,6 +97,18 @@ class SettingsActivity : AppCompatActivity() {
     private var etSmartWritingLabel: TextInputEditText? = null
     private var etMagicBookTitle: TextInputEditText? = null
 
+    // === 统计卡片 ===
+    private lateinit var tvStatInputChars: TextView
+    private lateinit var tvStatOutputChars: TextView
+    private lateinit var tvStatCount: TextView
+    private var tvStatVoiceTime: TextView? = null
+    private var tvStatSavedTime: TextView? = null
+    private var tvStatVoiceSpeed: TextView? = null
+
+    // === 历史记录 + 新闻源管理 ===
+    private lateinit var btnHistory: Button
+    private var btnNewsSources: Button? = null
+
     // === 标题可编辑 ===
     private var etSettingsTitle: TextInputEditText? = null
     private var tilSettingsTitle: TextInputLayout? = null
@@ -181,6 +193,7 @@ class SettingsActivity : AppCompatActivity() {
         } catch (_: Exception) {}
         setupListeners()
         aiSettingsHelper.setupListeners()
+        refreshStats()
         showVersion()
         loadOpenRouterFreeModels()
         refreshDictInfo()
@@ -241,6 +254,22 @@ class SettingsActivity : AppCompatActivity() {
             etStatusIdle = findViewById(R.id.et_status_idle)
             etSmartWritingLabel = findViewById(R.id.et_smart_writing_label)
             etMagicBookTitle = findViewById(R.id.et_magic_book_title)
+        } catch (_: Exception) {}
+
+        // 统计卡片
+        try {
+            tvStatInputChars = findViewById(R.id.tv_stat_input_chars)
+            tvStatOutputChars = findViewById(R.id.tv_stat_output_chars)
+            tvStatCount = findViewById(R.id.tv_stat_count)
+            tvStatVoiceTime = findViewById(R.id.tv_stat_voice_time)
+            tvStatSavedTime = findViewById(R.id.tv_stat_saved_time)
+            tvStatVoiceSpeed = findViewById(R.id.tv_stat_voice_speed)
+        } catch (_: Exception) {}
+
+        // 历史记录 + 新闻源管理
+        try {
+            btnHistory = findViewById(R.id.btn_history)
+            btnNewsSources = findViewById(R.id.btn_news_sources)
         } catch (_: Exception) {}
 
         // 可编辑标题
@@ -578,6 +607,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // 版本号点击检查更新
         tvVersion?.setOnClickListener { checkForUpdates() }
+
+        // 历史记录 + 新闻源管理
+        btnHistory?.setOnClickListener { showHistory() }
+        btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
 
         // 语音与 AI 本地化
         btnDownloadVoice?.setOnClickListener { downloadVoiceModel() }
@@ -1071,6 +1104,38 @@ class SettingsActivity : AppCompatActivity() {
             btnDownloadAi?.isEnabled = true
             btnDownloadAi?.text = "📥 下载 AI 模型"
         }
+    }
+
+    // ======================== 统计刷新 ========================
+
+    private fun refreshStats() {
+        // 文本统计
+        tvStatInputChars.text = statsManager.totalInputChars.toString()
+        tvStatOutputChars.text = statsManager.totalOutputChars.toString()
+        tvStatCount.text = statsManager.totalPolishCount.toString()
+
+        // 语音统计
+        val voiceTotalMs = statsManager.totalVoiceDurationMs
+        val voiceTimeMin = voiceTotalMs / 60000
+        tvStatVoiceTime?.text = "${voiceTimeMin}分钟"
+
+        val savedTimeMin = statsManager.savedTimeSeconds / 60
+        tvStatSavedTime?.text = "${savedTimeMin}分钟"
+
+        val speed = statsManager.voiceSpeedPerMinute
+        tvStatVoiceSpeed?.text = "${speed}字/分"
+    }
+
+    // ======================== 历史记录 & 新闻源 ========================
+
+    private fun showHistory() {
+        val intent = Intent(this, HistoryActivity::class.java)
+        startActivity(intent)
+    }
+
+    private fun showNewsSourcePicker() {
+        val intent = Intent(this, NewsSourceActivity::class.java)
+        startActivity(intent)
     }
 
     // ======================== 日志工具 ========================
