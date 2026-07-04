@@ -35,7 +35,6 @@ class VoiceAISettingsHelper(
     val downloadManager = ModelDownloadManager(activity)
 
     // 视图引用
-    var etGroqKey: EditText? = null
     var btnDownloadVoice: Button? = null
     var btnDownloadAi: Button? = null
 
@@ -43,11 +42,9 @@ class VoiceAISettingsHelper(
 
     /** 初始化所有视图引用 */
     fun bindViews(
-        etGroqKey: EditText?,
         btnDownloadVoice: Button?,
         btnDownloadAi: Button?
     ) {
-        this.etGroqKey = etGroqKey
         this.btnDownloadVoice = btnDownloadVoice
         this.btnDownloadAi = btnDownloadAi
     }
@@ -59,17 +56,13 @@ class VoiceAISettingsHelper(
         if (found.isNotEmpty()) {
             Log.i("VoiceAISettings", "扫描发现已有模型: $found")
         }
-        // Groq Key
-        etGroqKey?.setText(prefs.getString("groq_api_key", "") ?: "")
         // 刷新 UI
         refreshModelStatus()
     }
 
     /** 保存设置 */
     fun saveSettings() {
-        etGroqKey?.text?.toString()?.let { key ->
-            prefs.edit().putString("groq_api_key", key).apply()
-        }
+        // Groq key 已移除
     }
 
     /** 设置按钮监听 */

@@ -72,13 +72,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var tvLog: TextView
     private lateinit var tvVersion: TextView
-    private var tvStatVoiceTime: TextView? = null
-    private var tvStatSavedTime: TextView? = null
-    private var tvStatVoiceSpeed: TextView? = null
-    private lateinit var tvStatInputChars: TextView
-    private lateinit var tvStatOutputChars: TextView
-    private lateinit var tvStatCount: TextView
-    private lateinit var btnHistory: Button
     private lateinit var statsManager: PolishStatsManager
     private lateinit var dictManager: PinyinDictManager
 
@@ -86,11 +79,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var localModeManager: LocalModeManager
     private lateinit var modelManager: ModelManager
     private lateinit var downloadManager: ModelDownloadManager
-    private var etGroqKey: EditText? = null
-    private var etBraveApiKey: EditText? = null
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
-    private var btnNewsSources: Button? = null
     private var isDownloading = false
 
     // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式) ===
@@ -171,7 +161,6 @@ class SettingsActivity : AppCompatActivity() {
         // 语音与 AI 本地化设置 helper
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
         aiSettingsHelper.bindViews(
-            etGroqKey,
             btnDownloadVoice, btnDownloadAi
         )
 
@@ -193,16 +182,10 @@ class SettingsActivity : AppCompatActivity() {
         setupListeners()
         aiSettingsHelper.setupListeners()
         showVersion()
-        refreshStats()
         loadOpenRouterFreeModels()
         refreshDictInfo()
 
         checkAndRequestPermission()
-
-        // 从智能写作 RSS 源点击跳转时，自动弹出新闻源选择器
-        if (intent?.getBooleanExtra("open_news_picker", false) == true) {
-            showNewsSourcePicker()
-        }
 
         // 每天自动检查一次更新
         checkUpdateDaily()
@@ -229,15 +212,6 @@ class SettingsActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tv_api_status)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
-        try {
-            tvStatVoiceTime = findViewById(R.id.tv_stat_voice_time)
-            tvStatSavedTime = findViewById(R.id.tv_stat_saved_time)
-            tvStatVoiceSpeed = findViewById(R.id.tv_stat_voice_speed)
-        } catch (_: Exception) {}
-        tvStatInputChars = findViewById(R.id.tv_stat_input_chars)
-        tvStatOutputChars = findViewById(R.id.tv_stat_output_chars)
-        tvStatCount = findViewById(R.id.tv_stat_count)
-        btnHistory = findViewById(R.id.btn_history)
 
         // 词库管理 - 只保留下载按钮
         try {
@@ -247,13 +221,8 @@ class SettingsActivity : AppCompatActivity() {
 
         // 语音与 AI 本地化视图
         try {
-            etGroqKey = findViewById(R.id.et_groq_key)
-            etBraveApiKey = findViewById(R.id.et_brave_api_key)
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
-            btnNewsSources = findViewById(R.id.btn_news_sources)
-            // 确保新闻源按钮跟随主题色
-            btnNewsSources?.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
         } catch (_: Exception) {}
 
         // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
@@ -507,101 +476,7 @@ class SettingsActivity : AppCompatActivity() {
         appendLog("已加载设置")
     }
 
-    /** 显示新闻源选择弹窗（折叠分类选择器） */
-    fun showNewsSourcePicker(onSourceSelected: ((RssFetchManager.RssSource?) -> Unit)? = null) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_news_source_picker, null)
-        applyAccentToViewTree(dialogView, accentColor)
-        val rvSources = dialogView.findViewById<RecyclerView>(R.id.rv_source_picker)
-        val etCustomUrl = dialogView.findViewById<EditText>(R.id.et_custom_rss_url)
-        val btnConfirm = dialogView.findViewById<MaterialButton>(R.id.btn_confirm)
-        val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btn_cancel)
-
-        val sourcesByCategory = RssFetchManager.getSourcesByCategory(this)
-        val categories = sourcesByCategory.keys.toList()
-
-        val adapterItems = mutableListOf<CategoryAdapterItem>()
-        val expandedCategories = mutableSetOf<String>()
-        if (categories.isNotEmpty()) expandedCategories.add(categories[0])
-
-        for (category in categories) {
-            adapterItems.add(CategoryAdapterItem.Header(category, sourcesByCategory[category]?.size ?: 0))
-            if (expandedCategories.contains(category)) {
-                sourcesByCategory[category]?.forEach { source ->
-                    adapterItems.add(CategoryAdapterItem.SourceItem(source))
-                }
-            }
-        }
-
-        val currentSelected = RssFetchManager.getSelectedSource(this)
-        val selectedSourceRef = MutableRef<RssFetchManager.RssSource?>(currentSelected)
-
-        rvSources.layoutManager = LinearLayoutManager(this)
-        val adapter = CategorySourceAdapter(
-            adapterItems, expandedCategories, categories, sourcesByCategory, etCustomUrl, selectedSourceRef
-        )
-        rvSources.adapter = adapter
-
-        etCustomUrl.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                if (!s.isNullOrEmpty()) {
-                    selectedSourceRef.value = null
-                    adapter.notifyDataSetChanged()
-                }
-            }
-        })
-
-        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setView(dialogView)
-            .setCancelable(true)
-            .create()
-
-        btnConfirm.setOnClickListener {
-            val sourceName: String
-            val sourceUrl: String
-            val customUrl = etCustomUrl.text?.toString()?.trim() ?: ""
-            if (customUrl.isNotEmpty() && (customUrl.startsWith("http://") || customUrl.startsWith("https://"))) {
-                sourceName = "自定义"
-                sourceUrl = customUrl
-            } else if (selectedSourceRef.value != null) {
-                sourceName = selectedSourceRef.value!!.name
-                sourceUrl = selectedSourceRef.value!!.url
-            } else {
-                android.widget.Toast.makeText(this, "请选择一个源或填入自定义 URL", android.widget.Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val rssPrefs = getSharedPreferences("cesia_rss", MODE_PRIVATE)
-            rssPrefs.edit()
-                .putString("selected_source", sourceName)
-                .putString("selected_url", sourceUrl)
-                .apply()
-
-            val cacheFile = java.io.File(filesDir, "rss_cache.txt")
-            if (cacheFile.exists()) cacheFile.delete()
-            android.widget.Toast.makeText(this, "已选择: $sourceName，正在抓取...", android.widget.Toast.LENGTH_SHORT).show()
-
-            val newSource = RssFetchManager.RssSource(sourceName, sourceUrl, "")
-            CoroutineScope(Dispatchers.IO).launch {
-                RssFetchManager.fetchAndCache(this@SettingsActivity, newSource)
-            }
-
-            appendLog("已切换新闻源: $sourceName → $sourceUrl")
-            dialog.dismiss()
-            onSourceSelected?.invoke(newSource)
-        }
-
-        btnCancel.setOnClickListener {
-            dialog.dismiss()
-            onSourceSelected?.invoke(null)
-        }
-        dialog.show()
-    }
-
     private fun setupListeners() {
-        // 新闻源管理按钮
-        btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
 
         // 标题可编辑 - 焦点离开时自动保存
         etSettingsTitle?.setOnFocusChangeListener { _, hasFocus ->
@@ -785,7 +660,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun downloadVoiceModel() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
         btnDownloadVoice?.isEnabled = false
-        btnDownloadVoice?.text = "下载中..."
+        btnDownloadVoice?.text = "0%"
         tvStatus.text = "🔄 下载语音模型中..."
         appendLog("⬇ 开始下载语音模型: ${modelInfo.name}")
         // 记录下载状态，用于 Activity 恢复时检测
@@ -802,6 +677,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $fileName ($pctStr)"
+                            btnDownloadVoice?.text = pctStr
                             appendLog("⬇ $fileName: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -814,10 +690,11 @@ class SettingsActivity : AppCompatActivity() {
                         tvStatus.text = "✅ 语音模型下载完成"
                         appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
+                        btnDownloadVoice?.text = "✅ 已完成"
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
-                        btnDownloadVoice?.text = "📥 下载语音模型"
+                        btnDownloadVoice?.text = "📥 语音识别"
                     }
                 }
             } catch (e: Exception) {
@@ -825,7 +702,7 @@ class SettingsActivity : AppCompatActivity() {
                     .putBoolean("voice_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadVoice?.isEnabled = true
-                    btnDownloadVoice?.text = "📥 下载语音模型"
+                    btnDownloadVoice?.text = "📥 语音识别"
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ 语音模型下载异常: ${e.message}")
                 }
@@ -837,7 +714,7 @@ class SettingsActivity : AppCompatActivity() {
         val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
             ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: return
         btnDownloadAi?.isEnabled = false
-        btnDownloadAi?.text = "下载中..."
+        btnDownloadAi?.text = "0%"
         tvStatus.text = "🔄 下载 AI 模型中..."
         appendLog("⬇ 开始下载 AI 模型: ${modelInfo.name} (${modelInfo.sizeBytes / 1024 / 1024}MB)")
         // 记录下载状态，用于 Activity 恢复时检测
@@ -854,6 +731,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $name ($pctStr)"
+                            btnDownloadAi?.text = pctStr
                             appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -866,10 +744,11 @@ class SettingsActivity : AppCompatActivity() {
                         tvStatus.text = "✅ AI 模型下载完成"
                         appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
+                        btnDownloadAi?.text = "✅ 已完成"
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ AI 模型下载失败: ${result.exceptionOrNull()?.message}")
-                        btnDownloadAi?.text = "📥 下载 AI 模型"
+                        btnDownloadAi?.text = "📥 语音润色"
                     }
                 }
             } catch (e: Exception) {
@@ -877,7 +756,7 @@ class SettingsActivity : AppCompatActivity() {
                     .putBoolean("ai_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadAi?.isEnabled = true
-                    btnDownloadAi?.text = "📥 下载 AI 模型"
+                    btnDownloadAi?.text = "📥 语音润色"
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ AI 模型下载异常: ${e.message}")
                 }
@@ -1219,25 +1098,6 @@ class SettingsActivity : AppCompatActivity() {
             btnDownloadAi?.isEnabled = true
             btnDownloadAi?.text = "📥 下载 AI 模型"
         }
-    }
-
-    private fun refreshStats() {
-        tvStatInputChars.text = statsManager.totalInputChars.toString()
-        tvStatOutputChars.text = statsManager.totalOutputChars.toString()
-        tvStatCount.text = statsManager.totalPolishCount.toString()
-        refreshVoiceStats()
-    }
-
-    private fun refreshVoiceStats() {
-        try {
-            val voiceTimeMin = statsManager.totalVoiceDurationMs / 60000
-            val savedTimeMin = statsManager.savedTimeSeconds / 60
-            val speed = statsManager.voiceSpeedPerMinute
-
-            tvStatVoiceTime?.text = "${voiceTimeMin}分钟"
-            tvStatSavedTime?.text = "${savedTimeMin}分钟"
-            tvStatVoiceSpeed?.text = "${speed}字/分"
-        } catch (_: Exception) {}
     }
 
     // ======================== 日志工具 ========================
