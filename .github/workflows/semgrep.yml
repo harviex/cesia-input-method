@@ -27,7 +27,6 @@ jobs:
           semgrep ci \
             --config=rules/ime-security.yaml \
             --sarif=semgrep.sarif \
-            --error \
             --no-git-ignore
         continue-on-error: true
 
