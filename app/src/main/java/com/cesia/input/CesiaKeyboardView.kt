@@ -191,7 +191,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
             32 to "空格",        // 空格键
             -108 to "粘贴",      // 粘贴
             -109 to "复制",      // 复制
-            10 to "回车"         // 回车
+            10 to "回车",        // 回车
+            49 to "Tab"          // 1键：Tab
         )
 
     // 副字符画笔（灰色）
