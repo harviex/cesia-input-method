@@ -3,26 +3,39 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FFFFFF">
+    android:background="@drawable/popup_bg">
 
-    <!-- 搜索栏：EditText 直接输入 -->
+    <!-- 标题栏：统一风格 -->
+    <TextView
+        android:id="@+id/tv_clipboard_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="10dp"
+        android:text="📋 剪贴板管理"
+        android:textSize="18sp"
+        android:textColor="#333333"
+        android:textStyle="bold"
+        android:background="#E0E0E0" />
+
+    <!-- 搜索栏：统一风格 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="6dp"
+        android:padding="8dp"
         android:gravity="center_vertical"
-        android:background="#F5F5F5">
+        android:background="#FAFAFA">
 
         <EditText
-            android:id="@+id/btn_clipboard_search"
+            android:id="@+id/et_clipboard_search"
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
             android:gravity="center_vertical"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:hint="🔍 点击搜索..."
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:hint="🔍 搜索剪贴板..."
             android:textSize="13sp"
             android:textColor="#333333"
             android:textColorHint="#999999"
@@ -47,6 +60,20 @@
         android:background="#E0F7FA"
         android:visibility="gone" />
 
+    <!-- 两列网格：与魔法书、智能写作一致 -->
+    <GridView
+        android:id="@+id/gv_clipboard_items"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:numColumns="2"
+        android:verticalSpacing="4dp"
+        android:horizontalSpacing="4dp"
+        android:padding="6dp"
+        android:stretchMode="columnWidth"
+        android:gravity="top"
+        android:listSelector="@android:color/transparent" />
+
     <!-- 空状态提示 -->
     <TextView
         android:id="@+id/tv_clipboard_empty"
@@ -59,21 +86,7 @@
         android:padding="16dp"
         android:visibility="gone" />
 
-    <!-- 两列网格 -->
-    <GridView
-        android:id="@+id/gv_clipboard_items"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:numColumns="2"
-        android:verticalSpacing="4dp"
-        android:horizontalSpacing="4dp"
-        android:padding="6dp"
-        android:stretchMode="columnWidth"
-        android:gravity="top"
-        android:listSelector="#E0F7FA" />
-
-    <!-- 底部管理栏：置顶 + 删除 + 关闭(⨯) -->
+    <!-- 底部管理栏：统一风格 ＋ ⤒ ⊗ ⨯ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -83,7 +96,27 @@
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
-        <!-- 置顶：⤒ 向上箭头到横线（非Emoji图钉） -->
+        <!-- 新增：＋ -->
+        <TextView
+            android:id="@+id/btn_clipboard_add"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="＋"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="新增" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 置顶：⤒ -->
         <TextView
             android:id="@+id/btn_clipboard_pin"
             android:layout_width="0dp"
@@ -92,7 +125,7 @@
             android:gravity="center"
             android:text="⤒"
             android:textSize="18sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="置顶" />
 
@@ -102,7 +135,7 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 删除：清空符号 ⊗ -->
+        <!-- 删除：⊗ -->
         <TextView
             android:id="@+id/btn_clipboard_delete"
             android:layout_width="0dp"
@@ -111,7 +144,7 @@
             android:gravity="center"
             android:text="⊗"
             android:textSize="18sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
 
@@ -121,16 +154,16 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 完成/关闭：⨯ -->
+        <!-- 关闭：⨯ -->
         <TextView
-            android:id="@+id/btn_clipboard_done"
+            android:id="@+id/btn_clipboard_close"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
             android:text="⨯"
             android:textSize="18sp"
-            android:textColor="#666666"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="关闭" />
 

@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.AnimationDrawable
+import android.graphics.drawable.Drawable
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
@@ -24,16 +25,19 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.ScaleAnimation
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.ArrayAdapter
 import android.widget.GridView
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.PopupWindow
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import android.text.TextUtils
 import android.graphics.Typeface
 import java.io.File
@@ -293,10 +297,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 根据当前模式更新语音键图标 */
     private fun updateMicButtonAppearance() {
         if (localModeEnabled) {
-            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic, 0, 0)
+            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
             micButton?.text = "🎤"
         } else {
-            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_mic, 0, 0)
+            micButton?.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
             micButton?.text = "🎤☁️"
         }
     }
@@ -429,11 +433,145 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (clipboardSearchFilter.isEmpty()) {
             clipboardFilteredItems.addAll(clipboardItems)
         } else {
-            clipboardFilteredItems.addAll(clipboardItems.filter { it.text.contains(clipboardSearchFilter, ignoreCase = true) })
+            clipboardFilteredItems.addAll(clipboardItems.filter { matchesClipboardFilter(it.text, clipboardSearchFilter) })
         }
         clipboardAdapter?.notifyDataSetChanged()
         clipboardPopupView?.findViewById<TextView>(R.id.tv_clipboard_empty)?.visibility =
             if (clipboardFilteredItems.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    /** 剪贴板搜索匹配：支持中文直接匹配、拼音首字母匹配、全拼匹配 */
+    private fun matchesClipboardFilter(text: String, filter: String): Boolean {
+        val f = filter.trim().lowercase()
+        if (f.isEmpty()) return true
+        // 1. 直接包含匹配（中文、英文、数字）
+        if (text.contains(f, ignoreCase = true)) return true
+        // 2. 拼音匹配：将文本转为拼音首字母和全拼进行匹配
+        val pinyinFirst = toPinyinFirstLetters(text)
+        val pinyinFull = toPinyinFull(text)
+        return pinyinFirst.contains(f, ignoreCase = true) || pinyinFull.contains(f, ignoreCase = true)
+    }
+
+    /** 将中文转为拼音首字母（如：你好 -> nh） */
+    private fun toPinyinFirstLetters(text: String): String {
+        val sb = StringBuilder()
+        for (c in text) {
+            if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
+                sb.append(c.lowercase())
+            } else if (c.toInt() >= 0x4E00 && c.toInt() <= 0x9FFF) { // 基本汉字范围
+                sb.append(getPinyinFirstLetter(c))
+            }
+        }
+        return sb.toString()
+    }
+
+    /** 将中文转为全拼（如：你好 -> nihao） */
+    private fun toPinyinFull(text: String): String {
+        val sb = StringBuilder()
+        for (c in text) {
+            if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
+                sb.append(c.lowercase())
+            } else if (c.toInt() >= 0x4E00 && c.toInt() <= 0x9FFF) {
+                sb.append(getPinyinFull(c))
+            }
+        }
+        return sb.toString()
+    }
+
+    /** 获取单个汉字的拼音首字母 */
+    private fun getPinyinFirstLetter(c: Char): String {
+        // 简单的汉字拼音首字母映射（常用字覆盖）
+        return when (c.toInt()) {
+            in 0x4E00..0x4EFF -> "a" // 一丁七... (简化)
+            in 0x4F00..0x4FFF -> "b"
+            in 0x5000..0x50FF -> "c"
+            in 0x5100..0x51FF -> "d"
+            in 0x5200..0x52FF -> "e"
+            in 0x5300..0x53FF -> "f"
+            in 0x5400..0x54FF -> "g"
+            in 0x5500..0x55FF -> "h"
+            in 0x5600..0x56FF -> "j"
+            in 0x5700..0x57FF -> "k"
+            in 0x5800..0x58FF -> "l"
+            in 0x5900..0x59FF -> "m"
+            in 0x5A00..0x5AFF -> "n"
+            in 0x5B00..0x5BFF -> "o"
+            in 0x5C00..0x5CFF -> "p"
+            in 0x5D00..0x5DFF -> "q"
+            in 0x5E00..0x5EFF -> "r"
+            in 0x5F00..0x5FFF -> "s"
+            in 0x6000..0x60FF -> "t"
+            in 0x6100..0x61FF -> "w"
+            in 0x6200..0x62FF -> "x"
+            in 0x6300..0x63FF -> "y"
+            in 0x6400..0x64FF -> "z"
+            in 0x6500..0x65FF -> "a"
+            in 0x6600..0x66FF -> "b"
+            in 0x6700..0x67FF -> "c"
+            in 0x6800..0x68FF -> "d"
+            in 0x6900..0x69FF -> "e"
+            in 0x6A00..0x6AFF -> "f"
+            in 0x6B00..0x6BFF -> "g"
+            in 0x6C00..0x6CFF -> "h"
+            in 0x6D00..0x6DFF -> "j"
+            in 0x6E00..0x6EFF -> "k"
+            in 0x6F00..0x6FFF -> "l"
+            in 0x7000..0x70FF -> "m"
+            in 0x7100..0x71FF -> "n"
+            in 0x7200..0x72FF -> "o"
+            in 0x7300..0x73FF -> "p"
+            in 0x7400..0x74FF -> "q"
+            in 0x7500..0x75FF -> "r"
+            in 0x7600..0x76FF -> "s"
+            in 0x7700..0x77FF -> "t"
+            in 0x7800..0x78FF -> "w"
+            in 0x7900..0x79FF -> "x"
+            in 0x7A00..0x7AFF -> "y"
+            in 0x7B00..0x7BFF -> "z"
+            in 0x7C00..0x7CFF -> "a"
+            in 0x7D00..0x7DFF -> "b"
+            in 0x7E00..0x7EFF -> "c"
+            in 0x7F00..0x7FFF -> "d"
+            in 0x8000..0x80FF -> "e"
+            in 0x8100..0x81FF -> "f"
+            in 0x8200..0x82FF -> "g"
+            in 0x8300..0x83FF -> "h"
+            in 0x8400..0x84FF -> "j"
+            in 0x8500..0x85FF -> "k"
+            in 0x8600..0x86FF -> "l"
+            in 0x8700..0x87FF -> "m"
+            in 0x8800..0x88FF -> "n"
+            in 0x8900..0x89FF -> "o"
+            in 0x8A00..0x8AFF -> "p"
+            in 0x8B00..0x8BFF -> "q"
+            in 0x8C00..0x8CFF -> "r"
+            in 0x8D00..0x8DFF -> "s"
+            in 0x8E00..0x8EFF -> "t"
+            in 0x8F00..0x8FFF -> "w"
+            in 0x9000..0x90FF -> "x"
+            in 0x9100..0x91FF -> "y"
+            in 0x9200..0x92FF -> "z"
+            in 0x9300..0x93FF -> "a"
+            in 0x9400..0x94FF -> "b"
+            in 0x9500..0x95FF -> "c"
+            in 0x9600..0x96FF -> "d"
+            in 0x9700..0x97FF -> "e"
+            in 0x9800..0x98FF -> "f"
+            in 0x9900..0x99FF -> "g"
+            in 0x9A00..0x9AFF -> "h"
+            in 0x9B00..0x9BFF -> "j"
+            in 0x9C00..0x9CFF -> "k"
+            in 0x9D00..0x9DFF -> "l"
+            in 0x9E00..0x9EFF -> "m"
+            0x9FFF -> "n"
+            else -> ""
+        }
+    }
+
+    /** 获取单个汉字的全拼（简化版，返回首字母） */
+    private fun getPinyinFull(c: Char): String {
+        // 简化：返回首字母，实际可接入完整拼音库
+        return getPinyinFirstLetter(c)
     }
 
     // 初始化标志
@@ -1547,6 +1685,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else if (magicEditMode) {
                 magicEditBuffer.append(selectedDisplay)
                 updateMagicEditStatus()
+            } else if (clipboardAddMode) {
+                clipboardAddBuffer.append(selectedDisplay)
+                updateClipboardAddStatus()
             } else {
                 commitCandidateText(selectedDisplay)
             }
@@ -1588,6 +1729,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 magicEditBuffer.append(selected)
                 rimeEngine.clear()
                 updateMagicEditStatus()
+            } else if (clipboardAddMode) {
+                // 剪贴板新增模式：写入 buffer 而不是上屏
+                clipboardAddBuffer.append(selected)
+                rimeEngine.clear()
+                updateClipboardAddStatus()
             } else {
                 // 上屏选中的词
                 commitCandidateText(selected)
@@ -2107,6 +2253,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         startVoiceWave()
         isRecording = true
         micButton.text = "🎤 说话"
+        // 显示语音命令词提示
+        showVoiceCommandHints()
 
         // 根据本地/云端模式选择语音识别后端
         when (cloudMode) {
@@ -3441,6 +3589,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private var smartEditMode = false
     private var smartEditBuffer = StringBuilder()
 
+    // ======================== 剪贴板新增模式 ========================
+    private var clipboardAddMode = false
+    private var clipboardAddBuffer = StringBuilder()
+
     /** 关闭所有弹窗（长按互斥） */
     private fun dismissAllPopups() {
         magicHistoryPopup?.dismiss()
@@ -3456,6 +3608,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
         btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         stopMagicBookGlow()
+        // 退出剪贴板新增模式
+        if (clipboardAddMode) exitClipboardAddMode(save = false)
     }
 
 // endregion 候选适配器
@@ -3477,6 +3631,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
         candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+    }
+
+    /** 退出剪贴板新增模式 */
+    private fun exitClipboardAddMode(save: Boolean = false) {
+        if (save && clipboardAddBuffer.isNotEmpty()) {
+            val text = clipboardAddBuffer.toString().trim()
+            if (text.isNotEmpty()) {
+                clipboardItems.add(0, ClipboardItem(text = text, isPinned = false))
+                saveClipboardHistoryFromClassMembers()
+                updateStatus(" 已保存至剪贴板：${text.take(20)}")
+            }
+        } else {
+            if (clipboardAddMode) updateStatus("❌ 已取消新增剪贴板")
+        }
+        clipboardAddMode = false
+        clipboardAddBuffer.clear()
     }
 
     /** 进入魔法编辑模式：关闭弹窗，清空缓冲区，等待键盘输入 */
@@ -3510,6 +3680,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val display = smartEditBuffer.toString() + comp
         if (display.isEmpty()) {
             updateStatus("✏️ 输入智能写作命令...（按发送键保存）")
+        } else {
+            updateStatus("✏️ $display")
+        }
+        // 同步更新候选栏
+        val allCands = rimeEngine.getAllCandidates()
+        candidateAdapter?.updateData(allCands)
+        rvCandidates?.scrollToPosition(0)
+        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+    }
+
+    /** 更新剪贴板新增模式状态（同步候选栏） */
+    private fun updateClipboardAddStatus() {
+        val comp = rimeEngine.composingText
+        val display = clipboardAddBuffer.toString() + comp
+        if (display.isEmpty()) {
+            updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
         } else {
             updateStatus("✏️ $display")
         }
@@ -4089,6 +4275,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             lastStreamingText = text
                             recognizedText = text
                             withContext(Dispatchers.Main) {
+                                // 检测到识别文本，隐藏语音命令提示
+                                if (statusLines.isNotEmpty() && statusLines.last().startsWith("💡")) {
+                                    statusLines.removeAt(statusLines.size - 1)
+                                }
                                 // 流式显示：直接在光标位置显示识别文本（组合态）
                                 val ic = currentInputConnection ?: return@withContext
                                 ic.setComposingText(text, 1)
@@ -4921,6 +5111,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 切换键盘时退出魔法编辑模式和智能写作编辑模式
         if (magicEditMode) exitMagicEditMode(save = false)
         if (smartEditMode) exitSmartEditMode(save = false)
+        if (clipboardAddMode) exitClipboardAddMode(save = false)
         // 记录进入符号键盘前的模式，用于返回
         // 只在从非符号键盘进入符号键盘时记录，符号↔符号切换不更新
         if ((mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN)
@@ -5513,12 +5704,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             applyAccentToViewTree(clipboardPopupView!!, themeAccent)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
-            val etSearch = popupView.findViewById<android.widget.EditText>(R.id.btn_clipboard_search)
+            val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
             this.etSearch = etSearch
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val btnDone = popupView.findViewById<TextView>(R.id.btn_clipboard_done)
+            val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
@@ -5612,7 +5804,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
 
-            btnDone.setOnClickListener { popup.dismiss() }
+            btnAdd.setOnClickListener {
+                // 新增：打开编辑弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入）
+                showClipboardAddPopup()
+            }
+
+            btnClose.setOnClickListener { popup.dismiss() }
 
             // 置顶按钮
             btnPin.setOnClickListener {
@@ -5904,6 +6101,50 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             .setNegativeButton("取消", null)
             .create()
         dialog.show()
+    }
+
+    /** 显示剪贴板新增弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入） */
+    private fun showClipboardAddPopup() {
+        clipboardAddMode = true
+        clipboardAddBuffer.clear()
+        dismissAllPopups()
+        val inflater = LayoutInflater.from(this)
+        val view = inflater.inflate(R.layout.popup_clipboard_manager, null)
+        val popup = PopupWindow(
+            view,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
+            isFocusable = true
+            setBackgroundDrawable(ContextCompat.getDrawable(this@CesiaInputMethod, R.drawable.popup_bg))
+            elevation = 8f
+            setOutsideTouchable(true)
+        }
+        clipboardPopup = popup
+        clipboardPopupView = view
+
+        // 更新标题为"新增"
+        view.findViewById<TextView>(R.id.tv_clipboard_title)?.text = "➕ 新增剪贴板"
+
+        // 状态栏提示
+        updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
+
+        // 关闭按钮
+        view.findViewById<ImageView>(R.id.btn_clipboard_close)?.setOnClickListener {
+            exitClipboardAddMode(save = false)
+            popup.dismiss()
+        }
+
+        // 新增按钮 -> 保存
+        view.findViewById<ImageView>(R.id.btn_clipboard_add)?.setOnClickListener {
+            exitClipboardAddMode(save = true)
+            popup.dismiss()
+        }
+
+        // 显示弹窗
+        val parentView = keyboardView
+        popup.showAtLocation(parentView, Gravity.CENTER, 0, 0)
     }
 
     private fun updateClipboardFavorites() {
@@ -6226,6 +6467,94 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     rimeEngine.clear()
                     magicEditBuffer.append(primaryCode.toChar())
                     updateMagicEditStatus()
+                    return
+                }
+            }
+        }
+
+        // ======================== 剪贴板新增模式拦截 ========================
+        if (clipboardAddMode) {
+            when (primaryCode) {
+                // 发送键/回车键：保存剪贴板并退出编辑模式
+                -200, 10 -> {
+                    val comp = rimeEngine.composingText
+                    if (comp.isNotEmpty()) {
+                        clipboardAddBuffer.append(comp)
+                        rimeEngine.clear()
+                    }
+                    exitClipboardAddMode(save = true)
+                    return
+                }
+                // 返回键：取消并退出编辑模式
+                KeyEvent.KEYCODE_BACK -> {
+                    rimeEngine.clear()
+                    exitClipboardAddMode(save = false)
+                    return
+                }
+                // 退格键：优先删除 Rime composition，其次删除缓冲区
+                -5, Keyboard.KEYCODE_DELETE -> {
+                    if (rimeEngine.isComposing) {
+                        rimeEngine.processKey("BackSpace")
+                        updateClipboardAddStatus()
+                    } else if (clipboardAddBuffer.isNotEmpty()) {
+                        clipboardAddBuffer.deleteCharAt(clipboardAddBuffer.length - 1)
+                        updateClipboardAddStatus()
+                    }
+                    return
+                }
+                // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
+                in 97..122 -> {
+                    rimeEngine.processKey(primaryCode.toChar())
+                    updateClipboardAddStatus()
+                    return
+                }
+                // 数字键 0-9
+                in 48..57 -> {
+                    if (keyboardMode == KeyboardMode.NUMBER) {
+                        rimeEngine.processKey(primaryCode.toChar())
+                        updateClipboardAddStatus()
+                    } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val index = if (primaryCode == 48) 9 else (primaryCode - 49)
+                        val cands = rimeEngine.candidates
+                        if (index < cands.size) {
+                            val selected = rimeEngine.selectCandidate(index)
+                            if (selected.isNotEmpty()) {
+                                clipboardAddBuffer.append(selected)
+                                rimeEngine.clear()
+                            }
+                        }
+                    } else {
+                        clipboardAddBuffer.append(primaryCode.toChar())
+                    }
+                    updateClipboardAddStatus()
+                    return
+                }
+                // 空格：如果有候选词则选第一个词，否则追加空格
+                32 -> {
+                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                        val selected = rimeEngine.selectCandidate(0)
+                        if (selected.isNotEmpty()) {
+                            clipboardAddBuffer.append(selected)
+                            rimeEngine.clear()
+                        }
+                    } else {
+                        clipboardAddBuffer.append(' ')
+                    }
+                    updateClipboardAddStatus()
+                    return
+                }
+                // 标点符号直接追加
+                44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
+                    rimeEngine.clear()
+                    clipboardAddBuffer.append(primaryCode.toChar())
+                    updateClipboardAddStatus()
+                    return
+                }
+                // 中文标点（Unicode）
+                65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
+                    rimeEngine.clear()
+                    clipboardAddBuffer.append(primaryCode.toChar())
+                    updateClipboardAddStatus()
                     return
                 }
             }
@@ -7191,6 +7520,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             isVoiceLocked = true
             updateMicButtonLockedState()
+            // 显示语音锁定模式提示（命令词）
+            showVoiceLockHints()
             updateStatus("🔒 已进入语音锁定模式，说话后自动处理")
             // 锁定模式直接录音，不分裂按钮
             startRecordingLocked()
@@ -7264,6 +7595,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             statusDot.setBackgroundResource(drawableRes)
         } catch (_: Exception) {}
+    }
+
+    /** 显示语音命令词提示 */
+    private fun showVoiceCommandHints() {
+        val hints = VoiceEngine.getCommandHints()
+        if (hints.isNotEmpty() && ::statusText.isInitialized) {
+            updateStatus("💡 $hints")
+        }
+    }
+
+    /** 显示语音锁定模式提示 */
+    private fun showVoiceLockHints() {
+        val hints = VoiceEngine.getCommandHints()
+        if (hints.isNotEmpty() && ::statusText.isInitialized) {
+            updateStatus("🔒 语音锁定命令：$hints")
+        }
     }
 
     private var statusLines = mutableListOf<String>()

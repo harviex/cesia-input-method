@@ -183,13 +183,16 @@ class CesiaKeyboardView @JvmOverloads constructor(
     )
 
     // T9 功能键主字符映射（复用 t9MainPaint，统一灰度）
-    private val t9FuncLabels = mapOf(
-        -5 to "⌫",      // 退格
-        -104 to "⇧",    // Shift
-        -100 to "符",    // 符号切换
-        -999 to "⌨",    // 全键盘切换
-        10 to "↵"       // 回车
-    )
+        private val t9FuncLabels = mapOf(
+            -5 to "\u232B",      // 退格
+            -104 to "\u21E7",    // Shift
+            -100 to "\u7B26",    // 符号切换
+            -999 to "\u2328",    // 全键盘切换
+            32 to "\u7A7A",      // 空格键
+            -108 to "\u5168\u9009",  // 全选
+            -109 to "\u590D\u5236",  // 复制
+            10 to "\u21B5"       // 回车
+        )
 
     // 副字符画笔（灰色）
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

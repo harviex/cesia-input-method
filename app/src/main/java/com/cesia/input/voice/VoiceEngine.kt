@@ -66,6 +66,11 @@ class VoiceEngine(private val context: Context) {
             cmdWriting = writing
             Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing")
         }
+
+        /** 获取语音命令词提示字符串 */
+        fun getCommandHints(): String {
+            return "退出 / $cmdPolish / $cmdFinish / $cmdSend / $cmdWriting"
+        }
     }
 
     enum class Backend {
