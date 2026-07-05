@@ -368,16 +368,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         canvas.drawText(t9Func, cx, cy, t9MainPaint)
                     }
                 }
-                // 2. 符号键 - "符" 字较小
+
+                // 2. 符号键 - "符" 字（使用 t9MainPaint，跟随字体缩放/灰度）
                 for (key in keys) {
                     val code = key.codes?.firstOrNull() ?: continue
                     if (code == -100) {
-                        val smallPaint = Paint(t9MainPaint).apply {
-                            textSize = t9MainSpSize * 0.7f
-                        }
                         val cx = key.x + key.width / 2f
-                        val cy = key.y + key.height / 2f + smallPaint.textSize * 0.35f
-                        canvas.drawText("符", cx, cy, smallPaint)
+                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                        canvas.drawText("符", cx, cy, t9MainPaint)
                     }
                 }
                 // 3. 粘贴/复制键主字符 - "全选"/"复制"

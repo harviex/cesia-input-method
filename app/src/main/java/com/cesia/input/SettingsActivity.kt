@@ -346,6 +346,8 @@ class SettingsActivity : AppCompatActivity() {
             if (hasUpdate) {
                 tvVersion.visibility = View.GONE
                 llVersionContainer?.visibility = View.VISIBLE
+                // 设置版本号圆点颜色为主题色
+                versionDot?.setBackgroundColor(accentColor)
                 startPulseAnimation()
             } else {
                 tvVersion.visibility = View.VISIBLE

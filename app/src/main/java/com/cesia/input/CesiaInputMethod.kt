@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.AnimationDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
@@ -5011,11 +5012,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun startVoiceWave() {
         try {
             voiceWave.visibility = View.VISIBLE
-            val bg = voiceWave.background
-            if (bg is AnimationDrawable) {
-                waveAnim = bg
-                bg.start()
+            // 创建跟随主题色的声波动画
+            val color = themeAccent
+            val frames = arrayOf(
+                createWaveFrame(color, 0.25f, 48),
+                createWaveFrame(color, 0.4f, 56),
+                createWaveFrame(color, 0.55f, 64),
+                createWaveFrame(color, 0.4f, 56)
+            )
+            val anim = AnimationDrawable().apply {
+                frames.forEach { frame ->
+                    addFrame(frame, 250)
+                }
+                isOneShot = false
             }
+            voiceWave.background = anim
+            anim.start()
+            waveAnim = anim
+
             val pulse = ScaleAnimation(
                 1.0f, 1.3f, 1.0f, 1.3f,
                 ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
@@ -5027,6 +5041,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             voiceWave.startAnimation(pulse)
         } catch (_: Exception) {}
+    }
+
+    private fun createWaveFrame(color: Int, alpha: Float, size: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor((color and 0xFFFFFF) or ((color * alpha).toInt() shl 24))
+            setSize(size, size)
+        }
     }
 
     private fun stopVoiceWave() {
@@ -7588,13 +7610,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun setStatusDot(state: String) {
         if (!::statusDot.isInitialized) return
         try {
-            val drawableRes = when (state) {
-                "recording" -> R.drawable.status_dot_recording
-                "processing" -> R.drawable.status_dot_processing
-                "error" -> R.drawable.status_dot_error
-                else -> R.drawable.status_dot_idle
+            val color = when (state) {
+                "recording" -> themeAccent
+                "processing" -> 0xFFFF9800.toInt() // orange
+                "error" -> 0xFFF44336.toInt()    // red
+                else -> 0xFF999999.toInt()       // gray idle
             }
-            statusDot.setBackgroundResource(drawableRes)
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color)
+                setSize(12, 12)
+            }
+            statusDot.background = drawable
         } catch (_: Exception) {}
     }
 
