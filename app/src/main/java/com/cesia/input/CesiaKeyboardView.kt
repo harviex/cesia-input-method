@@ -358,6 +358,19 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
             }
 
+            // ===== T9 功能键主字符（独立循环，无 label 检查，复用 t9MainPaint 跟随灰度/缩放）=====
+            if (isT9Mode) {
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    val t9Func = t9FuncLabels[code]
+                    if (t9Func != null) {
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
+                        canvas.drawText(t9Func, cx, cy, t9MainPaint)
+                    }
+                }
+            }
+
             for (key in keys) {
                 val code = key.codes?.firstOrNull() ?: continue
                 if (key.label == null) continue
@@ -399,21 +412,6 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     key.y + 10f + popupSpSize
                 }
                 canvas.drawText(symbol, x, y, popupPaint)
-            }
-
-            // ===== 3. T9 1键/剪贴板键/底行功能键 表面文字（主题感知 + 缩放） =====
-            if (isT9Mode && t9FuncLabels.containsKey(code)) {
-                val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    textAlign = Paint.Align.CENTER
-                    textSize = TypedValue.applyDimension(
-                        TypedValue.COMPLEX_UNIT_SP, 12f * textScaleFactor, resources.displayMetrics
-                    )
-                    color = scaleGrayColor(labelTextColor, textGrayScale)
-                }
-                val cx = key.x + key.width / 2f
-                val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
-                val label = t9FuncLabels[code] ?: ""
-                canvas.drawText(label, cx, cy, grayPaint)
             }
 
             // ===== 4. Shift 锁定圆点（脉冲发光效果） =====
