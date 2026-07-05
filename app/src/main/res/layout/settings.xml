@@ -733,7 +733,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="12sp"
                         android:inputType="text"
-                        android:hint="初始状态文字" />
+                        android:hint="输入法状态栏初始状态文字" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -750,7 +750,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="12sp"
                         android:inputType="text"
-                        android:hint="智能写作按钮文字" />
+                        android:hint="长按智能写作按钮显示菜单标题" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -767,7 +767,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="12sp"
                         android:inputType="text"
-                        android:hint="魔法书弹窗标题" />
+                        android:hint="长按智能修改按钮显示菜单标题" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <!-- ═══════════ 分隔 ═══════════ -->
@@ -856,23 +856,17 @@
             android:textColor="#333333"
             android:layout_marginBottom="6dp" />
 
-        <ScrollView
+        <!-- 运行日志区域：点击展开/折叠，无滚动条限制 -->
+        <TextView
+            android:id="@+id/tv_log"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
-            android:fillViewport="false">
-
-            <TextView
-                android:id="@+id/tv_log"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="#F5F5F5"
-                android:padding="8dp"
-                android:textSize="10sp"
-                android:textColor="#81D8D0"
-                android:scrollbars="vertical"
-                android:textIsSelectable="true"
-                android:text="等待操作..." />
-        </ScrollView>
+            android:layout_height="wrap_content"
+            android:background="#F5F5F5"
+            android:padding="12dp"
+            android:textSize="11sp"
+            android:textColor="#333333"
+            android:textIsSelectable="true"
+            android:text="等待操作..." />
 
         <!-- 底部留白 -->
         <View

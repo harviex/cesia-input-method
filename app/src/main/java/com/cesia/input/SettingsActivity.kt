@@ -73,6 +73,7 @@ class SettingsActivity : AppCompatActivity() {
     private var btnTestLocalAi: MaterialButton? = null
     private lateinit var tvStatus: TextView
     private lateinit var tvLog: TextView
+    private var isLogExpanded = true
     private lateinit var tvVersion: TextView
     private lateinit var statsManager: PolishStatsManager
     private lateinit var dictManager: PinyinDictManager
@@ -621,6 +622,19 @@ class SettingsActivity : AppCompatActivity() {
         // 版本号容器（有更新时显示）也可点击检查更新
         findViewById<LinearLayout>(R.id.ll_version_container)?.setOnClickListener { checkForUpdates() }
         findViewById<TextView>(R.id.tv_version_with_dot)?.setOnClickListener { checkForUpdates() }
+
+        // 运行日志点击展开/折叠
+        tvLog.setOnClickListener {
+            isLogExpanded = !isLogExpanded
+            if (isLogExpanded) {
+                tvLog.maxLines = Int.MAX_VALUE
+                tvLog.text = tvLog.text // 触发重新测量
+                appendLog("📖 日志已展开")
+            } else {
+                tvLog.maxLines = 5
+                appendLog("📕 日志已折叠 (点击展开)")
+            }
+        }
 
         // 历史记录 + 新闻源管理
         btnHistory?.setOnClickListener { showHistory() }
@@ -1424,6 +1438,7 @@ class SettingsActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_model_selector, null)
         val rvModels = dialogView.findViewById<RecyclerView>(R.id.rv_model_list)
         val tvTitle = dialogView.findViewById<TextView>(R.id.tv_model_dialog_title)
+        val btnClose = dialogView.findViewById<TextView>(R.id.btn_model_dialog_close)
 
         // Set current model in title
         val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
@@ -1447,6 +1462,10 @@ class SettingsActivity : AppCompatActivity() {
             .setView(dialogView)
             .setCancelable(true)
             .create()
+
+        // 关闭按钮点击
+        btnClose.setOnClickListener { dialog.dismiss() }
+
         dialog.show()
     }
 
