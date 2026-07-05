@@ -172,6 +172,9 @@ class SettingsActivity : AppCompatActivity() {
 
         initViews()
 
+        // 设置模型下拉框背景（边框颜色跟随主题色）
+        tvCloudModel?.background = createSpinnerBackground(accentColor)
+
         // 语音与 AI 本地化设置 helper
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
         aiSettingsHelper.bindViews(
@@ -1759,5 +1762,20 @@ class SettingsActivity : AppCompatActivity() {
                 }
             } catch (_: Exception) {}
         }
+    }
+
+    /** 创建模型下拉框背景，边框颜色跟随主题色 */
+    private fun createSpinnerBackground(accent: Int): android.graphics.drawable.GradientDrawable {
+        val drawable = android.graphics.drawable.GradientDrawable()
+        drawable.shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+        drawable.setColor(0xFFFFFFFF.toInt()) // 白色背景
+        drawable.setStroke(dpToPx(1), accent) // 1dp 边框，主题色
+        drawable.cornerRadius = dpToPx(8).toFloat() // 8dp 圆角
+        drawable.setPadding(dpToPx(12), dpToPx(8), dpToPx(32), dpToPx(8))
+        return drawable
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 }

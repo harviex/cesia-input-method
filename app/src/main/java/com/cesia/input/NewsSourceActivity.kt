@@ -43,7 +43,9 @@ class NewsSourceActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.btn_close).setOnClickListener { finish() }
 
         // 添加自定义源按钮
-        findViewById<TextView>(R.id.btn_add_custom).setOnClickListener { showAddCustomDialog() }
+        val btnAddCustom = findViewById<TextView>(R.id.btn_add_custom)
+        btnAddCustom.setOnClickListener { showAddCustomDialog() }
+        btnAddCustom.setBackgroundColor(themeAccent)
 
         // 应用动态主题色到全树
         applyAccentToViewTree(window.decorView, themeAccent)

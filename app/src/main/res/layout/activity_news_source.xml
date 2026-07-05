@@ -54,7 +54,7 @@
             android:gravity="center"
             android:text="+ 添加自定义 RSS"
             android:textSize="14sp"
-            android:textColor="#81D8D0"
+            android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="添加自定义 RSS 源" />
