@@ -188,6 +188,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
             -104 to "\u21E7",     // Shift ⇧
             -100 to "符",          // 符号切换
             -999 to "\u2328",     // 全键盘切换 ⌨
+            32 to "空格",         // 空格键
             10 to "\u21B5",       // 回车 ↵
             49 to "Tab"           // 1键：Tab
         )
@@ -357,13 +358,43 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
             // ===== T9 功能键主字符（独立循环，无 label 检查，复用 t9MainPaint 跟随灰度/缩放）=====
             if (isT9Mode) {
+                // 1. 普通功能键主字符（t9MainPaint）
                 for (key in keys) {
                     val code = key.codes?.firstOrNull() ?: continue
                     val t9Func = t9FuncLabels[code]
-                    if (t9Func != null) {
+                    if (t9Func != null && code != -100 && code != -108 && code != -109) {
                         val cx = key.x + key.width / 2f
                         val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
                         canvas.drawText(t9Func, cx, cy, t9MainPaint)
+                    }
+                }
+                // 2. 符号键 - "符" 字较小
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    if (code == -100) {
+                        val smallPaint = Paint(t9MainPaint).apply {
+                            textSize = t9MainSpSize * 0.7f
+                        }
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + smallPaint.textSize * 0.35f
+                        canvas.drawText("符", cx, cy, smallPaint)
+                    }
+                }
+                // 3. 粘贴/复制键主字符 - "全选"/"复制"
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    val label = when (code) {
+                        -108 -> "全选"
+                        -109 -> "复制"
+                        else -> null
+                    }
+                    if (label != null) {
+                        val centerPaint = Paint(t9MainPaint).apply {
+                            textSize = t9MainSpSize * 0.85f
+                        }
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + centerPaint.textSize * 0.35f
+                        canvas.drawText(label, cx, cy, centerPaint)
                     }
                 }
             }
@@ -411,26 +442,34 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(symbol, x, y, popupPaint)
             }
 
-            // ===== 3. T9 剪贴板键表面文字（主题感知 + 缩放 + 灰度）=====
-            if (isT9Mode && (code == -108 || code == -109)) {
-                val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    textAlign = Paint.Align.CENTER
-                    textSize = TypedValue.applyDimension(
-                        TypedValue.COMPLEX_UNIT_SP, 12f * textScaleFactor, resources.displayMetrics
-                    )
-                    color = scaleGrayColor(labelTextColor, textGrayScale)
-                }
-                val cx = key.x + key.width / 2f
-                val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
-                val label = when (code) {
-                    -108 -> "全选"
-                    -109 -> "复制"
-                    else -> ""
-                }
-                canvas.drawText(label, cx, cy, grayPaint)
-            }
+                    // ===== T9 副字符（灰色 functionalLabels / 红色 popupCharacters）独立循环，无 label 检查 =====
+                    if (isT9Mode) {
+                        for (key in keys) {
+                            val code = key.codes?.firstOrNull() ?: continue
+                            val x = key.x + key.width - 10f
 
-            // ===== 4. Shift 锁定圆点（脉冲发光效果） =====
+                            // functionalLabels 灰色副字符
+                            val fnLabel = functionalLabels[code]
+                            if (fnLabel != null) {
+                                val y = key.y + 10f + spSize
+                                canvas.drawText(fnLabel, x, y, labelPaint)
+                            }
+
+                            // popupCharacters 红色副字符（如空格键的 0）
+                            val popup = key.popupCharacters
+                            if (!popup.isNullOrEmpty()) {
+                                val symbol = popup[0].toString()
+                                val y = if (fnLabel != null) {
+                                    key.y + 10f + spSize + popupSpSize + 2f
+                                } else {
+                                    key.y + 10f + popupSpSize
+                                }
+                                canvas.drawText(symbol, x, y, popupPaint)
+                            }
+                        }
+                    }
+
+                    // ===== 4. Shift 锁定圆点（脉冲发光效果） =====
             // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
             if ((code == -104 || code == -1) && isShiftLocked) {
                 val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
