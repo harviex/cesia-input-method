@@ -1,0 +1,106 @@
+rules:
+  # ==========================================
+  # Cesia 输入法：易崩溃/泄漏/ANR 模式（非安全类）
+  # ==========================================
+
+  - id: ime-handler-leak
+    message: "Handler.postDelayed 未在 onDestroy/onPause 移除回调（内存泄漏/ANR 隐患）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern-either:
+      - pattern: $H.postDelayed($R, $DELAY)
+      - pattern: $H.postAtTime($R, $TIME)
+    pattern-not:
+      pattern: $H.removeCallbacks($R)
+    metavariable-regex:
+      metavariable: $H
+      regex: "(?i)handler"
+
+  - id: ime-cursor-not-closed
+    message: "Cursor 未关闭（泄漏 SQLite 连接，最终导致 Crash）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern-either:
+      - pattern: $C = $DB.query(...)
+      - pattern: $C = $DB.rawQuery(...)
+      - pattern: $C = $DB.queryWithFactory(...)
+    pattern-not:
+      pattern: $C.close()
+
+  - id: ime-wakelock-not-released
+    message: "WakeLock acquire 未对应 release（电量耗尽/系统杀进程）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: $WL.acquire(...)
+    pattern-not:
+      pattern: $WL.release()
+
+  - id: ime-broadcast-receiver-unregistered
+    message: "registerReceiver 未对应 unregisterReceiver（泄漏/崩溃）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: $CTX.registerReceiver($R, $F)
+    pattern-not:
+      pattern: $CTX.unregisterReceiver($R)
+
+  - id: ime-inputmethodservice-leak
+    message: "InputMethodService 持有长生命周期引用（Context/View/Handler），建议用 WeakReference"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: |
+      class $CLASS extends InputMethodService {
+        ...
+        $FIELD = ...
+        ...
+      }
+    metavariable-regex:
+      metavariable: $FIELD
+      regex: "(?i)(context|view|handler|activity|callback|listener|runnable)"
+
+  - id: ime-jni-static-field
+    message: "JNI 层静态字段持有 Java 对象引用（GC 无法回收，易 OOM）"
+    severity: WARNING
+    languages: [c, cpp]
+    pattern: |
+      static jobject $FIELD;
+      ...
+      $FIELD = env->NewGlobalRef(...);
+
+  - id: ime-async-task-deprecated
+    message: "AsyncTask 已废弃（API 30+ 并发限制、内存泄漏），建议用 Coroutine/Executor"
+    severity: INFO
+    languages: [kotlin, java]
+    pattern: |
+      class $CLASS extends AsyncTask<..., ..., ...> { ... }
+
+  - id: ime-main-thread-io
+    message: "主线程疑似做 IO/网络/数据库操作（ANR 高风险）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern-either:
+      - pattern: $DB.query(...)
+      - pattern: $DB.insert(...)
+      - pattern: $DB.update(...)
+      - pattern: $DB.delete(...)
+      - pattern: $CLIENT.newCall(...).execute()
+      - pattern: Files.readAllBytes(...)
+      - pattern: FileInputStream(...)
+      - pattern: FileOutputStream(...)
+    pattern-not-either:
+      - pattern: |
+          if (Looper.myLooper() != Looper.getMainLooper()) { ... }
+      - pattern: |
+          runOnUiThread { ... }
+      - pattern: |
+          Handler(Looper.getMainLooper()).post { ... }
+
+  - id: ime-toast-on-background-thread
+    message: "非主线程显示 Toast（部分机型崩溃）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: Toast.makeText(...).show()
+    pattern-not-either:
+      - pattern: |
+          runOnUiThread { ... }
+      - pattern: |
+          Handler(Looper.getMainLooper()).post { ... }
