@@ -2769,17 +2769,32 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
             optRssSource.setOnClickListener {
-                // RSS源：打开设置页的新闻源选择器
-                try {
-                    val intent = android.content.Intent(this@CesiaInputMethod, SettingsActivity::class.java).apply {
-                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        putExtra("open_news_picker", true)
+                // RSS源：直接切换选中/取消选中（不跳转页面）
+                val currentOpts = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
+                val rssPrefs = getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+                if (currentOpts.contains("rss_cache")) {
+                    // 当前已选中 -> 取消选中
+                    currentOpts.remove("rss_cache")
+                    rssPrefs.edit()
+                        .remove("selected_name")
+                        .remove("selected_url")
+                        .remove("selected_category")
+                        .apply()
+                } else {
+                    // 当前未选中 -> 选中（若有上次选中的源则恢复，否则选第一个预置源）
+                    currentOpts.add("rss_cache")
+                    val selected = RssFetchManager.getSelectedSource(this@CesiaInputMethod)
+                    if (selected == null) {
+                        // 无历史选择，默认选第一个预置源
+                        val firstSource = RssFetchManager.PRESET_SOURCES.firstOrNull()
+                        if (firstSource != null) {
+                            RssFetchManager.saveSelectedSource(this@CesiaInputMethod, firstSource)
+                        }
                     }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.w("Cesia", "无法打开新闻源选择器: ${e.message}")
                 }
-                smartWritingPopup?.dismiss()
+                smartPrefs.edit().putStringSet("selected_options", currentOpts).apply()
+                savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+                refreshOption(it as TextView, "rss_cache", OPT_RSS_SOURCE)
             }
             optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
             optLocalLib.setOnClickListener {

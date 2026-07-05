@@ -14,6 +14,8 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.view.LayoutInflater
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
 import android.animation.Animator
@@ -63,8 +65,8 @@ class SettingsActivity : AppCompatActivity() {
     // === 云端功能设置 ===
     private lateinit var etApiUrl: TextInputEditText
     private lateinit var etApiKey: TextInputEditText
-    private var spinnerCloudModel: Spinner? = null
-    private var tvModelInfo: TextView? = null
+    private lateinit var etTavilyKey: TextInputEditText
+    private var tvCloudModel: TextView? = null
     private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
     private lateinit var btnTestApi: MaterialButton
@@ -216,8 +218,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun initViews() {
         etApiUrl = findViewById(R.id.et_api_url)
         etApiKey = findViewById(R.id.et_openrouter_key)
-        spinnerCloudModel = findViewById(R.id.spinner_cloud_model)
-        tvModelInfo = findViewById(R.id.tv_model_info)
+        etTavilyKey = findViewById(R.id.et_brave_api_key)
+        tvCloudModel = findViewById(R.id.tv_cloud_model)
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
         btnTestApi = findViewById(R.id.btn_test_api)
@@ -470,7 +472,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
+        // OpenRouter API Key - 直接显示真实 key（恢复原有行为）
         etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
+        // Tavily API Key - 直接显示真实 key（与 OpenRouter 一致）
+        etTavilyKey.setText(prefs.getString(PREF_BRAVE_KEY, ""))
 
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
@@ -490,6 +495,13 @@ class SettingsActivity : AppCompatActivity() {
 
         // 加载设置标题
         etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia AI智能输入法"))
+
+        // 初始化云端模型显示
+        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
+        tvCloudModel?.let { textView ->
+            // 先显示默认文本，fetchModels 完成后会更新
+            textView.text = "请选择模型"
+        }
 
         // 更新 VoiceEngine 命令词
         VoiceEngine.updateCommandWords(
@@ -527,26 +539,19 @@ class SettingsActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        // API Key - 焦点离开时自动保存
+        // API Key - 焦点离开时自动保存（直接显示真实 key，无需脱敏）
         etApiKey.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) saveApiKey()
+        }
+
+        // Tavily API Key - 焦点离开时自动保存（与 OpenRouter 一致）
+        etTavilyKey.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) saveTavilyKey()
         }
 
         // 润色 Prompt - 焦点离开时自动保存
         etPolishPrompt.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) savePolishPrompt()
-        }
-
-        // 云端模型选择 - 选择后自动保存
-        spinnerCloudModel?.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                val model = cloudModelList?.getOrNull(position)
-                model?.let {
-                    prefs.edit().putString(PREF_MODEL_ID, it.id).apply()
-                    appendLog("模型已保存: ${it.id}")
-                }
-            }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
         // 语音命令词 - 焦点离开时自动保存
@@ -605,6 +610,9 @@ class SettingsActivity : AppCompatActivity() {
         // 测试区重置 prompt 按钮
         btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
 
+        // 云端模型选择 - 点击 TextView 打开选择对话框
+        tvCloudModel?.setOnClickListener { showModelSelectorDialog(cloudModelList ?: emptyList()) }
+
         // 版本号点击检查更新
         tvVersion?.setOnClickListener { checkForUpdates() }
         // 版本号容器（有更新时显示）也可点击检查更新
@@ -635,6 +643,12 @@ class SettingsActivity : AppCompatActivity() {
         val apiKey = etApiKey.text?.toString()?.trim() ?: ""
         prefs.edit().putString(PREF_OPENROUTER_KEY, apiKey).apply()
         appendLog("OpenRouter API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
+    }
+
+    private fun saveTavilyKey() {
+        val apiKey = etTavilyKey.text?.toString()?.trim() ?: ""
+        prefs.edit().putString(PREF_BRAVE_KEY, apiKey).apply()
+        appendLog("Tavily API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
     }
 
     private fun savePolishPrompt() {
@@ -898,8 +912,7 @@ class SettingsActivity : AppCompatActivity() {
                             put("content", inputText)
                         })
                     }
-                    val selectedModel = cloudModelList?.get(spinnerCloudModel?.selectedItemPosition ?: 0)?.id
-                        ?: prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
+                    val selectedModel = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
                     val json = JSONObject().apply {
                         put("model", selectedModel)
                         put("messages", messages)
@@ -1357,14 +1370,14 @@ class SettingsActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
                 runOnUiThread {
-                    tvModelInfo?.text = "⚠️ 无法加载模型列表：${e.message}"
+                    tvCloudModel?.text = "⚠️ 无法加载模型列表：${e.message}"
                 }
             }
 
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 if (!response.isSuccessful) {
                     runOnUiThread {
-                        tvModelInfo?.text = "⚠️ 加载失败：HTTP ${response.code}"
+                        tvCloudModel?.text = "⚠️ 加载失败：HTTP ${response.code}"
                     }
                     return
                 }
@@ -1388,58 +1401,84 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     cloudModelList = list
                     runOnUiThread {
-                        updateSpinner(list)
+                        // 更新 TextView 显示当前选中的模型名称
+                        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
+                        val currentModel = list.find { it.id == savedModelId }
+                        currentModel?.let {
+                            tvCloudModel?.text = it.name
+                        }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
-                        tvModelInfo?.text = "⚠️ 解析失败：${e.message}"
+                        tvCloudModel?.text = "⚠️ 加载失败"
                     }
                 }
             }
         })
     }
 
-    private fun updateSpinner(models: List<CloudModel>) {
-        val spinner = spinnerCloudModel ?: return
-        val displayNames = models.map { model ->
-            val ctxStr = if (model.contextLength >= 1000000)
+    private fun showModelSelectorDialog(models: List<CloudModel>) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_model_selector, null)
+        val rvModels = dialogView.findViewById<RecyclerView>(R.id.rv_model_list)
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tv_model_dialog_title)
+
+        // Set current model in title
+        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        val currentModel = models.find { it.id == savedModelId }
+        currentModel?.let {
+            tvTitle.text = "当前: ${it.name}"
+        }
+
+        rvModels.layoutManager = LinearLayoutManager(this)
+        rvModels.adapter = ModelSelectorAdapter(models, savedModelId) { model ->
+            // Update the TextView
+            tvCloudModel?.text = model.name
+            // Save the model ID
+            prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
+            appendLog("模型已保存: ${model.id}")
+            // Dismiss dialog
+            (dialogView.parent as? android.app.Dialog)?.dismiss()
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        dialog.show()
+    }
+
+    private inner class ModelSelectorAdapter(
+        private val models: List<CloudModel>,
+        private val selectedModelId: String,
+        private val onModelClick: (CloudModel) -> Unit
+    ) : RecyclerView.Adapter<ModelSelectorAdapter.ModelViewHolder>() {
+
+        inner class ModelViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val tvName: TextView = view.findViewById(R.id.tv_model_name)
+            val tvProvider: TextView = view.findViewById(R.id.tv_model_provider)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ModelViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_model_selector, parent, false)
+            return ModelViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ModelViewHolder, position: Int) {
+            val model = models[position]
+            val ctxStr = if (model.contextLength >= 1000000L)
                 "${model.contextLength / 1000000}M"
-            else if (model.contextLength >= 1000)
+            else if (model.contextLength >= 1000L)
                 "${model.contextLength / 1000}K"
             else "${model.contextLength}"
-            "${model.name} ($ctxStr)"
-        }
-        val adapter = android.widget.ArrayAdapter(
-            this,
-            R.layout.spinner_item_cloud_model,
-            displayNames
-        )
-        adapter.setDropDownViewResource(R.layout.spinner_item_cloud_model)
-        spinner.adapter = adapter
-
-        // 恢复之前保存的选择
-        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
-        val savedIndex = models.indexOfFirst { it.id == savedModelId }
-        if (savedIndex >= 0) {
-            spinner.setSelection(savedIndex)
+            holder.tvName.text = "${model.name} ($ctxStr)"
+            holder.tvProvider.text = model.provider
+            val isSelected = model.id == selectedModelId
+            holder.itemView.setBackgroundColor(if (isSelected) 0xFFE0F7FA.toInt() else 0xFFFFFFFF.toInt())
+            holder.itemView.setOnClickListener { onModelClick(model) }
         }
 
-        // 选中后更新信息栏
-        spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                val model = models[position]
-                val ctxStr = if (model.contextLength >= 1000000)
-                    "${model.contextLength / 1000000}M tokens"
-                else if (model.contextLength >= 1000)
-                    "${model.contextLength / 1000}K tokens"
-                else "${model.contextLength} tokens"
-                val features = mutableListOf<String>()
-                if (model.hasTools) features.add("工具调用")
-                if (model.hasVision) features.add("视觉")
-                tvModelInfo?.text = "${model.provider} · $ctxStr · ${features.joinToString(", ")}"
-            }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
-        }
+        override fun getItemCount() = models.size
     }
 
     // ======================== 新闻源选择器的 RecyclerView Adapter ========================

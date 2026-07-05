@@ -6,16 +6,60 @@
     android:background="#FAFAFA">
 
     <!-- 标题栏 -->
-    <TextView
+    <LinearLayout
+        android:id="@+id/title_bar"
         android:layout_width="match_parent"
         android:layout_height="48dp"
+        android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:text="📰 选择新闻源（点击立即抓取）"
-        android:textSize="16sp"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold"
-        android:background="#81D8D0" />
+        android:background="#81D8D0"
+        android:paddingHorizontal="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📰 选择新闻源（点击切换选中）"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
+
+        <!-- 关闭按钮 -->
+        <TextView
+            android:id="@+id/btn_close"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="20sp"
+            android:textColor="#FFFFFF"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="关闭" />
+
+    </LinearLayout>
+
+    <!-- 添加自定义源按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/btn_add_custom"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="+ 添加自定义 RSS"
+            android:textSize="14sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="添加自定义 RSS 源" />
+
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_sources"
