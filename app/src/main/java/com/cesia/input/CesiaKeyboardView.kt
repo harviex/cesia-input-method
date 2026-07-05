@@ -182,17 +182,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
         65311 to "？"    // 全角问号
     )
 
-    // T9 功能键主字符映射（复用 t9MainPaint，统一灰度）
+    // T9 功能键主字符映射（复用 t9MainPaint，统一灰度，居中大字）
         private val t9FuncLabels = mapOf(
-            -5 to "删除",       // 退格
-            -104 to "大写",      // Shift
-            -100 to "符号",      // 符号切换
-            -999 to "全键",      // 全键盘切换
-            32 to "空格",        // 空格键
-            -108 to "粘贴",      // 粘贴
-            -109 to "复制",      // 复制
-            10 to "回车",        // 回车
-            49 to "Tab"          // 1键：Tab
+            -5 to "\u232B",       // 退格 ⌫
+            -104 to "\u21E7",     // Shift ⇧
+            -100 to "符",          // 符号切换
+            -999 to "\u2328",     // 全键盘切换 ⌨
+            10 to "\u21B5",       // 回车 ↵
+            49 to "Tab"           // 1键：Tab
         )
 
     // 副字符画笔（灰色）
@@ -412,6 +409,25 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     key.y + 10f + popupSpSize
                 }
                 canvas.drawText(symbol, x, y, popupPaint)
+            }
+
+            // ===== 3. T9 剪贴板键表面文字（主题感知 + 缩放 + 灰度）=====
+            if (isT9Mode && (code == -108 || code == -109)) {
+                val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    textAlign = Paint.Align.CENTER
+                    textSize = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_SP, 12f * textScaleFactor, resources.displayMetrics
+                    )
+                    color = scaleGrayColor(labelTextColor, textGrayScale)
+                }
+                val cx = key.x + key.width / 2f
+                val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
+                val label = when (code) {
+                    -108 -> "全选"
+                    -109 -> "复制"
+                    else -> ""
+                }
+                canvas.drawText(label, cx, cy, grayPaint)
             }
 
             // ===== 4. Shift 锁定圆点（脉冲发光效果） =====

@@ -921,15 +921,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             122 to "撤销", // z
             110 to "前进",  // n
             109 to "Del",  // m
-            -108 to "粘贴", // 剪贴板键：副字符
-            -109 to "剪切", // 复制键：副字符
-            // T9 底行功能键标签
-            (-100) to "符号", // 符号切换
-            (-999) to "全键", // 全键盘切换
-            32 to "空格",   // 空格键
-            (-108) to "粘贴", // 粘贴键
-            (-109) to "复制", // 复制键
-            10 to "回车"    // 回车键
+            // T9 底行功能键副字符（灰色，右上角）
+            -108 to "粘贴",  // 粘贴键：副字符
+            -109 to "剪切",  // 复制键：副字符
+            10 to "撤销"     // 回车键：副字符
         ))
         // T9Labels 已清空（数字键不再显示灰色副字符）
         keyboardView.setT9Labels(mapOf())
