@@ -188,7 +188,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
             -104 to "\u21E7",     // Shift ⇧
             -100 to "符",          // 符号切换
             -999 to "\u2328",     // 全键盘切换 ⌨
-            32 to "空格",         // 空格键
+            // 32 to "空格",         // 空格键 - 去掉"空格"文字
             10 to "\u21B5",       // 回车 ↵
             49 to "Tab"           // 1键：Tab
         )
@@ -467,24 +467,25 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         }
                     }
 
-                    // ===== 4. Shift 锁定圆点（脉冲发光效果） =====
-            // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
-            if ((code == -104 || code == -1) && isShiftLocked) {
-                val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = themeAccent
-                    style = Paint.Style.FILL
-                }
-                val dotX = key.x + key.width - 30f
-                val dotY = key.y + 10f + 8f
-                // 脉冲半径：8f ~ 12f，基于系统时间
-                val pulse = (System.currentTimeMillis() % 800) / 800f
-                val radius = 8f + 4f * kotlin.math.sin(pulse * 2 * kotlin.math.PI).toFloat()
-                canvas.drawCircle(dotX, dotY, radius, dotPaint)
-                // 触发持续重绘以实现动画
-                if (isShiftLocked) {
-                    postInvalidateDelayed(50)
-                }
-            }
+                    // ===== 4. Shift 锁定圆点（脉冲发光效果）=====
+                                // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
+                                if ((code == -104 || code == -1) && isShiftLocked) {
+                                    val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        color = themeAccent
+                                        style = Paint.Style.FILL
+                                    }
+                                    val dotX = key.x + key.width - 30f
+                                    // 圆点位置下移，与副字符垂直位置一致 (key.y + 10f + spSize)
+                                    val dotY = key.y + 10f + spSize
+                                    // 脉冲半径：6f ~ 10f，周期 2000ms 更慢
+                                    val pulse = (System.currentTimeMillis() % 2000) / 2000f
+                                    val radius = 6f + 4f * kotlin.math.sin(pulse * 2 * kotlin.math.PI).toFloat()
+                                    canvas.drawCircle(dotX, dotY, radius, dotPaint)
+                                    // 触发持续重绘以实现动画（降低频率配合慢速脉冲）
+                                    if (isShiftLocked) {
+                                        postInvalidateDelayed(100)
+                                    }
+                                }
 
             // ===== 5. (剪贴板字符已合并到 section 3) =====
         }

@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -26,6 +27,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -173,8 +175,22 @@ class SettingsActivity : AppCompatActivity() {
 
         initViews()
 
+        // 设置下拉刷新检查版本更新
+        val swipeRefresh = findViewById<SwipeRefreshLayout>(R.id.swipe_refresh)
+        swipeRefresh?.setOnRefreshListener {
+            checkForUpdates()
+            swipeRefresh.isRefreshing = false
+        }
+        swipeRefresh?.setColorSchemeColors(accentColor)
+
         // 设置模型下拉框背景（边框颜色跟随主题色）
         tvCloudModel?.background = createSpinnerBackground(accentColor)
+        // 云端模型下拉箭头颜色跟随主题色
+        tvCloudModel?.let {
+            val drawable = ContextCompat.getDrawable(this, R.drawable.ic_expand_more)?.mutate()
+            drawable?.setTint(accentColor)
+            it.setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
+        }
 
         // 语音与 AI 本地化设置 helper
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
