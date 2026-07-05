@@ -184,14 +184,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
     // T9 功能键主字符映射（复用 t9MainPaint，统一灰度）
         private val t9FuncLabels = mapOf(
-            -5 to "\u232B",      // 退格
-            -104 to "\u21E7",    // Shift
-            -100 to "\u7B26",    // 符号切换
-            -999 to "\u2328",    // 全键盘切换
-            32 to "\u7A7A",      // 空格键
-            -108 to "\u5168\u9009",  // 全选
-            -109 to "\u590D\u5236",  // 复制
-            10 to "\u21B5"       // 回车
+            -5 to "删除",       // 退格
+            -104 to "大写",      // Shift
+            -100 to "符号",      // 符号切换
+            -999 to "全键",      // 全键盘切换
+            32 to "空格",        // 空格键
+            -108 to "粘贴",      // 粘贴
+            -109 to "复制",      // 复制
+            10 to "回车"         // 回车
         )
 
     // 副字符画笔（灰色）
@@ -376,16 +376,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
                         canvas.drawText(t9Punct, cx, cy, t9MainPaint)
                     }
-                    // ===== T9 功能键主字符（复用 t9MainPaint，统一灰度）=====
-                    val t9Func = t9FuncLabels[code]
-                    if (t9Func != null) {
-                        val cx = key.x + key.width / 2f
-                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
-                        canvas.drawText(t9Func, cx, cy, t9MainPaint)
-                    }
-                }
+                // T9 功能键主字符主字符由第 3 部分统一绘制（主题感知 + 缩放），此处不再重复绘制
+            }
 
-                val x = key.x + key.width - 10f
+            val x = key.x + key.width - 10f
 
             // ===== 1. functionalLabels / t9Labels（灰色，右上角） =====
             val fnLabel = functionalLabels[code] ?: t9Labels[code]
@@ -406,8 +400,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(symbol, x, y, popupPaint)
             }
 
-            // ===== 3. T9 1键/剪贴板键 表面文字（主题感知 + 缩放） =====
-            if (isT9Mode && (code == 49 || code == -108 || code == -109)) {
+            // ===== 3. T9 1键/剪贴板键/底行功能键 表面文字（主题感知 + 缩放） =====
+            if (isT9Mode && t9FuncLabels.containsKey(code)) {
                 val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     textAlign = Paint.Align.CENTER
                     textSize = TypedValue.applyDimension(
@@ -417,12 +411,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
                 val cx = key.x + key.width / 2f
                 val cy = key.y + key.height / 2f + grayPaint.textSize * 0.35f
-                val label = when (code) {
-                    49 -> "Tab"
-                    -108 -> "全选"
-                    -109 -> "复制"
-                    else -> ""
-                }
+                val label = t9FuncLabels[code] ?: ""
                 canvas.drawText(label, cx, cy, grayPaint)
             }
 
