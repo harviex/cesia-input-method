@@ -1295,7 +1295,11 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
 
-        tvStatus.text = "⏳ 正在下载 v$version..."
+        // 在版本号区域显示下载进度
+        llVersionContainer?.visibility = View.VISIBLE
+        tvVersion?.text = "⏳ 正在下载 v$version..."
+        tvVersionWithDot?.text = "v$version"
+        versionDot?.visibility = View.GONE
         appendLog("开始下载: $apkUrl")
 
         Thread {
@@ -1308,12 +1312,15 @@ class SettingsActivity : AppCompatActivity() {
                 val response = client.newCall(request).execute()
 
                 if (!response.isSuccessful) {
-                    runOnUiThread {
-                        tvStatus.text = "❌ 下载失败: ${response.code}"
-                        appendLog("下载失败: ${response.code}")
-                    }
-                    return@Thread
-                }
+                                    runOnUiThread {
+                                        tvVersion?.text = "❌ 下载失败: ${response.code}"
+                                        tvVersionWithDot?.text = "v$version"
+                                        versionDot?.visibility = View.GONE
+                                        llVersionContainer?.visibility = View.VISIBLE
+                                        appendLog("下载失败: ${response.code}")
+                                    }
+                                    return@Thread
+                                }
 
                 // 保存到缓存目录
                 val apkFile = java.io.File(cacheDir, "cesia-update.apk")
@@ -1324,7 +1331,10 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
-                    tvStatus.text = "✅ 下载完成，正在安装..."
+                    tvVersion?.text = "✅ 下载完成，正在安装..."
+                    tvVersionWithDot?.text = "v$version"
+                    versionDot?.visibility = View.GONE
+                    llVersionContainer?.visibility = View.VISIBLE
                     appendLog("APK下载完成: ${apkFile.absolutePath}")
                 }
 
@@ -1349,14 +1359,20 @@ class SettingsActivity : AppCompatActivity() {
                     appendLog("已触发安装")
                 } catch (e: Exception) {
                     runOnUiThread {
-                        tvStatus.text = "❌ 安装失败: ${e.message}"
+                        tvVersion?.text = "❌ 安装失败: ${e.message}"
+                        tvVersionWithDot?.text = "v$version"
+                        versionDot?.visibility = View.GONE
+                        llVersionContainer?.visibility = View.VISIBLE
                         appendLog("安装失败: ${e.message}")
                         Toast.makeText(this, "安装失败，请手动安装: ${apkFile.absolutePath}", Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvStatus.text = "❌ 下载异常: ${e.message}"
+                    tvVersion?.text = "❌ 下载异常: ${e.message}"
+                    tvVersionWithDot?.text = "v$version"
+                    versionDot?.visibility = View.GONE
+                    llVersionContainer?.visibility = View.VISIBLE
                     appendLog("下载异常: ${e.message}")
                 }
             }
