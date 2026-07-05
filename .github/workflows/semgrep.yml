@@ -1,0 +1,39 @@
+name: Semgrep Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 3 * * 1'  # 每周一凌晨 3 点全量扫描
+
+permissions:
+  contents: read
+  security-events: write  # 上传 SARIF 到 GitHub Security 标签页
+
+jobs:
+  semgrep:
+    name: Semgrep Scan
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep (包含自定义输入法规则)
+        run: |
+          semgrep ci \
+            --config=auto \
+            --config=rules/ime-security.yaml \
+            --sarif=semgrep.sarif \
+            --error \
+            --no-git-ignore
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

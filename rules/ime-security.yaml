@@ -1,0 +1,80 @@
+rules:
+  # ==========================================
+  # Cesia 输入法专属安全规则
+  # ==========================================
+
+  - id: ime-hardcoded-api-key
+    message: "疑似硬编码 API Key / Token（建议放入 SharedPreferences 或 Keystore）"
+    severity: ERROR
+    languages: [kotlin, java]
+    pattern-either:
+      - pattern: $X = "sk-..."
+      - pattern: $X = "sk_live_..."
+      - pattern: $X = "tvly-..."
+      - pattern: $X = "pplx-..."
+      - pattern: $X = "fc-..."
+      - pattern: $X = "Bearer ..."
+    metavariable-regex:
+      metavariable: $X
+      regex: "(?i)(api[_-]?key|token|secret|password|pwd|auth)"
+
+  - id: ime-log-sensitive-data
+    message: "日志疑似输出敏感字段（密码、Token、Key、Authorization）"
+    severity: ERROR
+    languages: [kotlin, java]
+    pattern: Log.$M(..., $VAR, ...)
+    metavariable-regex:
+      metavariable: $VAR
+      regex: "(?i)(password|pwd|token|secret|api[_-]?key|auth|authorization|bearer)"
+
+  - id: ime-prefs-store-sensitive
+    message: "SharedPreferences 明文存储敏感信息（建议加密或用 EncryptedSharedPreferences）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern-either:
+      - pattern: $EDITOR.putString($KEY, $VAL)
+      - pattern: $EDITOR.putString($KEY, $VAL).apply()
+      - pattern: $EDITOR.putString($KEY, $VAL).commit()
+    metavariable-regex:
+      metavariable: $KEY
+      regex: "(?i)(password|pwd|token|secret|api[_-]?key|auth|private[_-]?key)"
+
+  - id: ime-network-without-pinning
+    message: "OkHttpClient 缺少 Certificate Pinning（中间人攻击风险）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: OkHttpClient.Builder()...build()
+    pattern-not: .certificatePinner(...)
+
+  - id: ime-intent-extras-sensitive
+    message: "Intent.putExtra 传递敏感数据（可能被其他 App 读取）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: $INTENT.putExtra($KEY, $VAL)
+    metavariable-regex:
+      metavariable: $KEY
+      regex: "(?i)(password|pwd|token|secret|api[_-]?key|auth|private[_-]?key)"
+
+  - id: ime-clipboard-sensitive
+    message: "剪贴板写入敏感内容（其他 App 可读）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: $CLIP.setText($TEXT)
+    metavariable-regex:
+      metavariable: $TEXT
+      regex: "(?i)(password|pwd|token|secret|api[_-]?key|private[_-]?key)"
+
+  - id: ime-webview-js-enabled
+    message: "WebView 开启 JavaScript 且未校验来源（XSS 风险）"
+    severity: WARNING
+    languages: [kotlin, java]
+    pattern: $WEB.settings.javaScriptEnabled = true
+    pattern-not: $WEB.settings.javaScriptEnabled = false
+
+  - id: ime-debug-log-release
+    message: "Release 包仍保留详细日志（建议用 BuildConfig.DEBUG 守护）"
+    severity: INFO
+    languages: [kotlin, java]
+    pattern: Log.$M(...)
+    pattern-not-if: |
+      if (BuildConfig.DEBUG) { ... }
