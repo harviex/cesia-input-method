@@ -38,9 +38,6 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.PopupWindow
 import android.widget.TextView
-import android.widget.EditText
-import android.widget.Toast
-import android.content.ClipData
 import androidx.core.content.ContextCompat
 import android.text.TextUtils
 import android.graphics.Typeface
@@ -58,11 +55,8 @@ import com.cesia.input.stats.MagicHistoryManager
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
-import com.cesia.input.ui.PopupManager
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
-import org.json.JSONObject
-import org.json.JSONArray
 
 /**
  * Cesia 输入法 — Rime 内核版
@@ -1391,7 +1385,172 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 主题菜单弹窗 */
     private fun showThemePopup() {
-        PopupManager.showThemePopup(this)
+        dismissAllPopups()
+        val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
+        // 立刻应用当前主题色到弹窗内所有硬编码的蒂芙尼蓝元素
+        applyAccentToViewTree(view, themeAccent)
+        val popup = PopupWindow(
+            view,
+            (resources.displayMetrics.widthPixels * 0.85f).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            false
+        )
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        popup.isOutsideTouchable = true
+        themePopup = popup
+
+        val seekHue = view.findViewById<android.widget.SeekBar>(R.id.seek_hue)
+        val seekGray = view.findViewById<android.widget.SeekBar>(R.id.seek_gray)
+        val seekKey = view.findViewById<android.widget.SeekBar>(R.id.seek_key)
+        val tvHue = view.findViewById<android.widget.TextView>(R.id.tv_hue_preview)
+        val btnReset = view.findViewById<android.widget.TextView>(R.id.btn_reset_theme)
+
+        // 明暗模式按钮（仅明亮/黑暗，去掉随系统）
+        val btnThemeLight = view.findViewById<android.widget.TextView>(R.id.btn_theme_light)
+        val btnThemeDark = view.findViewById<android.widget.TextView>(R.id.btn_theme_dark)
+
+        // 文字大小按钮
+        val btnTextSmall = view.findViewById<android.widget.TextView>(R.id.btn_text_small)
+        val btnTextMedium = view.findViewById<android.widget.TextView>(R.id.btn_text_medium)
+        val btnTextLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_large)
+        val btnTextXLarge = view.findViewById<android.widget.TextView>(R.id.btn_text_xlarge)
+
+        // 文字灰度调节
+        val seekTextGray = view.findViewById<android.widget.SeekBar>(R.id.seek_text_gray)
+        val tvTextGrayPreview = view.findViewById<android.widget.TextView>(R.id.tv_text_gray_preview)
+
+        // 初始化为当前值（不是默认值，解决重开不同步问题）
+        seekHue.progress = accentHue.toInt()
+        seekGray.progress = themeBgGrayBase
+        seekKey.progress = themeKeyGrayBase
+
+        // 初始化 SeekBar 色调和预览框背景（使用当前 themeAccent）
+        val initialAccentList = android.content.res.ColorStateList.valueOf(themeAccent)
+        seekHue.progressTintList = initialAccentList
+        seekHue.thumbTintList = initialAccentList
+        tvHue.setBackgroundColor(themeAccent)
+
+        // 初始化明暗模式按钮状态
+        val currentThemeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt(PREF_THEME_MODE, THEME_LIGHT)
+        updateThemeModeButtons(btnThemeLight, btnThemeDark, currentThemeMode)
+
+        // 初始化文字大小按钮状态
+        updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, textThemeSize)
+
+        // 初始化文字灰度滑块
+        seekTextGray.progress = (textGrayScale * 100f).toInt().coerceIn(0, 100)
+        tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
+
+        // 明暗模式切换（仅明亮/黑暗）
+        btnThemeLight.setOnClickListener {
+            isDarkTheme = false
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_LIGHT)
+            applyThemeColors()
+        }
+        btnThemeDark.setOnClickListener {
+            isDarkTheme = true
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_DARK).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_DARK)
+            applyThemeColors()
+        }
+
+        // 文字大小切换
+        btnTextSmall.setOnClickListener {
+            textThemeSize = 0
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 0)
+            applyThemeColors()
+        }
+        btnTextMedium.setOnClickListener {
+            textThemeSize = 1
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 1)
+            applyThemeColors()
+        }
+        btnTextLarge.setOnClickListener {
+            textThemeSize = 2
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 2)
+            applyThemeColors()
+        }
+        btnTextXLarge.setOnClickListener {
+            textThemeSize = 3
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 3)
+            applyThemeColors()
+        }
+
+        // 文字灰度调节
+        seekTextGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                textGrayScale = progress / 100f
+                tvTextGrayPreview.text = String.format("%.1f", textGrayScale)
+                applyTextGrayScale()
+                saveThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        seekHue.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                accentHue = progress.toFloat()
+                themeAccent = hslToColor(accentHue, defaultAccentHsl[1], defaultAccentHsl[2])
+                tvHue.setBackgroundColor(themeAccent)
+                // SeekBar 自身的 tint 也跟主题色走
+                val accentStateList = android.content.res.ColorStateList.valueOf(themeAccent)
+                seekHue.progressTintList = accentStateList
+                seekHue.thumbTintList = accentStateList
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        seekGray.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                themeBgGrayBase = progress
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        seekKey.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                themeKeyGrayBase = progress
+                applyThemeColors()
+            }
+            override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+        })
+
+        btnReset.setOnClickListener {
+            // 默认值：主题色蒂芙尼蓝，背景/按键灰度1.0(255)，文字灰度0.7，文字大小"小"(0)，明暗模式"明亮"
+            accentHue = defaultAccentHsl[0]
+            themeAccent = hslToColor(defaultAccentHsl[0], defaultAccentHsl[1], defaultAccentHsl[2])
+            themeBgGrayBase = 0xFF
+            themeKeyGrayBase = 0xFF
+            textThemeSize = 0
+            textGrayScale = 0.7f
+            seekHue.progress = accentHue.toInt()
+            seekGray.progress = themeBgGrayBase
+            seekKey.progress = themeKeyGrayBase
+            updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 0)
+            seekTextGray.progress = 70
+            textGrayScale = 0.7f
+            tvTextGrayPreview.text = "0.7"
+            // 重置明暗模式为明亮
+            isDarkTheme = false
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
+            updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_LIGHT)
+            applyThemeColors()
+        }
+
+        popup.setOnDismissListener { themePopup = null }
+        popup.showAtLocation(keyboardView, android.view.Gravity.CENTER, 0, 0)
     }
 
     private fun updateThemeModeButtons(btnLight: android.widget.TextView, btnDark: android.widget.TextView, mode: Int) {
@@ -2333,7 +2492,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // endregion 智能写作（星星按钮）
 
 // region 魔法历史菜单
-// ======================== 魔法历史 & 菜单 ========================
+    // ======================== 魔法历史 & 菜单 ========================
 
     private fun executeMagicOrAiReply() {
         try {
@@ -2420,10 +2579,128 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun showMagicHistoryPopup() {
-        PopupManager.showMagicHistoryPopup(this)
+        Log.d("Cesia", "showMagicHistoryPopup: called, mgr=$magicHistoryManager")
+        val mgr = magicHistoryManager ?: run {
+            Log.e("Cesia", "showMagicHistoryPopup: magicHistoryManager is null!")
+            return
+        }
+
+        // 后台加载记录，避免主线程 JSON 解析卡界面
+        Thread {
+            val records = mgr.getRecords()
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    showMagicHistoryPopupInternal(mgr, records)
+                } catch (e: Exception) {
+                    Log.e("Cesia", "showMagicHistoryPopup UI 异常", e)
+                    updateStatus("长按可管理魔法指令")
+                }
+            }
+        }.start()
     }
 
-    private fun enterMagicEditMode(mgr: MagicHistoryManager) {
+    private fun showMagicHistoryPopupInternal(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
+        val inflater = android.view.LayoutInflater.from(this)
+        val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
+        applyAccentToViewTree(popupView, themeAccent)
+        val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
+        // 设置标题（使用个性化设置）
+        val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)
+        tvTitle?.text = magicBookTitle
+
+        val keyboardWidth = keyboardView.width
+        val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+        // 测量标题栏实际高度
+        popupView.measure(
+            View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)?.measuredHeight
+            ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
+
+        val barHeightPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
+        ).toInt()
+        // 获取状态栏高度
+        val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
+            if (id > 0) resources.getDimensionPixelSize(id) else 88
+        }
+        // 高度 = 状态栏底部到键盘顶部的可用空间
+        val keyboardLocation = IntArray(2)
+        keyboardView.getLocationOnScreen(keyboardLocation)
+        val keyboardTopScreenY = keyboardLocation[1]
+        val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
+        // Grid 高度 = 总高度 - 标题栏 - 按钮栏，填满剩余空间
+        val gridHeightPx = (totalHeight - titleHeightPx - barHeightPx).coerceAtLeast(100)
+        Log.d("Cesia", "MagicBookPopup: statusBar=$statusBarHeight keyboardTop=$keyboardTopScreenY total=$totalHeight grid=$gridHeightPx")
+
+        val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+        popup.isOutsideTouchable = false
+        popup.elevation = 4f
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        popup.setFocusable(false)
+
+        // 动态设置 GridView 高度，填满标题栏和按钮栏之间的空间
+        gridView.layoutParams = gridView.layoutParams.apply {
+            height = gridHeightPx
+        }
+
+        // ===== 数据列表：置顶项在前，非置顶项按时间倒序 =====
+        val items = mutableListOf<MagicHistoryManager.MagicRecord>()
+        fun rebuildItems() {
+            val all = mgr.getRecords()
+            items.clear()
+            items.addAll(all.filter { it.isPinned })
+            items.addAll(all.filter { !it.isPinned })
+        }
+        rebuildItems()
+
+        val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
+        val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
+        val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
+
+        // 追踪当前编辑状态
+        var editingPosition = -1
+        var hasFocusedEdit = false
+
+        fun notifyChanged() {
+            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+        }
+
+        // ===== 底部按钮：新增魔法 =====
+        btnAdd.setOnClickListener {
+            popup.dismiss()
+            enterMagicEditMode(mgr)
+        }
+
+        gridView.adapter = object : android.widget.BaseAdapter() {
+// endregion 魔法历史菜单
+
+// region 候选适配器
+            override fun getCount() = items.size
+            override fun getItem(p: Int) = items[p]
+            override fun getItemId(p: Int) = items[p].id
+
+            override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
+                val record = items[p]
+                val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
+                val isEditing = (p == editingPosition)
+
+                if (isEditing) {
+                    tv.visibility = View.GONE
+                    et.visibility = View.VISIBLE
+                    if (et.text.toString() != record.instruction) {
+                        et.setText(record.instruction)
+                        et.setSelection(et.text.length)
+                    }
+                    et.hint = "✏️ 修改魔法指令..."
+                    et.setOnEditorActionListener { _, actionId, _ ->
+                        if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
                             saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
                             editingPosition = -1
                             hasFocusedEdit = false
@@ -2600,7 +2877,275 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
-        PopupManager.showSmartWritingPopup(this)
+        Log.d("Cesia", "showSmartWritingPopup: 弹窗被调用")
+        try {
+            val inflater = android.view.LayoutInflater.from(this)
+            val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
+            applyAccentToViewTree(popupView, themeAccent)
+
+            val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
+            tvTitle.text = smartWritingLabel
+
+            // 选项视图（4个数据源：剪贴板、RSS源、网络搜索、本地文库）
+            val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
+            val optRssSource = popupView.findViewById<TextView>(R.id.opt_rss_news)
+            val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
+            val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
+
+            // 恢复上次选中状态（持久化）
+            val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
+            var savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+
+            fun refreshOption(tv: TextView, tag: String, label: String) {
+                val checked = savedOptions.contains(tag)
+                tv.text = if (checked) "✓ $label" else "○ $label"
+                tv.setTextColor(if (checked) themeAccent else 0xFF333333.toInt())
+                tv.setTypeface(null, if (checked) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                tv.tag = tag
+            }
+            refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
+            refreshOption(optRssSource, "rss_cache", OPT_RSS_SOURCE)
+            refreshOption(optSearch, "search", OPT_SEARCH)
+            refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
+
+            // 点击切换（直接保存到 SharedPreferences 并刷新 UI）
+            fun toggleOption(tv: TextView, tag: String, label: String) {
+                val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
+                if (current.contains(tag)) current.remove(tag) else current.add(tag)
+                smartPrefs.edit().putStringSet("selected_options", current).apply()
+                // 更新 savedOptions 闭包变量，使 refreshOption 读取最新值
+                savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+                refreshOption(tv, tag, label)
+            }
+            optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
+            optRssSource.setOnClickListener {
+                // RSS源：直接切换选中/取消选中（不跳转页面）
+                val currentOpts = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
+                val rssPrefs = getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+                if (currentOpts.contains("rss_cache")) {
+                    // 当前已选中 -> 取消选中
+                    currentOpts.remove("rss_cache")
+                    rssPrefs.edit()
+                        .remove("selected_name")
+                        .remove("selected_url")
+                        .remove("selected_category")
+                        .apply()
+                } else {
+                    // 当前未选中 -> 选中（若有上次选中的源则恢复，否则选第一个预置源）
+                    currentOpts.add("rss_cache")
+                    val selected = RssFetchManager.getSelectedSource(this@CesiaInputMethod)
+                    if (selected == null) {
+                        // 无历史选择，默认选第一个预置源
+                        val firstSource = RssFetchManager.PRESET_SOURCES.firstOrNull()
+                        if (firstSource != null) {
+                            RssFetchManager.saveSelectedSource(this@CesiaInputMethod, firstSource)
+                        }
+                    }
+                }
+                smartPrefs.edit().putStringSet("selected_options", currentOpts).apply()
+                savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+                refreshOption(it as TextView, "rss_cache", OPT_RSS_SOURCE)
+            }
+            optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
+            optLocalLib.setOnClickListener {
+                // 如果已选中，再次点击取消；如果未选中，先选文件
+                val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
+                if (current.contains("local_lib")) {
+                    current.remove("local_lib")
+                    smartPrefs.edit().putStringSet("selected_options", current).apply()
+                    savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
+                    refreshOption(it as TextView, "local_lib", OPT_LOCAL_LIB)
+                } else {
+                    // 弹出文件选择器（通过透明辅助 Activity）
+                    val intent = android.content.Intent(this, FilePickerActivity::class.java).apply {
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        startActivity(intent)
+                        // 选完后通过 onResume 或 SharedPreferences 回调刷新选中状态
+                        // 简单方案：选完文件后自动标记为已选中
+                        current.add("local_lib")
+                        smartPrefs.edit().putStringSet("selected_options", current).apply()
+                    } catch (e: Exception) {
+                        Log.w("Cesia", "Cannot open file picker: ${e.message}")
+                    }
+                }
+            }
+
+            // 智能写作命令列表（2列，可滚动，与魔法书一致）
+            val gvRecords = popupView.findViewById<android.widget.GridView>(R.id.gv_smart_records)
+            val smartRecords = mutableListOf<String>()
+            loadSmartRecords(smartRecords)
+
+            val recordAdapter = object : android.widget.BaseAdapter() {
+                override fun getCount() = smartRecords.size
+                override fun getItem(p: Int) = smartRecords[p]
+                override fun getItemId(p: Int) = p.toLong()
+                override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                    val v = cv ?: android.view.LayoutInflater.from(this@CesiaInputMethod)
+                        .inflate(R.layout.item_smart_command, parent, false)
+                    val tvCommand = v.findViewById<android.widget.TextView>(R.id.tv_smart_command)
+                    tvCommand.text = smartRecords[p]
+                    return v
+                }
+            }
+            gvRecords.adapter = recordAdapter
+
+            // 追踪当前编辑状态
+            var editingPosition = -1
+            var hasFocusedEdit = false
+
+            fun notifyChanged() {
+                (gvRecords.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            }
+
+            // 长按：置顶/删除（和魔法书一致）
+            gvRecords.setOnItemLongClickListener { _, view, position, _ ->
+                if (position < smartRecords.size) {
+                    val item = smartRecords[position]
+                    smartRecords.removeAt(position)
+                    smartRecords.add(0, item)
+                    saveSmartRecords(smartRecords)
+                    notifyChanged()
+                    updateStatus("⤒ 已置顶：${item.take(20)}")
+                }
+                true
+            }
+
+            // 单击：直接执行该命令（调用AI）
+            gvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+                if (position < smartRecords.size) {
+                    val command = smartRecords[position]
+                    smartWritingPopup?.dismiss()
+                    smartWritingPopup = null
+                    executeSmartCommand(command)
+                }
+            }
+
+            // 底部按钮
+            val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
+            val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
+            val btnDelete = popupView.findViewById<TextView>(R.id.btn_smart_delete)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
+
+            // ===== ＋：进入编辑模式输入新命令 =====
+            btnAdd.setOnClickListener {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+                enterSmartEditMode()
+            }
+
+            // ===== 置顶按钮：PopupMenu 选择置顶指定命令 =====
+            btnPin.setOnClickListener {
+                if (smartRecords.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnPin)
+                for ((idx, cmd) in smartRecords.withIndex()) {
+                    val title = "${if (idx == 0) "⤒ " else "○ "}${cmd.take(20)}"
+                    popupMenu.menu.add(0, idx, 0, title)
+                }
+                popupMenu.setOnMenuItemClickListener { item ->
+                    val pos = item.itemId
+                    if (pos >= 0 && pos < smartRecords.size) {
+                        val moved = smartRecords.removeAt(pos)
+                        smartRecords.add(0, moved)
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⤒ 已置顶：${moved.take(18)}")
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            // ===== 删除按钮：PopupMenu 选择删除 =====
+            btnDelete.setOnClickListener {
+                if (smartRecords.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnDelete)
+                // 全部删除置顶（order=0）
+                popupMenu.menu.add(0, -1, 0, "⊗ 删除全部（${smartRecords.size}条）")
+                for ((idx, cmd) in smartRecords.withIndex()) {
+                    popupMenu.menu.add(0, idx + 1, 1, "⊗ ${cmd.take(18)}")
+                }
+                popupMenu.setOnMenuItemClickListener { item ->
+                    if (item.itemId == -1) {
+                        smartRecords.clear()
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⊗ 已清空智能写作命令")
+                    } else {
+                        val pos = item.itemId - 1
+                        if (pos >= 0 && pos < smartRecords.size) {
+                            val removed = smartRecords.removeAt(pos)
+                            saveSmartRecords(smartRecords)
+                            notifyChanged()
+                            updateStatus("⊗ 已删除：${removed.take(18)}")
+                        }
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            // ===== 关闭按钮 =====
+            btnClose.setOnClickListener {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+            }
+
+            // 弹窗尺寸和定位（与魔法书一致）
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            // 测量标题栏实际高度
+            popupView.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+            )
+            val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)?.measuredHeight
+                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
+
+            val barHeightPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
+            ).toInt()
+
+            // 选项区高度（2列×2行 × 40dp）
+            val optionHeightPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics
+            ).toInt()
+            val optionsHeightPx = optionHeightPx * 2 + TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
+            ).toInt() // padding
+
+            val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
+                if (id > 0) resources.getDimensionPixelSize(id) else 88
+            }
+            val keyboardLocation = IntArray(2)
+            keyboardView.getLocationOnScreen(keyboardLocation)
+            val keyboardTopScreenY = keyboardLocation[1]
+            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
+
+            // GridView 使用 weight=1 自动填满剩余空间，无需手动设置高度
+
+            // 弹窗尺寸：固定高度 = 键盘顶部 - 状态栏底部，完全填满
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            popup.isOutsideTouchable = false
+            popup.elevation = 4f
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            popup.setFocusable(false)
+
+            popup.setOnDismissListener {
+                smartWritingPopup = null
+                stopMagicButtonGlow()
+                btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
+            }
+
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
+            smartWritingPopup = popup
+        } catch (e: Exception) {
+            Log.e("Cesia", "showSmartWritingPopup 异常", e)
+        }
     }
 
     /** 进入智能写作命令编辑模式 */
@@ -3052,7 +3597,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 关闭所有弹窗（长按互斥） */
     private fun dismissAllPopups() {
-        PopupManager.dismissAllPopups(this)
+        magicHistoryPopup?.dismiss()
+        magicHistoryPopup = null
+        smartWritingPopup?.dismiss()
+        smartWritingPopup = null
+        clipboardPopup?.dismiss()
+        clipboardPopup = null
+        themePopup?.dismiss()
+        themePopup = null
+        // 清除所有按钮高亮状态
+        stopMagicButtonGlow()
+        btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        stopMagicBookGlow()
+        // 退出剪贴板新增模式
+        if (clipboardAddMode) exitClipboardAddMode(save = false)
     }
 
 // endregion 候选适配器
@@ -5162,7 +5721,201 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 剪贴板管理器弹窗 — 两列风格，支持置顶/删除/搜索/关闭/长按操作
      */
     private fun showClipboardManagerPopup() {
-        PopupManager.showClipboardManagerPopup(this)
+        try {
+            val inflater2 = android.view.LayoutInflater.from(this)
+            clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
+            applyAccentToViewTree(clipboardPopupView!!, themeAccent)
+            val popupView = clipboardPopupView!!
+            val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
+            val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
+            this.etSearch = etSearch
+            val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
+            val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
+            val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
+            val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
+            val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
+
+            // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
+            etSearch.setOnFocusChangeListener { _, hasFocus ->
+                clipboardSearchEditMode = hasFocus
+                if (hasFocus) {
+                    tvSearchHint.visibility = View.VISIBLE
+                    tvSearchHint.text = "输入搜索关键词..."
+                    etSearch.hint = ""
+                } else {
+                    tvSearchHint.visibility = View.GONE
+                    etSearch.hint = "🔍 点击搜索..."
+                }
+            }
+            etSearch.addTextChangedListener(object : android.text.TextWatcher {
+// endregion 长按检测
+
+// region 剪贴板搜索
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    // 搜索编辑模式下，TextWatcher 不做任何事（由 onKey 拦截处理过滤）
+                    // 非搜索编辑模式下（如直接粘贴），才由 TextWatcher 触发过滤
+                    if (!clipboardSearchEditMode) {
+                        clipboardSearchFilter = s?.toString()?.trim() ?: ""
+                        applyClipboardFilter()
+                    }
+                }
+            })
+            etSearch.setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                    // 搜索动作：清除焦点，隐藏软键盘
+                    etSearch.clearFocus()
+                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                    imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
+                    true
+                } else false
+            }
+
+            // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
+            val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            loadClipboardHistoryToClassMembers(clipboardMgr)
+            Log.d("Cesia", "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}")
+
+            // 初始化过滤
+            clipboardSearchFilter = ""
+            applyClipboardFilter()
+
+            clipboardAdapter = ClipboardAdapter(inflater2, clipboardFilteredItems, this)
+            gvClipboard.adapter = clipboardAdapter
+
+            val keyboardWidth = keyboardView.width
+            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+
+            // 获取状态栏高度
+            val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
+                if (id > 0) resources.getDimensionPixelSize(id) else 88
+            }
+            // 高度 = 状态栏底部到键盘顶部的可用空间
+            val keyboardLocation = IntArray(2)
+            keyboardView.getLocationOnScreen(keyboardLocation)
+            val keyboardTopScreenY = keyboardLocation[1]
+            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
+
+            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            popup.isOutsideTouchable = false
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.elevation = 8f
+            popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            popup.setFocusable(false)
+            clipboardPopup = popup
+
+            // 单击：插入文本（非空条目）
+            gvClipboard.setOnItemClickListener { _, _, position, _ ->
+                val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemClickListener
+                if (item.isEmpty) return@setOnItemClickListener
+                currentInputConnection?.commitText(item.text, 1)
+                popup.dismiss()
+            }
+
+            // 长按：操作菜单（置顶/删除/编辑/分词）
+            gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
+                val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
+                if (item.isEmpty) return@setOnItemLongClickListener true
+                showClipboardItemActions(item, clipboardItems) {
+                    // 删除后直接保存到 SharedPreferences，不要重新加载（否则被删除的条目会重新出现）
+                    saveClipboardHistoryFromClassMembers()
+                    applyClipboardFilter()
+                }
+                true
+            }
+
+
+            btnAdd.setOnClickListener {
+                // 新增：打开编辑弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入）
+                showClipboardAddPopup()
+            }
+
+            btnClose.setOnClickListener { popup.dismiss() }
+
+            // 置顶按钮
+            btnPin.setOnClickListener {
+                val realItems = clipboardItems.filter { !it.isEmpty }
+                if (realItems.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnPin)
+                for (r in realItems) {
+                    val title = "${if (r.isPinned) "⤒ " else "○ "}${r.text.take(18)}"
+                    popupMenu.menu.add(0, r.text.hashCode(), 0, title)
+                }
+                popupMenu.setOnMenuItemClickListener { menuItem ->
+                    val target = realItems.find { it.text.hashCode() == menuItem.itemId }
+                    if (target != null) {
+                        clipboardItems.removeAll { it.text == target.text }
+                        clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            // 删除按钮
+            btnDelete.setOnClickListener {
+                val realItems = clipboardItems.filter { !it.isEmpty }
+                if (realItems.isEmpty()) return@setOnClickListener
+                val popupMenu = android.widget.PopupMenu(this, btnDelete)
+                // 全部删除置顶（order=0）
+                popupMenu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条）")
+                for (r in realItems) {
+                    popupMenu.menu.add(0, r.text.hashCode(), 1, "⊗ ${r.text.take(18)}")
+                }
+                popupMenu.setOnMenuItemClickListener { menuItem ->
+                    if (menuItem.itemId == -1) {
+                        // 全部删除：保留置顶项
+                        clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                        // 清除系统剪贴板，防止重新加载时再次出现
+                        try {
+                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            clipboardMgr?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                        } catch (_: Exception) {}
+                        updateStatus("⊗ 已删除全部（保留置顶）")
+                    } else {
+                        val target = realItems.find { it.text.hashCode() == menuItem.itemId }
+                        if (target != null) {
+                            clipboardItems.removeAll { it.text == target.text }
+                            saveClipboardHistoryFromClassMembers()
+                            applyClipboardFilter()
+                            // 同时清除系统剪贴板中匹配的内容，防止重新加载时再次出现
+                            try {
+                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                if (clipboardMgr?.hasPrimaryClip() == true) {
+                                    val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    if (clipText == target.text) {
+                                        clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    true
+                }
+                popupMenu.show()
+            }
+
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
+
+            popup.setOnDismissListener {
+                cancelSendKeyLongPress()
+                clipboardPopup = null
+                Log.d("Cesia", "clipboardPopup dismissed, clipboardItems.size=${clipboardItems.size}")
+            }
+
+            // 持久化保存（弹窗显示后立即保存当前加载状态）
+            saveClipboardHistoryFromClassMembers()
+            Log.d("Cesia", "showClipboardManagerPopup: saved to prefs, clipboardItems.size=${clipboardItems.size}")
+
+        } catch (e: Exception) {
+            updateStatus("❌ 剪贴板管理器异常: ${e.message}")
+        }
     }
 
     private fun updateClipboardSearchBtn(btnSearch: TextView) {
@@ -6854,824 +7607,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region UI辅助
     // ======================== UI 辅助 ========================
 
-    /** PopupManager - handles all popup windows as inner class for private access */
-    inner class PopupManager {
-        // ======================== Theme Popup ========================
-
-        fun showThemePopup() {
-            try {
-                val inflater = LayoutInflater.from(this@CesiaInputMethod)
-                val popupView = inflater.inflate(R.layout.popup_theme_menu, null)
-                applyAccentToViewTree(popupView, themeAccent)
-
-                val tvTitle = popupView.findViewById<TextView>(R.id.tv_theme_title)
-                tvTitle.text = "🎨 主题设置"
-
-                val btnLight = popupView.findViewById<TextView>(R.id.btn_theme_light)
-                val btnDark = popupView.findViewById<TextView>(R.id.btn_theme_dark)
-                val btnAuto = popupView.findViewById<TextView>(R.id.btn_theme_auto)
-                val btnTextSmall = popupView.findViewById<TextView>(R.id.btn_text_small)
-                val btnTextMedium = popupView.findViewById<TextView>(R.id.btn_text_medium)
-                val btnTextLarge = popupView.findViewById<TextView>(R.id.btn_text_large)
-                val btnClose = popupView.findViewById<TextView>(R.id.btn_theme_close)
-
-                fun refreshThemeButtons() {
-                    updateThemeButton(btnLight, "☀️ 浅色", ThemeMode.LIGHT, themeMode)
-                    updateThemeButton(btnDark, "🌙 深色", ThemeMode.DARK, themeMode)
-                    updateThemeButton(btnAuto, "🌗 自动", ThemeMode.AUTO, themeMode)
-                    updateTextSizeButton(btnTextSmall, "小", TextSizeMode.SMALL, textSizeMode)
-                    updateTextSizeButton(btnTextMedium, "中", TextSizeMode.MEDIUM, textSizeMode)
-                    updateTextSizeButton(btnTextLarge, "大", TextSizeMode.LARGE, textSizeMode)
-                }
-
-                refreshThemeButtons()
-
-                btnLight.setOnClickListener { setThemeMode(ThemeMode.LIGHT); refreshThemeButtons() }
-                btnDark.setOnClickListener { setThemeMode(ThemeMode.DARK); refreshThemeButtons() }
-                btnAuto.setOnClickListener { setThemeMode(ThemeMode.AUTO); refreshThemeButtons() }
-                btnTextSmall.setOnClickListener { setTextSizeMode(TextSizeMode.SMALL); refreshThemeButtons() }
-                btnTextMedium.setOnClickListener { setTextSizeMode(TextSizeMode.MEDIUM); refreshThemeButtons() }
-                btnTextLarge.setOnClickListener { setTextSizeMode(TextSizeMode.LARGE); refreshThemeButtons() }
-                btnClose.setOnClickListener { dismissAllPopups() }
-
-                val keyboardWidth = keyboardView.width
-                val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-                val popup = PopupWindow(popupView, popupWidth, ViewGroup.LayoutParams.WRAP_CONTENT, true)
-                popup.isOutsideTouchable = true
-                popup.elevation = 8f
-                popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                popup.setFocusable(false)
-
-                popup.showAtLocation(keyboardView, Gravity.BOTTOM, 0, 0)
-                themePopup = popup
-
-                popup.setOnDismissListener { themePopup = null }
-            } catch (e: Exception) {
-                updateStatus("❌ 主题弹窗异常: ${e.message}")
-            }
-        }
-
-        private fun updateThemeButton(btn: TextView, label: String, mode: ThemeMode, current: ThemeMode) {
-            btn.text = if (mode == current) "✓ $label" else "○ $label"
-            btn.setTextColor(if (mode == current) resources.getColor(com.cesia.input.R.color.tiffany_blue) else 0xFF333333.toInt())
-            btn.setTypeface(null, if (mode == current) Typeface.BOLD else Typeface.NORMAL)
-        }
-
-        private fun updateTextSizeButton(btn: TextView, label: String, mode: TextSizeMode, current: TextSizeMode) {
-            btn.text = if (mode == current) "✓ $label" else "○ $label"
-            btn.setTextColor(if (mode == current) resources.getColor(com.cesia.input.R.color.tiffany_blue) else 0xFF333333.toInt())
-            btn.setTypeface(null, if (mode == current) Typeface.BOLD else Typeface.NORMAL)
-        }
-
-        // ======================== Magic History Popup ========================
-
-        fun showMagicHistoryPopup() {
-            val mgr = MagicHistoryManager.getInstance(this@CesiaInputMethod)
-            val records = mgr.getRecords()
-            showMagicHistoryPopupInternal(mgr, records)
-        }
-
-        private fun showMagicHistoryPopupInternal(mgr: MagicHistoryManager, records: List<MagicHistoryManager.MagicRecord>) {
-            val inflater = LayoutInflater.from(this@CesiaInputMethod)
-            val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
-            applyAccentToViewTree(popupView, themeAccent)
-            val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
-
-            val tvTitle = popupView.findViewById<TextView>(R.id.tv_magic_title)
-            tvTitle?.text = magicBookTitle
-
-            val keyboardWidth = keyboardView.width
-            val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-            popupView.measure(
-                View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-            val titleHeightPx = popupView.findViewById<TextView>(R.id.tv_magic_title)?.measuredHeight
-                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
-
-            val barHeightPx = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
-            ).toInt()
-
-            val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
-                if (id > 0) resources.getDimensionPixelSize(id) else 88
-            }
-
-            val keyboardLocation = IntArray(2)
-            keyboardView.getLocationOnScreen(keyboardLocation)
-            val keyboardTopScreenY = keyboardLocation[1]
-            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
-
-            val gridHeightPx = (totalHeight - titleHeightPx - barHeightPx).coerceAtLeast(100)
-
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-            popup.isOutsideTouchable = false
-            popup.elevation = 4f
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
-            popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            popup.setFocusable(false)
-
-            gridView.layoutParams = gridView.layoutParams.apply { height = gridHeightPx }
-
-            val items = mutableListOf<MagicHistoryManager.MagicRecord>()
-
-            fun rebuildItems() {
-                val all = mgr.getRecords()
-                items.clear()
-                items.addAll(all.filter { it.isPinned })
-                items.addAll(all.filter { !it.isPinned })
-            }
-            rebuildItems()
-
-            val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
-
-            var editingPosition = -1
-            var hasFocusedEdit = false
-
-            fun notifyChanged() {
-                (gridView.adapter as? BaseAdapter)?.notifyDataSetChanged()
-            }
-
-            btnAdd.setOnClickListener {
-                popup.dismiss()
-                enterMagicEditMode(mgr)
-            }
-
-            gridView.adapter = object : BaseAdapter() {
-                override fun getCount() = items.size
-                override fun getItem(p: Int) = items[p]
-                override fun getItemId(p: Int) = items[p].id
-
-                override fun getView(p: Int, cv: View?, parent: ViewGroup?): View {
-                    val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
-                    val record = items[p]
-                    val tv = v.findViewById<TextView>(R.id.tv_magic_text)
-                    val et = v.findViewById<EditText>(R.id.et_magic_edit)
-                    val isEditing = (p == editingPosition)
-
-                    if (isEditing) {
-                        tv.visibility = View.GONE
-                        et.visibility = View.VISIBLE
-                        if (et.text.toString() != record.instruction) {
-                            et.setText(record.instruction)
-                            et.setSelection(et.text.length)
-                        }
-                        et.hint = "✏️ 修改魔法指令..."
-                        et.setOnEditorActionListener { _, actionId, _ ->
-                            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                                saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
-                                editingPosition = -1
-                                hasFocusedEdit = false
-                                true
-                            } else false
-                        }
-                    } else {
-                        et.visibility = View.GONE
-                        tv.visibility = View.VISIBLE
-                        et.setOnEditorActionListener(null)
-
-                        val isActive = record.instruction == currentMagicPrompt
-                        val prefix = if (isActive) "✓ " else if (record.isPinned) "⤒ " else ""
-                        val displayText = "${prefix}${record.instruction}"
-                        if (record.isPinned && !isActive) {
-                            val spannable = SpannableString(displayText)
-                            spannable.setSpan(
-                                StyleSpan(Typeface.BOLD),
-                                0, prefix.length,
-                                SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE
-                            )
-                            tv.text = spannable
-                            tv.setTextColor(0xFF333333.toInt())
-                            tv.setTypeface(null, Typeface.NORMAL)
-                        } else {
-                            tv.text = displayText
-                            tv.setTextColor(if (isActive) themeAccent else 0xFF333333.toInt())
-                            tv.setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
-                        }
-                        tv.textSize = 13f
-                        tv.maxLines = 2
-                    }
-                    return v
-                }
-            }
-
-            gridView.setOnItemClickListener { _, _, position, _ ->
-                val record = items[position]
-                currentMagicPrompt = record.instruction
-                popup.dismiss()
-                executeSelectedMagic(record.instruction)
-            }
-
-            gridView.setOnItemLongClickListener { _, _, position, _ ->
-                if (editingPosition != position) {
-                    editingPosition = position
-                    hasFocusedEdit = false
-                    notifyChanged()
-                    gridView.post {
-                        val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
-                        val et = child?.findViewById<EditText>(R.id.et_magic_edit)
-                        et?.requestFocus()
-                        et?.postDelayed({
-                            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-                            imm?.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-                        }, 100)
-                    }
-                }
-                true
-            }
-
-            btnClose.setOnClickListener { popup.dismiss() }
-
-            gridView.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
-                override fun onScrollStateChanged(view: android.widget.AbsListView?, scrollState: Int) {
-                    if (scrollState != android.widget.AbsListView.OnScrollListener.SCROLL_STATE_IDLE && editingPosition >= 0) {
-                        editingPosition = -1
-                        hasFocusedEdit = false
-                        notifyChanged()
-                    }
-                }
-                override fun onScroll(view: android.widget.AbsListView?, firstVisibleItem: Int, visibleItemCount: Int, totalItemCount: Int) {}
-            })
-
-            btnPin.setOnClickListener {
-                val realItems = items
-                if (realItems.isEmpty()) return@setOnClickListener
-                val popupMenu = PopupMenu(this@CesiaInputMethod, btnPin)
-                for (r in realItems) {
-                    val title = "${if (r.isPinned) "⤒ " else "○ "}${r.instruction.take(18)}"
-                    popupMenu.menu.add(0, r.id.toInt(), 0, title)
-                }
-                popupMenu.setOnMenuItemClickListener { item ->
-                    val record = realItems.find { it.id.toInt() == item.itemId }
-                    if (record != null) {
-                        mgr.togglePin(record.id)
-                        rebuildItems()
-                        notifyChanged()
-                        updateStatus(if (!record.isPinned) "⤒ 已置顶" else "取消置顶")
-                    }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            btnDelete.setOnClickListener {
-                val realItems = items
-                if (realItems.isEmpty()) return@setOnClickListener
-                val popupMenu = PopupMenu(this@CesiaInputMethod, btnDelete)
-                popupMenu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条）")
-                for (r in realItems) {
-                    popupMenu.menu.add(0, r.id.toInt(), 1, "⊗ ${r.instruction.take(18)}")
-                }
-                popupMenu.setOnMenuItemClickListener { item ->
-                    if (item.itemId == -1) {
-                        val pinned = realItems.filter { it.isPinned }
-                        mgr.clearAll()
-                        for (r in pinned) {
-                            mgr.addRecord(r.instruction)
-                        }
-                        currentMagicPrompt = null
-                        rebuildItems()
-                        notifyChanged()
-                        updateStatus("⊗ 已删除全部（保留置顶）")
-                    } else {
-                        mgr.removeRecord(item.itemId.toLong())
-                        val updated = mgr.getRecords()
-                        if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                            currentMagicPrompt = mgr.getActiveInstruction()
-                        }
-                        rebuildItems()
-                        notifyChanged()
-                    }
-                    true
-                }
-                popupMenu.show()
-            }
-
-            val anchorLocation = IntArray(2)
-            keyboardView.getLocationOnScreen(anchorLocation)
-            popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
-            magicHistoryPopup = popup
-
-            popup.setOnDismissListener {
-                cancelMagicBookLongPress()
-                magicHistoryPopup = null
-            }
-        }
-
-        private fun saveEditing(position: Int, gridView: GridView, mgr: MagicHistoryManager, onSaved: () -> Unit) {
-            val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
-            val et = child?.findViewById<EditText>(R.id.et_magic_edit)
-            val newText = et?.text.toString().trim()
-            if (newText.isNotEmpty()) {
-                val record = (gridView.adapter as BaseAdapter).getItem(position) as MagicHistoryManager.MagicRecord
-                mgr.updateInstruction(record.id, newText)
-                onSaved()
-            }
-        }
-
-        // ======================== Smart Writing Popup ========================
-
-        private const val OPT_CLIPBOARD = "📋 剪贴板首条"
-        private const val OPT_RSS_SOURCE = "📰 RSS源"
-        private const val OPT_SEARCH = "🌐 网络搜索"
-        private const val OPT_LOCAL_LIB = "📚 本地文库"
-
-        fun showSmartWritingPopup() {
-            try {
-                val inflater = LayoutInflater.from(this@CesiaInputMethod)
-                val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
-                applyAccentToViewTree(popupView, themeAccent)
-
-                val tvTitle = popupView.findViewById<TextView>(R.id.tv_smart_title)
-                tvTitle.text = smartWritingLabel
-
-                val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
-                val optRssSource = popupView.findViewById<TextView>(R.id.opt_rss_news)
-                val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
-                val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
-
-                val smartPrefs = getSharedPreferences("cesia_smart_writing", MODE_PRIVATE)
-                var savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
-
-                fun refreshOption(tv: TextView, tag: String, label: String) {
-                    val checked = savedOptions.contains(tag)
-                    tv.text = if (checked) "✓ $label" else "○ $label"
-                    tv.setTextColor(if (checked) themeAccent else 0xFF333333.toInt())
-                    tv.setTypeface(null, if (checked) Typeface.BOLD else Typeface.NORMAL)
-                    tv.tag = tag
-                }
-
-                refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
-                refreshOption(optRssSource, "rss_cache", OPT_RSS_SOURCE)
-                refreshOption(optSearch, "search", OPT_SEARCH)
-                refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
-
-                fun toggleOption(tv: TextView, tag: String, label: String) {
-                    val current = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
-                    if (current.contains(tag)) current.remove(tag) else current.add(tag)
-                    smartPrefs.edit().putStringSet("selected_options", current).apply()
-                    savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
-                    refreshOption(tv, tag, label)
-                }
-
-                optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
-                optRssSource.setOnClickListener {
-                    val currentOpts = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
-                    if (currentOpts.contains("rss_cache")) currentOpts.remove("rss_cache") else currentOpts.add("rss_cache")
-                    smartPrefs.edit().putStringSet("selected_options", currentOpts).apply()
-                    savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
-                    val tv = it as TextView
-                    val checked = savedOptions.contains("rss_cache")
-                    tv.text = if (checked) "✓ $OPT_RSS_SOURCE" else "○ $OPT_RSS_SOURCE"
-                    tv.setTextColor(if (checked) themeAccent else 0xFF333333.toInt())
-                    tv.setTypeface(null, if (checked) Typeface.BOLD else Typeface.NORMAL)
-                }
-                optSearch.setOnClickListener { toggleOption(it as TextView, "search", OPT_SEARCH) }
-                optLocalLib.setOnClickListener { toggleOption(it as TextView, "local_lib", OPT_LOCAL_LIB) }
-
-                val keyboardWidth = keyboardView.width
-                val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-                popupView.measure(
-                    View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                )
-                val titleHeightPx = popupView.findViewById<TextView>(R.id.tv_smart_title)?.measuredHeight
-                    ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
-
-                val barHeightPx = TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
-                ).toInt()
-
-                val optionHeightPx = TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics
-                ).toInt()
-                val optionsHeightPx = optionHeightPx * 2 + TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
-                ).toInt()
-
-                val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
-                    if (id > 0) resources.getDimensionPixelSize(id) else 88
-                }
-                val keyboardLocation = IntArray(2)
-                keyboardView.getLocationOnScreen(keyboardLocation)
-                val keyboardTopScreenY = keyboardLocation[1]
-                val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
-
-                val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-                popup.isOutsideTouchable = false
-                popup.elevation = 4f
-                popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
-                popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                popup.setFocusable(false)
-
-                popup.setOnDismissListener {
-                    smartWritingPopup = null
-                    stopMagicButtonGlow()
-                    btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
-                    btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
-                }
-
-                popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
-                smartWritingPopup = popup
-            } catch (e: Exception) {
-                Log.e("Cesia", "showSmartWritingPopup 异常", e)
-            }
-        }
-
-        // ======================== Clipboard Manager Popup ========================
-
-        fun showClipboardManagerPopup() {
-            try {
-                val inflater = LayoutInflater.from(this@CesiaInputMethod)
-                val popupView = inflater.inflate(R.layout.popup_clipboard_manager, null)
-                applyAccentToViewTree(popupView, themeAccent)
-                val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
-                val etSearch = popupView.findViewById<EditText>(R.id.et_clipboard_search)
-                this@CesiaInputMethod.etSearch = etSearch
-                val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-                val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
-                val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
-                val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
-                val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
-                val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
-
-                etSearch.setOnFocusChangeListener { _, hasFocus ->
-                    clipboardSearchEditMode = hasFocus
-                    if (hasFocus) {
-                        tvSearchHint.visibility = View.VISIBLE
-                        tvSearchHint.text = "输入搜索关键词..."
-                        etSearch.hint = ""
-                    } else {
-                        tvSearchHint.visibility = View.GONE
-                        etSearch.hint = "🔍 点击搜索..."
-                    }
-                }
-                etSearch.addTextChangedListener(object : android.text.TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-                    override fun afterTextChanged(s: android.text.Editable?) {
-                        if (!clipboardSearchEditMode) {
-                            clipboardSearchFilter = s?.toString()?.trim() ?: ""
-                            applyClipboardFilter()
-                        }
-                    }
-                })
-                etSearch.setOnEditorActionListener { _, actionId, _ ->
-                    if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                        etSearch.clearFocus()
-                        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-                        imm?.hideSoftInputFromWindow(etSearch.windowToken, 0)
-                        true
-                    } else false
-                }
-
-                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                loadClipboardHistoryToClassMembers(clipboardMgr)
-                Log.d("Cesia", "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}")
-
-                clipboardSearchFilter = ""
-                applyClipboardFilter()
-
-                clipboardAdapter = ClipboardAdapter(inflater, clipboardFilteredItems)
-                gvClipboard.adapter = clipboardAdapter
-
-                val keyboardWidth = keyboardView.width
-                val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
-
-                val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
-                    if (id > 0) resources.getDimensionPixelSize(id) else 88
-                }
-                val keyboardLocation = IntArray(2)
-                keyboardView.getLocationOnScreen(keyboardLocation)
-                val keyboardTopScreenY = keyboardLocation[1]
-                val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
-
-                val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
-                popup.isOutsideTouchable = false
-                popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
-                popup.elevation = 8f
-                popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                popup.setFocusable(false)
-                clipboardPopup = popup
-
-                gvClipboard.setOnItemClickListener { _, _, position, _ ->
-                    val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemClickListener
-                    if (item.isEmpty) return@setOnItemClickListener
-                    currentInputConnection?.commitText(item.text, 1)
-                    popup.dismiss()
-                }
-
-                gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
-                    val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
-                    if (item.isEmpty) return@setOnItemLongClickListener true
-                    showClipboardItemActions(item, clipboardItems) {
-                        saveClipboardHistoryFromClassMembers()
-                        applyClipboardFilter()
-                    }
-                    true
-                }
-
-                btnAdd.setOnClickListener {
-                    showClipboardAddPopup()
-                }
-
-                btnClose.setOnClickListener { popup.dismiss() }
-
-                btnPin.setOnClickListener {
-                    val realItems = clipboardItems.filter { !it.isEmpty }
-                    if (realItems.isEmpty()) return@setOnClickListener
-                    val popupMenu = PopupMenu(this@CesiaInputMethod, btnPin)
-                    for (r in realItems) {
-                        val title = "${if (r.isPinned) "⤒ " else "○ "}${r.text.take(18)}"
-                        popupMenu.menu.add(0, r.text.hashCode(), 0, title)
-                    }
-                    popupMenu.setOnMenuItemClickListener { menuItem ->
-                        val target = realItems.find { it.text.hashCode() == menuItem.itemId }
-                        if (target != null) {
-                            clipboardItems.removeAll { it.text == target.text }
-                            clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
-                            saveClipboardHistoryFromClassMembers()
-                            applyClipboardFilter()
-                        }
-                        true
-                    }
-                    popupMenu.show()
-                }
-
-                btnDelete.setOnClickListener {
-                    val realItems = clipboardItems.filter { !it.isEmpty }
-                    if (realItems.isEmpty()) return@setOnClickListener
-                    val popupMenu = PopupMenu(this@CesiaInputMethod, btnDelete)
-                    popupMenu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条）")
-                    for (r in realItems) {
-                        popupMenu.menu.add(0, r.text.hashCode(), 1, "⊗ ${r.text.take(18)}")
-                    }
-                    popupMenu.setOnMenuItemClickListener { menuItem ->
-                        if (menuItem.itemId == -1) {
-                            clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
-                            saveClipboardHistoryFromClassMembers()
-                            applyClipboardFilter()
-                            try {
-                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                clipboardMgr?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                            } catch (_: Exception) {}
-                            updateStatus("⊗ 已删除全部（保留置顶）")
-                        } else {
-                            val target = realItems.find { it.text.hashCode() == menuItem.itemId }
-                            if (target != null) {
-                                clipboardItems.removeAll { it.text == target.text }
-                                saveClipboardHistoryFromClassMembers()
-                                applyClipboardFilter()
-                                try {
-                                    val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                    if (clipboardMgr?.hasPrimaryClip() == true) {
-                                        val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                        if (clipText == target.text) {
-                                            clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                        }
-                        true
-                    }
-                    popupMenu.show()
-                }
-
-                popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
-
-                popup.setOnDismissListener {
-                    cancelSendKeyLongPress()
-                    clipboardPopup = null
-                    Log.d("Cesia", "clipboardPopup dismissed, clipboardItems.size=${clipboardItems.size}")
-                }
-
-                saveClipboardHistoryFromClassMembers()
-                Log.d("Cesia", "showClipboardManagerPopup: saved to prefs, clipboardItems.size=${clipboardItems.size}")
-
-            } catch (e: Exception) {
-                updateStatus("❌ 剪贴板管理器异常: ${e.message}")
-            }
-        }
-
-        fun showClipboardAddPopup() {
-            clipboardAddMode = true
-            clipboardAddBuffer.clear()
-            dismissAllPopups()
-            val inflater = LayoutInflater.from(this@CesiaInputMethod)
-            val view = inflater.inflate(R.layout.popup_clipboard_manager, null)
-            val popup = PopupWindow(
-                view,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                true
-            ).apply {
-                isFocusable = true
-                setBackgroundDrawable(ContextCompat.getDrawable(this@CesiaInputMethod, R.drawable.popup_bg))
-                elevation = 8f
-                setOutsideTouchable(true)
-            }
-            clipboardPopup = popup
-            clipboardPopupView = view
-
-            view.findViewById<TextView>(R.id.tv_clipboard_title)?.text = "➕ 新增剪贴板"
-
-            updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
-
-            view.findViewById<ImageView>(R.id.btn_clipboard_close)?.setOnClickListener {
-                exitClipboardAddMode(save = false)
-                popup.dismiss()
-            }
-
-            view.findViewById<ImageView>(R.id.btn_clipboard_add)?.setOnClickListener {
-                exitClipboardAddMode(save = true)
-                popup.dismiss()
-            }
-
-            val parentView = keyboardView
-            popup.showAtLocation(parentView, Gravity.CENTER, 0, 0)
-        }
-
-        fun showClipboardItemActions(
-            item: ClipboardItem,
-            allItems: MutableList<ClipboardItem>,
-            onUpdate: () -> Unit
-        ) {
-            val actions = mutableListOf<String>()
-            if (!item.isEmpty) {
-                actions.add("📋 插入文本")
-                actions.add(if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏")
-                actions.add(if (this@CesiaInputMethod.clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删")
-                actions.add("✂️ 分词处理")
-                actions.add("✏️ 编辑文本")
-                actions.add("🔍 搜索文本")
-                actions.add("🗑️ 删除条目")
-                actions.add("📤 分享文本")
-            }
-            val dialog = AlertDialog.Builder(this@CesiaInputMethod)
-                .setTitle(item.text.take(30) + if (item.text.length > 30) "…" else "")
-                .setItems(actions.toTypedArray()) { _, which ->
-                    when (which) {
-                        0 -> this@CesiaInputMethod.currentInputConnection?.commitText(item.text, 1)
-                        1 -> {
-                            val target = allItems.find { it.text == item.text }
-                            target?.let {
-                                allItems.removeAll { it.text == item.text }
-                                allItems.add(0, it.copy(isPinned = !it.isPinned))
-                                saveClipboardHistoryFromClassMembers()
-                                onUpdate()
-                            }
-                        }
-                        2 -> {
-                            val currentlyLocked = this@CesiaInputMethod.clipboardFavorites[item.text] == true
-                            this@CesiaInputMethod.clipboardFavorites[item.text] = !currentlyLocked
-                            updateClipboardFavorites()
-                            onUpdate()
-                        }
-                        3 -> {
-                            val words = item.text.split(Regex("\\s+|[，。！？、；：,.!?;:]")).filter { it.isNotEmpty() }
-                            if (words.isNotEmpty()) {
-                                val dialog = AlertDialog.Builder(this@CesiaInputMethod)
-                                    .setTitle("分词结果（${words.size}词）")
-                                    .setItems(words.toTypedArray()) { _, idx ->
-                                        this@CesiaInputMethod.currentInputConnection?.commitText(words[idx], 1)
-                                    }
-                                    .create()
-                                dialog.show()
-                            }
-                        }
-                        4 -> {
-                            showClipboardEditDialog(item.text) { newText ->
-                                val target = allItems.find { it.text == item.text }
-                                target?.let {
-                                    allItems.removeAll { it.text == item.text }
-                                    allItems.add(0, it.copy(text = newText))
-                                    saveClipboardHistoryFromClassMembers()
-                                    onUpdate()
-                                }
-                            }
-                        }
-                        5 -> {
-                            val intent = Intent(Intent.ACTION_WEB_SEARCH)
-                            intent.putExtra(android.app.SearchManager.QUERY, item.text)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                this@CesiaInputMethod.startActivity(intent)
-                            } catch (_: Exception) {
-                                Toast.makeText(this@CesiaInputMethod, "无可用搜索应用", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        6 -> {
-                            allItems.removeAll { it.text == item.text }
-                            saveClipboardHistoryFromClassMembers()
-                            try {
-                                val clipboardMgr = this@CesiaInputMethod.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                if (clipboardMgr?.hasPrimaryClip() == true) {
-                                    val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                    if (clipText == item.text) {
-                                        clipboardMgr.setPrimaryClip(ClipData.newPlainText("", ""))
-                                    }
-                                }
-                            } catch (_: Exception) {}
-                            onUpdate()
-                        }
-                        7 -> {
-                            val shareIntent = Intent(Intent.ACTION_SEND)
-                            shareIntent.type = "text/plain"
-                            shareIntent.putExtra(Intent.EXTRA_TEXT, item.text)
-                            shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                this@CesiaInputMethod.startActivity(Intent.createChooser(shareIntent, "分享文本"))
-                            } catch (_: Exception) {
-                                Toast.makeText(this@CesiaInputMethod, "无可用分享应用", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }
-                .create()
-            dialog.show()
-        }
-
-        private fun showClipboardEditDialog(original: String, onSave: (String) -> Unit) {
-            val et = EditText(this@CesiaInputMethod).apply {
-                setText(original)
-                setSelection(text.length)
-                hint = "编辑剪贴板内容..."
-                setMinLines(3)
-                gravity = Gravity.TOP or Gravity.START
-            }
-            AlertDialog.Builder(this@CesiaInputMethod)
-                .setTitle("✏️ 编辑剪贴板")
-                .setView(et)
-                .setPositiveButton("保存") { _, _ ->
-                    val newText = et.text.toString().trim()
-                    if (newText.isNotEmpty()) onSave(newText)
-                }
-                .setNegativeButton("取消", null)
-                .show()
-        }
-
-        // ======================== Utility Functions ========================
-
-        private fun applyAccentToViewTree(view: View, accentColor: Int) {
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) {
-                    applyAccentToViewTree(view.getChildAt(i), accentColor)
-                }
-            }
-            when (view) {
-                is TextView -> view.setTextColor(accentColor)
-                is ImageView -> view.setColorFilter(accentColor)
-                is ViewGroup -> {
-                    view.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                }
-            }
-        }
-
-        // ======================== Clipboard Adapter ========================
-
-        inner class ClipboardAdapter(
-            private val inflater: LayoutInflater,
-            private val items: List<ClipboardItem>
-        ) : android.widget.BaseAdapter() {
-            private val accentColor = this@CesiaInputMethod.themeAccent
-            override fun getCount() = items.size
-            override fun getItem(p: Int) = items[p]
-            override fun getItemId(p: Int) = items[p].text.hashCode().toLong()
-            override fun getView(p: Int, cv: View?, parent: ViewGroup?): View {
-                val v = cv ?: inflater.inflate(R.layout.item_clipboard_grid, parent, false)
-                val item = items[p]
-                val tv = v.findViewById<TextView>(R.id.tv_clipboard_text)
-                val tvPin = v.findViewById<TextView>(R.id.tv_clipboard_pin)
-                if (item.isEmpty) {
-                    tv.text = item.text
-                    tv.setTextColor(0xFF999999.toInt())
-                    tv.textSize = 13f
-                    tvPin.visibility = View.GONE
-                } else {
-                    tv.text = if (item.text.length > 80) item.text.take(80) + "…" else item.text
-                    tv.setTextColor(0xFF333333.toInt())
-                    tv.textSize = 13f
-                    tvPin.visibility = if (item.isPinned) View.VISIBLE else View.GONE
-                    tvPin.setTypeface(null, if (item.isPinned) Typeface.BOLD else Typeface.NORMAL)
-                    tvPin.setTextColor(accentColor)
-                }
-                return v
-            }
-        }
-
-    } // 闭合 PopupManager 内部类
-
-    // ======================== Smart Writing Execution ========================
-
-    // ======================== UI Helper Methods ========================
-
     private fun setStatusDot(state: String) {
         if (!::statusDot.isInitialized) return
         try {
@@ -7705,6 +7640,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus("🔒 语音锁定命令：$hints")
         }
     }
+
+    private var statusLines = mutableListOf<String>()
 
     private fun updateStatus(msg: String) {
         Log.d("Cesia", "updateStatus: msg='$msg', isRecording=$isRecording, lines=${statusLines.size}")
