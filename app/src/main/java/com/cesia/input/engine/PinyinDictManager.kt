@@ -101,19 +101,22 @@ class PinyinDictManager(private val context: Context) {
 
                 onProgress(99, downloadedBytes, totalBytes, "正在解压词库文件...")
 
-                // 解压全部文件，保持目录结构
+                // 解压全部文件，去掉 zip 内 "full/" 前缀，平铺到 rime 根目录
+                // （否则词库会落到 rime/full/ 子目录，Rime 引擎读不到，下载的词库无法被 import）
                 var extracted = 0
                 val zis = ZipInputStream(tempZip.inputStream())
                 var entry: ZipEntry? = zis.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        val outFile = File(rimeDir, entry.name)
+                        // 去掉可能的 "full/" 前缀，确保文件落在 rime 根目录
+                        val relativeName = entry.name.removePrefix("full/")
+                        val outFile = File(rimeDir, relativeName)
                         outFile.parentFile?.mkdirs()
                         outFile.outputStream().use { output ->
                             zis.copyTo(output)
                         }
                         extracted++
-                        Log.d(TAG, "解压: ${entry.name} (${outFile.length() / 1024}KB)")
+                        Log.d(TAG, "解压: ${relativeName} (${outFile.length() / 1024}KB)")
                     }
                     zis.closeEntry()
                     entry = zis.nextEntry
