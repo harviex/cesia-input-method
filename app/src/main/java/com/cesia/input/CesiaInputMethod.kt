@@ -6265,7 +6265,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val wasLongPressed = longPressTriggered && !longPressConsumed
         longPressTriggered = false
         longPressConsumed = false
-        cancelLongPress()
+        // 取消所有长按 runnable（含功能键长按 functionalLongPressRunnable），
+        // 防止快速输入下一个键时上一个字母的功能键长按被误触发
+        cancelAllLongPressActions()
         if (wasLongPressed) {
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
