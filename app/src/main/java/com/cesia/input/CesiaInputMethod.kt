@@ -372,6 +372,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // hjkl 方向键长按重复触发
     private var directionalRepeatRunnable: Runnable? = null
     private var directionalRepeatKeyCode: Int = 0
+    private var directionalRepeatActive: Boolean = false
     private val directionalRepeatHandler = Handler(Looper.getMainLooper())
     private val DIRECTIONAL_REPEAT_INTERVAL = 80L  // 80ms 重复间隔
 
@@ -661,8 +662,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         stopDirectionalRepeat()
 
         directionalRepeatKeyCode = keyCode
+        directionalRepeatActive = true
         directionalRepeatRunnable = object : Runnable {
             override fun run() {
+                if (!directionalRepeatActive) return
                 sendControlKey(directionalRepeatKeyCode)
                 directionalRepeatHandler.postDelayed(this, DIRECTIONAL_REPEAT_INTERVAL)
             }
@@ -673,6 +676,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun stopDirectionalRepeat() {
+        directionalRepeatActive = false
         directionalRepeatRunnable?.let { directionalRepeatHandler.removeCallbacks(it) }
         directionalRepeatRunnable = null
         directionalRepeatKeyCode = 0
@@ -6255,6 +6259,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     // 3. 退格/空格/回车等控制键优先交给 Rime 处理
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
+        // 任意按键都停止方向键重复，防止长按后光标卡住持续移动
+        stopDirectionalRepeat()
         // 统一长按状态机：每次 onKey 先重置标志，防止跨键泄漏
         val wasLongPressed = longPressTriggered && !longPressConsumed
         longPressTriggered = false
@@ -7261,6 +7267,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        // 停止所有可能的重复（方向键/退格），防止切出输入法后光标卡住
+        directionalRepeatActive = false
+        directionalRepeatRunnable?.let { directionalRepeatHandler.removeCallbacks(it) }
+        directionalRepeatRunnable = null
+        backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
+        backspaceRunnable = null
         if (finishingInput && isRecording) stopRecording()
     }
 

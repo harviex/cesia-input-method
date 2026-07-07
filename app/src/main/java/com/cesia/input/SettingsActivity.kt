@@ -1160,11 +1160,7 @@ class SettingsActivity : AppCompatActivity() {
         refreshDictInfo()
         // 检测上次下载是否被系统终止（Activity 后台时被 kill）
         checkInterruptedDownloads()
-        // 如果新手引导已完成，隐藏横幅
-        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        if (prefs.getBoolean("onboarding_completed", false)) {
-            viewOnboardingBanner?.visibility = View.GONE
-        }
+        // 新手引导横幅保持常驻显示（由 checkFirstLaunchOnboarding 统一控制），不在 onResume 隐藏
     }
 
     /**

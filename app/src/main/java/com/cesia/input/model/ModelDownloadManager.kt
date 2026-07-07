@@ -168,6 +168,8 @@ class ModelDownloadManager(private val context: Context) {
 
                 if (destFile.exists() && destFile.length() > 0) {
                     grandTotal += destFile.length()
+                    // 已缓存文件也上报进度，避免进度条/状态栏无反馈
+                    onProgress?.invoke(destFile.name, 100.0, destFile.length(), destFile.length())
                     continue
                 }
 
@@ -302,6 +304,8 @@ class ModelDownloadManager(private val context: Context) {
                 // 已存在的文件直接计入进度
                 if (destFile.exists() && destFile.length() > 0) {
                     grandTotal += destFile.length()
+                    // 已缓存文件也上报进度，避免进度条/状态栏无反馈
+                    onProgress?.invoke(destFile.name, 100.0, destFile.length(), destFile.length())
                     continue
                 }
 

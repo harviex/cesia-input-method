@@ -12,8 +12,11 @@ java {
 }
 
 // ===== 版本号计算 =====
-// 默认版本（不带 -PapkVersion 参数时也用此值）
-def DEFAULT_VERSION = "1.2.1"
+// 默认版本：基于 git commit 数量自动递增（每次提交版本号自增，保证覆盖安装）
+def gitCountRaw = "git rev-list --count HEAD".execute([], project.rootDir).text.trim()
+def gitCount = gitCountRaw.isInteger() ? gitCountRaw.toInteger() : 1
+// 默认版本号 1.2.<gitCount>，versionCode = 1020000 + gitCount（单调递增，兼容旧覆盖安装）
+def DEFAULT_VERSION = "1.2.${gitCount}"
 def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION") ?: DEFAULT_VERSION
 def apkVer = apkVerRaw?.trim()
 
@@ -29,9 +32,9 @@ if (apkVer && apkVer.matches("\\d+\\.\\d+\\.\\d+")) {
     verCode = major * 1000000 + minor * 10000 + patch
     verName = apkVer
 } else {
-    def count = "git rev-list --count HEAD".execute([], project.rootDir).text.trim()
-    verCode = (count.isInteger() ? count.toInteger() : 1)
-    verName = "1.1.${verCode}"
+    def count = gitCount
+    verCode = 1020000 + count
+    verName = "1.2.${count}"
     println "⚠ 版本号未配置 (apkVer=${apkVer})，使用 git count: ${verName}"
 }
 println "✅ 版本号: versionCode=${verCode}, versionName=${verName}"
