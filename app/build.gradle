@@ -18,7 +18,12 @@ def apkVer = apkVerRaw?.trim()
 def verCode
 def verName
 if (apkVer && apkVer.matches("\\d+\\.\\d+\\.\\d+")) {
-    verCode = apkVer.split("\\.")[2].toInteger()
+    def parts = apkVer.split("\\.")
+    def major = parts[0].toInteger()
+    def minor = parts[1].toInteger()
+    def patch = parts[2].toInteger()
+    // versionCode 单调递增：major*10000 + minor*100 + patch（1.2.1 -> 10201）
+    verCode = major * 10000 + minor * 100 + patch
     verName = apkVer
 } else {
     def count = "git rev-list --count HEAD".execute([], project.rootDir).text.trim()
