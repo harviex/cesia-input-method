@@ -8,6 +8,16 @@
         <item name="colorAccent">@color/accent</item>
     </style>
 
+    <!-- NoActionBar 专用（透明状态栏适配） -->
+    <style name="Theme.Cesia.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/accent</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
     <!-- 黑暗主题 -->
     <style name="Theme.Cesia.Dark" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:windowBackground">#1A1A2E</item>

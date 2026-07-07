@@ -48,6 +48,7 @@ import com.cesia.input.ai.LocalModeToggleHelper
 import com.cesia.input.ai.VoiceAISettingsHelper
 import com.cesia.input.model.ModelDownloadManager
 import com.cesia.input.model.ModelInfo
+import com.cesia.input.onboarding.OnboardingActivity
 import com.cesia.input.model.ModelManager
 import com.cesia.input.model.ModelRegistry
 import com.cesia.input.voice.VoiceEngine
@@ -220,6 +221,9 @@ class SettingsActivity : AppCompatActivity() {
         loadOpenRouterFreeModels()
         refreshDictInfo()
 
+        // 检查是否首次启动，显示新手引导横幅
+        checkFirstLaunchOnboarding()
+
         checkAndRequestPermission()
 
         // 每天自动检查一次更新
@@ -310,12 +314,20 @@ class SettingsActivity : AppCompatActivity() {
             llVersionContainer = findViewById(R.id.ll_version_container)
             versionDot = findViewById(R.id.version_dot)
             tvVersionWithDot = findViewById(R.id.tv_version_with_dot)
+            pbVersionDownload = findViewById(R.id.pb_version_download)
+        } catch (_: Exception) {}
+
+        // 新手引导横幅
+        try {
+            viewOnboardingBanner = findViewById(R.id.view_onboarding_banner)
         } catch (_: Exception) {}
     }
 
     private var llVersionContainer: View? = null
     private var versionDot: View? = null
     private var tvVersionWithDot: TextView? = null
+    private var pbVersionDownload: ProgressBar? = null
+    private var viewOnboardingBanner: View? = null
     private var versionCheckHandler: Handler? = null
     private var pulseAnimator: Animator? = null
 
@@ -1132,6 +1144,11 @@ class SettingsActivity : AppCompatActivity() {
         refreshDictInfo()
         // 检测上次下载是否被系统终止（Activity 后台时被 kill）
         checkInterruptedDownloads()
+        // 如果新手引导已完成，隐藏横幅
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        if (prefs.getBoolean("onboarding_completed", false)) {
+            viewOnboardingBanner?.visibility = View.GONE
+        }
     }
 
     /**
@@ -1318,6 +1335,8 @@ class SettingsActivity : AppCompatActivity() {
         tvVersion?.text = "⏳ 正在下载 v$version..."
         tvVersionWithDot?.text = "v$version"
         versionDot?.visibility = View.GONE
+        pbVersionDownload?.visibility = View.VISIBLE
+        pbVersionDownload?.progress = 0
         appendLog("开始下载: $apkUrl")
 
         Thread {
@@ -1330,21 +1349,38 @@ class SettingsActivity : AppCompatActivity() {
                 val response = client.newCall(request).execute()
 
                 if (!response.isSuccessful) {
-                                    runOnUiThread {
-                                        tvVersion?.text = "❌ 下载失败: ${response.code}"
-                                        tvVersionWithDot?.text = "v$version"
-                                        versionDot?.visibility = View.GONE
-                                        llVersionContainer?.visibility = View.VISIBLE
-                                        appendLog("下载失败: ${response.code}")
-                                    }
-                                    return@Thread
-                                }
+                    runOnUiThread {
+                        tvVersion?.text = "❌ 下载失败: ${response.code}"
+                        tvVersionWithDot?.text = "v$version"
+                        versionDot?.visibility = View.GONE
+                        pbVersionDownload?.visibility = View.GONE
+                        llVersionContainer?.visibility = View.VISIBLE
+                        appendLog("下载失败: ${response.code}")
+                    }
+                    return@Thread
+                }
+
+                // 获取文件总大小
+                val contentLength = response.body?.contentLength() ?: -1L
+                var downloaded = 0L
 
                 // 保存到缓存目录
                 val apkFile = java.io.File(cacheDir, "cesia-update.apk")
                 response.body?.byteStream()?.use { input ->
                     apkFile.outputStream().use { output ->
-                        input.copyTo(output)
+                        val buffer = ByteArray(8192)
+                        var len: Int
+                        while (input.read(buffer).also { len = it } != -1) {
+                            output.write(buffer, 0, len)
+                            downloaded += len
+                            if (contentLength > 0) {
+                                val progress = (downloaded * 100 / contentLength).toInt()
+                                runOnUiThread {
+                                    pbVersionDownload?.progress = progress
+                                    tvVersion?.text = "⏳ 下载中 ${progress}%..."
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1352,6 +1388,8 @@ class SettingsActivity : AppCompatActivity() {
                     tvVersion?.text = "✅ 下载完成，正在安装..."
                     tvVersionWithDot?.text = "v$version"
                     versionDot?.visibility = View.GONE
+                    pbVersionDownload?.progress = 100
+                    pbVersionDownload?.visibility = View.GONE
                     llVersionContainer?.visibility = View.VISIBLE
                     appendLog("APK下载完成: ${apkFile.absolutePath}")
                 }
@@ -1380,6 +1418,7 @@ class SettingsActivity : AppCompatActivity() {
                         tvVersion?.text = "❌ 安装失败: ${e.message}"
                         tvVersionWithDot?.text = "v$version"
                         versionDot?.visibility = View.GONE
+                        pbVersionDownload?.visibility = View.GONE
                         llVersionContainer?.visibility = View.VISIBLE
                         appendLog("安装失败: ${e.message}")
                         Toast.makeText(this, "安装失败，请手动安装: ${apkFile.absolutePath}", Toast.LENGTH_LONG).show()
@@ -1390,6 +1429,7 @@ class SettingsActivity : AppCompatActivity() {
                     tvVersion?.text = "❌ 下载异常: ${e.message}"
                     tvVersionWithDot?.text = "v$version"
                     versionDot?.visibility = View.GONE
+                    pbVersionDownload?.visibility = View.GONE
                     llVersionContainer?.visibility = View.VISIBLE
                     appendLog("下载异常: ${e.message}")
                 }
@@ -1830,5 +1870,26 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    // ======================== 新手引导横幅 ========================
+
+    private fun checkFirstLaunchOnboarding() {
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        val hasCompletedOnboarding = prefs.getBoolean("onboarding_completed", false)
+        val hasSeenBanner = prefs.getBoolean("onboarding_banner_shown", false)
+
+        if (!hasCompletedOnboarding && !hasSeenBanner) {
+            viewOnboardingBanner?.visibility = View.VISIBLE
+            // 标记横幅已显示
+            prefs.edit().putBoolean("onboarding_banner_shown", true).apply()
+
+            viewOnboardingBanner?.setOnClickListener {
+                startActivity(Intent(this, OnboardingActivity::class.java))
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            }
+        } else {
+            viewOnboardingBanner?.visibility = View.GONE
+        }
     }
 }

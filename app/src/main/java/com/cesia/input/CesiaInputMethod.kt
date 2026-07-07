@@ -369,6 +369,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var sendButtonGlowRunnable: Runnable? = null
     private var sendButtonGlowing = false
 
+    // hjkl 方向键长按重复触发
+    private var directionalRepeatRunnable: Runnable? = null
+    private var directionalRepeatKeyCode: Int = 0
+    private val directionalRepeatHandler = Handler(Looper.getMainLooper())
+    private val DIRECTIONAL_REPEAT_INTERVAL = 80L  // 80ms 重复间隔
+
     // 智能修改按钮（魔法书）长按检测
     private var magicBookLongPressTriggered = false
     private var magicBookHandler = Handler(Looper.getMainLooper())
@@ -621,10 +627,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             100 -> { { sendControlKey(KeyEvent.KEYCODE_MOVE_END) } }  // d=End
             102 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_UP) } }  // f=PgUp
             103 -> { { sendControlKey(KeyEvent.KEYCODE_PAGE_DOWN) } }  // g=PgDn
-            104 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_LEFT) } }  // h=左
-            106 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_DOWN) } }  // j=下
-            107 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_UP) } }  // k=上
-            108 -> { { sendControlKey(KeyEvent.KEYCODE_DPAD_RIGHT) } }  // l=右
+            104 -> { { startDirectionalRepeat(KeyEvent.KEYCODE_DPAD_LEFT) } }  // h=左（长按重复）
+            106 -> { { startDirectionalRepeat(KeyEvent.KEYCODE_DPAD_DOWN) } }  // j=下（长按重复）
+            107 -> { { startDirectionalRepeat(KeyEvent.KEYCODE_DPAD_UP) } }  // k=上（长按重复）
+            108 -> { { startDirectionalRepeat(KeyEvent.KEYCODE_DPAD_RIGHT) } }  // l=右（长按重复）
             // ZXCV行：编辑功能
             120 -> { { currentInputConnection?.performContextMenuAction(android.R.id.cut) } }  // x=剪切
             99  -> { { currentInputConnection?.performContextMenuAction(android.R.id.copy) } }  // c=复制
@@ -645,6 +651,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun sendCtrlKey(keyCode: Int) = sendControlKey(keyCode, KeyEvent.META_CTRL_ON)
+
+    // hjkl 方向键长按重复触发
+    private fun startDirectionalRepeat(keyCode: Int) {
+        // 如果已经在重复同一个键，不重复启动
+        if (directionalRepeatRunnable != null && directionalRepeatKeyCode == keyCode) return
+
+        // 停止之前的重复
+        stopDirectionalRepeat()
+
+        directionalRepeatKeyCode = keyCode
+        directionalRepeatRunnable = object : Runnable {
+            override fun run() {
+                sendControlKey(directionalRepeatKeyCode)
+                directionalRepeatHandler.postDelayed(this, DIRECTIONAL_REPEAT_INTERVAL)
+            }
+        }
+        // 先发送一次，然后开始重复
+        sendControlKey(keyCode)
+        directionalRepeatHandler.postDelayed(directionalRepeatRunnable!!, DIRECTIONAL_REPEAT_INTERVAL)
+    }
+
+    private fun stopDirectionalRepeat() {
+        directionalRepeatRunnable?.let { directionalRepeatHandler.removeCallbacks(it) }
+        directionalRepeatRunnable = null
+        directionalRepeatKeyCode = 0
+    }
 
     /** 大写转换：选中的英文→大写，数字→中文大写数字 */
     /** 判断魔法指令是否为生成类（允许空文本）还是修改类（需要文本） */
@@ -6979,7 +7011,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     currentLongPressKey = null
                 }
-                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 800)
+                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 1000)
             }
         }
         // popupCharacters 长按检测（功能键不注册，避免与功能长按冲突）
@@ -6998,7 +7030,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     handleShiftLongPress()
                 }
             }.also {
-                Handler(Looper.getMainLooper()).postDelayed(it, 800)
+                Handler(Looper.getMainLooper()).postDelayed(it, 1000)
             }
         }
         // 剪贴板键长按：-108=粘贴，-109=剪切
@@ -7010,7 +7042,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     currentInputConnection?.performContextMenuAction(android.R.id.paste)
                 }
             }
-            Handler(Looper.getMainLooper()).postDelayed(clipboardPasteRunnable!!, 400)
+            Handler(Looper.getMainLooper()).postDelayed(clipboardPasteRunnable!!, 1000)
         }
         if (primaryCode == -109) {
             clipboardCutRunnable = Runnable {
@@ -7020,7 +7052,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     currentInputConnection?.performContextMenuAction(android.R.id.cut)
                 }
             }
-            Handler(Looper.getMainLooper()).postDelayed(clipboardCutRunnable!!, 400)
+            Handler(Looper.getMainLooper()).postDelayed(clipboardCutRunnable!!, 1000)
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
@@ -7044,7 +7076,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     sendCtrlKey(KeyEvent.KEYCODE_Z)
                 }
             }.also {
-                Handler(Looper.getMainLooper()).postDelayed(it, 600)
+                Handler(Looper.getMainLooper()).postDelayed(it, 1000)
             }
         }
 
@@ -7068,6 +7100,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         symbolKeyLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         symbolKeyLongPressRunnable = null
         cancelSendKeyLongPress()
+        // 停止 hjkl 方向键重复
+        stopDirectionalRepeat()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
     }

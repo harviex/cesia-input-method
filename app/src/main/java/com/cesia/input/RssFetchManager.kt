@@ -309,12 +309,18 @@ object RssFetchManager {
         prefs.edit().putString(KEY_CUSTOM_SOURCES, json).apply()
     }
 
-    /** 获取所有源（预置 + 自定义） */
+    /** 获取所有源（预置 + 自定义），新闻类置顶 */
     fun getAllSources(context: Context): List<RssSource> {
         val all = mutableListOf<RssSource>()
         all.addAll(PRESET_SOURCES)
         all.addAll(getCustomSources(context))
-        return all
+        
+        // 排序：新闻类(新闻/综合)置顶，其次按分类首字母排序，自定义在最后
+        return all.sortedWith(compareByDescending<RssSource> { it.category == "新闻" }
+            .thenByDescending { it.category == "综合" }
+            .thenBy { it.category }
+            .thenBy { it.name }
+        )
     }
 
     /** 按分类分组获取源 */

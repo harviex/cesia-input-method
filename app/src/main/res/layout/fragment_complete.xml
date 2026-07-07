@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="设置完成！🎉"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="40dp" />
+
+    <TextView
+        android:id="@+id/tvSubtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Cesia 已准备就绪，最后一步：启用输入法并授予麦克风权限"
+        android:textSize="15sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:gravity="center"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 3 步 IME 启用/切换图文说明 -->
+    <LinearLayout
+        android:id="@+id/llSteps"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@id/tvSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 步骤 1 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="1"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:background="@drawable/bg_step_circle_primary" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:text="设置 → 语言和输入法 → 启用「Cesia 输入法」"
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurface" />
+        </LinearLayout>
+
+        <!-- 步骤 2 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="2"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:background="@drawable/bg_step_circle_secondary" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:text="长按空格键/地球键 → 选择 Cesia 为当前输入法"
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurface" />
+        </LinearLayout>
+
+        <!-- 步骤 3 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="3"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:background="#81D8D0" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:text="输入时长按语音键 🎤 → 切换本地/云端识别"
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurface" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 底部按钮组 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="32dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFinish"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="完成并请求麦克风权限"
+            android:insetTop="16dp"
+            android:insetBottom="16dp"
+            android:layout_marginHorizontal="24dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPrev"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="上一步"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:insetTop="12dp"
+            android:insetBottom="12dp"
+            android:layout_marginTop="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="12dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenImeSettings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="去设置页启用输入法"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginEnd="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenKeyboardPicker"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="直接选输入法"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

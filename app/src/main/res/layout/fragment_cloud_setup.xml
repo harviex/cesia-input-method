@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="32dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="云端功能配置（可选）"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="填写 API Key 可启用云端 AI 润色、联网搜索、语音识别。留空则仅使用本地功能。"
+            android:textSize="14sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginBottom="24dp" />
+
+        <!-- OpenRouter -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="OpenRouter API Key"
+            android:layout_marginBottom="16dp"
+            app:endIconMode="clear_text">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etOpenRouterKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenRouterSite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="去 OpenRouter 申请 Key"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Tavily -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Tavily API Key (联网搜索)"
+            android:layout_marginBottom="16dp"
+            app:endIconMode="clear_text">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etTavilyKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTavilySite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="去 Tavily 申请 Key"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 新闻源：单选 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="新闻源选择（单选）"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="12dp" />
+
+        <RadioGroup
+            android:id="@+id/rgNewsSources"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="24dp">
+
+            <RadioButton
+                android:id="@+id/rbNewsPeople"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="人民日报（官方权威）"
+                android:textSize="14sp"
+                android:paddingVertical="8dp" />
+
+            <RadioButton
+                android:id="@+id/rbNewsXinhua"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="新华社（国家通讯社）"
+                android:textSize="14sp"
+                android:paddingVertical="8dp" />
+
+            <RadioButton
+                android:id="@+id/rbNewsCCTV"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="央视新闻（视频为主）"
+                android:textSize="14sp"
+                android:paddingVertical="8dp" />
+
+            <RadioButton
+                android:id="@+id/rbNewsLocal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="本地新闻（需手动添加）"
+                android:textSize="14sp"
+                android:paddingVertical="8dp" />
+        </RadioGroup>
+
+        <!-- 底部按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="上一步"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:insetTop="12dp"
+                android:insetBottom="12dp"
+                android:layout_marginEnd="12dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveCloud"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="保存并继续"
+                android:insetTop="12dp"
+                android:insetBottom="12dp"
+                android:layout_marginEnd="12dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSkipCloud"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="不使用云端功能"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:insetTop="12dp"
+                android:insetBottom="12dp" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    app:cardCornerRadius="12dp"
+    app:cardBackgroundColor="?attr/colorPrimaryContainer"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorPrimary">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="@string/app_name"
+            android:padding="8dp"
+            android:background="@drawable/bg_onboarding_icon_bg"
+            android:layout_marginEnd="16dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="欢迎使用 Cesia 输入法"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorOnPrimaryContainer" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="首次使用？点击开始新手向导，5步完成词库下载、云端配置、权限授权"
+                android:textSize="13sp"
+                android:textColor="?attr/colorOnPrimaryContainer"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartOnboarding"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开始向导"
+            android:insetTop="8dp"
+            android:insetBottom="8dp"
+            android:layout_marginStart="16dp" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

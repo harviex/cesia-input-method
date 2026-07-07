@@ -16,7 +16,16 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="16dp">
-        <!-- ═══════════ 标题（可编辑）═══════════ -->
+        <!-- ═══════════ 新手引导横幅（首次启动显示）═══════════ -->
+                <include
+                    android:id="@+id/view_onboarding_banner"
+                    layout="@layout/view_onboarding_banner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone" />
+
+                <!-- ═══════════ 标题（可编辑）═══════════ -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/til_settings_title"
                     android:layout_width="match_parent"
@@ -84,6 +93,19 @@
                         android:textSize="11sp"
                         android:textColor="#999999"
                         android:gravity="center" />
+
+                    <ProgressBar
+                        android:id="@+id/pb_version_download"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="120dp"
+                        android:layout_height="4dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:visibility="gone"
+                        android:progressDrawable="@drawable/progress_bar_horizontal"
+                        android:indeterminate="false"
+                        android:max="100"
+                        android:progress="0" />
                 </LinearLayout>
 
                 <!-- ═══════════ 统计卡片 ═══════════ -->
