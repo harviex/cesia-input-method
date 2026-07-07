@@ -64,6 +64,12 @@
             android:label="新闻源管理"
             android:exported="false" />
 
+        <!-- 新手引导页面 -->
+        <activity
+            android:name=".onboarding.OnboardingActivity"
+            android:label="新手向导"
+            android:exported="false" />
+
         <!-- FileProvider for OTA installs -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -57,6 +57,15 @@
                     android:layout_marginBottom="16dp"
                     android:background="?attr/selectableItemBackground" />
 
+                <!-- ═══════════ 新手引导横幅 ═══════════ -->
+                <include
+                    android:id="@+id/onboarding_banner"
+                    layout="@layout/view_onboarding_banner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone" />
+
                 <LinearLayout
                     android:id="@+id/ll_version_container"
                     android:layout_width="match_parent"
@@ -274,7 +283,7 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- 历史记录按钮 + 新闻源管理按钮 -->
+                <!-- 历史记录按钮 + 新闻源管理按钮 + 新手向导按钮 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="40dp"
@@ -307,6 +316,18 @@
                         app:backgroundTint="#81D8D0"
                         app:cornerRadius="10dp" />
                 </LinearLayout>
+
+                <!-- 新手向导按钮（全宽，用于测试/重跑向导） -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_onboarding"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginBottom="16dp"
+                    android:text="新手向导（重跑设置向导）"
+                    android:textSize="13sp"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#81D8D0"
+                    app:cornerRadius="10dp" />
 
                 <!-- ═══════════ 分隔 ═══════════ -->
                 <View

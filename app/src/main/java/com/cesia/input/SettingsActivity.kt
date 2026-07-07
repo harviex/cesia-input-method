@@ -28,6 +28,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.cesia.input.onboarding.OnboardingActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -113,6 +114,7 @@ class SettingsActivity : AppCompatActivity() {
     // === 历史记录 + 新闻源管理 ===
     private lateinit var btnHistory: Button
     private var btnNewsSources: Button? = null
+    private var btnOnboarding: Button? = null
 
     // === 标题可编辑 ===
     private var etSettingsTitle: TextInputEditText? = null
@@ -292,6 +294,7 @@ class SettingsActivity : AppCompatActivity() {
         try {
             btnHistory = findViewById(R.id.btn_history)
             btnNewsSources = findViewById(R.id.btn_news_sources)
+            btnOnboarding = findViewById(R.id.btn_onboarding)
         } catch (_: Exception) {}
 
         // 可编辑标题
@@ -299,6 +302,22 @@ class SettingsActivity : AppCompatActivity() {
             etSettingsTitle = findViewById(R.id.et_settings_title)
             tilSettingsTitle = findViewById(R.id.til_settings_title)
         } catch (_: Exception) {}
+
+        // 新手引导横幅
+        val onboardingBanner = findViewById<View>(R.id.onboarding_banner)
+        val btnGoOnboarding = findViewById<com.google.android.material.button.MaterialButton>(R.id.btnGoOnboarding)
+        val onboardingPrefs = getSharedPreferences("cesia_onboarding", MODE_PRIVATE)
+        val onboardingCompleted = onboardingPrefs.getBoolean("onboarding_completed", false)
+        if (onboardingCompleted) {
+            onboardingBanner.visibility = View.GONE
+        } else {
+            onboardingBanner.visibility = View.VISIBLE
+            val tvBannerText = findViewById<TextView>(R.id.tvBannerText)
+            tvBannerText?.text = "还没完成新手向导？点击去设置"
+            btnGoOnboarding?.setOnClickListener {
+                startActivity(Intent(this, OnboardingActivity::class.java))
+            }
+        }
 
         // 测试区重置 prompt 按钮
         try {
@@ -657,6 +676,9 @@ class SettingsActivity : AppCompatActivity() {
         // 历史记录 + 新闻源管理
         btnHistory?.setOnClickListener { showHistory() }
         btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
+        btnOnboarding?.setOnClickListener {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        }
 
         // 语音与 AI 本地化
         btnDownloadVoice?.setOnClickListener { downloadVoiceModel() }
