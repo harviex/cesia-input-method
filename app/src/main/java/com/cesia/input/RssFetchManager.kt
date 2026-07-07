@@ -38,6 +38,14 @@ object RssFetchManager {
     data class RssSource(val name: String, val url: String, val category: String)
 
     val PRESET_SOURCES: List<RssSource> = listOf(
+        // 新闻/综合（国内主流）——移至最前
+        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
+        RssSource("新华社", "https://feedx.net/rss/xinhua.xml", "新闻"),
+        RssSource("央视新闻", "https://feedx.net/rss/cctv.xml", "新闻"),
+        RssSource("澎湃新闻", "https://feedx.net/rss/thepaper.xml", "新闻"),
+        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "新闻"),
+        RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "新闻"),
+
         // 科技（精选 4 个，避免过多）
         RssSource("爱范儿", "https://www.ifanr.com/feed", "科技"),
         RssSource("IT之家", "https://www.ithome.com/rss/", "科技"),
@@ -53,14 +61,6 @@ object RssFetchManager {
         RssSource("华尔街见闻", "https://dedicated.wallstreetcn.com/rss.xml", "财经"),
         RssSource("财新网", "https://feedx.net/rss/caixin.xml", "财经"),
         RssSource("雪球热榜", "https://xueqiu.com/statuses/hot.json", "财经"),
-
-        // 新闻/综合（国内主流）
-        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
-        RssSource("新华社", "https://feedx.net/rss/xinhua.xml", "新闻"),
-        RssSource("央视新闻", "https://feedx.net/rss/cctv.xml", "新闻"),
-        RssSource("澎湃新闻", "https://feedx.net/rss/thepaper.xml", "新闻"),
-        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "新闻"),
-        RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "新闻"),
 
         // 国际（国内可访问的中文源）
         RssSource("环球时报", "https://feedx.net/rss/huanqiu.xml", "国际"),
