@@ -99,8 +99,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ---- 主题色动态可调（三维） ----
     private var themeAccent: Int = 0xFF81D8D0.toInt()     // 主色（蒂芙尼蓝），色相调节
-    private var themeBgGrayBase: Int = 0xE0                // 背景灰度基础值（0-255）
-    private var themeKeyGrayBase: Int = 0xF0               // 按键灰度基础值（0-255）
+    private var themeBgGrayBase: Int = 0xFF                // 背景灰度基础值（0-255），默认最右=255
+    private var themeKeyGrayBase: Int = 0xFF               // 按键灰度基础值（0-255），默认最右=255
     private var themePopup: PopupWindow? = null
     private val defaultAccentHsl = hslOf(0xFF81D8D0.toInt())
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
@@ -110,8 +110,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         themeAccent = prefs.getInt("theme_accent", 0xFF81D8D0.toInt())
-        themeBgGrayBase = prefs.getInt("theme_bg_gray", 0xE0)
-        themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xF0)
+        themeBgGrayBase = prefs.getInt("theme_bg_gray", 0xFF)
+        themeKeyGrayBase = prefs.getInt("theme_key_gray", 0xFF)
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
         textThemeSize = prefs.getInt("theme_text_size", 1)
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)

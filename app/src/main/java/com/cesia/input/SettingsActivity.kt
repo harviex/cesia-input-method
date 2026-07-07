@@ -87,6 +87,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var downloadManager: ModelDownloadManager
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
+    private var pbVoiceDownload: android.widget.ProgressBar? = null
+    private var pbAiDownload: android.widget.ProgressBar? = null
     private var isDownloading = false
 
     // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式) ===
@@ -154,7 +156,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_MODE = "run_mode"
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_SETTINGS_TITLE = "settings_title"
-        const val DEFAULT_POLISH_PROMPT = "你是专业的中文润色助手。请润色用户输入的文本，使其更加流畅、自然、符合中文表达习惯，保持原意不变。只输出润色后的文本，不要包含任何解释或额外内容。"
+        const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -262,6 +264,8 @@ class SettingsActivity : AppCompatActivity() {
         try {
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
+            pbVoiceDownload = findViewById(R.id.pb_voice_download)
+            pbAiDownload = findViewById(R.id.pb_ai_download)
         } catch (_: Exception) {}
 
         // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
@@ -515,17 +519,17 @@ class SettingsActivity : AppCompatActivity() {
 
         // 加载语音命令词（新键名，兼容旧键名）
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
-        etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "智能写作"))
-        etCmdCommand?.setText(cmdPrefs.getString("cmd_command", "智能修改"))
-        etCmdPolish?.setText(cmdPrefs.getString("cmd_polish", "智能润色"))
-        etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束语音识别"))
-        etCmdSend?.setText(cmdPrefs.getString("cmd_send", "立即发送"))
-        etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出语音模式"))
+        etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "写作"))
+        etCmdCommand?.setText(cmdPrefs.getString("cmd_command", "修改"))
+        etCmdPolish?.setText(cmdPrefs.getString("cmd_polish", "润色"))
+        etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束"))
+        etCmdSend?.setText(cmdPrefs.getString("cmd_send", "发送"))
+        etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出"))
 
         // 加载个性化设置
-        etStatusIdle?.setText(prefs.getString("status_idle", ""))
-        etSmartWritingLabel?.setText(prefs.getString("smart_writing_label", ""))
-        etMagicBookTitle?.setText(prefs.getString("magic_book_title", "芙莉莲的魔法书"))
+        etStatusIdle?.setText(prefs.getString("status_idle", "人工智能已就绪"))
+        etSmartWritingLabel?.setText(prefs.getString("smart_writing_label", "智能写作菜单"))
+        etMagicBookTitle?.setText(prefs.getString("magic_book_title", "智能修改菜单"))
 
         // 加载设置标题
         etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia AI智能输入法"))
@@ -539,12 +543,12 @@ class SettingsActivity : AppCompatActivity() {
 
         // 更新 VoiceEngine 命令词
         VoiceEngine.updateCommandWords(
-            cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
-            cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
-            cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
-            cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
-            cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改",
-            cmdPrefs.getString("cmd_writing", "智能写作") ?: "智能写作"
+            cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
+            cmdPrefs.getString("cmd_polish", "润色") ?: "润色",
+            cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
+            cmdPrefs.getString("cmd_send", "发送") ?: "发送",
+            cmdPrefs.getString("cmd_command", "修改") ?: "修改",
+            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
         )
 
         appendLog("已加载设置")
@@ -709,12 +713,12 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateVoiceEngineCommands() {
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
         VoiceEngine.updateCommandWords(
-            cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
-            cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
-            cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
-            cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
-            cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改",
-            cmdPrefs.getString("cmd_writing", "智能写作") ?: "智能写作"
+            cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
+            cmdPrefs.getString("cmd_polish", "润色") ?: "润色",
+            cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
+            cmdPrefs.getString("cmd_send", "发送") ?: "发送",
+            cmdPrefs.getString("cmd_command", "修改") ?: "修改",
+            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
         )
     }
 
@@ -732,6 +736,8 @@ class SettingsActivity : AppCompatActivity() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
         btnDownloadVoice?.isEnabled = false
         btnDownloadVoice?.text = "0%"
+        pbVoiceDownload?.visibility = android.view.View.VISIBLE
+        pbVoiceDownload?.progress = 0
         tvStatus.text = "🔄 下载语音模型中..."
         appendLog("⬇ 开始下载语音模型: ${modelInfo.name}")
         // 记录下载状态，用于 Activity 恢复时检测
@@ -749,6 +755,7 @@ class SettingsActivity : AppCompatActivity() {
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $fileName ($pctStr)"
                             btnDownloadVoice?.text = pctStr
+                            pbVoiceDownload?.progress = percent.toInt()
                             appendLog("⬇ $fileName: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -762,10 +769,12 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
                         btnDownloadVoice?.text = "✅ 已完成"
+                        pbVoiceDownload?.visibility = android.view.View.GONE
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
                         btnDownloadVoice?.text = "📥 语音识别"
+                        pbVoiceDownload?.visibility = android.view.View.GONE
                     }
                 }
             } catch (e: Exception) {
@@ -776,6 +785,7 @@ class SettingsActivity : AppCompatActivity() {
                     btnDownloadVoice?.text = "📥 语音识别"
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ 语音模型下载异常: ${e.message}")
+                    pbVoiceDownload?.visibility = android.view.View.GONE
                 }
             }
         }.start()
@@ -786,6 +796,8 @@ class SettingsActivity : AppCompatActivity() {
             ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: return
         btnDownloadAi?.isEnabled = false
         btnDownloadAi?.text = "0%"
+        pbAiDownload?.visibility = android.view.View.VISIBLE
+        pbAiDownload?.progress = 0
         tvStatus.text = "🔄 下载 AI 模型中..."
         appendLog("⬇ 开始下载 AI 模型: ${modelInfo.name} (${modelInfo.sizeBytes / 1024 / 1024}MB)")
         // 记录下载状态，用于 Activity 恢复时检测
@@ -803,6 +815,7 @@ class SettingsActivity : AppCompatActivity() {
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $name ($pctStr)"
                             btnDownloadAi?.text = pctStr
+                            pbAiDownload?.progress = percent.toInt()
                             appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -816,10 +829,12 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
                         btnDownloadAi?.text = "✅ 已完成"
+                        pbAiDownload?.visibility = android.view.View.GONE
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ AI 模型下载失败: ${result.exceptionOrNull()?.message}")
                         btnDownloadAi?.text = "📥 语音润色"
+                        pbAiDownload?.visibility = android.view.View.GONE
                     }
                 }
             } catch (e: Exception) {
@@ -830,6 +845,7 @@ class SettingsActivity : AppCompatActivity() {
                     btnDownloadAi?.text = "📥 语音润色"
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ AI 模型下载异常: ${e.message}")
+                    pbAiDownload?.visibility = android.view.View.GONE
                 }
             }
         }.start()
@@ -1521,6 +1537,11 @@ class SettingsActivity : AppCompatActivity() {
             tvTitle.text = "当前: ${it.name}"
         }
 
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
         rvModels.layoutManager = LinearLayoutManager(this)
         rvModels.adapter = ModelSelectorAdapter(models, savedModelId) { model ->
             // Update the TextView
@@ -1529,13 +1550,8 @@ class SettingsActivity : AppCompatActivity() {
             prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
             appendLog("模型已保存: ${model.id}")
             // Dismiss dialog
-            (dialogView.parent as? android.app.Dialog)?.dismiss()
+            dialog.dismiss()
         }
-
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(true)
-            .create()
 
         // 关闭按钮点击
         btnClose.setOnClickListener { dialog.dismiss() }

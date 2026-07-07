@@ -440,33 +440,6 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(symbol, x, y, popupPaint)
             }
 
-                    // ===== T9 副字符（灰色 functionalLabels / 红色 popupCharacters）独立循环，无 label 检查 =====
-                    if (isT9Mode) {
-                        for (key in keys) {
-                            val code = key.codes?.firstOrNull() ?: continue
-                            val x = key.x + key.width - 10f
-
-                            // functionalLabels 灰色副字符
-                            val fnLabel = functionalLabels[code]
-                            if (fnLabel != null) {
-                                val y = key.y + 10f + spSize
-                                canvas.drawText(fnLabel, x, y, labelPaint)
-                            }
-
-                            // popupCharacters 红色副字符（如空格键的 0）
-                            val popup = key.popupCharacters
-                            if (!popup.isNullOrEmpty()) {
-                                val symbol = popup[0].toString()
-                                val y = if (fnLabel != null) {
-                                    key.y + 10f + spSize + popupSpSize + 2f
-                                } else {
-                                    key.y + 10f + popupSpSize
-                                }
-                                canvas.drawText(symbol, x, y, popupPaint)
-                            }
-                        }
-                    }
-
                     // ===== 4. Shift 锁定圆点（脉冲发光效果）=====
                                 // T9 shift=-104，QWERTY shift=-1，共用 isShiftLocked 状态
                                 if ((code == -104 || code == -1) && isShiftLocked) {
