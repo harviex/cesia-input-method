@@ -754,7 +754,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $fileName ($pctStr)"
-                            btnDownloadVoice?.text = pctStr
+                            btnDownloadVoice?.text = "下载中"
                             pbVoiceDownload?.progress = percent.toInt()
                             appendLog("⬇ $fileName: $pctStr ($dlStr / $totalStr)")
                         }
@@ -814,7 +814,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $name ($pctStr)"
-                            btnDownloadAi?.text = pctStr
+                            btnDownloadAi?.text = "下载中"
                             pbAiDownload?.progress = percent.toInt()
                             appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
@@ -1893,19 +1893,22 @@ class SettingsActivity : AppCompatActivity() {
     private fun checkFirstLaunchOnboarding() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         val hasCompletedOnboarding = prefs.getBoolean("onboarding_completed", false)
-        val hasSeenBanner = prefs.getBoolean("onboarding_banner_shown", false)
 
-        if (!hasCompletedOnboarding && !hasSeenBanner) {
-            viewOnboardingBanner?.visibility = View.VISIBLE
-            // 标记横幅已显示
-            prefs.edit().putBoolean("onboarding_banner_shown", true).apply()
+        // 新手引导横幅常驻显示（既是首次引导，也是随时可重新查看的入口）
+        viewOnboardingBanner?.visibility = View.VISIBLE
+        // 已完成的用户横幅文案改为"重新查看新手引导"
+        val bannerTitle = viewOnboardingBanner?.findViewById<TextView>(R.id.tv_banner_title)
+        val bannerSubtitle = viewOnboardingBanner?.findViewById<TextView>(R.id.tv_banner_subtitle)
+        val bannerBtn = viewOnboardingBanner?.findViewById<TextView>(R.id.btnStartOnboarding)
+        if (hasCompletedOnboarding) {
+            bannerTitle?.text = "👋 随时查看新手引导"
+            bannerSubtitle?.text = "点击重新浏览使用向导：词库下载、云端配置、权限授权"
+            bannerBtn?.text = "重新查看"
+        }
 
-            viewOnboardingBanner?.setOnClickListener {
-                startActivity(Intent(this, OnboardingActivity::class.java))
-                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-            }
-        } else {
-            viewOnboardingBanner?.visibility = View.GONE
+        viewOnboardingBanner?.setOnClickListener {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
     }
 }

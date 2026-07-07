@@ -399,10 +399,12 @@ class CesiaKeyboardView @JvmOverloads constructor(
 
             for (key in keys) {
                 val code = key.codes?.firstOrNull() ?: continue
-                if (key.label == null) continue
 
                 // ===== T9 主字符（大号字母，按键中央）=====
                 if (isT9Mode) {
+                    if (key.label == null) {
+                        // 无主标签的 T9 功能键（如粘贴/剪切/撤销），跳过主字符绘制，但仍绘制副字符
+                    } else {
                     val t9Main = t9MainLabels[code]
                     if (t9Main != null) {
                         val cx = key.x + key.width / 2f
@@ -415,6 +417,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         val cx = key.x + key.width / 2f
                         val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
                         canvas.drawText(t9Punct, cx, cy, t9MainPaint)
+                    }
                     }
                 // T9 功能键主字符主字符由第 3 部分统一绘制（主题感知 + 缩放），此处不再重复绘制
             }

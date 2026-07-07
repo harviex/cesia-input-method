@@ -149,8 +149,6 @@ class NewsSourceActivity : AppCompatActivity() {
             val cb: CheckBox = view.findViewById(R.id.cb_source)
         }
 
-        private var lastCategory = ""
-
         override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_news_source, parent, false)
@@ -165,9 +163,9 @@ class NewsSourceActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
-            // 分类标题（只在分类变化时显示）
-            if (item.category != lastCategory) {
-                lastCategory = item.category
+            // 分类标题（仅当前 position 与前一项分类不同，或处于列表首位时显示）
+            val showCategory = position == 0 || items[position - 1].category != item.category
+            if (showCategory) {
                 holder.tvCategory.text = item.category
                 holder.tvCategory.visibility = View.VISIBLE
             } else {

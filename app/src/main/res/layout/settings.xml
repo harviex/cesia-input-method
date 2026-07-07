@@ -581,23 +581,25 @@
                     android:id="@+id/pb_voice_download"
                     style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
-                    android:layout_height="4dp"
+                    android:layout_height="8dp"
                     android:max="100"
                     android:progress="0"
                     android:layout_marginBottom="4dp"
                     android:visibility="gone"
-                    android:progressTint="#81D8D0" />
+                    android:progressTint="#81D8D0"
+                    android:progressBackgroundTint="#E0F2F1" />
 
                 <ProgressBar
                     android:id="@+id/pb_ai_download"
                     style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
-                    android:layout_height="4dp"
+                    android:layout_height="8dp"
                     android:max="100"
                     android:progress="0"
                     android:layout_marginBottom="8dp"
                     android:visibility="gone"
-                    android:progressTint="#81D8D0" />
+                    android:progressTint="#81D8D0"
+                    android:progressBackgroundTint="#E0F2F1" />
 
                 <!-- ═══════════ 分隔 ═══════════ -->
                 <View

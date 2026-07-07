@@ -33,6 +33,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/tv_banner_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="欢迎使用 Cesia 输入法"
@@ -41,6 +42,7 @@
                 android:textColor="#0D3B38" />
 
             <TextView
+                android:id="@+id/tv_banner_subtitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="首次使用？点击开始新手向导，5步完成词库下载、云端配置、权限授权"
