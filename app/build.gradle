@@ -11,8 +11,10 @@ java {
     }
 }
 
-// ===== 版本号计算（配置期执行，-PapkVersion 由 CI 传入）=====
-def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION")
+// ===== 版本号计算 =====
+// 默认版本（不带 -PapkVersion 参数时也用此值）
+def DEFAULT_VERSION = "1.2.1"
+def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION") ?: DEFAULT_VERSION
 def apkVer = apkVerRaw?.trim()
 
 def verCode
