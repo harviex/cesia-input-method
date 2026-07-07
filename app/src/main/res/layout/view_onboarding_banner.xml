@@ -6,9 +6,9 @@
     android:layout_height="wrap_content"
     android:layout_margin="16dp"
     app:cardCornerRadius="12dp"
-    app:cardBackgroundColor="?attr/colorPrimaryContainer"
+    app:cardBackgroundColor="#F0FBFA"
     app:strokeWidth="1dp"
-    app:strokeColor="?attr/colorPrimary">
+    app:strokeColor="#81D8D0">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -38,14 +38,14 @@
                 android:text="欢迎使用 Cesia 输入法"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="?attr/colorOnPrimaryContainer" />
+                android:textColor="#0D3B38" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="首次使用？点击开始新手向导，5步完成词库下载、云端配置、权限授权"
                 android:textSize="13sp"
-                android:textColor="?attr/colorOnPrimaryContainer"
+                android:textColor="#2A5A57"
                 android:layout_marginTop="4dp" />
         </LinearLayout>
 

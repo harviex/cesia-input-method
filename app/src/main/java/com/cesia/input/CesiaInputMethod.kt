@@ -7184,8 +7184,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             autoRefreshRssCache()
             Log.d("Cesia", "onStartInputView: step4 done")
 
-            // 同传按钮：AI 模型文件已下载时显示（TTS 使用系统自带）
-            btnTheme?.visibility = if (modelManager.hasAiModel()) View.VISIBLE else View.GONE
+            // 🎨 主题按钮：始终显示，不依赖 AI 模型是否下载
+            btnTheme?.visibility = View.VISIBLE
 
             // 重置星星按钮状态（防止重启后残留高亮）
             btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
