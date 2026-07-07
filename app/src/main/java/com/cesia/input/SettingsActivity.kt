@@ -1340,11 +1340,28 @@ class SettingsActivity : AppCompatActivity() {
                                     return@Thread
                                 }
 
-                // 保存到缓存目录
+                // 保存到缓存目录（带进度显示）
                 val apkFile = java.io.File(cacheDir, "cesia-update.apk")
+                val totalBytes = response.body?.contentLength() ?: 0L
+                var downloadedBytes = 0L
+                val buffer = ByteArray(8192)
                 response.body?.byteStream()?.use { input ->
                     apkFile.outputStream().use { output ->
-                        input.copyTo(output)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            downloadedBytes += read
+                            if (totalBytes > 0) {
+                                val percent = (downloadedBytes * 100.0 / totalBytes)
+                                val pctStr = String.format("%.1f%%", percent)
+                                val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
+                                val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
+                                runOnUiThread {
+                                    tvVersion?.text = "⏳ 下载中 v$version ($pctStr)\n$dlStr / $totalStr"
+                                }
+                            }
+                        }
                     }
                 }
 
