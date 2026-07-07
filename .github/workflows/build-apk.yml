@@ -44,14 +44,23 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          COUNT=$(git rev-list --count HEAD)
-          VERSION="1.1.$COUNT"
+          # 从 build.gradle 读取 DEFAULT_VERSION 作为版本基准（单一来源）
+          VERSION=$(grep -oP 'DEFAULT_VERSION = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "APK_VERSION=$VERSION" >> $GITHUB_ENV
           echo "apkVersion=$VERSION" > gradle.properties.tmp
           grep -v "^apkVersion=" gradle.properties >> gradle.properties.tmp 2>/dev/null || true
           mv gradle.properties.tmp gradle.properties
-          echo "✅ Version: $VERSION (commit count: $COUNT)"
+          echo "✅ Version: $VERSION"
+      - name: Check if release tag exists
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag v${{ steps.version.outputs.version }} 已存在，跳过自动创建 Release"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build APK with Gradle
         run: |
@@ -70,7 +79,7 @@ jobs:
           retention-days: 7
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -91,7 +100,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update latest.json on gh-pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check.outputs.exists == 'false'
         uses: actions/github-script@v7
         with:
           script: |
