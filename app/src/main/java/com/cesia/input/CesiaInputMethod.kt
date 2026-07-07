@@ -15,6 +15,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -73,6 +75,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 单线程 Executor，用于串行执行 Rime 引擎操作（防止多线程并发崩溃）
     private val rimeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /** 在 Rime 单线程执行器上执行同步调用，阻塞等待结果（主线程勿直接调用，需在协程/后台线程） */
+    @Suppress("UNUSED_PARAMETER")
+    private fun <T> rimeSync(block: () -> T): T = CompletableFuture.supplyAsync({ block() }, rimeExecutor)
+        .get(5, TimeUnit.SECONDS)
+
+    /** 在 Rime 单线程执行器上执行异步调用（不阻塞） */
+    private fun rimeAsync(block: () -> Unit) = rimeExecutor.execute(block)
 
     // ======================== 视图 ========================
     private lateinit var keyboardView: CesiaKeyboardView
@@ -852,7 +862,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
         candidateAdapter = CandidateAdapter { index, _ ->
-            if (rimeEngine.hasCandidates || isAssociationMode) {
+            if (rimeSync { rimeEngine.hasCandidates } || isAssociationMode) {
                 selectCandidateByGlobalIndex(index)
             }
         }
@@ -936,15 +946,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
         rimeEngine = RimeEngine(this)
-        val rimeOk = rimeEngine.initialize()
-        Log.i("Cesia", "Rime 引擎初始化: ok=$rimeOk")
-        val rimeErrorMsg = if (!rimeOk) rimeEngine.lastError() ?: "未知" else null
+        // Rime 引擎初始化必须在单线程执行
+        rimeExecutor.execute {
+            val rimeOk = rimeSync { rimeEngine.initialize() }
+            val rimeErrorMsg = if (!rimeOk) rimeSync { rimeEngine.lastError() } ?: "未知" else null
+            Handler(Looper.getMainLooper()).post {
+                Log.i("Cesia", "Rime 引擎初始化: ok=$rimeOk")
+                if (rimeOk) {
+                    // 初始化成功后，在主线程继续后续初始化
+                    onRimeInitialized(rimeErrorMsg)
+                } else {
+                    updateStatus("Cesia 启动失败: Rime 初始化错误: $rimeErrorMsg")
+                    setStatusDot("error")
+                }
+            }
+        }
 
-        // 初始化语音引擎和模型管理器
+        // 初始化语音引擎和模型管理器（不需要等待 Rime 初始化完成，可并行）
         modelManager = ModelManager(this)
         voiceEngine = VoiceEngine(this)
         aiEngine = AIEngine(this)
 
+        return view
+    }
+
+    /** Rime 引擎初始化完成后的回调，在主线程执行后续初始化 */
+    private fun onRimeInitialized(rimeErrorMsg: String?) {
         // 从 SharedPreferences 加载自定义命令词（跨进程同步：设置页面保存后，IME 启动时读取）
         runCatching {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -1131,41 +1158,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             engine.initialize(getOpenRouterApiKey())
         }
-
-        loadSettings()
-        // 加载云按钮状态
-        loadCloudMode()
-        updateCloudButtonState()
-        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        typelessEngine?.updateModelId(prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID)
-        // 加载用户自定义润色 prompt 并同步到云端和本地引擎
-        val polishPrompt = prefs.getString(PREF_POLISH_PROMPT, null)
-        if (!polishPrompt.isNullOrEmpty()) {
-            typelessEngine?.getPolishService()?.updatePolishPrompt(polishPrompt)
-            aiEngine.customPolishPrompt = polishPrompt
-        }
-        aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-            .getString(PREF_AI_STYLE, "自然") ?: "自然"
-
-        setupButtonListeners()
-        setupCandidateBar()
-        setupCandidatePanel()
-        applyKeyboardTheme()
-
-        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}" +
-            (rimeErrorMsg?.let { " | 错误: $it" } ?: ""))
-        setStatusDot("idle")
-        isViewInitialized = true
-
-        // 初始化为 T9 模式
-        rimeEngine.selectSchema("t9_pinyin")
-        rimeEngine.reload()
-
-        // 应用动态主题色到主输入视图树
-        applyAccentToViewTree(view, themeAccent)
-        applyThemeColors()
-
-        return view
     }
 
 // endregion 生命周期
@@ -1678,7 +1670,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isAssociationMode && globalIndex < associationCandidates.size) {
             val selectedDisplay = associationCandidates[globalIndex]
             val newPrefix = associationPrefix + selectedDisplay
-            val newAssociations = rimeEngine.getAssociations(newPrefix).take(20)
+            val newAssociations = rimeSync { rimeEngine.getAssociations(newPrefix).take(20) }
 
             // 上屏选中的词（追加到已有前缀后面）
             if (smartEditMode) {
@@ -1711,30 +1703,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 正常模式：点击的是 Rime 候选词
-        val curSize = rimeEngine.candidates.size
+        val curSize = rimeSync { rimeEngine.candidates.size }
         if (curSize <= 0) return
         val targetPage = globalIndex / curSize
         val idxInPage = globalIndex % curSize
         // 翻页到目标页
-        var curPage = rimeEngine.currentPage
-        while (curPage < targetPage) { rimeEngine.nextPage(); curPage++ }
-        while (curPage > targetPage) { rimeEngine.prevPage() }
-        val selected = rimeEngine.selectCandidate(idxInPage)
+        rimeSync {
+            var curPage = rimeSync { rimeEngine.currentPage }
+            while (curPage < targetPage) { rimeSync { rimeEngine.nextPage() }; curPage++ }
+            while (curPage > targetPage) { rimeSync { rimeEngine.prevPage() }; curPage-- }
+        }
+        val selected = rimeSync { rimeEngine.selectCandidate(idxInPage) }
         if (selected.isNotEmpty()) {
             if (smartEditMode) {
                 // 智能写作编辑模式：写入 buffer 而不是上屏
                 smartEditBuffer.append(selected)
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
                 updateSmartEditStatus()
             } else if (magicEditMode) {
                 // 魔法编辑模式：写入 buffer 而不是上屏
                 magicEditBuffer.append(selected)
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
                 updateMagicEditStatus()
             } else if (clipboardAddMode) {
                 // 剪贴板新增模式：写入 buffer 而不是上屏
                 clipboardAddBuffer.append(selected)
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
                 updateClipboardAddStatus()
             } else {
                 // 上屏选中的词
@@ -1742,11 +1736,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
-                rimeEngine.clear()
-                rimeEngine.createSession()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
+                rimeAsync { rimeEngine.createSession() }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
-            val associations = rimeEngine.getAssociations(selected).take(20)
+            val associations = rimeSync { rimeEngine.getAssociations(selected).take(20) }
             if (associations.isNotEmpty()) {
                 // 有联想词，进入联想模式
                 isAssociationMode = true
@@ -1799,10 +1793,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun updateCandidateBar() {
         // 语音识别期间不更新候选栏（避免覆盖流式识别状态）
         if (isRecording) return
-        
-        val composing = rimeEngine.isComposing
-        val pinyin = rimeEngine.composingText
-        val allCands = rimeEngine.getAllCandidates()
+
+        val composing = rimeSync { rimeEngine.isComposing }
+        val pinyin = rimeSync { rimeEngine.composingText }
+        val allCands = rimeSync { rimeEngine.getAllCandidates() }
 
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
@@ -1856,7 +1850,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            val allCandsPanel = rimeEngine.getAllCandidates()
+            val allCandsPanel = rimeSync { rimeEngine.getAllCandidates() }
             val displayPanel = if (isTraditional) allCandsPanel.map { toTraditional(it) } else allCandsPanel
             panelAdapter?.clear()
             panelAdapter?.addAll(displayPanel)
@@ -1913,8 +1907,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         deleteLongPressTriggered = false
 
         btnDelete.setOnClickListener {
-            if (rimeEngine.isComposing) {
-                rimeEngine.processKey("BackSpace")
+            if (rimeSync { rimeEngine.isComposing }) {
+                rimeAsync { rimeEngine.processKey("BackSpace") }
                 updateCandidateBar()
             } else {
                 try {
@@ -1953,8 +1947,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         deleteLongPressTriggered = true
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                         try {
-                            if (rimeEngine.isComposing) {
-                                rimeEngine.processKey("BackSpace")
+                            if (rimeSync { rimeEngine.isComposing }) {
+                                rimeAsync { rimeEngine.processKey("BackSpace") }
                                 updateCandidateBar()
                             } else {
                                 val ic = currentInputConnection ?: return@Runnable
@@ -2079,12 +2073,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 发送按钮
         btnSend.setOnClickListener {
             val ic = currentInputConnection ?: return@setOnClickListener
-            if (!isAsciiMode && rimeEngine.isComposing) {
-                val text = if (rimeEngine.hasCandidates) {
-                    rimeEngine.selectCandidate(0).ifEmpty { rimeEngine.composingText }
-                } else { rimeEngine.composingText }
+            if (!isAsciiMode && rimeSync { rimeEngine.isComposing }) {
+                val text = if (rimeSync { rimeEngine.hasCandidates }) {
+                    rimeSync { rimeEngine.selectCandidate(0) }.ifEmpty { rimeSync { rimeEngine.composingText } }
+                } else { rimeSync { rimeEngine.composingText } }
                 if (text.isNotEmpty()) { commitCandidateText(text) }
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
                 updateCandidateBar()
             }
             val editorInfo = currentInputEditorInfo
@@ -3621,7 +3615,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 更新魔法编辑模式状态栏：显示已输入内容 + Rime 当前拼音 */
     private fun updateMagicEditStatus() {
-        val comp = rimeEngine.composingText
+        val comp = rimeSync { rimeEngine.composingText }
         val display = magicEditBuffer.toString() + comp
         if (display.isEmpty()) {
             updateStatus("✏️ 输入魔法指令...（按发送键保存）")
@@ -3629,10 +3623,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus("✏️ $display")
         }
         // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
+        val allCands = rimeSync { rimeEngine.getAllCandidates() }
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        candidateBar.visibility = if (rimeSync { rimeEngine.isComposing }) View.VISIBLE else View.GONE
     }
 
     /** 退出剪贴板新增模式 */
@@ -3678,7 +3672,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 更新智能写作命令编辑状态（同步候选栏） */
     private fun updateSmartEditStatus() {
-        val comp = rimeEngine.composingText
+        val comp = rimeSync { rimeEngine.composingText }
         val display = smartEditBuffer.toString() + comp
         if (display.isEmpty()) {
             updateStatus("✏️ 输入智能写作命令...（按发送键保存）")
@@ -3686,15 +3680,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus("✏️ $display")
         }
         // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
+        val allCands = rimeSync { rimeEngine.getAllCandidates() }
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        candidateBar.visibility = if (rimeSync { rimeEngine.isComposing }) View.VISIBLE else View.GONE
     }
 
     /** 更新剪贴板新增模式状态（同步候选栏） */
     private fun updateClipboardAddStatus() {
-        val comp = rimeEngine.composingText
+        val comp = rimeSync { rimeEngine.composingText }
         val display = clipboardAddBuffer.toString() + comp
         if (display.isEmpty()) {
             updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
@@ -3702,10 +3696,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus("✏️ $display")
         }
         // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
+        val allCands = rimeSync { rimeEngine.getAllCandidates() }
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        candidateBar.visibility = if (rimeSync { rimeEngine.isComposing }) View.VISIBLE else View.GONE
     }
 
     /** 退出智能写作命令编辑模式 */
@@ -5108,7 +5102,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 结束 composing 状态，清除输入框中的高亮/下划线残留
         try { currentInputConnection?.finishComposingText() } catch (_: Exception) {}
         // 清除输入状态，防止切换后残留
-        rimeEngine.clear()
+        rimeAsync { rimeAsync { rimeEngine.clear() } }
         t9InputBuffer.clear()
         candidateBar.visibility = View.GONE
         updateStatus(statusIdleText)
@@ -5116,15 +5110,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 使用单线程 Executor 串行执行，防止多线程并发操作 Rime 引擎导致崩溃
         if (keyboardMode == KeyboardMode.NUMBER) {
             switchToKeyboard(KeyboardMode.QWERTY)
-            rimeExecutor.execute {
-                rimeEngine.selectSchema("pinyin")
-                rimeEngine.reload()
+            rimeAsync {
+                rimeSync { rimeEngine.selectSchema("pinyin") }
+                rimeSync { rimeEngine.reload() }
             }
         } else {
             switchToKeyboard(KeyboardMode.NUMBER)
-            rimeExecutor.execute {
-                rimeEngine.selectSchema("t9_pinyin")
-                rimeEngine.reload()
+            rimeAsync {
+                rimeSync { rimeEngine.selectSchema("t9_pinyin") }
+                rimeSync { rimeEngine.reload() }
                 Handler(Looper.getMainLooper()).post { resetNumberKeyboardState() }
             }
         }
@@ -5155,25 +5149,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (mode == KeyboardMode.NUMBER) {
             // 进入 T9：只操作 T9 相关状态
             isAsciiMode = false
-            rimeEngine.setAsciiMode(false)
+            rimeAsync { rimeAsync { rimeEngine.setAsciiMode(false) } }
             t9ShiftTemp = false  // 每次进入 T9 重置临时 shift
             // t9ShiftLocked 保留（T9 锁定状态不因切换而改变）
         } else if (mode == KeyboardMode.QWERTY) {
             // 进入全键盘：恢复 QWERTY shift 状态
             isAsciiMode = qwertyShiftLocked || qwertyShiftTemp
-            rimeEngine.setAsciiMode(isAsciiMode)
+            rimeAsync { rimeEngine.setAsciiMode(isAsciiMode) }
             // 根据 shift 状态恢复对应方案
             if (qwertyShiftLocked || qwertyShiftTemp) {
-                rimeEngine.selectSchema("en")
+                rimeAsync { rimeSync { rimeEngine.selectSchema("en") } }
             } else {
-                rimeEngine.selectSchema("pinyin")
+                rimeAsync { rimeSync { rimeEngine.selectSchema("pinyin") } }
             }
-            rimeEngine.clear()
+            rimeAsync { rimeAsync { rimeEngine.clear() } }
         } else {
             // 进入符号键盘：只操作符号相关状态
             isAsciiMode = false
-            rimeEngine.setAsciiMode(false)
-            rimeEngine.clear()
+            rimeAsync { rimeAsync { rimeEngine.setAsciiMode(false) } }
+            rimeAsync { rimeAsync { rimeEngine.clear() } }
             t9InputBuffer.clear()
             // symbolShiftLocked 保留
             candidateBar.visibility = View.GONE
@@ -5209,18 +5203,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (keyboardMode == KeyboardMode.NUMBER) {
             // T9 → QWERTY：切换 schema 到 pinyin
             switchToKeyboard(KeyboardMode.QWERTY)
-            rimeEngine.selectSchema("pinyin")
-            rimeEngine.reload()
+            rimeAsync {
+                rimeSync { rimeEngine.selectSchema("pinyin") }
+                rimeSync { rimeEngine.reload() }
+            }
             if (qwertyShiftLocked) {
                 isAsciiMode = true
-                rimeEngine.setAsciiMode(true)
-                rimeEngine.selectSchema("en")
+                rimeAsync { rimeAsync { rimeEngine.setAsciiMode(true) } }
+                rimeAsync { rimeSync { rimeEngine.selectSchema("en") } }
             }
         } else {
             // QWERTY → T9：切换 schema 到 t9_pinyin
             switchToKeyboard(KeyboardMode.NUMBER)
-            rimeEngine.selectSchema("t9_pinyin")
-            rimeEngine.reload()
+            rimeAsync {
+                rimeSync { rimeEngine.selectSchema("t9_pinyin") }
+                rimeSync { rimeEngine.reload() }
+            }
             resetNumberKeyboardState()
         }
     }
@@ -5232,7 +5230,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun resetT9State() {
         t9InputBuffer.clear()
-        rimeEngine.clear()
+        rimeAsync { rimeAsync { rimeEngine.clear() } }
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
         updateCandidateBar()
@@ -5288,23 +5286,29 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 qwertyShiftLocked = false
                 qwertyShiftTemp = false
                 isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-                rimeEngine.selectSchema("pinyin")
-                rimeEngine.clear()
+                rimeAsync {
+                    rimeAsync { rimeEngine.setAsciiMode(false) }
+                    rimeSync { rimeEngine.selectSchema("pinyin") }
+                    rimeAsync { rimeEngine.clear() }
+                }
             } else if (qwertyShiftTemp) {
                 // 临时shift → 退回正常，切回中文方案
                 qwertyShiftTemp = false
                 isAsciiMode = false
-                rimeEngine.setAsciiMode(false)
-                rimeEngine.selectSchema("pinyin")
-                rimeEngine.clear()
+                rimeAsync {
+                    rimeAsync { rimeEngine.setAsciiMode(false) }
+                    rimeSync { rimeEngine.selectSchema("pinyin") }
+                    rimeAsync { rimeEngine.clear() }
+                }
             } else {
                 // 正常 → 单击临时shift，切换到英文方案
                 qwertyShiftTemp = true
                 isAsciiMode = true
-                rimeEngine.setAsciiMode(true)
-                rimeEngine.selectSchema("en")
-                rimeEngine.clear()
+                rimeAsync {
+                    rimeAsync { rimeEngine.setAsciiMode(true) }
+                    rimeSync { rimeEngine.selectSchema("en") }
+                    rimeAsync { rimeEngine.clear() }
+                }
             }
         } else {
             // 符号键盘：操作 symbolShiftLocked
@@ -5326,10 +5330,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             qwertyShiftLocked = true
             qwertyShiftTemp = false
             isAsciiMode = true
-            rimeEngine.setAsciiMode(true)
-            // 切换到英文方案
-            rimeEngine.selectSchema("en")
-            rimeEngine.clear()
+            rimeAsync {
+                rimeAsync { rimeEngine.setAsciiMode(true) }
+                // 切换到英文方案
+                rimeSync { rimeEngine.selectSchema("en") }
+                rimeAsync { rimeEngine.clear() }
+            }
         } else {
             // 符号键盘：锁定符号 shift
             symbolShiftLocked = true
@@ -5356,10 +5362,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 qwertyShiftTemp = false
             }
             isAsciiMode = false
-            rimeEngine.setAsciiMode(false)
+            rimeAsync { rimeAsync { rimeEngine.setAsciiMode(false) } }
             // QWERTY 模式下切回中文方案
             if (keyboardMode == KeyboardMode.QWERTY) {
-                rimeEngine.selectSchema("pinyin")
+                rimeAsync { rimeSync { rimeEngine.selectSchema("pinyin") } }
             }
             updateShiftIndicator()
             keyboardView.invalidateAllKeys()
@@ -5420,25 +5426,27 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val digits = t9InputBuffer.toString()
         if (digits.isNotEmpty()) {
             // 重建session，输入完整数字串
-            rimeEngine.clear()
-            rimeEngine.createSession()
-            for (d in digits) {
-                rimeEngine.processKey(d.toString())
+            rimeAsync {
+                rimeEngine.clear()
+                rimeEngine.createSession()
+                for (d in digits) {
+                    rimeEngine.processKey(d.toString())
+                }
+                updateCandidateBar()
             }
         }
-        updateCandidateBar()
     }
 
     private fun commitT9AndClear() {
         if (t9InputBuffer.isNotEmpty()) {
-            if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                val selected = rimeEngine.selectCandidate(0)
+            if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
+                val selected = rimeSync { rimeEngine.selectCandidate(0) }
                 if (selected.isNotEmpty()) {
                     commitCandidateText(selected)
                 }
             }
             t9InputBuffer.clear()
-            rimeEngine.clear()
+            rimeAsync { rimeEngine.clear() }
             updateCandidateBar()
         }
     }
@@ -5476,7 +5484,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 KeyboardMode.QWERTY -> {
                     // schema 本来就是 pinyin，保留 shift 状态
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     updateCandidateBar()
                 }
                 else -> updateCandidateBar()
@@ -5486,10 +5494,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val wasT9 = keyboardMode == KeyboardMode.NUMBER
             switchToKeyboard(KeyboardMode.QWERTY)
             if (wasT9) {
-                rimeEngine.selectSchema("pinyin")
-                rimeEngine.reload()
+                rimeAsync {
+                    rimeSync { rimeEngine.selectSchema("pinyin") }
+                    rimeSync { rimeEngine.reload() }
+                }
             } else {
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
             }
             updateCandidateBar()
         }
@@ -5509,12 +5519,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 正常切换中英文模式
             isAsciiMode = !isAsciiMode
         }
-        rimeEngine.setAsciiMode(isAsciiMode)
+        rimeAsync { rimeEngine.setAsciiMode(isAsciiMode) }
         // 如果当前在数字键盘，保持在数字键盘（只是切换中英文模式）
         if (keyboardMode != KeyboardMode.NUMBER) {
             switchToKeyboard(KeyboardMode.QWERTY)
         }
-        rimeEngine.clear()
+        rimeAsync { rimeAsync { rimeEngine.clear() } }
         updateCandidateBar()
     }
 
@@ -6322,24 +6332,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             when (primaryCode) {
                 // 发送键/回车键：保存命令、退出编辑模式、直接执行
                 -200, 10 -> {
-                    val comp = rimeEngine.composingText
+                    val comp = rimeSync { rimeEngine.composingText }
                     if (comp.isNotEmpty()) {
                         smartEditBuffer.append(comp)
-                        rimeEngine.clear()
+                        rimeAsync { rimeAsync { rimeEngine.clear() } }
                     }
                     exitSmartEditMode(save = true, execute = true)
                     return
                 }
                 // 返回键：取消并退出编辑模式
                 KeyEvent.KEYCODE_BACK -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     exitSmartEditMode(save = false)
                     return
                 }
                 // 退格键：优先删除 Rime composition，其次删除缓冲区
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    if (rimeEngine.isComposing) {
-                        rimeEngine.processKey("BackSpace")
+                    if (rimeSync { rimeEngine.isComposing }) {
+                        rimeAsync { rimeEngine.processKey("BackSpace") }
                         updateSmartEditStatus()
                     } else if (smartEditBuffer.isNotEmpty()) {
                         smartEditBuffer.deleteCharAt(smartEditBuffer.length - 1)
@@ -6349,23 +6359,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
                 in 97..122 -> {
-                    rimeEngine.processKey(primaryCode.toChar())
+                    rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                     updateSmartEditStatus()
                     return
                 }
                 // 数字键 0-9：T9模式走T9拼音引擎，全键盘模式选词或追加
                 in 48..57 -> {
                     if (keyboardMode == KeyboardMode.NUMBER) {
-                        rimeEngine.processKey(primaryCode.toChar())
+                        rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                         updateSmartEditStatus()
-                    } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                    } else if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                        val cands = rimeEngine.candidates
+                        val cands = rimeSync { rimeEngine.candidates }
                         if (index < cands.size) {
-                            val selected = rimeEngine.selectCandidate(index)
+                            val selected = rimeSync { rimeEngine.selectCandidate(index) }
                             if (selected.isNotEmpty()) {
                                 smartEditBuffer.append(selected)
-                                rimeEngine.clear()
+                                rimeAsync { rimeAsync { rimeEngine.clear() } }
                             }
                         }
                     } else {
@@ -6376,11 +6386,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 空格：如果有候选词则选第一个词，否则追加空格
                 32 -> {
-                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                        val selected = rimeEngine.selectCandidate(0)
+                    if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
+                        val selected = rimeSync { rimeEngine.selectCandidate(0) }
                         if (selected.isNotEmpty()) {
                             smartEditBuffer.append(selected)
-                            rimeEngine.clear()
+                            rimeAsync { rimeAsync { rimeEngine.clear() } }
                         }
                     } else {
                         smartEditBuffer.append(' ')
@@ -6390,14 +6400,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 标点符号直接追加
                 44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     smartEditBuffer.append(primaryCode.toChar())
                     updateSmartEditStatus()
                     return
                 }
                 // 中文标点（Unicode）
                 65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     smartEditBuffer.append(primaryCode.toChar())
                     updateSmartEditStatus()
                     return
@@ -6411,24 +6421,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 发送键/回车键：保存魔法并退出编辑模式
                 -200, 10 -> {
                     // 先把 Rime 当前 composition 的文字追加到缓冲区
-                    val comp = rimeEngine.composingText
+                    val comp = rimeSync { rimeEngine.composingText }
                     if (comp.isNotEmpty()) {
                         magicEditBuffer.append(comp)
-                        rimeEngine.clear()
+                        rimeAsync { rimeAsync { rimeEngine.clear() } }
                     }
                     exitMagicEditMode(save = true)
                     return
                 }
                 // 返回键：取消并退出编辑模式
                 KeyEvent.KEYCODE_BACK -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     exitMagicEditMode(save = false)
                     return
                 }
                 // 退格键：优先删除 Rime composition，其次删除缓冲区
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    if (rimeEngine.isComposing) {
-                        rimeEngine.processKey("BackSpace")
+                    if (rimeSync { rimeEngine.isComposing }) {
+                        rimeAsync { rimeEngine.processKey("BackSpace") }
                         updateMagicEditStatus()
                     } else if (magicEditBuffer.isNotEmpty()) {
                         magicEditBuffer.deleteCharAt(magicEditBuffer.length - 1)
@@ -6438,7 +6448,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
                 in 97..122 -> {
-                    rimeEngine.processKey(primaryCode.toChar())
+                    rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                     updateMagicEditStatus()
                     return
                 }
@@ -6446,16 +6456,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 in 48..57 -> {
                     if (keyboardMode == KeyboardMode.NUMBER) {
                         // T9模式：数字键直接走Rime引擎（字母输入模式），不走T9 buffer
-                        rimeEngine.processKey(primaryCode.toChar())
+                        rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                         updateMagicEditStatus()
-                    } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                    } else if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                        val cands = rimeEngine.candidates
+                        val cands = rimeSync { rimeEngine.candidates }
                         if (index < cands.size) {
-                            val selected = rimeEngine.selectCandidate(index)
+                            val selected = rimeSync { rimeEngine.selectCandidate(index) }
                             if (selected.isNotEmpty()) {
                                 magicEditBuffer.append(selected)
-                                rimeEngine.clear()
+                                rimeAsync { rimeAsync { rimeEngine.clear() } }
                             }
                         }
                     } else {
@@ -6466,11 +6476,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 空格：如果有候选词则选第一个词，否则追加空格
                 32 -> {
-                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                        val selected = rimeEngine.selectCandidate(0)
+                    if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
+                        val selected = rimeSync { rimeEngine.selectCandidate(0) }
                         if (selected.isNotEmpty()) {
                             magicEditBuffer.append(selected)
-                            rimeEngine.clear()
+                            rimeAsync { rimeAsync { rimeEngine.clear() } }
                         }
                     } else {
                         magicEditBuffer.append(' ')
@@ -6480,14 +6490,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 标点符号直接追加
                 44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     magicEditBuffer.append(primaryCode.toChar())
                     updateMagicEditStatus()
                     return
                 }
                 // 中文标点（Unicode）
                 65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     magicEditBuffer.append(primaryCode.toChar())
                     updateMagicEditStatus()
                     return
@@ -6500,24 +6510,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             when (primaryCode) {
                 // 发送键/回车键：保存剪贴板并退出编辑模式
                 -200, 10 -> {
-                    val comp = rimeEngine.composingText
+                    val comp = rimeSync { rimeEngine.composingText }
                     if (comp.isNotEmpty()) {
                         clipboardAddBuffer.append(comp)
-                        rimeEngine.clear()
+                        rimeAsync { rimeAsync { rimeEngine.clear() } }
                     }
                     exitClipboardAddMode(save = true)
                     return
                 }
                 // 返回键：取消并退出编辑模式
                 KeyEvent.KEYCODE_BACK -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     exitClipboardAddMode(save = false)
                     return
                 }
                 // 退格键：优先删除 Rime composition，其次删除缓冲区
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    if (rimeEngine.isComposing) {
-                        rimeEngine.processKey("BackSpace")
+                    if (rimeSync { rimeEngine.isComposing }) {
+                        rimeAsync { rimeEngine.processKey("BackSpace") }
                         updateClipboardAddStatus()
                     } else if (clipboardAddBuffer.isNotEmpty()) {
                         clipboardAddBuffer.deleteCharAt(clipboardAddBuffer.length - 1)
@@ -6527,23 +6538,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
                 in 97..122 -> {
-                    rimeEngine.processKey(primaryCode.toChar())
+                    rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                     updateClipboardAddStatus()
                     return
                 }
                 // 数字键 0-9
                 in 48..57 -> {
                     if (keyboardMode == KeyboardMode.NUMBER) {
-                        rimeEngine.processKey(primaryCode.toChar())
+                        rimeAsync { rimeEngine.processKey(primaryCode.toChar()) }
                         updateClipboardAddStatus()
-                    } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
+                    } else if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                        val cands = rimeEngine.candidates
+                        val cands = rimeSync { rimeEngine.candidates }
                         if (index < cands.size) {
-                            val selected = rimeEngine.selectCandidate(index)
+                            val selected = rimeSync { rimeEngine.selectCandidate(index) }
                             if (selected.isNotEmpty()) {
                                 clipboardAddBuffer.append(selected)
-                                rimeEngine.clear()
+                                rimeAsync { rimeAsync { rimeEngine.clear() } }
                             }
                         }
                     } else {
@@ -6554,11 +6565,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 空格：如果有候选词则选第一个词，否则追加空格
                 32 -> {
-                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                        val selected = rimeEngine.selectCandidate(0)
+                    if (rimeSync { rimeEngine.isComposing && rimeEngine.hasCandidates }) {
+                        val selected = rimeSync { rimeEngine.selectCandidate(0) }
                         if (selected.isNotEmpty()) {
                             clipboardAddBuffer.append(selected)
-                            rimeEngine.clear()
+                            rimeAsync { rimeAsync { rimeEngine.clear() } }
                         }
                     } else {
                         clipboardAddBuffer.append(' ')
@@ -6568,14 +6579,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 标点符号直接追加
                 44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     clipboardAddBuffer.append(primaryCode.toChar())
                     updateClipboardAddStatus()
                     return
                 }
                 // 中文标点（Unicode）
                 65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     clipboardAddBuffer.append(primaryCode.toChar())
                     updateClipboardAddStatus()
                     return
@@ -6584,9 +6595,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
 
         val ic = currentInputConnection
-        val composing = rimeEngine.isComposing
-        val hasCands = rimeEngine.hasCandidates
-        val cands = rimeEngine.candidates
+        val composing = rimeSync { rimeEngine.isComposing }
+        val hasCands = rimeSync { rimeEngine.hasCandidates }
+        val cands = rimeSync { rimeEngine.candidates }
 
         // 空格键调试日志
         if (primaryCode == 32 && keyboardMode != KeyboardMode.NUMBER && !isAsciiMode) {
@@ -6622,12 +6633,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         primaryCode.toChar()
                     }
                     // 走 Rime 英文方案，获取联想候选词
-                    val accepted = rimeEngine.processKey(keyChar)
+                    val accepted = rimeSync { rimeEngine.processKey(keyChar) }
                     if (accepted) {
                         updateCandidateBar()
                         // 如果 Rime 没有 composing（直接上屏了），commit 结果
-                        if (!rimeEngine.isComposing) {
-                            val result = rimeEngine.commit()
+                        if (!rimeSync { rimeEngine.isComposing }) {
+                            val result = rimeSync { rimeEngine.commit() }
                             if (result.isNotEmpty()) {
                                 commitCandidateText(result)
                             } else {
@@ -6642,21 +6653,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     if (!qwertyShiftLocked && keyboardMode == KeyboardMode.QWERTY && qwertyShiftTemp) {
                         qwertyShiftTemp = false
                         isAsciiMode = false
-                        rimeEngine.setAsciiMode(false)
-                        rimeEngine.selectSchema("pinyin")
+                        rimeAsync { rimeAsync { rimeEngine.setAsciiMode(false) } }
+                        rimeAsync { rimeSync { rimeEngine.selectSchema("pinyin") } }
                         updateShiftIndicator()
                         keyboardView.invalidateAllKeys()
                     }
                 } else {
                     // 中文模式：先走 Rime 引擎
-                    val hadComposing = rimeEngine.isComposing
+                    val hadComposing = rimeSync { rimeEngine.isComposing }
                     exitAssociationMode()
-                    val accepted = rimeEngine.processKey(primaryCode.toChar())
-                    Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'")
+                    val accepted = rimeSync { rimeEngine.processKey(primaryCode.toChar()) }
+                    Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeSync { rimeEngine.isComposing }} composingText='${rimeSync { rimeEngine.composingText }}'")
                     if (accepted) {
                         // 如果之前没有 composing，且输入后 Rime 产生了 composing，说明是拼音输入
                         // 如果之前没有 composing，且输入后也没有 composing，说明是英文输入
-                        if (!hadComposing && !rimeEngine.isComposing) {
+                        if (!hadComposing && !rimeSync { rimeEngine.isComposing }) {
                             // Rime 没有进入 composing 状态，直接上屏英文
                             ic?.commitText(primaryCode.toChar().toString(), 1)
                         }
@@ -6676,18 +6687,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 } else {
                     // 全键盘模式的数字键逻辑
                     // 如果当前 composing 是纯英文（如输入t后按9），直接上屏英文+数字
-                    val composingText = rimeEngine.composingText
+                    val composingText = rimeSync { rimeEngine.composingText }
                     val isPureEnglish = composing && composingText.isNotEmpty() &&
                         composingText.all { it in 'a'..'z' }
                     if (isPureEnglish) {
                         // 英文输入中按数字：上屏英文原文 + 数字，无空格
-                        rimeEngine.clear()
+                        rimeAsync { rimeAsync { rimeEngine.clear() } }
                         ic?.commitText(composingText + primaryCode.toChar().toString(), 1)
                         autoExitShift()
                     } else if (!isAsciiMode && composing && hasCands) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
                         if (index < cands.size) {
-                            val selected = rimeEngine.selectCandidate(index)
+                            val selected = rimeSync { rimeEngine.selectCandidate(index) }
                             if (selected.isNotEmpty()) {
                                 commitCandidateText(selected)
                             } else { commitAndClear() }
@@ -6722,9 +6733,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         }
                     } else if (t9InputBuffer.isNotEmpty()) {
                         // T9模式：空格 = 选择首候选上屏
-                        val cands = rimeEngine.candidates
+                        val cands = rimeSync { rimeEngine.candidates }
                         if (cands.isNotEmpty()) {
-                            val selected = rimeEngine.selectCandidate(0)
+                            val selected = rimeSync { rimeEngine.selectCandidate(0) }
                             if (selected.isNotEmpty()) {
                                 commitCandidateText(selected)
                             }
@@ -6743,7 +6754,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         // 联想模式：选择第一个联想词继续联想
                         val selectedWord = associationCandidates[0]
                         val newPrefix = associationPrefix + selectedWord
-                        val newAssociations = rimeEngine.getAssociations(newPrefix)
+                        val newAssociations = rimeSync { rimeEngine.getAssociations(newPrefix) }
                         if (newAssociations.isNotEmpty()) {
                             associationPrefix = newPrefix
                             associationCandidates = newAssociations
@@ -6757,9 +6768,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             updateCandidateBar()
                         }
                     } else {
-                        val cands = rimeEngine.candidates
+                        val cands = rimeSync { rimeEngine.candidates }
                         if (cands.isNotEmpty()) {
-                            val selected = rimeEngine.selectCandidate(0)
+                            val selected = rimeSync { rimeEngine.selectCandidate(0) }
                             if (selected.isNotEmpty()) {
                                 commitCandidateText(selected)
                             } else {
@@ -6787,11 +6798,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     // 数字键盘退格
                     if (!t9ShiftTemp && t9InputBuffer.isNotEmpty()) {
                         // 先告诉 Rime 删除一个按键
-                        rimeEngine.processKey("BackSpace")
+                        rimeAsync { rimeEngine.processKey("BackSpace") }
                         // 同步更新缓冲
                         t9InputBuffer.deleteCharAt(t9InputBuffer.length - 1)
                         if (t9InputBuffer.isEmpty()) {
-                            rimeEngine.clear()
+                            rimeAsync { rimeAsync { rimeEngine.clear() } }
                             resetT9State()
                         } else {
                             updateCandidateBar()
@@ -6802,15 +6813,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 } else if (isAsciiMode) {
                     deleteSelectionOrChar()
                 } else {
-                    val wasComposing = rimeEngine.isComposing
-                    val handled = rimeEngine.processKey("BackSpace")
+                    val wasComposing = rimeSync { rimeEngine.isComposing }
+                    val handled = rimeSync { rimeEngine.processKey("BackSpace") }
                     if (!handled) {
                         deleteSelectionOrChar()
                     }
-                    if (wasComposing && !rimeEngine.isComposing) {
-                        resetToIdle()
-                    } else {
-                        updateCandidateBar()
+                    if (wasComposing && !rimeSync { rimeEngine.isComposing }) {
                     }
                 }
             }
@@ -6820,16 +6828,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
                 if (!isAsciiMode && composing) {
                     // 直接上屏当前拼音字母（不转换成汉字）
-                    val pinyinText = rimeEngine.composingText?.replace(" ", "")
+                    val pinyinText = rimeSync { rimeEngine.composingText?.replace(" ", "") }
                     if (!pinyinText.isNullOrEmpty()) {
                         ic?.commitText(pinyinText, 1)
                     } else if (hasCands) {
-                        val selected = rimeEngine.selectCandidate(0)
+                        val selected = rimeSync { rimeEngine.selectCandidate(0) }
                         if (selected.isNotEmpty()) {
                             commitCandidateText(selected)
                         }
                     }
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     updateCandidateBar()
                 } else {
                     // 只发送换行，不触发发送动作
@@ -6883,10 +6891,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 if (!isAsciiMode && composing) {
                     val text = if (hasCands) {
-                        rimeEngine.selectCandidate(0).ifEmpty { rimeEngine.composingText }
-                    } else { rimeEngine.composingText }
+                        rimeSync { rimeEngine.selectCandidate(0).ifEmpty { rimeEngine.composingText } }
+                    } else { rimeSync { rimeEngine.composingText } }
                     if (text.isNotEmpty()) { ic?.commitText(text, 1) }
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     updateCandidateBar()
                 }
                 val editorInfo = currentInputEditorInfo
@@ -6899,13 +6907,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // ======================== 其他按键（标点等）=======================
             else -> {
                 // 如果当前 composing 是纯英文（如输入llama后按.），直接上屏英文+标点
-                val composingText = rimeEngine.composingText
+                val composingText = rimeSync { rimeEngine.composingText }
                 val isPureEnglish = !isAsciiMode && composing && composingText.isNotEmpty() &&
                     composingText.all { it in 'a'..'z' }
                 if (isPureEnglish) {
                     // 英文输入中按标点：上屏英文原文 + 标点，无空格
                     val punct = primaryCode.toChar().toString()
-                    rimeEngine.clear()
+                    rimeAsync { rimeAsync { rimeEngine.clear() } }
                     ic?.commitText(composingText + punct, 1)
                 } else {
                     if (!isAsciiMode && composing) commitAndClear()
@@ -6925,7 +6933,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         // 保持英文模式，不清空任何状态
                     } else {
                         // 标点上屏后清空候选栏和状态栏
-                        rimeEngine.clear()
+                        rimeAsync { rimeEngine.clear() }
                         if (keyboardMode == KeyboardMode.NUMBER) t9InputBuffer.clear()
                     }
                 }
@@ -6938,11 +6946,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 提交当前 composing 文本并清除状态
      */
     private fun commitAndClear() {
-        val text = rimeEngine.commit()
+        val text = rimeSync { rimeEngine.commit() }
         if (text.isNotEmpty()) {
             commitCandidateText(text)
         }
-        rimeEngine.clear()
+        rimeAsync { rimeEngine.clear() }
         if (isPanelExpanded) collapseCandidatePanel()
         updateCandidateBar()
     }
@@ -6967,7 +6975,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
         // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突
         var skipPopupLongPress = false
-        if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
+        if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeSync { rimeEngine.isComposing }) {
             if (getFunctionalLongAction(primaryCode) != null) {
                 skipPopupLongPress = true
                 functionalLongPressRunnable = Runnable {
@@ -7025,7 +7033,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
                 override fun run() {
-                    val handled = rimeEngine.processKey("BackSpace")
+                    val handled = rimeSync { rimeEngine.processKey("BackSpace") }
                     if (!handled) {
                         currentInputConnection?.deleteSurroundingText(1, 0)
                     }
@@ -7076,9 +7084,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         cancelLongPress()
         if (magicEditMode && text != null) {
             // 魔法编辑模式：如果 Rime 正在 composing，追加选词到缓冲区并清空 Rime
-            if (rimeEngine.isComposing) {
+            if (rimeSync { rimeEngine.isComposing }) {
                 magicEditBuffer.append(text)
-                rimeEngine.clear()
+                rimeAsync { rimeAsync { rimeEngine.clear() } }
                 updateMagicEditStatus()
             } else {
                 // 非 composing 状态直接追加
@@ -7128,12 +7136,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 外部词库下载后需要重新部署 Rime
             val dictPrefs = getSharedPreferences("cesia_dict", MODE_PRIVATE)
             val settingsPrefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-            if (dictPrefs.getBoolean("dict_downloaded", false) && rimeEngine.isInitialized) {
+            if (dictPrefs.getBoolean("dict_downloaded", false) && rimeSync { rimeEngine.isInitialized }) {
                 val lastReload = settingsPrefs.getLong("last_dict_reload", 0)
                 val lastSync = dictPrefs.getLong("last_sync", 0)
                 if (lastSync > lastReload) {
                     Log.i("Cesia", "检测到词库更新，重新部署 Rime")
-                    rimeEngine.reload()
+                    rimeAsync { rimeSync { rimeEngine.reload() } }
                     settingsPrefs.edit().putLong("last_dict_reload", System.currentTimeMillis()).apply()
                 }
             }
