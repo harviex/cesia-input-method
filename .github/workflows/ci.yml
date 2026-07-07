@@ -1,7 +1,4 @@
-# Build APK for Android
-# MNN .a libraries are downloaded from GitHub Release by CMake
-
-name: Build APK
+name: CI - Build & Security
 
 on:
   push:
@@ -9,13 +6,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'  # 每周一凌晨 3 点全量安全扫描
 
 jobs:
+  # ---- Build APK ----
   build:
+    name: Build APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,3 +116,33 @@ jobs:
               sha,
               branch: 'gh-pages'
             });
+
+  # ---- Security Scan (Semgrep) ----
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep (包含自定义输入法规则)
+        run: |
+          semgrep ci \
+            --config=rules/ime-security.yaml \
+            --config=rules/ime-bugs.yaml \
+            --sarif \
+            --sarif-output=semgrep.sarif \
+            --no-git-ignore
+        continue-on-error: true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
