@@ -24,8 +24,9 @@ if (apkVer && apkVer.matches("\\d+\\.\\d+\\.\\d+")) {
     def major = parts[0].toInteger()
     def minor = parts[1].toInteger()
     def patch = parts[2].toInteger()
-    // versionCode 单调递增：major*10000 + minor*100 + patch（1.2.1 -> 10201）
-    verCode = major * 10000 + minor * 100 + patch
+    // versionCode 单调递增：major*1000000 + minor*10000 + patch
+    // 1.2.1 -> 1020001（兼容旧 CI 的 10000+count 方案，保证覆盖安装）
+    verCode = major * 1000000 + minor * 10000 + patch
     verName = apkVer
 } else {
     def count = "git rev-list --count HEAD".execute([], project.rootDir).text.trim()
