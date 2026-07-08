@@ -329,6 +329,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var isAssociationMode = false   // 是否处于联想模式
     private var selectedCandidateIndex = 0   // 当前长按选中的候选词 index（用于菜单定位）
 
+    // === 按钮提示计数（最多2次） ===
+    private val buttonHintCount = mutableMapOf<String, Int>()
+
+    /** 按钮按下时提示（最多2次），提示文字来源个性化设置 */
+    private fun maybeShowButtonHint(buttonName: String, hintText: String) {
+        val count = buttonHintCount[buttonName] ?: 0
+        if (count < 2) {
+            updateStatus(hintText)
+            buttonHintCount[buttonName] = count + 1
+        }
+    }
 
 
     // 语音引擎协程作用域
@@ -2101,6 +2112,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         deleteLongPressTriggered = false
 
         btnDelete.setOnClickListener {
+            maybeShowButtonHint("clear", "清空")
             if (rimeEngine.isComposing) {
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
@@ -2152,8 +2164,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 val selEnd = extracted?.selectionEnd ?: -1
                                 if (selStart >= 0 && selEnd >= 0 && selStart != selEnd) {
                                     ic.commitText("", 1)
+                                    maybeShowButtonHint("clear_long", "清空选中的文字")
                                 } else {
                                     // 长按：删除光标后全部文字，循环删除避免字数限制
+                                    maybeShowButtonHint("clear_long", "清空光标后的文字")
                                     while (true) {
                                         val after = ic.getTextAfterCursor(1000, 0)
                                         if (after.isNullOrEmpty()) break
@@ -2188,7 +2202,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        btnClipboard.setOnClickListener { executeMagicOrAiReply() }
+        btnClipboard.setOnClickListener {
+            maybeShowButtonHint("magic", "智能修改")
+            executeMagicOrAiReply()
+        }
         btnClipboard.setOnTouchListener { v, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
@@ -2218,7 +2235,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 智能写作按钮（星星/五角星）：短按执行第一项命令，长按弹出设置弹窗
         // 复用魔法书按钮的触摸处理模式
-        btnMagic.setOnClickListener { toggleMagicMode() }
+        btnMagic.setOnClickListener {
+            maybeShowButtonHint("smart_write", "智能写作")
+            toggleMagicMode()
+        }
         btnMagic.setOnTouchListener { v, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
@@ -2233,6 +2253,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookRunnable = Runnable {
                         magicBookLongPressTriggered = true
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        maybeShowButtonHint("smart_write_long", "智能写作 菜单")
                         showSmartWritingPopup()
                     }.also {
                         magicBookHandler.postDelayed(it, 600)
@@ -2266,6 +2287,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 发送按钮
         btnSend.setOnClickListener {
+            maybeShowButtonHint("send", "发送")
             val ic = currentInputConnection ?: return@setOnClickListener
             if (!isAsciiMode && rimeEngine.isComposing) {
                 val text = if (rimeEngine.hasCandidates) {
@@ -2328,11 +2350,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 锁定模式下单击 → 退出锁定
             isVoiceLocked = false
             updateMicButtonLockedState()
+            maybeShowButtonHint("voice", "退出语音锁定模式")
             updateStatus("🔓 已退出语音锁定模式")
             resetToIdle()
             return
         }
         if (!isRecording && !isWaitingForChoice) {
+            maybeShowButtonHint("voice", "正在收听...")
             try {
                 val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
                 val hasVoiceModel = modelManager.hasVoiceModel()
@@ -4116,7 +4140,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 简繁切换：通过 Rime 原生 OpenCC 转换（候选词和输出均自动转换） */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
-        updateStatus(if (isTraditional) " 已切换为繁体输出" else " 已切换为简体输出")
+        maybeShowButtonHint("traditional", if (isTraditional) "正体输入模式" else "简体输入模式")
         updateTraditionalButton()
         // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
         updateCandidateBar()
@@ -4133,30 +4157,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun updateTraditionalButton() {
-        // 更新按钮视觉状态
+        // 更新按钮视觉状态（不再弹出脉冲动画，仅颜色变化）
         if (::btnTraditional.isInitialized) {
             // 简体模式显示"简"字，正体模式显示"正"字
             btnTraditional.text = if (isTraditional) "正" else "简"
             btnTraditional.setTextColor(if (isTraditional) themeAccent else 0xFF888888.toInt())
             btnTraditional.setBackgroundColor(if (isTraditional) (themeAccent and 0x00FFFFFF) or 0x22000000 else 0x00000000)
-            if (isTraditional && !traditionalGlowing) {
-                traditionalGlowing = true
-                val pulse = android.view.animation.ScaleAnimation(
-                    1.0f, 1.12f, 1.0f, 1.12f,
-                    android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
-                    android.view.animation.ScaleAnimation.RELATIVE_TO_SELF, 0.5f
-                ).apply {
-                    duration = 800
-                    repeatMode = android.view.animation.ScaleAnimation.REVERSE
-                    repeatCount = android.view.animation.ScaleAnimation.INFINITE
-                }
-                btnTraditional.startAnimation(pulse)
-            } else if (!isTraditional && traditionalGlowing) {
-                traditionalGlowing = false
-                btnTraditional.clearAnimation()
-                btnTraditional.backgroundTintList = android.content.res.ColorStateList.valueOf(0x00000000.toInt())
-                btnTraditional.elevation = 0f
-            }
         }
     }
 
