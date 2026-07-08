@@ -639,7 +639,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             98  -> { { toggleUpperCase() } }  // b=大写转换
             122 -> { { sendCtrlKey(KeyEvent.KEYCODE_Z) } }  // z=撤销
             110 -> { { sendCtrlKey(KeyEvent.KEYCODE_Y) } }  // n=Redo（前进）
-            109 -> { { sendControlKey(KeyEvent.KEYCODE_FORWARD_DEL) } }  // m=Delete
+            109 -> { { startForwardDeleteRepeat() } }  // m=Delete（长按连续删除）
             else -> null
         }
     }
@@ -680,6 +680,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         directionalRepeatRunnable?.let { directionalRepeatHandler.removeCallbacks(it) }
         directionalRepeatRunnable = null
         directionalRepeatKeyCode = 0
+    }
+
+    // 全键盘 M 键长按：连续 forward delete（删除光标后的字符）
+    private val forwardDeleteHandler = Handler(Looper.getMainLooper())
+    private var forwardDeleteRunnable: Runnable? = null
+    private var forwardDeleteActive = false
+    private val FORWARD_DELETE_INTERVAL = 80L
+
+    private fun startForwardDeleteRepeat() {
+        if (forwardDeleteActive) return
+        stopForwardDeleteRepeat()
+        forwardDeleteActive = true
+        forwardDeleteRunnable = object : Runnable {
+            override fun run() {
+                if (!forwardDeleteActive) return
+                sendControlKey(KeyEvent.KEYCODE_FORWARD_DEL)
+                forwardDeleteHandler.postDelayed(this, FORWARD_DELETE_INTERVAL)
+            }
+        }
+        // 先删除一次，然后开始连续删除
+        sendControlKey(KeyEvent.KEYCODE_FORWARD_DEL)
+        forwardDeleteHandler.postDelayed(forwardDeleteRunnable!!, FORWARD_DELETE_INTERVAL)
+    }
+
+    private fun stopForwardDeleteRepeat() {
+        forwardDeleteActive = false
+        forwardDeleteRunnable?.let { forwardDeleteHandler.removeCallbacks(it) }
+        forwardDeleteRunnable = null
     }
 
     /** 大写转换：选中的英文→大写，数字→中文大写数字 */
@@ -887,11 +915,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
-        candidateAdapter = CandidateAdapter { index, _ ->
-            if (rimeEngine.hasCandidates || isAssociationMode) {
-                selectCandidateByGlobalIndex(index)
+        candidateAdapter = CandidateAdapter(
+            onItemClick = { index, _ ->
+                if (rimeEngine.hasCandidates || isAssociationMode) {
+                    selectCandidateByGlobalIndex(index)
+                }
+            },
+            onItemLongClick = { _, word ->
+                showCandidateLongPressMenu(word)
+                true
             }
-        }
+        )
         rvCandidates?.adapter = candidateAdapter
         rvCandidates?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
@@ -1884,23 +1918,77 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 简繁转换：繁体模式下候选词显示繁体
         val displayCands = if (isTraditional) allCands.map { toTraditional(it) } else allCands
 
+        // 应用候选偏好（置顶/降频），全局持久化
+        val reordered = CandidatePrefs.reorder(this, displayCands)
+
         // 更新候选词列表
-        candidateAdapter?.updateData(displayCands)
+        candidateAdapter?.updateData(reordered)
         rvCandidates?.scrollToPosition(0)
-        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
+        btnCandidateExpand.visibility = if (reordered.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCandsPanel = rimeEngine.getAllCandidates()
             val displayPanel = if (isTraditional) allCandsPanel.map { toTraditional(it) } else allCandsPanel
+            val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
-            panelAdapter?.addAll(displayPanel)
+            panelAdapter?.addAll(reorderedPanel)
             panelAdapter?.notifyDataSetChanged()
         }
     }
 
 // endregion 候选栏
+
+    // ======================== 候选词长按菜单（置顶/降频） ========================
+    /**
+     * 长按候选词弹出菜单：置顶 / 降频 / 恢复默认。
+     * 用 PopupWindow（IME 环境不能用 AlertDialog）。
+     */
+    private fun showCandidateLongPressMenu(word: String) {
+        if (word.isEmpty()) return
+        val ctx = this
+        val pinned = CandidatePrefs.isPinned(ctx, word)
+        val down = CandidatePrefs.isDowngraded(ctx, word)
+
+        val items = mutableListOf<String>()
+        if (pinned) items.add("取消置顶") else items.add("置顶")
+        if (down) items.add("恢复候选") else items.add("降频")
+        items.add("关闭")
+
+        val listView = android.widget.ListView(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_list_item_1, items)
+            setBackgroundColor(android.graphics.Color.WHITE)
+            dividerHeight = 1
+        }
+        val popup = PopupWindow(listView,
+            (200 * resources.displayMetrics.density).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup.setBackgroundDrawable(
+            ContextCompat.getDrawable(ctx, android.R.drawable.dialog_holo_light_frame)
+                ?: GradientDrawable().apply {
+                    setColor(android.graphics.Color.WHITE)
+                    setStroke(1, 0xFFCCCCCC.toInt())
+                }
+        )
+        listView.setOnItemClickListener { _, _, pos, _ ->
+            when (items[pos]) {
+                "置顶" -> CandidatePrefs.pin(ctx, word)
+                "取消置顶" -> CandidatePrefs.reset(ctx, word)
+                "降频" -> CandidatePrefs.downgrade(ctx, word)
+                "恢复候选" -> CandidatePrefs.reset(ctx, word)
+            }
+            popup.dismiss()
+            updateCandidateBar()
+        }
+        val anchor = rvCandidates ?: candidateBar
+        popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
+        anchor.post {
+            val loc = IntArray(2)
+            anchor.getLocationOnScreen(loc)
+            popup.update(loc[0], loc[1] + anchor.height, -1, -1)
+        }
+    }
 
 // region 录音控制
     // ======================== 识别后端可用性检测 ========================
@@ -7019,7 +7107,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     currentLongPressKey = null
                 }
-                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 1000)
+                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 700)
             }
         }
         // popupCharacters 长按检测（功能键不注册，避免与功能长按冲突）
@@ -7038,7 +7126,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     handleShiftLongPress()
                 }
             }.also {
-                Handler(Looper.getMainLooper()).postDelayed(it, 1000)
+                Handler(Looper.getMainLooper()).postDelayed(it, 700)
             }
         }
         // 剪贴板键长按：-108=粘贴，-109=剪切
@@ -7050,7 +7138,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     currentInputConnection?.performContextMenuAction(android.R.id.paste)
                 }
             }
-            Handler(Looper.getMainLooper()).postDelayed(clipboardPasteRunnable!!, 1000)
+            Handler(Looper.getMainLooper()).postDelayed(clipboardPasteRunnable!!, 700)
         }
         if (primaryCode == -109) {
             clipboardCutRunnable = Runnable {
@@ -7060,7 +7148,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     currentInputConnection?.performContextMenuAction(android.R.id.cut)
                 }
             }
-            Handler(Looper.getMainLooper()).postDelayed(clipboardCutRunnable!!, 1000)
+            Handler(Looper.getMainLooper()).postDelayed(clipboardCutRunnable!!, 700)
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
@@ -7084,7 +7172,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     sendCtrlKey(KeyEvent.KEYCODE_Z)
                 }
             }.also {
-                Handler(Looper.getMainLooper()).postDelayed(it, 1000)
+                Handler(Looper.getMainLooper()).postDelayed(it, 700)
             }
         }
 
@@ -7110,6 +7198,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         cancelSendKeyLongPress()
         // 停止 hjkl 方向键重复
         stopDirectionalRepeat()
+        // 停止 M 键连续删除
+        stopForwardDeleteRepeat()
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
     }
