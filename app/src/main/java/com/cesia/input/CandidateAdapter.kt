@@ -12,8 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
 class CandidateAdapter(
-    private val onItemClick: (Int, String) -> Unit,
-    private val onItemLongClick: ((Int, String) -> Boolean)? = null
+    private val onItemClick: (Int, String) -> Unit
 ) : RecyclerView.Adapter<CandidateAdapter.ViewHolder>() {
 
     private val items = mutableListOf<String>()
@@ -56,13 +55,6 @@ class CandidateAdapter(
         holder.textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
         holder.textView.setTextColor(textColor)
         holder.textView.setOnClickListener { onItemClick(position, text) }
-        if (onItemLongClick != null) {
-            holder.textView.setOnLongClickListener {
-                onItemLongClick.invoke(position, text)
-            }
-        } else {
-            holder.textView.setOnLongClickListener(null)
-        }
     }
 
     override fun getItemCount(): Int = items.size
