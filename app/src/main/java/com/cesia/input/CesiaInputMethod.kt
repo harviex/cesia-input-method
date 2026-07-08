@@ -55,6 +55,9 @@ import com.cesia.input.stats.MagicHistoryManager
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
+import com.cesia.input.t9.T9Composer
+import com.cesia.input.t9.T9ComboAdapter
+import com.cesia.input.t9.CandidatePrefs
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
 
@@ -187,6 +190,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnCandidateExpand: ImageButton
     private var rvCandidates: RecyclerView? = null
     private var candidateAdapter: CandidateAdapter? = null
+
+    // T9 字母组合选择器
+    private var rvT9Combo: RecyclerView? = null
+    private var t9ComboAdapter: T9ComboAdapter? = null
+    // T9 分层状态：锁定拼音前缀 + 剩余数字
+    private var t9LockedPrefix: String = ""
+    private var t9RemainingDigits: String = ""
+    // 当前字母组合选择器的数据（供点击回调使用）
+    private var t9ComboList: List<String> = emptyList()
 
     // 候选词展开面板
     private lateinit var candidatePanel: LinearLayout
@@ -887,17 +899,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
-        candidateAdapter = CandidateAdapter { index, _ ->
-            if (rimeEngine.hasCandidates || isAssociationMode) {
-                selectCandidateByGlobalIndex(index)
+        candidateAdapter = CandidateAdapter(
+            onItemClick = { index, _ ->
+                if (rimeEngine.hasCandidates || isAssociationMode) {
+                    selectCandidateByGlobalIndex(index)
+                }
+            },
+            onItemLongClick = { _, word ->
+                // 长按候选词 → 弹出置顶/降级菜单
+                showCandidateLongPressMenu(word)
+                true
             }
-        }
+        )
         rvCandidates?.adapter = candidateAdapter
         rvCandidates?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
         )
 
-        // T9 字母区已移除（不再显示英文字母和分隔线）
+        // T9 字母组合选择器
+        rvT9Combo = view.findViewById(R.id.rv_t9_combo)
+        t9ComboAdapter = T9ComboAdapter { combo ->
+            onT9ComboSelected(combo)
+        }
+        rvT9Combo?.adapter = t9ComboAdapter
+        rvT9Combo?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+            this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
+        )
 
         // 候选面板视图
         candidatePanel = view.findViewById(R.id.candidate_panel)
@@ -1833,6 +1860,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun updateCandidateBar() {
+        // 同步 T9 字母组合选择器可见性（与键盘模式/输入状态一致）
+        updateT9ComboBar()
         // 语音识别期间不更新候选栏（避免覆盖流式识别状态）
         if (isRecording) return
         
@@ -1884,19 +1913,71 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 简繁转换：繁体模式下候选词显示繁体
         val displayCands = if (isTraditional) allCands.map { toTraditional(it) } else allCands
 
+        // 应用候选偏好（置顶/降级），全局持久化
+        val reordered = CandidatePrefs.reorder(this, displayCands)
+
         // 更新候选词列表
-        candidateAdapter?.updateData(displayCands)
+        candidateAdapter?.updateData(reordered)
         rvCandidates?.scrollToPosition(0)
-        btnCandidateExpand.visibility = if (allCands.size > 4) View.VISIBLE else View.GONE
+        btnCandidateExpand.visibility = if (reordered.size > 4) View.VISIBLE else View.GONE
 
         // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCandsPanel = rimeEngine.getAllCandidates()
             val displayPanel = if (isTraditional) allCandsPanel.map { toTraditional(it) } else allCandsPanel
+            val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
-            panelAdapter?.addAll(displayPanel)
+            panelAdapter?.addAll(reorderedPanel)
             panelAdapter?.notifyDataSetChanged()
+        }
+    }
+
+    // ======================== 候选词长按菜单（置顶/降级） ========================
+    /**
+     * 长按候选词弹出菜单：置顶 / 降级 / 恢复默认。
+     * 用 PopupWindow（IME 环境不能用 AlertDialog）。
+     */
+    private fun showCandidateLongPressMenu(word: String) {
+        if (word.isEmpty()) return
+        val ctx = this
+        val pinned = CandidatePrefs.isPinned(ctx, word)
+        val down = CandidatePrefs.isDowngraded(ctx, word)
+
+        val items = mutableListOf<String>()
+        if (pinned) items.add("取消置顶") else items.add("置顶")
+        if (down) items.add("恢复候选") else items.add("降级")
+        items.add("关闭")
+
+        val listView = android.widget.ListView(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_list_item_1, items)
+            setBackgroundColor(android.graphics.Color.WHITE)
+            dividerHeight = 1
+        }
+        val popup = PopupWindow(listView, (200 * resources.displayMetrics.density).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup.setBackgroundDrawable(
+            ContextCompat.getDrawable(ctx, android.R.drawable.dialog_holo_light_frame) ?:
+            GradientDrawable().apply { setColor(android.graphics.Color.WHITE); setStroke(1, 0xFFCCCCCC.toInt()) }
+        )
+        listView.setOnItemClickListener { _, _, pos, _ ->
+            when (items[pos]) {
+                "置顶" -> CandidatePrefs.pin(ctx, word)
+                "取消置顶" -> CandidatePrefs.reset(ctx, word)
+                "降级" -> CandidatePrefs.downgrade(ctx, word)
+                "恢复候选" -> CandidatePrefs.reset(ctx, word)
+            }
+            popup.dismiss()
+            // 重新应用偏好并刷新候选栏
+            updateCandidateBar()
+        }
+        // 锚定到候选栏
+        val anchor = rvCandidates ?: candidateBar
+        popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
+        anchor.post {
+            val loc = IntArray(2)
+            anchor.getLocationOnScreen(loc)
+            popup.update(loc[0], loc[1] + anchor.height, -1, -1)
         }
     }
 
@@ -5268,9 +5349,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun resetT9State() {
         t9InputBuffer.clear()
+        t9LockedPrefix = ""
+        t9RemainingDigits = ""
         rimeEngine.clear()
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
+        updateT9ComboBar()
         updateCandidateBar()
         updateStatus(statusIdleText)
     }
@@ -5423,6 +5507,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 主字符模式：T9拼音输入
             val t9Digit = mainToSub[primaryCode]
             if (t9Digit != null) {
+                // 已锁定字母前缀时，再按数字 = 解除锁定并重新开始 t9 输入
+                if (t9LockedPrefix.isNotEmpty()) {
+                    t9LockedPrefix = ""
+                }
                 t9InputBuffer.append(t9Digit)
                 processT9Input()
             } else {
@@ -5454,18 +5542,86 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         val digits = t9InputBuffer.toString()
-        if (digits.isNotEmpty()) {
-            // 重建session，输入完整数字串
-            rimeEngine.clear()
-            rimeEngine.createSession()
-            for (d in digits) {
-                rimeEngine.processKey(d.toString())
-            }
+        if (digits.isEmpty()) {
+            t9LockedPrefix = ""
+            updateT9ComboBar()
+            updateCandidateBar()
+            return
         }
+        // 常规：整串数字喂 t9_pinyin（Rime 内部简拼+词频+拼音剪枝出词）
+        rimeEngine.selectSchema("t9_pinyin")
+        rimeEngine.clear()
+        rimeEngine.createSession()
+        for (d in digits) {
+            rimeEngine.processKey(d.toString())
+        }
+        updateT9ComboBar()
         updateCandidateBar()
     }
 
+    /**
+     * 点选字母组合 → 锁定为拼音前缀，切 pinyin schema 查「该前缀开头的词组」。
+     * 之后按回车 = 上屏该字母（免去切全键盘）。
+     */
+    private fun onT9ComboSelected(combo: String) {
+        if (combo.isEmpty()) return
+        t9LockedPrefix = combo
+        // 锁定后清空数字 buffer（已转为字母前缀查询），选择器只显示锁定项
+        t9InputBuffer.clear()
+        // 用 pinyin schema 查以 combo 开头的词（enable_completion 前缀匹配）
+        rimeEngine.selectSchema("pinyin")
+        rimeEngine.clear()
+        rimeEngine.createSession()
+        for (c in combo) {
+            rimeEngine.processKey(c.toString())
+        }
+        updateT9ComboBar()
+        updateCandidateBar()
+    }
+
+    /** 选中字母前缀后，按回车 = 直接上屏该字母串 */
+    private fun commitT9LockedLetter(): Boolean {
+        if (t9LockedPrefix.isNotEmpty()) {
+            currentInputConnection?.commitText(t9LockedPrefix, 1)
+            resetT9State()
+            return true
+        }
+        return false
+    }
+
+    /** 更新字母组合选择器（T9 模式显示合法拼音组合） */
+    private fun updateT9ComboBar() {
+        val showCombo = keyboardMode == KeyboardMode.NUMBER
+        if (!showCombo) {
+            rvT9Combo?.visibility = View.GONE
+            candidateBar.findViewById<View>(R.id.divider_t9)?.visibility = View.GONE
+            return
+        }
+        // 生成组合：有锁定前缀时展示"前缀+后续数字"的下一层，否则用当前数字 buffer
+        val combos = if (t9LockedPrefix.isNotEmpty()) {
+            if (t9InputBuffer.isNotEmpty()) T9Composer.nextLayer(t9LockedPrefix, t9InputBuffer.toString())
+            else listOf(t9LockedPrefix)
+        } else {
+            T9Composer.nextLayer("", t9InputBuffer.toString())
+        }
+        t9ComboList = combos
+        if (combos.isEmpty()) {
+            rvT9Combo?.visibility = View.GONE
+            candidateBar.findViewById<View>(R.id.divider_t9)?.visibility = View.GONE
+        } else {
+            t9ComboAdapter?.pinnedPrefix = t9LockedPrefix
+            t9ComboAdapter?.updateData(combos)
+            rvT9Combo?.visibility = View.VISIBLE
+            candidateBar.findViewById<View>(R.id.divider_t9)?.visibility = View.VISIBLE
+        }
+    }
+
     private fun commitT9AndClear() {
+        // 已锁定字母前缀时，回车 = 直接上屏该字母（免去切全键盘）
+        if (t9LockedPrefix.isNotEmpty()) {
+            commitT9LockedLetter()
+            return
+        }
         if (t9InputBuffer.isNotEmpty()) {
             if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                 val selected = rimeEngine.selectCandidate(0)
@@ -6825,6 +6981,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 if (keyboardMode == KeyboardMode.NUMBER) {
                     // 数字键盘退格
+                    if (t9LockedPrefix.isNotEmpty()) {
+                        // 已锁定字母前缀时，退格 = 解除锁定，回到常规数字查询
+                        t9LockedPrefix = ""
+                        rimeEngine.selectSchema("t9_pinyin")
+                        processT9Input()
+                        return
+                    }
                     if (!t9ShiftTemp && t9InputBuffer.isNotEmpty()) {
                         // 先告诉 Rime 删除一个按键
                         rimeEngine.processKey("BackSpace")

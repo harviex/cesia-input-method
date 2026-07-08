@@ -1,8 +1,7 @@
-package com.cesia.input
+package com.cesia.input.t9
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -11,14 +10,17 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
-class CandidateAdapter(
-    private val onItemClick: (Int, String) -> Unit,
-    private val onItemLongClick: ((Int, String) -> Boolean)? = null
-) : RecyclerView.Adapter<CandidateAdapter.ViewHolder>() {
+/**
+ * T9 字母组合选择器适配器：横向显示合法拼音组合 chip。
+ * 点击某组合 = 锁定该拼音前缀（回调 onSelect）。
+ */
+class T9ComboAdapter(
+    private val onSelect: (String) -> Unit
+) : RecyclerView.Adapter<T9ComboAdapter.ViewHolder>() {
 
     private val items = mutableListOf<String>()
-    var textScaleFactor: Float = 1f
-    var textColor: Int = Color.parseColor("#333333")
+    var textColor: Int = Color.parseColor("#4488FF")
+    var pinnedPrefix: String = ""
 
     inner class ViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
 
@@ -30,18 +32,14 @@ class CandidateAdapter(
                 RecyclerView.LayoutParams.MATCH_PARENT
             )
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(16, 0, 16, 0)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
-            setTextColor(textColor)
-            // 使用系统 selectableItemBackground，通过 theme resolve 避免 Resources$NotFoundException
+            setPadding(12, 0, 12, 0)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             val typedValue = TypedValue()
             val resolved = ctx.theme.resolveAttribute(
                 android.R.attr.selectableItemBackground, typedValue, true
             )
             if (resolved) {
                 background = ContextCompat.getDrawable(ctx, typedValue.resourceId)
-            } else {
-                setBackgroundColor(Color.TRANSPARENT)
             }
             isSingleLine = true
             isClickable = true
@@ -53,16 +51,10 @@ class CandidateAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val text = items[position]
         holder.textView.text = text
-        holder.textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
         holder.textView.setTextColor(textColor)
-        holder.textView.setOnClickListener { onItemClick(position, text) }
-        if (onItemLongClick != null) {
-            holder.textView.setOnLongClickListener {
-                onItemLongClick.invoke(position, text)
-            }
-        } else {
-            holder.textView.setOnLongClickListener(null)
-        }
+        // 已锁定前缀高亮（加粗）
+        holder.textView.paint.isFakeBoldText = text == pinnedPrefix
+        holder.textView.setOnClickListener { onSelect(text) }
     }
 
     override fun getItemCount(): Int = items.size
