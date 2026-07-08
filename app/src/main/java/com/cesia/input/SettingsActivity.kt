@@ -1925,24 +1925,7 @@ class SettingsActivity : AppCompatActivity() {
     // ======================== 新手引导横幅 ========================
 
     private fun checkFirstLaunchOnboarding() {
-        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        val hasCompletedOnboarding = prefs.getBoolean("onboarding_completed", false)
-
-        // 新手引导横幅常驻显示（既是首次引导，也是随时可重新查看的入口）
-        viewOnboardingBanner?.visibility = View.VISIBLE
-        // 已完成的用户横幅文案改为"重新查看新手引导"
-        val bannerTitle = viewOnboardingBanner?.findViewById<TextView>(R.id.tv_banner_title)
-        val bannerSubtitle = viewOnboardingBanner?.findViewById<TextView>(R.id.tv_banner_subtitle)
-        val bannerBtn = viewOnboardingBanner?.findViewById<TextView>(R.id.btnStartOnboarding)
-        if (hasCompletedOnboarding) {
-            bannerTitle?.text = "👋 随时查看新手引导"
-            bannerSubtitle?.text = "点击重新浏览使用向导：词库下载、云端配置、权限授权"
-            bannerBtn?.text = "重新查看"
-        }
-
-        viewOnboardingBanner?.setOnClickListener {
-            startActivity(Intent(this, OnboardingActivity::class.java))
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-        }
+        // 新手引导已移除，隐藏横幅
+        viewOnboardingBanner?.visibility = View.GONE
     }
 }

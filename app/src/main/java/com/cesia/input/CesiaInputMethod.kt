@@ -1316,7 +1316,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 btnTraditional.setTextColor(0xFF888888.toInt())
                 btnTraditional.setBackgroundColor(0x00000000)
             }
+            btnTraditional.translationZ = 4f // 功能按钮层级
         }
+
+        // 功能按钮层级（智能写作、修改、清退、发送）
+        btnMagic?.translationZ = 4f
+        btnClipboard?.translationZ = 4f
+        btnDelete?.translationZ = 4f
+        btnSend?.translationZ = 4f
 
         // 云/本地切换按钮
         if (::btnCloud.isInitialized) {
@@ -7774,15 +7781,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         micButton?.let { btn ->
             if (isVoiceLocked) {
                 // 锁定状态：高亮显示 + 脉冲发光动画
-                btn.background = makeKeyBgDrawable(themeAccent) // 青色背景
-                btn.setTextColor(0xFFFFFFFF.toInt()) // 白色文字
+                btn.background = makeKeyBgDrawable(themeAccent)
+                btn.setTextColor(0xFFFFFFFF.toInt())
                 btn.elevation = 6f
+                btn.translationZ = 12f // 置于所有层之上
                 startMicButtonGlow()
             } else {
-                // 正常状态
-                btn.setBackgroundColor(0x00000000.toInt()) // 透明背景
-                btn.setTextColor(0xFF555555.toInt()) // 灰色文字
-                btn.elevation = 0f
+                // 正常状态：恢复主题背景 + 最高层级
+                btn.background = makeKeyBgDrawable(currentKeyBg)
+                btn.setTextColor(unifiedTextColor)
+                btn.elevation = 4f
+                btn.translationZ = 8f // 在功能键层之上
                 stopMicButtonGlow()
             }
         }
