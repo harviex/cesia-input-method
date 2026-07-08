@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 
 class CandidateAdapter(
     private val onItemClick: (Int, String) -> Unit,
-    private val onItemLongClick: ((Int, String) -> Boolean)? = null
+    private val onItemLongClick: ((view: android.view.View, index: Int, word: String) -> Boolean)? = null
 ) : RecyclerView.Adapter<CandidateAdapter.ViewHolder>() {
 
     private val items = mutableListOf<String>()
@@ -57,7 +57,9 @@ class CandidateAdapter(
         holder.textView.setTextColor(textColor)
         holder.textView.setOnClickListener { onItemClick(position, text) }
         if (onItemLongClick != null) {
-            holder.textView.setOnLongClickListener { onItemLongClick.invoke(position, text) }
+            holder.textView.setOnLongClickListener {
+                onItemLongClick.invoke(holder.textView, position, text)
+            }
         } else {
             holder.textView.setOnLongClickListener(null)
         }

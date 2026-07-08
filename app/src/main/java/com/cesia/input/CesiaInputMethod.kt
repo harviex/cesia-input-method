@@ -921,8 +921,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     selectCandidateByGlobalIndex(index)
                 }
             },
-            onItemLongClick = { _, word ->
-                showCandidateLongPressMenu(word)
+            onItemLongClick = { view, _, word ->
+                showCandidateLongPressMenu(word, view)
                 true
             }
         )
@@ -1270,6 +1270,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return 0xFF000000.toInt() or (c shl 16) or (c shl 8) or c
     }
 
+    // 当前按键灰度背景色（供触摸回调恢复使用，确保暗黑/灰度状态下一致）
+    private var currentKeyBg: Int = 0
+
+    /** 生成与键盘按键同款的圆角灰底+描边背景 drawable */
+    private fun makeKeyBgDrawable(keyBgColor: Int): android.graphics.drawable.GradientDrawable {
+        val keyGrayVal = (keyBgColor and 0xFF)
+        val strokeGray = (keyGrayVal - 16).coerceIn(0, 255)
+        val strokeColor = 0xFF000000.toInt() or (strokeGray shl 16) or (strokeGray shl 8) or strokeGray
+        return android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            setColor(keyBgColor)
+            cornerRadius = 6f * resources.displayMetrics.density
+            setStroke((1 * resources.displayMetrics.density).toInt(), strokeColor)
+        }
+    }
+
     /** 实时应用主题色 + 背景灰度 + 按键灰度到所有UI元素 */
     private fun applyThemeColors() {
         // ① 背景灰度
@@ -1310,18 +1326,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // ③ 按键灰度 —— 底栏按钮、键盘按键背景
         val keyBgRaw = if (isDarkTheme) 0x2A else themeKeyGrayBase
         val keyBg = colorGray(keyBgRaw)
+        currentKeyBg = keyBg
         val keyBgList = android.content.res.ColorStateList.valueOf(keyBg)
-        // 底栏按钮默认背景（仅非高亮状态才设按键灰度）
+        // 底栏按钮默认背景（与键盘按键同款圆角灰底+描边，保持风格统一）
+        val keyBgDrawable = makeKeyBgDrawable(keyBg)
         if (!magicIsWaitingForVoice && !isRecording) {
-            btnMagic.setBackgroundColor(keyBg)
+            btnMagic.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         }
         if (!magicBookLongPressTriggered) {
-            btnClipboard.setBackgroundColor(keyBg)
+            btnClipboard.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         }
         if (!sendKeyLongPressTriggered) {
-            btnSend.setBackgroundColor(keyBg)
+            btnSend.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         }
-        btnDelete.setBackgroundColor(keyBg)
+        btnDelete.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         // 键盘按键背景（动态替换 drawable）
         if (::keyboardView.isInitialized) {
             keyboardView.updateKeyBackground(keyBg)
@@ -1378,9 +1396,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
         }
 
-        // 底栏按钮图标颜色（深色模式用主题色，避免过亮）
-        val iconColor = if (isDarkTheme) themeAccent else textColor
-        btnMagic.setColorFilter(if (!magicIsWaitingForVoice && !isRecording) themeAccent else iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
+        // 底栏按钮图标颜色：无色描边，跟随背景灰度的自动对比色（中性外边框）
+        val iconColor = unifiedTextColor
+        btnMagic.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnClipboard.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnSend.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
         btnDelete.setColorFilter(iconColor, android.graphics.PorterDuff.Mode.SRC_ATOP)
@@ -1499,7 +1517,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val initialAccentList = android.content.res.ColorStateList.valueOf(themeAccent)
         seekHue.progressTintList = initialAccentList
         seekHue.thumbTintList = initialAccentList
-        tvHue.setBackgroundColor(themeAccent)
+        tvHue.background = makeKeyBgDrawable(themeAccent)
 
         // 初始化明暗模式按钮状态
         val currentThemeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -1567,7 +1585,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
                 accentHue = progress.toFloat()
                 themeAccent = hslToColor(accentHue, defaultAccentHsl[1], defaultAccentHsl[2])
-                tvHue.setBackgroundColor(themeAccent)
+                tvHue.background = makeKeyBgDrawable(themeAccent)
                 // SeekBar 自身的 tint 也跟主题色走
                 val accentStateList = android.content.res.ColorStateList.valueOf(themeAccent)
                 seekHue.progressTintList = accentStateList
@@ -1945,7 +1963,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 长按候选词弹出菜单：置顶 / 降频 / 恢复默认。
      * 用 PopupWindow（IME 环境不能用 AlertDialog）。
      */
-    private fun showCandidateLongPressMenu(word: String) {
+    private fun showCandidateLongPressMenu(word: String, anchorView: android.view.View? = null) {
         if (word.isEmpty()) return
         val ctx = this
         val pinned = CandidatePrefs.isPinned(ctx, word)
@@ -1956,12 +1974,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (down) items.add("恢复候选") else items.add("降频")
         items.add("关闭")
 
-        val listView = android.widget.ListView(ctx).apply {
-            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_list_item_1, items)
-            setBackgroundColor(android.graphics.Color.WHITE)
-            dividerHeight = 1
-        }
-        val popup = PopupWindow(listView,
+        val menuView = layoutInflater.inflate(R.layout.popup_candidate_menu, null)
+        val tvTitle = menuView.findViewById<TextView>(R.id.tv_menu_title)
+        val btnClose = menuView.findViewById<ImageButton>(R.id.btn_menu_close)
+        val llItems = menuView.findViewById<LinearLayout>(R.id.ll_menu_items)
+        tvTitle.text = "候选：$word"
+
+        val popup = PopupWindow(menuView,
             (200 * resources.displayMetrics.density).toInt(),
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(
@@ -1971,8 +1990,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     setStroke(1, 0xFFCCCCCC.toInt())
                 }
         )
-        listView.setOnItemClickListener { _, _, pos, _ ->
-            when (items[pos]) {
+        popup.elevation = 8f
+
+        fun doAction(action: String) {
+            when (action) {
                 "置顶" -> CandidatePrefs.pin(ctx, word)
                 "取消置顶" -> CandidatePrefs.reset(ctx, word)
                 "降频" -> CandidatePrefs.downgrade(ctx, word)
@@ -1981,12 +2002,42 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             popup.dismiss()
             updateCandidateBar()
         }
-        val anchor = rvCandidates ?: candidateBar
+
+        for (item in items) {
+            val row = TextView(ctx).apply {
+                text = item
+                textSize = 14f
+                setTextColor(0xFF333333.toInt())
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((16 * resources.displayMetrics.density).toInt(), 0, (16 * resources.displayMetrics.density).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    (44 * resources.displayMetrics.density).toInt()
+                )
+                isClickable = true
+                isFocusable = true
+                val typedValue = TypedValue()
+                if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, typedValue, true)) {
+                    background = ContextCompat.getDrawable(ctx, typedValue.resourceId)
+                }
+                setOnClickListener { doAction(item) }
+            }
+            llItems.addView(row)
+        }
+        btnClose.setOnClickListener { popup.dismiss() }
+
+        // 定位到被长按候选词的附近（而非输入法底部）
+        val anchor = anchorView ?: (rvCandidates ?: candidateBar)
         popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
         anchor.post {
             val loc = IntArray(2)
             anchor.getLocationOnScreen(loc)
-            popup.update(loc[0], loc[1] + anchor.height, -1, -1)
+            // 若候选词下方空间不足，显示在其上方
+            val screenH = resources.displayMetrics.heightPixels
+            val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 50)
+            val belowY = loc[1] + anchor.height
+            val y = if (belowY + menuH > screenH) (loc[1] - menuH) else belowY
+            popup.update(loc[0], y, -1, -1)
         }
     }
 
@@ -2070,7 +2121,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     deleteLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 立即高亮清空按钮
-                    btnDelete.setBackgroundColor(themeAccent)
+                    btnDelete.background = makeKeyBgDrawable(themeAccent)
                     btnDelete.elevation = 6f
                     startDeleteButtonGlow()
                     deleteButtonGlowRunnable = Runnable {
@@ -2161,7 +2212,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookLongPressTriggered = false
                     dismissAllPopups() // 长按互斥：关闭其他弹窗
                     // 开始发光（与魔法书按钮一致：青色背景+白色图标）
-                    btnMagic.setBackgroundColor(themeAccent)
+                    btnMagic.background = makeKeyBgDrawable(themeAccent)
                     btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
                     startMagicButtonGlow()
                     // 延迟触发长按弹窗
@@ -2181,7 +2232,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     if (!magicBookLongPressTriggered) {
                         // 短按：停止发光，执行第一项命令
                         stopMagicButtonGlow()
-                        btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                        btnMagic.background = makeKeyBgDrawable(currentKeyBg)
                         btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                         v.performClick()
                     }
@@ -2192,7 +2243,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     magicBookRunnable?.let { magicBookHandler.removeCallbacks(it) }
                     magicBookRunnable = null
                     stopMagicButtonGlow()
-                    btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                    btnMagic.background = makeKeyBgDrawable(currentKeyBg)
                     btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                     true
                 }
@@ -2370,7 +2421,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 高亮按钮表示正在录音 + 脉冲发光动画
         magicIsWaitingForVoice = true
         magicModeGlowing = true
-        btnMagic.setBackgroundColor(themeAccent)
+        btnMagic.background = makeKeyBgDrawable(themeAccent)
         btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
         startMagicButtonGlow()
 
@@ -2474,7 +2525,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         magicModeGlowing = false
         stopMagicButtonGlow()
         try {
-            btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+            btnMagic.background = makeKeyBgDrawable(currentKeyBg)
             btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         } catch (_: Exception) {}
     }
@@ -3261,7 +3312,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.setOnDismissListener {
                 smartWritingPopup = null
                 stopMagicButtonGlow()
-                btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                btnMagic.background = makeKeyBgDrawable(currentKeyBg)
                 btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             }
 
@@ -3731,7 +3782,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         themePopup = null
         // 清除所有按钮高亮状态
         stopMagicButtonGlow()
-        btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnMagic.background = makeKeyBgDrawable(currentKeyBg)
         btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         stopMagicBookGlow()
         // 退出剪贴板新增模式
@@ -3932,7 +3983,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 item.findViewById<TextView>(R.id.tv_style_name).text = name
                 item.findViewById<TextView>(R.id.tv_style_desc).text = desc
                 if (name == aiReplyStyle) {
-                    btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+                    btnMagic.background = makeKeyBgDrawable(currentKeyBg)
                     btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
                 }
                 item.setOnClickListener {
@@ -5713,7 +5764,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun startSendKeyLongPress() {
         cancelSendKeyLongPress()
         // 立即高亮发送按钮
-        btnSend.setBackgroundColor(themeAccent)
+        btnSend.background = makeKeyBgDrawable(themeAccent)
         startSendButtonGlow()
         sendKeyRunnable = Runnable {
             sendKeyLongPressTriggered = true
@@ -5746,13 +5797,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopSendButtonGlow() {
         sendButtonGlowing = false
         btnSend.clearAnimation()
-        btnSend.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnSend.background = makeKeyBgDrawable(currentKeyBg)
     }
 
     private fun startMagicBookLongPress() {
         cancelMagicBookLongPress()
         // 立即高亮魔法书按钮
-        btnClipboard.setBackgroundColor(themeAccent)
+        btnClipboard.background = makeKeyBgDrawable(themeAccent)
         startMagicBookGlow()
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
@@ -5780,7 +5831,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopMagicBookGlow() {
         magicBookGlowing = false
         btnClipboard.clearAnimation()
-        btnClipboard.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnClipboard.background = makeKeyBgDrawable(currentKeyBg)
     }
 
     // ====== 语音按钮发光（锁定模式） ======
@@ -5821,7 +5872,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun stopDeleteButtonGlow() {
         deleteButtonGlowing = false
         btnDelete.clearAnimation()
-        btnDelete.setBackgroundColor(colorGray(themeKeyGrayBase))
+        btnDelete.background = makeKeyBgDrawable(currentKeyBg)
         btnDelete.elevation = 0f
     }
 
@@ -7286,7 +7337,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             btnTheme?.visibility = View.VISIBLE
 
             // 重置星星按钮状态（防止重启后残留高亮）
-            btnMagic.setBackgroundColor(colorGray(themeKeyGrayBase))
+            btnMagic.background = makeKeyBgDrawable(currentKeyBg)
             btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             btnMagic.clearAnimation()
         } catch (e: Throwable) {
@@ -7696,7 +7747,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         micButton?.let { btn ->
             if (isVoiceLocked) {
                 // 锁定状态：高亮显示 + 脉冲发光动画
-                btn.setBackgroundColor(themeAccent) // 青色背景
+                btn.background = makeKeyBgDrawable(themeAccent) // 青色背景
                 btn.setTextColor(0xFFFFFFFF.toInt()) // 白色文字
                 btn.elevation = 6f
                 startMicButtonGlow()
