@@ -196,6 +196,7 @@ class SettingsActivity : AppCompatActivity() {
         // 语音与 AI 本地化设置 helper（仅用于模型扫描/状态，按钮绑定已移到本 Activity）
         aiSettingsHelper = VoiceAISettingsHelper(this, prefs)
         aiSettingsHelper.bindViews(null, null)
+        modelManager = com.cesia.input.model.ModelManager(this)
         downloadManager = ModelDownloadManager(this)
 
         statsManager = PolishStatsManager(this)
