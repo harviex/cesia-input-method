@@ -1825,6 +1825,17 @@ class SettingsActivity : AppCompatActivity() {
                 applyAccentToViewTree(view.getChildAt(i), accent)
             }
         }
+        // 状态圆点：动态圆形drawable染色（匹配原尺寸和形状）
+        if (view.id == R.id.v_status_dot) {
+            try {
+                val dotDrawable = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(accent)
+                    setSize((6 * resources.displayMetrics.density).toInt(), (6 * resources.displayMetrics.density).toInt())
+                }
+                view.background = dotDrawable
+            } catch (_: Exception) {}
+        }
         val defaultColor = (view as? android.widget.TextView)?.textColors?.defaultColor ?: 0
         if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
         val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
@@ -1849,6 +1860,34 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 if (view.buttonTintList?.defaultColor == tiffany) {
                     view.buttonTintList = tintList
+                }
+            } catch (_: Exception) {}
+        }
+        // Handle ImageView drawable tint
+        if (view is android.widget.ImageView) {
+            try {
+                val drawable = view.drawable
+                if (drawable != null && (drawable.constantState?.toString()?.contains("81D8D0") == true)) {
+                    drawable.setTint(accent)
+                    view.setImageDrawable(drawable)
+                }
+            } catch (_: Exception) {}
+        }
+        // Handle simple View background drawable tint (non-tintable drawables)
+        if (view !is android.widget.ProgressBar && view !is android.widget.TextView && view !is android.widget.RadioButton && view !is com.google.android.material.button.MaterialButton && view !is com.google.android.material.textfield.TextInputLayout) {
+            try {
+                val bg = view.background
+                if (bg != null && bg.constantState?.toString()?.contains("81D8D0") == true) {
+                    bg.setTint(accent)
+                    view.background = bg
+                }
+            } catch (_: Exception) {}
+        }
+        // Handle ProgressBar progressTint
+        if (view is android.widget.ProgressBar) {
+            try {
+                if (view.progressTintList?.defaultColor == tiffany) {
+                    view.progressTintList = tintList
                 }
             } catch (_: Exception) {}
         }

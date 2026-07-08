@@ -589,7 +589,7 @@
                     android:progress="0"
                     android:layout_marginBottom="4dp"
                     android:visibility="gone"
-                    android:progressTint="#81D8D0"
+                    android:progressTint="?attr/colorPrimary"
                     android:progressBackgroundTint="#E0F2F1" />
 
                 <ProgressBar
@@ -601,7 +601,7 @@
                     android:progress="0"
                     android:layout_marginBottom="8dp"
                     android:visibility="gone"
-                    android:progressTint="#81D8D0"
+                    android:progressTint="?attr/colorPrimary"
                     android:progressBackgroundTint="#E0F2F1" />
 
                 <!-- ═══════════ 分隔 ═══════════ -->
@@ -868,7 +868,7 @@
             android:progress="0"
             android:layout_marginBottom="4dp"
             android:visibility="gone"
-            android:progressTint="#81D8D0" />
+            android:progressTint="?attr/colorPrimary" />
 
         <TextView
             android:id="@+id/tv_dict_download_progress"
