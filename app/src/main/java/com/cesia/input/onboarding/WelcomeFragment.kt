@@ -12,8 +12,7 @@ class WelcomeFragment : Fragment(R.layout.fragment_welcome) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val btnStart = view.findViewById<Button>(R.id.btnStart)
-        btnStart.setOnClickListener {
+        view.findViewById<View>(R.id.btnStart).setOnClickListener {
             (activity as? OnboardingActivity)?.goNext()
         }
     }
