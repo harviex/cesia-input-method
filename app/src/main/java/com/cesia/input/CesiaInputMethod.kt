@@ -2026,17 +2026,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         btnClose.setOnClickListener { popup.dismiss() }
 
-        // 定位到被长按候选词的附近（而非输入法底部）
-        val anchor = anchorView ?: (rvCandidates ?: candidateBar)
+        // 定位到候选栏附近（紧邻，不跳动）
+        val anchor = rvCandidates ?: candidateBar
         popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
         anchor.post {
             val loc = IntArray(2)
             anchor.getLocationOnScreen(loc)
-            // 若候选词下方空间不足，显示在其上方
+            // 菜单紧邻候选栏下方（或上方若空间不足）
             val screenH = resources.displayMetrics.heightPixels
-            val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 50)
+            val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 60)
             val belowY = loc[1] + anchor.height
-            val y = if (belowY + menuH > screenH) (loc[1] - menuH) else belowY
+            val y = if (belowY + menuH > screenH - 100) loc[1] - menuH - 8 else belowY + 2
             popup.update(loc[0], y, -1, -1)
         }
     }
@@ -7416,6 +7416,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         directionalRepeatRunnable = null
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
+        // 清除联想模式和候选，恢复初始状态
+        if (isAssociationMode || rimeEngine.isComposing) {
+            isAssociationMode = false
+            associationCandidates = emptyList()
+            rimeEngine.clear()
+            updateCandidateBar()
+            updateStatus(statusIdleText)
+        }
         if (finishingInput && isRecording) stopRecording()
     }
 

@@ -1581,7 +1581,7 @@ class SettingsActivity : AppCompatActivity() {
             holder.tvName.text = "${model.name} ($ctxStr)"
             holder.tvProvider.text = model.provider
             val isSelected = model.id == selectedModelId
-            holder.itemView.setBackgroundColor(if (isSelected) 0xFFE0F7FA.toInt() else 0xFFFFFFFF.toInt())
+            holder.itemView.setBackgroundColor(if (isSelected) accentColor else 0xFFFFFFFF.toInt())
             holder.itemView.setOnClickListener { onModelClick(model) }
         }
 
