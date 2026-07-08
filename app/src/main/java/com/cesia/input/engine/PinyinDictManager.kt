@@ -222,6 +222,17 @@ class PinyinDictManager(private val context: Context) {
 
     fun hasDownloadedDict(): Boolean = prefs.getBoolean(PREF_DICT_DOWNLOADED, false)
 
+    /** 清除已下载状态标记（卸载词库时调用） */
+    fun clearDownloadedState() {
+        prefs.edit()
+            .putBoolean(PREF_DICT_DOWNLOADED, false)
+            .putLong(PREF_LAST_SYNC, 0L)
+            .putLong(PREF_DICT_SIZE, 0L)
+            .putInt(PREF_DICT_FILE_COUNT, 0)
+            .putInt(PREF_DICT_ENTRY_COUNT, 0)
+            .apply()
+    }
+
     fun getDictFilePath(): String? {
         val rimeDir = getRimeDir()
         return if (rimeDir.exists() && rimeDir.listFiles()?.isNotEmpty() == true) {

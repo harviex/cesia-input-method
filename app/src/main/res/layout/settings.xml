@@ -355,56 +355,40 @@
                     android:textColor="#999999"
                     android:layout_marginBottom="8dp" />
 
-                <!-- 新下载按钮（普通 Button，按钮即进度条） -->
-                <Button
-                    android:id="@+id/btn_install_voice"
+                <!-- 下载按钮区域：两个按钮并排一行 -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="安装语音文字输入套件"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:gravity="center_vertical"
-                    android:paddingStart="12dp"
-                    android:background="#81D8D0"
-                    android:layout_marginBottom="6dp" />
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:weightSum="2"
+                    android:layout_marginBottom="8dp">
 
-                <Button
-                    android:id="@+id/btn_install_ai"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="选装本地AI模型(1.2G)"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:gravity="center_vertical"
-                    android:paddingStart="12dp"
-                    android:background="#81D8D0"
-                    android:layout_marginBottom="8dp" />
+                    <Button
+                        android:id="@+id/btn_install_voice"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="安装语音文字输入套件"
+                        android:textSize="11sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="#81D8D0"
+                        android:layout_marginEnd="4dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_download_voice"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="安装语音文字输入套件"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    app:backgroundTint="#81D8D0"
-                    app:cornerRadius="8dp"
-                    android:layout_marginBottom="6dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_download_ai"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="选装本地AI模型(1.2G)"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    app:backgroundTint="#81D8D0"
-                    app:cornerRadius="8dp"
-                    android:layout_marginBottom="8dp" />
+                    <Button
+                        android:id="@+id/btn_install_ai"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="选装本地AI模型(1.2G)"
+                        android:textSize="11sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:background="#81D8D0"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
 
                 <!-- ═══════════ 分隔 ═══════════ -->
                 <View
