@@ -75,6 +75,11 @@ translator:
   enable_user_dict: true
   comment_format:
     - xform/.*//
+  algebra:
+    # 简拼：让单数字键（对应字母）能匹配该字母开头的词
+    # 例如按 2(abc) → 匹配 a/b/c 开头的所有词（不是/比如/把/八...）
+    - abbrev/^([a-z]).+$/$1/           # 单字母简拼：bai→b, ai→a
+    - abbrev/^([zcs]h).+$/$1/          # 双字母简拼：zh→z, ch→c, sh→s
 
 # 标点
 punctuator:
