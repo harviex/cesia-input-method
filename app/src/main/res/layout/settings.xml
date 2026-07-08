@@ -355,7 +355,7 @@
                     android:textColor="#999999"
                     android:layout_marginBottom="8dp" />
 
-                <!-- 下载按钮区域：两个按钮并排一行 -->
+                <!-- 下载按钮区域：两个按钮并排一行（参考新闻源管理按钮外观） -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -363,7 +363,7 @@
                     android:weightSum="2"
                     android:layout_marginBottom="8dp">
 
-                    <Button
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_install_voice"
                         android:layout_width="0dp"
                         android:layout_height="44dp"
@@ -373,10 +373,11 @@
                         android:textColor="#FFFFFF"
                         android:textStyle="bold"
                         android:gravity="center"
-                        android:background="#81D8D0"
+                        app:backgroundTint="#81D8D0"
+                        app:cornerRadius="10dp"
                         android:layout_marginEnd="4dp" />
 
-                    <Button
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_install_ai"
                         android:layout_width="0dp"
                         android:layout_height="44dp"
@@ -386,7 +387,8 @@
                         android:textColor="#FFFFFF"
                         android:textStyle="bold"
                         android:gravity="center"
-                        android:background="#81D8D0"
+                        app:backgroundTint="#81D8D0"
+                        app:cornerRadius="10dp"
                         android:layout_marginStart="4dp" />
                 </LinearLayout>
 
@@ -815,75 +817,6 @@
                     android:background="#E0E0E0"
                     android:layout_marginBottom="12dp" />
 
-                <!-- ═══════════ 词库 ═══════════ -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="词库"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#333333"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:id="@+id/tv_dict_info"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="加载中..."
-            android:textSize="11sp"
-            android:textColor="#81D8D0"
-            android:background="#F5F5F5"
-            android:padding="8dp"
-            android:layout_marginBottom="8dp" />
-
-        <ProgressBar
-            android:id="@+id/pb_dict_download"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="4dp"
-            android:max="100"
-            android:progress="0"
-            android:layout_marginBottom="4dp"
-            android:visibility="gone"
-            android:progressTint="?attr/colorPrimary" />
-
-        <TextView
-            android:id="@+id/tv_dict_download_progress"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="11sp"
-            android:textColor="#81D8D0"
-            android:layout_marginBottom="8dp"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="12dp"
-            android:gravity="end">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_download_dict"
-                android:layout_width="wrap_content"
-                android:layout_height="32dp"
-                android:text="重新下载"
-                android:textSize="10sp"
-                android:textColor="#81D8D0"
-                app:backgroundTint="#FFFFFF"
-                app:strokeColor="#81D8D0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="6dp" />
-        </LinearLayout>
-
-        <!-- ═══════════ 分隔 ═══════════ -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#E0E0E0"
-            android:layout_marginBottom="12dp" />
-
         <!-- ═══════════ 日志 ═══════════ -->
         <TextView
             android:layout_width="wrap_content"
@@ -904,7 +837,7 @@
             android:textSize="11sp"
             android:textColor="#333333"
             android:textIsSelectable="true"
-            android:text="等待操作..." />
+            android:text="运行日志" />
 
         <!-- 底部留白 -->
         <View

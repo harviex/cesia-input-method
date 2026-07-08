@@ -125,10 +125,7 @@ class SettingsActivity : AppCompatActivity() {
     // 语音与 AI 本地化设置 helper
     private lateinit var aiSettingsHelper: VoiceAISettingsHelper
 
-    // 词库管理
-    private lateinit var btnDownloadDict: Button
-    private lateinit var tvDictInfo: TextView
-
+    // 词库信息（已并入运行日志开头）
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
     private var accentColor: Int = 0xFF81D8D0.toInt()
     private var themeMode: Int = THEME_LIGHT
@@ -256,12 +253,6 @@ class SettingsActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tv_api_status)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
-
-        // 词库管理 - 只保留下载按钮
-        try {
-            btnDownloadDict = findViewById(R.id.btn_download_dict)
-            tvDictInfo = findViewById(R.id.tv_dict_info)
-        } catch (_: Exception) {}
 
         // 语音与 AI 本地化视图
         try {
@@ -644,8 +635,6 @@ class SettingsActivity : AppCompatActivity() {
         btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
 
         // 词库管理 - 只有下载/重新下载按钮
-        btnDownloadDict?.setOnClickListener { downloadDict() }
-
         // 测试区重置 prompt 按钮
         btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
 
@@ -738,7 +727,7 @@ class SettingsActivity : AppCompatActivity() {
         val btn = button ?: return
         val accent = accentColor
         val bg = lighten(accent, 0.5f)
-        val radius = 8f * resources.displayMetrics.density
+        val radius = 10f * resources.displayMetrics.density
         val base = android.graphics.drawable.GradientDrawable().apply {
             setColor(bg); cornerRadius = radius
         }
@@ -754,24 +743,28 @@ class SettingsActivity : AppCompatActivity() {
         btn.text = text
     }
 
+    // 初始/重置态：纯主题色底 + 白字（与新闻源管理按钮一致）
     private fun resetButtonBg(button: android.widget.Button?, text: String) {
         val btn = button ?: return
-        val radius = 8f * resources.displayMetrics.density
-        val gd = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xFF81D8D0.toInt()); cornerRadius = radius
+        val tiffany = 0xFF81D8D0.toInt()
+        if (btn is com.google.android.material.button.MaterialButton) {
+            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(tiffany)
+        } else {
+            btn.setBackgroundColor(tiffany)
         }
-        btn.background = gd
+        btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
     }
 
     // 进度色(主题色) + 减淡50%背景 的圆角按钮底（用于非下载态的"已安装"等）
     private fun installedButtonBg(button: android.widget.Button?, text: String) {
         val btn = button ?: return
-        val radius = 8f * resources.displayMetrics.density
+        val radius = 10f * resources.displayMetrics.density
         val gd = android.graphics.drawable.GradientDrawable().apply {
             setColor(lighten(accentColor, 0.5f)); cornerRadius = radius
         }
         btn.background = gd
+        btn.setTextColor(0xFF333333.toInt())
         btn.text = text
     }
 
@@ -882,7 +875,6 @@ class SettingsActivity : AppCompatActivity() {
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             val overall = (percent * 0.5).toInt()
                             setBothVoiceProgress(overall, "语音模型 $fileName $pctStr")
-                            appendLog("⬇ 语音模型 $fileName: $pctStr ($dlStr / $totalStr)")
                         }
                     }
                 }
@@ -907,7 +899,6 @@ class SettingsActivity : AppCompatActivity() {
                         runOnUiThread {
                             val overall = 50 + (percent * 0.5).toInt()
                             setBothVoiceProgress(overall, "雾凇词库 $percent%")
-                            appendLog("⬇ 词库: $msg")
                         }
                     },
                     onComplete = { success, msg ->
@@ -921,6 +912,13 @@ class SettingsActivity : AppCompatActivity() {
                                 appendLog("✅ 语音文字输入套件安装完成")
                                 Toast.makeText(this, "语音文字输入套件安装完成", Toast.LENGTH_SHORT).show()
                                 refreshVoiceInstallState()
+                                refreshDictInfo()
+                                // 触发 Rime 重新部署
+                                try {
+                                    val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
+                                    rimeEngine.redeploy()
+                                    Toast.makeText(this, "词库已部署！请重启输入法后生效", Toast.LENGTH_LONG).show()
+                                } catch (_: Exception) {}
                             } else {
                                 appendLog("❌ 词库下载失败: $dictMsg")
                                 resetBothVoice("安装语音文字输入套件")
@@ -959,7 +957,6 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             setBothAiProgress(percent.toInt(), "$name $pctStr")
-                            appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
                     }
                 }
@@ -988,7 +985,7 @@ class SettingsActivity : AppCompatActivity() {
         }.start()
     }
 
-    // ======================== 词库管理 ========================
+    // ======================== 词库信息（并入运行日志开头） ========================
 
     private fun refreshDictInfo() {
         Thread {
@@ -1005,85 +1002,20 @@ class SettingsActivity : AppCompatActivity() {
                 else -> "${info.dictSize / 1024 / 1024}MB"
             }
             val statusText = if (info.downloaded) {
-                "词库: $sizeStr | 词条: ${info.dictCount} 条 | 文件: ${info.fileCount} 个\n同步: $syncTime\n来源: rime-ice (iDvel/rime-ice)"
+                "【词库】 $sizeStr | 词条: ${info.dictCount} 条 | 文件: ${info.fileCount} 个 | 同步: $syncTime | 来源: rime-ice"
             } else {
-                "词库: 使用内置精简版\n提示: 点击下载词库按钮获取完整词库（~50MB）\n来源: 内置"
+                "【词库】 使用内置精简版（点击「安装语音文字输入套件」获取完整词库~50MB）"
             }
             runOnUiThread {
-                tvDictInfo?.text = statusText
-                btnDownloadDict?.text = if (info.downloaded) "重新下载" else "下载词库"
+                // 词库信息作为运行日志开头第一行
+                val current = tvLog?.text?.toString() ?: ""
+                if (current.startsWith("【词库】")) {
+                    tvLog?.text = statusText + "\n" + current.substringAfter("\n")
+                } else {
+                    tvLog?.text = statusText + "\n" + current
+                }
             }
         }.start()
-    }
-
-    private fun downloadDict() {
-        val alreadyDownloaded = dictManager.hasDownloadedDict()
-        val title = if (alreadyDownloaded) "重新下载词库" else "下载完整词库"
-        val message = if (alreadyDownloaded) {
-            "将重新下载 rime-ice 完整词库（覆盖现有文件）。\n\n当前词库将被覆盖，操作不可撤销。"
-        } else {
-            "将下载 rime-ice 完整词库（full.zip，约 16MB 压缩包，解压后约 50MB）。\n\n词库包含：\n• 基础词库（~55万词条）\n• 扩展词库（41448字表）\n• 腾讯词库（~100万词条）\n• 英文词库\n• OpenCC 转换表\n• Lua 脚本\n\n下载完成后需重启输入法生效。\n\n来源：iDvel/rime-ice，GPL-3.0"
-        }
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("下载") { _, _ ->
-                startFullDictDownload()
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun startFullDictDownload() {
-        btnDownloadDict?.isEnabled = false
-        btnDownloadDict?.text = "下载中..."
-        tvStatus.text = "⏳ 正在下载词库..."
-        appendLog("📥 开始下载完整词库（rime-ice full.zip）")
-        appendLog("📋 词库来源：rime-ice (iDvel/rime-ice)")
-        appendLog("⚖️  许可证：GPL-3.0（词库数据，不影响本应用）")
-
-        // 显示进度条
-        val pbDict = findViewById<android.widget.ProgressBar>(R.id.pb_dict_download)
-        val tvDictProgress = findViewById<android.widget.TextView>(R.id.tv_dict_download_progress)
-        pbDict?.visibility = android.view.View.VISIBLE
-        tvDictProgress?.visibility = android.view.View.VISIBLE
-        pbDict?.progress = 0
-
-        dictManager.downloadFullDict(
-            onProgress = { percent, downloadedBytes, totalBytes, msg ->
-                runOnUiThread {
-                    pbDict?.progress = percent
-                    tvDictProgress?.text = "$msg ($percent%)"
-                    tvStatus.text = msg
-                    appendLog(msg)
-                }
-            },
-            onComplete = { success, msg ->
-                runOnUiThread {
-                    btnDownloadDict?.isEnabled = true
-                    pbDict?.visibility = android.view.View.GONE
-                    tvDictProgress?.visibility = android.view.View.GONE
-                    refreshDictInfo()
-                    if (success) {
-                        tvStatus.text = "✅ $msg"
-                        appendLog("✅ $msg")
-                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                        // 触发 Rime 重新部署
-                        try {
-                            val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
-                            rimeEngine.redeploy()
-                            Toast.makeText(this, "词库已部署！请重启输入法（切换一下输入法）后生效", Toast.LENGTH_LONG).show()
-                        } catch (e: Exception) {
-                            Toast.makeText(this, "词库下载完成！重启输入法后生效", Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        tvStatus.text = "❌ $msg"
-                        appendLog("❌ $msg")
-                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        )
     }
 
     // ======================== API 测试 ========================
