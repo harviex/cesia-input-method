@@ -327,6 +327,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
     private var associationCandidates = emptyList<String>()  // 当前联想候选词列表
     private var isAssociationMode = false   // 是否处于联想模式
+    private var selectedCandidateIndex = 0   // 当前长按选中的候选词 index（用于菜单定位）
 
 
 
@@ -921,8 +922,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     selectCandidateByGlobalIndex(index)
                 }
             },
-            onItemLongClick = { view, _, word ->
-                showCandidateLongPressMenu(word, view)
+            onItemLongClick = { view, index, word ->
+                showCandidateLongPressMenu(word, view, index)
                 true
             }
         )
@@ -1963,9 +1964,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 长按候选词弹出菜单：置顶 / 降频 / 恢复默认。
      * 用 PopupWindow（IME 环境不能用 AlertDialog）。
      */
-    private fun showCandidateLongPressMenu(word: String, anchorView: android.view.View? = null) {
+    private fun showCandidateLongPressMenu(word: String, anchorView: android.view.View?, longPressIndex: Int) {
         if (word.isEmpty()) return
         val ctx = this
+        // 保存被长按项 index，用于定位菜单
+        selectedCandidateIndex = longPressIndex
         val pinned = CandidatePrefs.isPinned(ctx, word)
         val down = CandidatePrefs.isDowngraded(ctx, word)
 
@@ -2026,18 +2029,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         btnClose.setOnClickListener { popup.dismiss() }
 
-        // 定位到候选栏附近（紧邻，不跳动）
-        val anchor = rvCandidates ?: candidateBar
-        popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
-        anchor.post {
-            val loc = IntArray(2)
-            anchor.getLocationOnScreen(loc)
-            // 菜单紧邻候选栏下方（或上方若空间不足）
-            val screenH = resources.displayMetrics.heightPixels
-            val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 60)
-            val belowY = loc[1] + anchor.height
-            val y = if (belowY + menuH > screenH - 100) loc[1] - menuH - 8 else belowY + 2
-            popup.update(loc[0], y, -1, -1)
+        // 定位到被长按候选词的正上方
+        val rv = rvCandidates ?: return
+        popup.showAtLocation(rv, android.view.Gravity.NO_GRAVITY, 0, 0)
+        rv.post {
+            val layoutManager = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return@post
+            // 获取当前长按项的 ViewHolder 位置
+            val selectedView: View? = rv.findViewHolderForAdapterPosition(selectedCandidateIndex)?.itemView
+            if (selectedView != null && rv.isShown) {
+                // 菜单显示在被长按项的正下方（空间不足则上方）
+                val loc = IntArray(2)
+                selectedView.getLocationOnScreen(loc)
+                val screenH = resources.displayMetrics.heightPixels
+                val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 60)
+                val belowY = loc[1] + selectedView.height
+                val y = if (belowY + menuH > screenH - 80) loc[1] - menuH - 4 else belowY + 2
+                popup.update(loc[0], y, -1, -1)
+            } else {
+                // 退化：显示在候选栏上方
+                val loc = IntArray(2)
+                rv.getLocationOnScreen(loc)
+                popup.update(loc[0], loc[1] - 2, -1, -1)
+            }
         }
     }
 
