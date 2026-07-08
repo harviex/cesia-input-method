@@ -1316,14 +1316,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 btnTraditional.setTextColor(0xFF888888.toInt())
                 btnTraditional.setBackgroundColor(0x00000000)
             }
-            btnTraditional.translationZ = 4f // 功能按钮层级
         }
 
-        // 功能按钮层级（智能写作、修改、清退、发送）
-        btnMagic?.translationZ = 4f
-        btnClipboard?.translationZ = 4f
-        btnDelete?.translationZ = 4f
-        btnSend?.translationZ = 4f
+        // 功能按钮层级（智能写作、修改、清退、发送） - 移除阴影
+        btnMagic?.elevation = 0f
+        btnClipboard?.elevation = 0f
+        btnDelete?.elevation = 0f
+        btnSend?.elevation = 0f
+        btnTraditional.elevation = 0f
 
         // 云/本地切换按钮
         if (::btnCloud.isInitialized) {
@@ -2047,28 +2047,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         btnClose.setOnClickListener { popup.dismiss() }
 
-        // 定位到被长按候选词的正上方
+        // 定位到候选栏底部（紧邻，不跳动）
         val rv = rvCandidates ?: return
         popup.showAtLocation(rv, android.view.Gravity.NO_GRAVITY, 0, 0)
         rv.post {
-            val layoutManager = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return@post
-            // 获取当前长按项的 ViewHolder 位置
-            val selectedView: View? = rv.findViewHolderForAdapterPosition(selectedCandidateIndex)?.itemView
-            if (selectedView != null && rv.isShown) {
-                // 菜单显示在被长按项的正下方（空间不足则上方）
-                val loc = IntArray(2)
-                selectedView.getLocationOnScreen(loc)
-                val screenH = resources.displayMetrics.heightPixels
-                val menuH = popup.contentView.measuredHeight.takeIf { it > 0 } ?: (items.size * 44 + 60)
-                val belowY = loc[1] + selectedView.height
-                val y = if (belowY + menuH > screenH - 80) loc[1] - menuH - 4 else belowY + 2
-                popup.update(loc[0], y, -1, -1)
-            } else {
-                // 退化：显示在候选栏上方
-                val loc = IntArray(2)
-                rv.getLocationOnScreen(loc)
-                popup.update(loc[0], loc[1] - 2, -1, -1)
-            }
+            val loc = IntArray(2)
+            rv.getLocationOnScreen(loc)
+            // 菜单显示在候选栏底部 +2px
+            popup.update(loc[0], loc[1] + rv.height + 2, -1, -1)
         }
     }
 
