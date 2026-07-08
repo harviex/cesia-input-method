@@ -28,6 +28,10 @@ class PinyinDictManager(private val context: Context) {
         private const val TAG = "RimeDictManager"
         const val PREF_DICT_DOWNLOADED = "dict_downloaded"
         const val PREF_LAST_SYNC = "last_sync"
+        // 词库统计信息（下载完成时一次性计算并持久化，避免每次返回设置页遍历整个 rime 目录）
+        const val PREF_DICT_SIZE = "dict_size"
+        const val PREF_DICT_FILE_COUNT = "dict_file_count"
+        const val PREF_DICT_ENTRY_COUNT = "dict_entry_count"
 
         // === 下载源：full.zip 包含所有词库、schema、lua、opencc ===
         const val FULL_DICT_URL = "https://github.com/iDvel/rime-ice/releases/download/2026.06.03/full.zip"
@@ -137,8 +141,8 @@ class PinyinDictManager(private val context: Context) {
                     .putLong(PREF_LAST_SYNC, System.currentTimeMillis())
                     .apply()
 
-                // 统计词库信息
-                val info = getDictInfo()
+                // 统计词库信息（仅此处遍历一次，结果持久化到 SP；之后 getDictInfo 不再遍历）
+                val info = computeAndCacheDictInfo()
                 onProgress(100, totalBytes, totalBytes, "词库下载完成！")
                 onComplete(true, "词库下载完成！共 $extracted 个文件，${info.dictCount} 条词条")
 
@@ -158,11 +162,36 @@ class PinyinDictManager(private val context: Context) {
     }
 
     fun getDictInfo(): DictInfo {
+        val downloaded = prefs.getBoolean(PREF_DICT_DOWNLOADED, false)
+        val lastSync = prefs.getLong(PREF_LAST_SYNC, 0)
+        var dictSize = prefs.getLong(PREF_DICT_SIZE, 0L)
+        var fileCount = prefs.getInt(PREF_DICT_FILE_COUNT, 0)
+        var dictCount = prefs.getInt(PREF_DICT_ENTRY_COUNT, 0)
+        // 兼容旧版：已下载但统计信息未持久化时，计算一次并缓存（之后不再遍历）
+        if (downloaded && dictSize == 0L && fileCount == 0 && dictCount == 0) {
+            val info = computeAndCacheDictInfo()
+            dictSize = info.dictSize
+            fileCount = info.fileCount
+            dictCount = info.dictCount
+        }
+        return DictInfo(
+            dictCount = dictCount,
+            dictSize = dictSize,
+            fileCount = fileCount,
+            downloaded = downloaded,
+            lastSync = lastSync
+        )
+    }
+
+    /**
+     * 统计词库信息（仅下载完成时调用一次）。遍历整个 rime 目录，
+     * 结果持久化到 SP，之后 getDictInfo() 不再遍历。
+     */
+    private fun computeAndCacheDictInfo(): DictInfo {
         val rimeDir = getRimeDir()
         var totalSize = 0L
         var fileCount = 0
         var dictCount = 0
-        // 单次遍历完成全部统计，避免多次递归扫描整个目录
         rimeDir.walkTopDown().forEach { file ->
             if (file.isFile) {
                 totalSize += file.length()
@@ -172,7 +201,11 @@ class PinyinDictManager(private val context: Context) {
                 }
             }
         }
-
+        prefs.edit()
+            .putLong(PREF_DICT_SIZE, totalSize)
+            .putInt(PREF_DICT_FILE_COUNT, fileCount)
+            .putInt(PREF_DICT_ENTRY_COUNT, dictCount)
+            .apply()
         return DictInfo(
             dictCount = dictCount,
             dictSize = totalSize,
