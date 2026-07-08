@@ -159,15 +159,17 @@ class PinyinDictManager(private val context: Context) {
 
     fun getDictInfo(): DictInfo {
         val rimeDir = getRimeDir()
-        // 递归统计所有子目录中的文件大小
-        val totalSize = rimeDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-        val fileCount = rimeDir.walkTopDown().filter { it.isFile }.count()
-
-        // 统计 .dict.yaml 文件中的词条数
+        var totalSize = 0L
+        var fileCount = 0
         var dictCount = 0
+        // 单次遍历完成全部统计，避免多次递归扫描整个目录
         rimeDir.walkTopDown().forEach { file ->
-            if (file.isFile && file.name.endsWith(".dict.yaml")) {
-                dictCount += countDictEntries(file)
+            if (file.isFile) {
+                totalSize += file.length()
+                fileCount++
+                if (file.name.endsWith(".dict.yaml")) {
+                    dictCount += countDictEntries(file)
+                }
             }
         }
 

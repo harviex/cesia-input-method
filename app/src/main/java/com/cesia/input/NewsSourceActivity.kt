@@ -70,6 +70,8 @@ class NewsSourceActivity : AppCompatActivity() {
                         if (success) {
                             RssFetchManager.saveSelectedSource(this@NewsSourceActivity, source)
                             selectedUrl = source.url
+                            // 同步更新 adapter 内部的 selectedUrl，否则 notifyDataSetChanged 仍用旧值，勾选不刷新
+                            adapter.selectedUrl = source.url
                             adapter.notifyDataSetChanged()
                             Toast.makeText(
                                 this@NewsSourceActivity,
@@ -77,6 +79,7 @@ class NewsSourceActivity : AppCompatActivity() {
                                 Toast.LENGTH_SHORT
                             ).show()
                         } else {
+                            adapter.notifyDataSetChanged()
                             Toast.makeText(
                                 this@NewsSourceActivity,
                                 "❌ ${source.name} 抓取失败",
@@ -89,6 +92,7 @@ class NewsSourceActivity : AppCompatActivity() {
                 // 取消选中：清除选择
                 RssFetchManager.clearSelectedSource(this@NewsSourceActivity)
                 selectedUrl = ""
+                adapter.selectedUrl = ""
                 adapter.notifyDataSetChanged()
                 Toast.makeText(this, "已取消：${source.name}", Toast.LENGTH_SHORT).show()
             }
@@ -137,7 +141,7 @@ class NewsSourceActivity : AppCompatActivity() {
 
     class SourceAdapter(
         private val items: List<RssFetchManager.RssSource>,
-        private var selectedUrl: String,
+        internal var selectedUrl: String,
         private val themeAccent: Int,
         private val onToggle: (RssFetchManager.RssSource, Boolean) -> Unit
     ) : RecyclerView.Adapter<SourceAdapter.ViewHolder>() {

@@ -228,8 +228,10 @@ class SettingsActivity : AppCompatActivity() {
 
         checkAndRequestPermission()
 
-        // 每天自动检查一次更新
+        // 每天自动检查一次更新（后台静默，受 24h 限制）
         checkUpdateDaily()
+        // 打开设置页即检查更新：若有新版本自动弹出下载菜单
+        checkForUpdates()
     }
 
     private fun applyTheme() {
@@ -854,24 +856,29 @@ class SettingsActivity : AppCompatActivity() {
     // ======================== 词库管理 ========================
 
     private fun refreshDictInfo() {
-        val info = dictManager.getDictInfo()
-        val syncTime = if (info.lastSync > 0) {
-            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(info.lastSync))
-        } else {
-            "从未下载"
-        }
-        val sizeStr = when {
-            info.dictSize < 1024 -> "${info.dictSize}B"
-            info.dictSize < 1024 * 1024 -> "${info.dictSize / 1024}KB"
-            else -> "${info.dictSize / 1024 / 1024}MB"
-        }
-        val statusText = if (info.downloaded) {
-            "词库: $sizeStr | 词条: ${info.dictCount} 条 | 文件: ${info.fileCount} 个\n同步: $syncTime\n来源: rime-ice (iDvel/rime-ice)"
-        } else {
-            "词库: 使用内置精简版\n提示: 点击下载词库按钮获取完整词库（~50MB）\n来源: 内置"
-        }
-        tvDictInfo?.text = statusText
-        btnDownloadDict?.text = if (info.downloaded) "重新下载" else "下载词库"
+        Thread {
+            // 词库信息统计涉及遍历整个 rime 目录 + 逐文件统计词条，较重，放到后台线程避免返回设置页卡顿
+            val info = dictManager.getDictInfo()
+            val syncTime = if (info.lastSync > 0) {
+                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(info.lastSync))
+            } else {
+                "从未下载"
+            }
+            val sizeStr = when {
+                info.dictSize < 1024 -> "${info.dictSize}B"
+                info.dictSize < 1024 * 1024 -> "${info.dictSize / 1024}KB"
+                else -> "${info.dictSize / 1024 / 1024}MB"
+            }
+            val statusText = if (info.downloaded) {
+                "词库: $sizeStr | 词条: ${info.dictCount} 条 | 文件: ${info.fileCount} 个\n同步: $syncTime\n来源: rime-ice (iDvel/rime-ice)"
+            } else {
+                "词库: 使用内置精简版\n提示: 点击下载词库按钮获取完整词库（~50MB）\n来源: 内置"
+            }
+            runOnUiThread {
+                tvDictInfo?.text = statusText
+                btnDownloadDict?.text = if (info.downloaded) "重新下载" else "下载词库"
+            }
+        }.start()
     }
 
     private fun downloadDict() {
@@ -1285,27 +1292,19 @@ class SettingsActivity : AppCompatActivity() {
                     } else ""
                 } catch (_: Exception) { "" }
 
-                // 版本比较：直接读 BuildConfig，不依赖 packageManager
+                // 版本比较：使用 compareVersions 正确比较三段版本号
+                // （之前错误地把 latestVersionCode 解析为仅 patch 段，导致 1020687 >= 687 永远成立，更新框永不弹出）
                 val currentVersionName = BuildConfig.VERSION_NAME
                 val currentVersionCode = BuildConfig.VERSION_CODE
 
-                // 从 tag_name 解析最新版本的 versionCode (格式: 1.1.X -> X)
-                val latestVersionCode = try {
-                    val parts = latestVersionName.split(".")
-                    if (parts.size >= 3) parts[2].toLong() else 0L
-                } catch (e: Exception) {
-                    Log.w("SettingsActivity", "解析远端版本失败: ${e.javaClass.simpleName} ${e.message}", e)
-                    0L
-                }
+                val cmp = compareVersions(latestVersionName, currentVersionName)
+                val isUpToDate = cmp <= 0
 
-                // 本地versionCode >= 最新版本versionCode 表示已是最新
-                val isUpToDate = currentVersionCode > 0 && currentVersionCode >= latestVersionCode
-
-                appendLog("本地: $currentVersionName($currentVersionCode), 最新: $latestVersionName($latestVersionCode), isUpToDate=$isUpToDate")
+                appendLog("本地: $currentVersionName($currentVersionCode), 最新: $latestVersionName, cmp=$cmp, isUpToDate=$isUpToDate")
 
                 runOnUiThread {
                     showVersion()
-                    if (!isUpToDate && latestVersionCode > 0) {
+                    if (cmp > 0) {
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
                         tvStatus.text = "已是最新版本 ($latestVersionName)"
