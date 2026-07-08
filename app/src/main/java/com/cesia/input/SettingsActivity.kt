@@ -87,8 +87,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var downloadManager: ModelDownloadManager
     private var btnDownloadVoice: Button? = null
     private var btnDownloadAi: Button? = null
-    private var pbVoiceDownload: android.widget.ProgressBar? = null
-    private var pbAiDownload: android.widget.ProgressBar? = null
     private var isDownloading = false
 
     // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式) ===
@@ -266,8 +264,6 @@ class SettingsActivity : AppCompatActivity() {
         try {
             btnDownloadVoice = findViewById(R.id.btn_download_voice)
             btnDownloadAi = findViewById(R.id.btn_download_ai)
-            pbVoiceDownload = findViewById(R.id.pb_voice_download)
-            pbAiDownload = findViewById(R.id.pb_ai_download)
         } catch (_: Exception) {}
 
         // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
@@ -734,15 +730,35 @@ class SettingsActivity : AppCompatActivity() {
 
     // ======================== 模型下载 ========================
 
+    // 将按钮背景设为"按钮即进度条"：底层灰 + 上层主题色按 percent 裁切
+    private fun applyButtonProgress(button: android.widget.Button?, percent: Int, text: String) {
+        val btn = button ?: return
+        val accent = accentColor
+        val gray = 0xFFE0E0E0.toInt()
+        val layer = android.graphics.drawable.LayerDrawable(arrayOf(
+            android.graphics.drawable.ColorDrawable(gray),
+            android.graphics.drawable.ClipDrawable(
+                android.graphics.drawable.ColorDrawable(accent),
+                android.view.Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL
+            )
+        ))
+        (layer.getDrawable(1) as android.graphics.drawable.ClipDrawable).level = (percent * 100).coerceIn(0, 10000)
+        btn.background = layer
+        btn.text = text
+    }
+
+    private fun resetButtonBg(button: android.widget.Button?, text: String) {
+        val btn = button ?: return
+        btn.background = android.graphics.drawable.ColorDrawable(0xFF81D8D0.toInt())
+        btn.text = text
+    }
+
     private fun downloadVoiceModel() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
         btnDownloadVoice?.isEnabled = false
-        btnDownloadVoice?.text = "0%"
-        pbVoiceDownload?.visibility = android.view.View.VISIBLE
-        pbVoiceDownload?.progress = 0
+        applyButtonProgress(btnDownloadVoice, 0, "0%")
         tvStatus.text = "🔄 下载语音模型中..."
         appendLog("⬇ 开始下载语音模型: ${modelInfo.name}")
-        // 记录下载状态，用于 Activity 恢复时检测
         getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
             .putBoolean("voice_downloading", true).commit()
 
@@ -756,8 +772,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $fileName ($pctStr)"
-                            btnDownloadVoice?.text = "下载中"
-                            pbVoiceDownload?.progress = percent.toInt()
+                            applyButtonProgress(btnDownloadVoice, percent.toInt(), "$fileName $pctStr")
                             appendLog("⬇ $fileName: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -770,13 +785,11 @@ class SettingsActivity : AppCompatActivity() {
                         tvStatus.text = "✅ 语音模型下载完成"
                         appendLog("✅ 语音模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "语音模型下载完成", Toast.LENGTH_SHORT).show()
-                        btnDownloadVoice?.text = "✅ 已完成"
-                        pbVoiceDownload?.visibility = android.view.View.GONE
+                        resetButtonBg(btnDownloadVoice, "✅ 已完成")
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
-                        btnDownloadVoice?.text = "📥 语音识别"
-                        pbVoiceDownload?.visibility = android.view.View.GONE
+                        resetButtonBg(btnDownloadVoice, "安装语音文字输入套件")
                     }
                 }
             } catch (e: Exception) {
@@ -784,10 +797,9 @@ class SettingsActivity : AppCompatActivity() {
                     .putBoolean("voice_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadVoice?.isEnabled = true
-                    btnDownloadVoice?.text = "📥 语音识别"
+                    resetButtonBg(btnDownloadVoice, "安装语音文字输入套件")
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ 语音模型下载异常: ${e.message}")
-                    pbVoiceDownload?.visibility = android.view.View.GONE
                 }
             }
         }.start()
@@ -797,12 +809,9 @@ class SettingsActivity : AppCompatActivity() {
         val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
             ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: return
         btnDownloadAi?.isEnabled = false
-        btnDownloadAi?.text = "0%"
-        pbAiDownload?.visibility = android.view.View.VISIBLE
-        pbAiDownload?.progress = 0
+        applyButtonProgress(btnDownloadAi, 0, "0%")
         tvStatus.text = "🔄 下载 AI 模型中..."
         appendLog("⬇ 开始下载 AI 模型: ${modelInfo.name} (${modelInfo.sizeBytes / 1024 / 1024}MB)")
-        // 记录下载状态，用于 Activity 恢复时检测
         getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
             .putBoolean("ai_downloading", true).commit()
 
@@ -816,8 +825,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             tvStatus.text = "🔄 下载 $name ($pctStr)"
-                            btnDownloadAi?.text = "下载中"
-                            pbAiDownload?.progress = percent.toInt()
+                            applyButtonProgress(btnDownloadAi, percent.toInt(), "$name $pctStr")
                             appendLog("⬇ $name: $pctStr ($dlStr / $totalStr)")
                         }
                     }
@@ -830,13 +838,11 @@ class SettingsActivity : AppCompatActivity() {
                         tvStatus.text = "✅ AI 模型下载完成"
                         appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
                         Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
-                        btnDownloadAi?.text = "✅ 已完成"
-                        pbAiDownload?.visibility = android.view.View.GONE
+                        resetButtonBg(btnDownloadAi, "✅ 已完成")
                     } else {
                         tvStatus.text = "❌ 下载失败: ${result.exceptionOrNull()?.message}"
                         appendLog("❌ AI 模型下载失败: ${result.exceptionOrNull()?.message}")
-                        btnDownloadAi?.text = "📥 语音润色"
-                        pbAiDownload?.visibility = android.view.View.GONE
+                        resetButtonBg(btnDownloadAi, "选装本地AI模型(1.2G)")
                     }
                 }
             } catch (e: Exception) {
@@ -844,10 +850,9 @@ class SettingsActivity : AppCompatActivity() {
                     .putBoolean("ai_downloading", false).commit()
                 runOnUiThread {
                     btnDownloadAi?.isEnabled = true
-                    btnDownloadAi?.text = "📥 语音润色"
+                    resetButtonBg(btnDownloadAi, "选装本地AI模型(1.2G)")
                     tvStatus.text = "❌ 下载异常: ${e.message}"
                     appendLog("❌ AI 模型下载异常: ${e.message}")
-                    pbAiDownload?.visibility = android.view.View.GONE
                 }
             }
         }.start()

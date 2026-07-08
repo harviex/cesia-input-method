@@ -355,63 +355,29 @@
                     android:textColor="#999999"
                     android:layout_marginBottom="8dp" />
 
-                <LinearLayout
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_download_voice"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="6dp">
+                    android:layout_height="44dp"
+                    android:text="安装语音文字输入套件"
+                    android:textSize="12sp"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    app:backgroundTint="#81D8D0"
+                    app:cornerRadius="8dp"
+                    android:layout_marginBottom="6dp" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_download_voice"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="语音识别"
-                        android:textSize="12sp"
-                        android:textColor="#FFFFFF"
-                        android:textStyle="bold"
-                        app:backgroundTint="#81D8D0"
-                        app:cornerRadius="8dp"
-                        android:layout_marginEnd="4dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_download_ai"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="语音润色"
-                        android:textSize="12sp"
-                        android:textColor="#FFFFFF"
-                        android:textStyle="bold"
-                        app:backgroundTint="#81D8D0"
-                        app:cornerRadius="8dp"
-                        android:layout_marginStart="4dp" />
-                </LinearLayout>
-
-                <!-- 下载进度条（语音识别 / 本地模型） -->
-                <ProgressBar
-                    android:id="@+id/pb_voice_download"
-                    style="?android:attr/progressBarStyleHorizontal"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_download_ai"
                     android:layout_width="match_parent"
-                    android:layout_height="12dp"
-                    android:max="100"
-                    android:progress="0"
-                    android:layout_marginBottom="4dp"
-                    android:visibility="gone"
-                    android:progressTint="?attr/colorPrimary"
-                    android:progressBackgroundTint="#E0F2F1" />
-
-                <ProgressBar
-                    android:id="@+id/pb_ai_download"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="12dp"
-                    android:max="100"
-                    android:progress="0"
-                    android:layout_marginBottom="8dp"
-                    android:visibility="gone"
-                    android:progressTint="?attr/colorPrimary"
-                    android:progressBackgroundTint="#E0F2F1" />
+                    android:layout_height="44dp"
+                    android:text="选装本地AI模型(1.2G)"
+                    android:textSize="12sp"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    app:backgroundTint="#81D8D0"
+                    app:cornerRadius="8dp"
+                    android:layout_marginBottom="8dp" />
 
                 <!-- ═══════════ 分隔 ═══════════ -->
                 <View
