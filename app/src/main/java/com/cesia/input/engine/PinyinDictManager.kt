@@ -34,7 +34,11 @@ class PinyinDictManager(private val context: Context) {
         const val PREF_DICT_ENTRY_COUNT = "dict_entry_count"
 
         // === 下载源：full.zip 包含所有词库、schema、lua、opencc ===
-        const val FULL_DICT_URL = "https://github.com/iDvel/rime-ice/releases/download/2026.06.03/full.zip"
+        // 主源走 ghproxy.net 镜像（与模型下载一致，国内可访问），失败回退 GitHub 原链
+        private val DICT_URLS = listOf(
+            "https://ghproxy.net/https://github.com/iDvel/rime-ice/releases/download/2026.06.03/full.zip",
+            "https://github.com/iDvel/rime-ice/releases/download/2026.06.03/full.zip"
+        )
 
         // === 本地目录名（外部存储，无需权限，卸载时删除） ===
         const val RIME_DIR = "rime"
@@ -61,91 +65,92 @@ class PinyinDictManager(private val context: Context) {
         Thread {
             try {
                 val rimeDir = getRimeDir()
-
                 onProgress(0, 0, 0, "正在连接服务器...")
-                Log.i(TAG, "开始下载: $FULL_DICT_URL")
 
-                val request = Request.Builder().url(FULL_DICT_URL).build()
-                val response = client.newCall(request).execute()
+                // 依次尝试所有下载源（镜像优先，原链兜底）
+                var lastErr = ""
+                for (tryUrl in DICT_URLS) {
+                    var thisErr = ""
+                    try {
+                        Log.i(TAG, "开始下载: $tryUrl")
+                        onProgress(0, 0, 0, "正在连接: ${tryUrl.substringBefore("github.com")}...")
+                        val request = Request.Builder().url(tryUrl).build()
+                        val response = client.newCall(request).execute()
+                        if (!response.isSuccessful) {
+                            thisErr = "HTTP ${response.code}"
+                            response.close()
+                        } else {
+                            val body = response.body
+                            if (body == null) {
+                                thisErr = "空响应"
+                            } else {
+                                val totalBytes = body.contentLength()
+                                onProgress(0, 0, totalBytes, "正在下载词库 (${formatSize(totalBytes)})...")
 
-                if (!response.isSuccessful) {
-                    onComplete(false, "下载失败: HTTP ${response.code}")
-                    return@Thread
-                }
+                                val tempZip = File(rimeDir, "full.zip.tmp")
+                                var downloadedBytes = 0L
+                                val buffer = ByteArray(8192)
+                                body.byteStream().use { input ->
+                                    tempZip.outputStream().use { output ->
+                                        var bytesRead: Int
+                                        var lastCallbackTime = 0L
+                                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                                            output.write(buffer, 0, bytesRead)
+                                            downloadedBytes += bytesRead
+                                            val now = System.currentTimeMillis()
+                                            if (now - lastCallbackTime > 200) {
+                                                lastCallbackTime = now
+                                                val pct = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt().coerceAtMost(99) else 0
+                                                onProgress(pct, downloadedBytes, totalBytes, "下载中... ${formatSize(downloadedBytes)} / ${formatSize(totalBytes)}")
+                                            }
+                                        }
+                                    }
+                                }
+                                body.close()
 
-                val body = response.body ?: run {
-                    onComplete(false, "下载失败: 空响应")
-                    return@Thread
-                }
+                                onProgress(99, downloadedBytes, totalBytes, "正在解压词库文件...")
 
-                val totalBytes = body.contentLength()
-                onProgress(0, 0, totalBytes, "正在下载词库 (${formatSize(totalBytes)})...")
+                                var extracted = 0
+                                val zis = ZipInputStream(tempZip.inputStream())
+                                var entry: ZipEntry? = zis.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory) {
+                                        val relativeName = entry.name.removePrefix("full/")
+                                        val outFile = File(rimeDir, relativeName)
+                                        outFile.parentFile?.mkdirs()
+                                        outFile.outputStream().use { output -> zis.copyTo(output) }
+                                        extracted++
+                                        Log.d(TAG, "解压: ${relativeName} (${outFile.length() / 1024}KB)")
+                                    }
+                                    zis.closeEntry()
+                                    entry = zis.nextEntry
+                                }
+                                zis.close()
+                                tempZip.delete()
 
-                // 流式下载，边写边更新进度
-                val tempZip = File(rimeDir, "full.zip.tmp")
-                var downloadedBytes = 0L
-                val buffer = ByteArray(8192)
-                body.byteStream().use { input ->
-                    tempZip.outputStream().use { output ->
-                        var bytesRead: Int
-                        var lastCallbackTime = 0L
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                            val now = System.currentTimeMillis()
-                            if (now - lastCallbackTime > 200) {
-                                lastCallbackTime = now
-                                val pct = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt().coerceAtMost(99) else 0
-                                onProgress(pct, downloadedBytes, totalBytes, "下载中... ${formatSize(downloadedBytes)} / ${formatSize(totalBytes)}")
+                                if (extracted == 0) {
+                                    thisErr = "解压失败: 未提取到任何文件"
+                                } else {
+                                    Log.i(TAG, "解压完成: $extracted 个文件")
+                                    prefs.edit()
+                                        .putBoolean(PREF_DICT_DOWNLOADED, true)
+                                        .putLong(PREF_LAST_SYNC, System.currentTimeMillis())
+                                        .apply()
+                                    val info = computeAndCacheDictInfo()
+                                    onProgress(100, totalBytes, totalBytes, "词库下载完成！")
+                                    onComplete(true, "词库下载完成！共 $extracted 个文件，${info.dictCount} 条词条")
+                                    return@Thread
+                                }
                             }
                         }
+                    } catch (e: Exception) {
+                        thisErr = e.message ?: "未知错误"
+                        Log.w(TAG, "下载源失败: $tryUrl -> $thisErr")
                     }
+                    lastErr = thisErr
+                    // 尝试下一个源
                 }
-                body.close()
-
-                onProgress(99, downloadedBytes, totalBytes, "正在解压词库文件...")
-
-                // 解压全部文件，去掉 zip 内 "full/" 前缀，平铺到 rime 根目录
-                // （否则词库会落到 rime/full/ 子目录，Rime 引擎读不到，下载的词库无法被 import）
-                var extracted = 0
-                val zis = ZipInputStream(tempZip.inputStream())
-                var entry: ZipEntry? = zis.nextEntry
-                while (entry != null) {
-                    if (!entry.isDirectory) {
-                        // 去掉可能的 "full/" 前缀，确保文件落在 rime 根目录
-                        val relativeName = entry.name.removePrefix("full/")
-                        val outFile = File(rimeDir, relativeName)
-                        outFile.parentFile?.mkdirs()
-                        outFile.outputStream().use { output ->
-                            zis.copyTo(output)
-                        }
-                        extracted++
-                        Log.d(TAG, "解压: ${relativeName} (${outFile.length() / 1024}KB)")
-                    }
-                    zis.closeEntry()
-                    entry = zis.nextEntry
-                }
-                zis.close()
-                tempZip.delete()
-
-                if (extracted == 0) {
-                    onComplete(false, "解压失败: 未提取到任何文件")
-                    return@Thread
-                }
-
-                Log.i(TAG, "解压完成: $extracted 个文件")
-
-                // 更新状态
-                prefs.edit()
-                    .putBoolean(PREF_DICT_DOWNLOADED, true)
-                    .putLong(PREF_LAST_SYNC, System.currentTimeMillis())
-                    .apply()
-
-                // 统计词库信息（仅此处遍历一次，结果持久化到 SP；之后 getDictInfo 不再遍历）
-                val info = computeAndCacheDictInfo()
-                onProgress(100, totalBytes, totalBytes, "词库下载完成！")
-                onComplete(true, "词库下载完成！共 $extracted 个文件，${info.dictCount} 条词条")
-
+                onComplete(false, "所有下载源均失败，最后错误: $lastErr")
             } catch (e: Exception) {
                 Log.e(TAG, "下载词库失败", e)
                 onComplete(false, "下载失败: ${e.message}")
