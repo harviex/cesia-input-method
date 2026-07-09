@@ -72,9 +72,9 @@ class SettingsActivity : AppCompatActivity() {
     private var tvCloudModel: TextView? = null
     private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
+    private lateinit var tilTestText: com.google.android.material.textfield.TextInputLayout
     private lateinit var btnTestApi: MaterialButton
     private var btnTestLocalAi: MaterialButton? = null
-    private lateinit var tvStatus: TextView
     private lateinit var tvLog: TextView
     private var isLogExpanded = true
     private lateinit var tvVersion: TextView
@@ -248,9 +248,9 @@ class SettingsActivity : AppCompatActivity() {
         tvCloudModel = findViewById(R.id.tv_cloud_model)
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
+        tilTestText = findViewById(R.id.til_test_text)
         btnTestApi = findViewById(R.id.btn_test_api)
         btnTestLocalAi = findViewById(R.id.btn_test_local_ai)
-        tvStatus = findViewById(R.id.tv_api_status)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
 
@@ -716,7 +716,6 @@ class SettingsActivity : AppCompatActivity() {
     private fun resetPolishPrompt() {
         etPolishPrompt.setText(DEFAULT_POLISH_PROMPT)
         prefs.edit().putString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT).apply()
-        tvStatus.text = "✅ 润色 Prompt 已重置为默认值"
         appendLog("🔄 润色 Prompt 已重置为默认值")
         Toast.makeText(this, "已重置为默认 Prompt", Toast.LENGTH_SHORT).show()
     }
@@ -739,33 +738,31 @@ class SettingsActivity : AppCompatActivity() {
         )
         clip.level = (percent.coerceIn(0, 100) * 100).coerceIn(0, 10000)
         val layer = android.graphics.drawable.LayerDrawable(arrayOf(base, clip))
+        // 清除 backgroundTint，否则 MaterialButton 会用 tint 覆盖进度层
+        if (btn is com.google.android.material.button.MaterialButton) {
+            btn.backgroundTintList = null
+        }
         btn.background = layer
+        btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
     }
 
-    // 初始/重置态：纯主题色底 + 白字（与新闻源管理按钮一致）
+    // 初始/重置态：跟随主题色底 + 白字
     private fun resetButtonBg(button: android.widget.Button?, text: String) {
         val btn = button ?: return
-        val tiffany = 0xFF81D8D0.toInt()
+        val accent = accentColor
         if (btn is com.google.android.material.button.MaterialButton) {
-            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(tiffany)
+            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(accent)
         } else {
-            btn.setBackgroundColor(tiffany)
+            btn.setBackgroundColor(accent)
         }
         btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
     }
 
-    // 进度色(主题色) + 减淡50%背景 的圆角按钮底（用于非下载态的"已安装"等）
+    // 已安装态：同样跟随主题色 + 白字（不转黑）
     private fun installedButtonBg(button: android.widget.Button?, text: String) {
-        val btn = button ?: return
-        val radius = 10f * resources.displayMetrics.density
-        val gd = android.graphics.drawable.GradientDrawable().apply {
-            setColor(lighten(accentColor, 0.5f)); cornerRadius = radius
-        }
-        btn.background = gd
-        btn.setTextColor(0xFF333333.toInt())
-        btn.text = text
+        resetButtonBg(button, text)
     }
 
     // 将颜色按因子减淡（factor=0.5 → 与原色各占一半，即减淡50%）
@@ -1020,6 +1017,40 @@ class SettingsActivity : AppCompatActivity() {
 
     // ======================== API 测试 ========================
 
+    // 在“测试要润色的文本”框显示测试结果：
+    // 成功 → 文本框变主题色并闪烁几下后停止；失败 → 文本框变红并显示错误代码
+    private fun showTestResult(success: Boolean, message: String) {
+        val accent = accentColor
+        val red = 0xFFE53935.toInt()
+        val ed = etTestText
+        val til = tilTestText
+        if (success) {
+            til.error = null
+            til.boxStrokeColor = accent
+            // 闪烁：主题色 <-> 白色 交替几次后定格主题色
+            val white = 0xFFFFFFFF.toInt()
+            val handler = android.os.Handler(mainLooper)
+            var count = 0
+            val total = 6
+            val runnable = object : Runnable {
+                override fun run() {
+                    ed.setTextColor(if (count % 2 == 0) accent else white)
+                    count++
+                    if (count <= total) {
+                        handler.postDelayed(this, 160)
+                    } else {
+                        ed.setTextColor(accent)
+                    }
+                }
+            }
+            handler.post(runnable)
+        } else {
+            ed.setTextColor(red)
+            til.boxStrokeColor = red
+            til.error = message
+        }
+    }
+
     private fun testApiConnection() {
         val inputText = etTestText.text?.toString()?.trim() ?: ""
         if (inputText.isEmpty()) {
@@ -1029,7 +1060,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestApi.isEnabled = false
         btnTestApi.text = "测试中..."
-        tvStatus.text = "🔄 正在润色..."
+        appendLog("🔄 正在润色...")
 
         Thread {
             try {
@@ -1098,18 +1129,18 @@ class SettingsActivity : AppCompatActivity() {
                             }
                             if (polished.isNotEmpty() && polished != inputText) {
                                 etTestText.setText(polished)
-                                tvStatus.text = "✅ API 润色成功"
+                                showTestResult(true, "润色成功")
                                 appendLog("润色成功: $polished")
                             } else {
-                                tvStatus.text = "⚠️ API 返回但内容无变化"
+                                showTestResult(true, "API 返回但内容无变化")
                                 appendLog("API 返回无变化: ${body.take(200)}")
                             }
                         } catch (e: Exception) {
-                            tvStatus.text = "✅ API 成功 (原始响应)"
+                            showTestResult(true, "API 成功 (原始响应)")
                             appendLog("API 响应: ${body.take(200)}")
                         }
                     } else {
-                        tvStatus.text = "❌ API 错误 $respCode"
+                        showTestResult(false, "API 错误 $respCode")
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
@@ -1117,7 +1148,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvStatus.text = "❌ 网络错误: ${e.message ?: "未知"}"
+                    showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
                     btnTestApi.text = "API 润色"
@@ -1137,8 +1168,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestLocalAi?.isEnabled = false
         btnTestLocalAi?.text = "推理中..."
-        tvStatus.text = "🔄 正在加载模型并润色..."
-        appendLog("🤖 本地 AI 测试开始: ${inputText.take(30)}...")
+        appendLog("🔄 正在加载模型并润色...")
 
         Thread {
             try {
@@ -1147,7 +1177,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 if (modelFile == null || !modelFile.exists()) {
                     runOnUiThread {
-                        tvStatus.text = "❌ 未安装 AI 模型"
+                        showTestResult(false, "未安装 AI 模型")
                         appendLog("本地 AI 失败: 模型未安装")
                         btnTestLocalAi?.isEnabled = true
                         btnTestLocalAi?.text = "本地 AI"
@@ -1176,7 +1206,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (!loaded) {
                     runOnUiThread {
                         val mnnLog = aiEngine.getMnnLog()
-                        tvStatus.text = "❌ 模型加载失败"
+                        showTestResult(false, "模型加载失败")
                         appendLog("本地 AI 失败: 模型加载失败 (${loadTime}ms)")
                         if (mnnLog.isNotEmpty()) {
                             appendLog("MNN log: $mnnLog")
@@ -1202,14 +1232,14 @@ class SettingsActivity : AppCompatActivity() {
 
                 runOnUiThread {
                     if (result == null) {
-                        tvStatus.text = "⏰ 推理超时（60s），模型可能太慢"
+                        showTestResult(false, "推理超时（60s）")
                         appendLog("推理超时（${inferTime}ms），请尝试更短的文本或更小的模型")
                     } else if (result.isNotEmpty() && result != inputText) {
                         etTestText.setText(result)
-                        tvStatus.text = "✅ 本地 AI 润色成功 (${inferTime}ms)"
+                        showTestResult(true, "本地 AI 润色成功 (${inferTime}ms)")
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
                     } else {
-                        tvStatus.text = "⚠️ 润色结果为空"
+                        showTestResult(true, "润色结果为空")
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
                     btnTestLocalAi?.isEnabled = true
@@ -1218,7 +1248,7 @@ class SettingsActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
                 runOnUiThread {
-                    tvStatus.text = "❌ 异常: ${e.message ?: "未知"}"
+                    showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
                     btnTestLocalAi?.isEnabled = true
                     btnTestLocalAi?.text = "本地 AI"
@@ -1372,7 +1402,6 @@ class SettingsActivity : AppCompatActivity() {
                     if (cmp > 0) {
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        tvStatus.text = "已是最新版本 ($latestVersionName)"
                         appendLog("已是最新版本")
                     }
                 }
@@ -1935,6 +1964,16 @@ class SettingsActivity : AppCompatActivity() {
                 if (drawable != null && (drawable.constantState?.toString()?.contains("81D8D0") == true)) {
                     drawable.setTint(accent)
                     view.setImageDrawable(drawable)
+                }
+            } catch (_: Exception) {}
+        }
+        // 下载按钮：跟随主题色（backgroundTint 用 accent 而非硬编码 tiffany）
+        if (view.id == R.id.btn_install_voice || view.id == R.id.btn_install_ai) {
+            try {
+                if (view is com.google.android.material.button.MaterialButton) {
+                    if (view.background !is android.graphics.drawable.LayerDrawable) {
+                        view.backgroundTintList = android.content.res.ColorStateList.valueOf(accent)
+                    }
                 }
             } catch (_: Exception) {}
         }
