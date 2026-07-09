@@ -512,7 +512,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         val savedUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
-        tvApiUrl.text = savedUrl
+        tvApiUrl.text = apiUrlDisplay(savedUrl)
         val savedKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
         tvApiKey.text = if (savedKey.isEmpty()) "点击选择或输入" else if (savedKey.length > 20) maskSecret(savedKey) else savedKey
         val savedTavily = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
@@ -570,17 +570,16 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // API URL / Key / Tavily - 点击打开下拉菜单（含自定义输入 + 历史记忆）
+        // API URL / Key / Tavily - 点击打开下拉菜单（含自定义输入 + 历史记忆 + 删除）
         tvApiUrl.setOnClickListener {
             showCustomValueDialog(
                 title = "AI API URL",
                 presets = listOf(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    "https://api.openai.com/v1/chat/completions"
+                    "https://openrouter.ai/api/v1/chat/completions" to "openrouter.ai"
                 ),
                 historyKey = "api_url_history",
                 prefKey = PREF_API_URL,
-                currentValue = tvApiUrl.text.toString(),
+                currentValue = if (tvApiUrl.text.toString() == "请选择模型供应方") "" else tvApiUrl.text.toString(),
                 valueView = tvApiUrl,
                 isSecret = false
             )
@@ -593,7 +592,8 @@ class SettingsActivity : AppCompatActivity() {
                 prefKey = PREF_OPENROUTER_KEY,
                 currentValue = if (tvApiKey.text.toString() == "点击选择或输入") "" else tvApiKey.text.toString(),
                 valueView = tvApiKey,
-                isSecret = true
+                isSecret = true,
+                freeUrl = "https://openrouter.ai/"
             )
         }
         tvTavilyKey.setOnClickListener {
@@ -604,7 +604,8 @@ class SettingsActivity : AppCompatActivity() {
                 prefKey = PREF_BRAVE_KEY,
                 currentValue = if (tvTavilyKey.text.toString() == "点击选择或输入") "" else tvTavilyKey.text.toString(),
                 valueView = tvTavilyKey,
-                isSecret = true
+                isSecret = true,
+                freeUrl = "https://www.tavily.com/"
             )
         }
 
@@ -638,7 +639,19 @@ class SettingsActivity : AppCompatActivity() {
                         return@setOnFocusChangeListener
                     }
                     if (value == old) return@setOnFocusChangeListener // 无变动不保存
-                    // 校验：仅中文/英文，不含符号与数字
+                    // 校验：仅中文/英文，不含空格/符号/数字，且不超过 4 字
+                    if (value.contains(" ")) {
+                        appendLog("❌ 命令词「$value」不允许空格，已忽略")
+                        Toast.makeText(this, "命令词不允许空格", Toast.LENGTH_SHORT).show()
+                        field.setText(old) // 还原
+                        return@setOnFocusChangeListener
+                    }
+                    if (value.length > 4) {
+                        appendLog("❌ 命令词「$value」不能超过4个字，已忽略")
+                        Toast.makeText(this, "命令词不能超过4个字", Toast.LENGTH_SHORT).show()
+                        field.setText(old) // 还原
+                        return@setOnFocusChangeListener
+                    }
                     if (!value.matches(Regex("^[\\u4e00-\\u9fa5a-zA-Z]+\$"))) {
                         appendLog("❌ 命令词「$value」仅允许中英文，已忽略")
                         Toast.makeText(this, "命令词仅允许中英文", Toast.LENGTH_SHORT).show()
@@ -741,32 +754,57 @@ class SettingsActivity : AppCompatActivity() {
     // 选中或保存后写入 prefs(prefKey) 并更新显示(valueView)，同时把值记入 historyKey 列表供下次直接选择
     private fun showCustomValueDialog(
         title: String,
-        presets: List<String>,
+        presets: List<Pair<String, String>>, // (value, displayName)
         historyKey: String,
         prefKey: String,
         currentValue: String,
         valueView: TextView,
-        isSecret: Boolean
+        isSecret: Boolean,
+        freeUrl: String = ""
     ) {
+        // 当前显示值（用于列表里把当前选中项标出来）
         val history = getHistory(historyKey).toMutableList()
-        // 当前值若不在预设/历史中，置顶显示
         val allItems = LinkedHashSet<String>().apply {
             if (currentValue.isNotEmpty()) add(currentValue)
-            addAll(presets)
+            addAll(presets.map { it.first })
             addAll(history)
         }.toList()
+
+        // value -> 显示文案（API URL 等需要把地址映射成友好名）
+        fun displayOf(v: String): String {
+            val preset = presets.find { it.first == v }
+            if (preset != null && preset.second.isNotEmpty()) return preset.second
+            return if (isSecret) maskSecret(v) else v
+        }
 
         val dialogView = layoutInflater.inflate(R.layout.dialog_custom_value, null)
         val tvTitle = dialogView.findViewById<TextView>(R.id.tv_title)
         val lvValues = dialogView.findViewById<ListView>(R.id.lv_values)
         val etCustom = dialogView.findViewById<EditText>(R.id.et_custom)
         val btnSave = dialogView.findViewById<Button>(R.id.btn_save)
+        val btnApplyFree = dialogView.findViewById<Button>(R.id.btn_apply_free)
 
         tvTitle.text = title
         etCustom.hint = if (isSecret) "自定义：输入后点“保存并使用”" else "自定义：输入后点“保存并使用”"
 
-        val display = if (isSecret) allItems.map { maskSecret(it) } else allItems
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, display)
+        val adapter = object : ArrayAdapter<String>(
+            this, R.layout.item_custom_value, R.id.tv_item_text, allItems
+        ) {
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = convertView ?: layoutInflater.inflate(R.layout.item_custom_value, parent, false)
+                val tv = view.findViewById<TextView>(R.id.tv_item_text)
+                val btnDel = view.findViewById<TextView>(R.id.tv_item_delete)
+                val v = allItems[position]
+                tv.text = displayOf(v)
+                btnDel.setOnClickListener {
+                    removeHistory(historyKey, v)
+                    allItems.toMutableList().remove(v)
+                    notifyDataSetChanged()
+                    appendLog("已删除: ${if (isSecret) maskSecret(v) else v}")
+                }
+                return view
+            }
+        }
         lvValues.adapter = adapter
 
         val dialog = AlertDialog.Builder(this)
@@ -776,21 +814,75 @@ class SettingsActivity : AppCompatActivity() {
 
         lvValues.setOnItemClickListener { _, _, position, _ ->
             val value = allItems[position]
-            applyValue(prefKey, historyKey, value, valueView, isSecret, title)
-            dialog.dismiss()
+            val ok = applyValueWithCheck(prefKey, historyKey, value, valueView, isSecret, title)
+            if (ok) dialog.dismiss()
         }
 
         btnSave.setOnClickListener {
             val value = etCustom.text?.toString()?.trim() ?: ""
             if (value.isNotEmpty()) {
-                applyValue(prefKey, historyKey, value, valueView, isSecret, title)
-                dialog.dismiss()
+                val ok = applyValueWithCheck(prefKey, historyKey, value, valueView, isSecret, title)
+                if (ok) dialog.dismiss()
             } else {
                 Toast.makeText(this, "请输入内容", Toast.LENGTH_SHORT).show()
             }
         }
 
+        if (freeUrl.isNotEmpty()) {
+            btnApplyFree.visibility = View.VISIBLE
+            btnApplyFree.setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(freeUrl)))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "无法打开浏览器", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
         dialog.show()
+    }
+
+    // 应用值并做针对性审查（openrouter key / tavily key）
+    // 返回 true 表示通过审查可关闭对话框，false 表示被拦截
+    private fun applyValueWithCheck(
+        prefKey: String,
+        historyKey: String,
+        value: String,
+        valueView: TextView,
+        isSecret: Boolean,
+        title: String
+    ): Boolean {
+        // 针对 API Key 的审查
+        if (prefKey == PREF_OPENROUTER_KEY) {
+            // 仅当当前 URL 为 openrouter 时才审查 sk-or 开头
+            val url = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
+            if (url.contains("openrouter.ai", ignoreCase = true) && !value.startsWith("sk-or", ignoreCase = true)) {
+                promptKeyMismatch(title, "https://openrouter.ai/")
+                return false
+            }
+        }
+        if (prefKey == PREF_BRAVE_KEY) {
+            if (!value.startsWith("tvly", ignoreCase = true)) {
+                Toast.makeText(this, "密钥不匹配：Tavily Key 需以 tvly 开头", Toast.LENGTH_LONG).show()
+                return false
+            }
+        }
+        applyValue(prefKey, historyKey, value, valueView, isSecret, title)
+        return true
+    }
+
+    // key 不匹配时提示去填入或注册
+    private fun promptKeyMismatch(title: String, registerUrl: String) {
+        AlertDialog.Builder(this)
+            .setTitle("未检测到匹配的 Key")
+            .setMessage("当前为 OpenRouter，需要以 sk-or 开头的 Key。是否前往注册或返回填入？")
+            .setPositiveButton("去注册") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(registerUrl)))
+                } catch (_: Exception) {}
+            }
+            .setNegativeButton("返回填入") { _, _ -> }
+            .show()
     }
 
     private fun applyValue(
@@ -803,8 +895,15 @@ class SettingsActivity : AppCompatActivity() {
     ) {
         prefs.edit().putString(prefKey, value).apply()
         addHistory(historyKey, value)
-        // 密钥类字段在设置页上也只显示脱敏（前15 + 后5）
-        valueView.text = if (isSecret && value.length > 20) maskSecret(value) else value
+        if (prefKey == PREF_API_URL) {
+            prefs.edit().putBoolean("api_url_configured", true).apply()
+        }
+        // 显示：密钥脱敏（前15 + 后5）；API URL 显示友好名
+        valueView.text = when {
+            isSecret && value.length > 20 -> maskSecret(value)
+            prefKey == PREF_API_URL -> apiUrlDisplay(value)
+            else -> value
+        }
         val disp = if (isSecret) "已设置(${if (value.length > 20) maskSecret(value) else value})" else value
         appendLog("$title: $disp")
     }
@@ -821,6 +920,23 @@ class SettingsActivity : AppCompatActivity() {
         list.add(0, value)
         val trimmed = list.take(10)
         prefs.edit().putString(key, trimmed.joinToString("||")).apply()
+    }
+
+    private fun removeHistory(key: String, value: String) {
+        val list = getHistory(key).toMutableList()
+        list.remove(value)
+        prefs.edit().putString(key, list.joinToString("||")).apply()
+    }
+
+    // API URL 显示映射：openrouter 地址显示友好名，自定义地址显示原始地址
+    // 初始未配置时显示“请选择模型供应方”
+    private fun apiUrlDisplay(value: String): String {
+        val configured = prefs.getBoolean("api_url_configured", false)
+        return when {
+            value == DEFAULT_API_URL && !configured -> "请选择模型供应方"
+            value == DEFAULT_API_URL -> "openrouter.ai"
+            else -> value
+        }
     }
 
     private fun maskSecret(s: String): String {
@@ -1200,7 +1316,7 @@ class SettingsActivity : AppCompatActivity() {
 
         Thread {
             try {
-                val apiUrl = tvApiUrl.text?.toString()?.trim() ?: DEFAULT_API_URL
+                val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
                 val isOr = apiUrl.contains("openrouter.ai")
 
                 val request = if (isOr) {
@@ -1765,10 +1881,18 @@ class SettingsActivity : AppCompatActivity() {
         val rvModels = dialogView.findViewById<RecyclerView>(R.id.rv_model_list)
         val tvTitle = dialogView.findViewById<TextView>(R.id.tv_model_dialog_title)
         val btnClose = dialogView.findViewById<TextView>(R.id.btn_model_dialog_close)
+        val etCustomModel = dialogView.findViewById<EditText>(R.id.et_custom_model)
+        val btnSaveCustom = dialogView.findViewById<Button>(R.id.btn_save_custom_model)
+
+        // 合并自定义模型（pref: id 以 || 分隔，id 即名称）
+        val customIds = getCustomModels()
+        val allModels = models.toMutableList().apply {
+            addAll(customIds.map { CloudModel(it, it, "自定义", 0, false, false) })
+        }
 
         // Set current model in title
         val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
-        val currentModel = models.find { it.id == savedModelId }
+        val currentModel = allModels.find { it.id == savedModelId }
         currentModel?.let {
             tvTitle.text = "当前: ${it.name}"
         }
@@ -1779,20 +1903,44 @@ class SettingsActivity : AppCompatActivity() {
             .create()
 
         rvModels.layoutManager = LinearLayoutManager(this)
-        rvModels.adapter = ModelSelectorAdapter(models, savedModelId) { model ->
-            // Update the TextView
+        rvModels.adapter = ModelSelectorAdapter(allModels, savedModelId) { model ->
             tvCloudModel?.text = model.name
-            // Save the model ID
             prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
             appendLog("模型已保存: ${model.id}")
-            // Dismiss dialog
             dialog.dismiss()
+        }
+
+        btnSaveCustom.setOnClickListener {
+            val id = etCustomModel.text?.toString()?.trim() ?: ""
+            if (id.isNotEmpty()) {
+                addCustomModel(id)
+                appendLog("自定义模型已保存: $id")
+                // 立即应用并关闭
+                tvCloudModel?.text = id
+                prefs.edit().putString(PREF_MODEL_ID, id).apply()
+                dialog.dismiss()
+            } else {
+                Toast.makeText(this, "请输入模型 ID", Toast.LENGTH_SHORT).show()
+            }
         }
 
         // 关闭按钮点击
         btnClose.setOnClickListener { dialog.dismiss() }
 
         dialog.show()
+    }
+
+    private fun getCustomModels(): List<String> {
+        val raw = prefs.getString("custom_models", "") ?: ""
+        if (raw.isEmpty()) return emptyList()
+        return raw.split("||").filter { it.isNotEmpty() }
+    }
+
+    private fun addCustomModel(id: String) {
+        val list = getCustomModels().toMutableList()
+        list.remove(id)
+        list.add(0, id)
+        prefs.edit().putString("custom_models", list.take(20).joinToString("||")).apply()
     }
 
     private inner class ModelSelectorAdapter(
