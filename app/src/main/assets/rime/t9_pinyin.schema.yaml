@@ -65,18 +65,6 @@ speller:
     - derive/[pqrs]/7/
     - derive/[tuv]/8/
     - derive/[wxyz]/9/
-    # ===== 模糊音（与全键盘 pinyin.schema.yaml 一致）=====
-    # 平翘舌模糊
-    - derive/^([zcs])h/$1/          # zh→z, ch→c, sh→s
-    - derive/^([zcs])([^h])/$1h$2/  # z→zh, c→ch, s→sh
-    # 前后鼻音模糊
-    - derive/([aeiou])n$/$1ng/      # an→ang, en→eng, in→ing...
-    - derive/([aeiou])ng$/$1n/      # ang→an, eng→en, ing→in...
-    # 韵母顺序模糊
-    - derive/uei$/ui/               # uei↔ui
-    - derive/ui$/uei/
-    - derive/iou$/iu/               # iou↔iu
-    - derive/iu$/iou/
 
 # 翻译器 — script_translator 支持拼音切分、词组
 translator:

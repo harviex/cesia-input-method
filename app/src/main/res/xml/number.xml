@@ -24,9 +24,9 @@
     <Row android:keyHeight="52dp">
         <Key android:codes="12290" android:keyLabel="" android:popupCharacters="." android:keyEdgeFlags="left"
             android:keyWidth="20%p" />
-        <Key android:codes="52" android:keyLabel="" android:popupCharacters="4" />
-        <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" />
-        <Key android:codes="54" android:keyLabel="" android:popupCharacters="6" />
+        <Key android:codes="52" android:keyLabel="" android:popupCharacters="4" android:keyWidth="22%p" />
+        <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" android:keyWidth="16%p" />
+        <Key android:codes="54" android:keyLabel="" android:popupCharacters="6" android:keyWidth="22%p" />
         <Key android:codes="65281" android:keyLabel="" android:popupCharacters="：" android:keyEdgeFlags="right"
             android:keyWidth="20%p" />
     </Row>

@@ -5,7 +5,6 @@ config_version: "1.1.1"
 schema_list:
   - schema: pinyin
   - schema: t9_pinyin
-  - schema: en
 
 # 开关选项
 switches:
