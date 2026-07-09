@@ -4426,6 +4426,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 不调用 showAiChoiceButtons()，保持语音键不分列
     }
 
+    /**
+     * 撤销/清空命令后继续录音：重置录音状态并重新启动识别循环，
+     * 但保留 recognizedText（已上屏/组合态的文字不被清空），从而维持“待上屏”的识别状态。
+     */
+    private fun resumeRecordingKeepText() {
+        isVoiceLocked = true
+        isRecording = true
+        isWaitingForChoice = false
+        pendingAiMode = null
+        isProcessingResult = false
+        setStatusDot("recording")
+        keyboardView.visibility = View.GONE
+        candidateBar.visibility = View.GONE
+        voiceStartTime = System.currentTimeMillis()
+        // 重新启动本地流式识别循环（resetStream 由 VoiceEngine 内部处理）
+        startWhisperRecordingAsync()
+    }
+
     /** Google 语音识别（流式，通过 FallbackRecognizer） */
     private fun startGoogleRecording(polishChoice: PolishChoice) {
         try {
@@ -4615,38 +4633,33 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     }
                                 }
                                 "undo" -> {
-                                    // 撤销：以空格为分界，去除最近一个已识别但未上屏的语段
-                                    val seg = recognizedText.trimEnd()
-                                    val cut = if (seg.isEmpty()) "" else {
-                                        val idx = seg.lastIndexOf(' ')
-                                        if (idx < 0) seg else seg.substring(0, idx)
+                                    // 撤销：以空格为分界，删除最近一个已识别语段（含其前导空格），
+                                    // 但保留剩余文字为“组合态”（待上屏、未真正提交），并继续识别。
+                                    // 例：「我好 你好 撤销」→ 去掉“撤销”后“我好 你好 ”，
+                                    //     再删掉最后一个语段“ 你好 ”，留下“我好”并保持在识别中。
+                                    var prefix = text.trimEnd()
+                                    val idx = prefix.lastIndexOf(' ')
+                                    prefix = if (idx < 0) "" else prefix.substring(0, idx)
+                                    val removeLen = text.length - prefix.length
+                                    if (removeLen > 0) {
+                                        ic.deleteSurroundingText(removeLen, 0)
                                     }
-                                    val removedLen = recognizedText.length - cut.length
-                                    if (removedLen > 0) {
-                                        ic.deleteSurroundingText(removedLen, 0)
-                                    }
-                                    recognizedText = cut
-                                    updateStatus("↩️ 已撤销最近语段")
-                                    // 锁定模式：继续录音；非锁定模式：结束语音输入
-                                    if (isVoiceLocked) {
-                                        startRecordingLocked()
-                                    } else {
-                                        resetToIdle()
-                                    }
+                                    // 剩余文字以组合态保留（不上屏），继续监听后续语音
+                                    ic.setComposingText(prefix, 1)
+                                    recognizedText = prefix
+                                    updateStatus("↩️ 已撤销最近语段：$prefix")
+                                    resumeRecordingKeepText()
                                 }
                                 "clear" -> {
-                                    // 清空：去除所有已识别但未上屏的文字，并结束本次语音输入
-                                    if (recognizedText.isNotEmpty()) {
-                                        ic.deleteSurroundingText(recognizedText.length, 0)
+                                    // 清空：删除所有已识别但未上屏的文字（不残留空组合字符），
+                                    // 继续识别状态（不结束、不上屏）。
+                                    val removeLen = text.length
+                                    if (removeLen > 0) {
+                                        ic.deleteSurroundingText(removeLen, 0)
                                     }
                                     recognizedText = ""
-                                    updateStatus("🧹 已清空并结束语音输入")
-                                    // 普通语音输入：结束；锁定模式：不退出锁定，继续录音
-                                    if (isVoiceLocked) {
-                                        startRecordingLocked()
-                                    } else {
-                                        resetToIdle()
-                                    }
+                                    updateStatus("🧹 已清空，继续识别")
+                                    resumeRecordingKeepText()
                                 }
                             }
                         }
