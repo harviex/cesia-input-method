@@ -189,30 +189,63 @@ class AIEngine(private val context: Context) {
 
             if (text.isBlank()) return@withContext ""
 
-            try {
-                // 重置对话历史，避免上下文污染导致重复
-                mnnEngine.nativeReset()
-
-                // 动态计算 maxTokens：原文长度 * 2.5（留足余量），最少 64，最多 2048
-                val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 4096)
-                Log.d(TAG, "Polish: textLen=${text.length}, maxTokens=$maxTokens")
-
-                val prompt = buildPolishPrompt(text, instruction)
-                Log.d(TAG, "Polish prompt: ${prompt.take(200)}")
-
-                // 推理前主动 GC，释放 Java 堆内存，防止 JNI 返回字符串时 OOM
-                System.gc()
-                val result = mnnEngine.nativeGenerate(prompt, maxTokens)
-                Log.d(TAG, "Polish raw result: ${result.take(200)}")
-
-                val cleaned = postProcessPolishResult(text, result)
-                Log.d(TAG, "Polish cleaned: ${cleaned.take(200)}")
-                cleaned.ifBlank { null }
-            } catch (e: Exception) {
-                Log.e(TAG, "Polish error", e)
-                null
+            // 长文本分块润色：本地 LLM 在长 prompt 下易生成失败/超时返回空 → 导致返回 null
+            // 按 ~60 字切分（优先在句末标点处断），逐块润色后拼接，避免单次过长
+            val CHUNK_THRESHOLD = 60
+            if (text.length > CHUNK_THRESHOLD) {
+                val chunks = splitIntoChunks(text, CHUNK_THRESHOLD)
+                Log.d(TAG, "Polish: 长文本分 ${chunks.size} 块 (总长 ${text.length})")
+                val sb = StringBuilder()
+                for (chunk in chunks) {
+                    val r = polishSingle(chunk, instruction) ?: chunk  // 某块失败则保留原文该块
+                    sb.append(r)
+                }
+                val joined = sb.toString().trim()
+                return@withContext joined.ifBlank { null }
             }
+
+            return@withContext polishSingle(text, instruction)
         }
+
+    /** 单块润色（含重置、动态 maxTokens、后处理） */
+    private fun polishSingle(text: String, instruction: String): String? {
+        try {
+            mnnEngine.nativeReset()
+            val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 1024)
+            Log.d(TAG, "Polish: textLen=${text.length}, maxTokens=$maxTokens")
+            val prompt = buildPolishPrompt(text, instruction)
+            System.gc()
+            val result = mnnEngine.nativeGenerate(prompt, maxTokens)
+            Log.d(TAG, "Polish raw result: ${result.take(200)}")
+            val cleaned = postProcessPolishResult(text, result)
+            return cleaned.ifBlank { null }
+        } catch (e: Exception) {
+            Log.e(TAG, "Polish error", e)
+            return null
+        }
+    }
+
+    /** 尽量在句末标点处把长文本切成 ≤ maxLen 的块 */
+    private fun splitIntoChunks(text: String, maxLen: Int): List<String> {
+        val chunks = mutableListOf<String>()
+        var start = 0
+        while (start < text.length) {
+            var end = minOf(start + maxLen, text.length)
+            if (end < text.length) {
+                // 在 [start+maxLen/2, end] 范围内向前找最后一个句末标点
+                val mid = start + maxLen / 2
+                var cut = -1
+                for (j in end downTo mid) {
+                    val ch = text[j]
+                    if (ch == '。' || ch == '？' || ch == '！' || ch == '\n') { cut = j + 1; break }
+                }
+                if (cut > start) end = cut
+            }
+            chunks.add(text.substring(start, end))
+            start = end
+        }
+        return chunks
+    }
 
     /**
      * 润色结果后处理：

@@ -893,10 +893,12 @@ class VoiceEngine(private val context: Context) {
         val units: Map<Char, Long> = mapOf(
             '十' to 10L, '百' to 100L, '千' to 1000L, '万' to 10000L, '亿' to 100000000L
         )
+        // 序数前缀：后面紧跟的中文数字不当作数值转换（如“第一次”保持“第一次”）
+        val ordinalPrefixes = setOf('第', '初')
 
         val result = StringBuilder()
-        var i = 0
         val chars = text.toCharArray()
+        var i = 0
 
         while (i < chars.size) {
             val c = chars[i]
@@ -908,12 +910,25 @@ class VoiceEngine(private val context: Context) {
                     numEnd++
                 }
                 val chineseNumStr = text.substring(numStart, numEnd)
-                val arabicValue = parseChineseNumber(chineseNumStr, chineseDigits, units)
-                if (arabicValue != null) {
-                    result.append(arabicValue)
-                } else {
-                    // 转换失败，保留原文
+
+                // 序数：前面是“第/初”则不转换，原样保留
+                val prev = if (numStart > 0) chars[numStart - 1] else null
+                if (prev != null && prev in ordinalPrefixes) {
                     result.append(chineseNumStr)
+                } else if (chineseNumStr.any { it in units }) {
+                    // 含单位（十百千万亿）：按数值解析
+                    val arabicValue = parseChineseNumber(chineseNumStr, chineseDigits, units)
+                    if (arabicValue != null) {
+                        result.append(arabicValue)
+                    } else {
+                        result.append(chineseNumStr)
+                    }
+                } else {
+                    // 无单位的连续中文数字：逐字转阿拉伯，保留原顺序（如“四三五”→“435”）
+                    for (ch in chineseNumStr) {
+                        val d = chineseDigits[ch]
+                        if (d != null) result.append(d) else result.append(ch)
+                    }
                 }
                 i = numEnd
             } else {
@@ -925,8 +940,8 @@ class VoiceEngine(private val context: Context) {
     }
 
     /**
-     * 解析中文数字字符串为 Long 值
-     * 支持：零-九、十、百、千、万、亿
+     * 解析含单位的中文数字字符串为 Long 值
+     * 支持：零-九、十、百、千、万、亿（不含单位的多数字串不应传入此处）
      */
     private fun parseChineseNumber(s: String, digits: Map<Char, Long>, units: Map<Char, Long>): Long? {
         if (s.isEmpty()) return null
@@ -967,6 +982,7 @@ class VoiceEngine(private val context: Context) {
             return result
         } catch (_: Exception) {
             return null
+
         }
     }
 

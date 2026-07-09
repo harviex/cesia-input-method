@@ -7154,6 +7154,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region 按键事件
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false
+        // 快速连续输入时，先取消上一个按键残留的长按 runnable（功能键长按/剪贴板/Shift/回车等），
+        // 防止上一个字母的长按在下一个键按下后被误触发
+        cancelAllLongPressActions()
         // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
         // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
         // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突
