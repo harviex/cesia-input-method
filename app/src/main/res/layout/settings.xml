@@ -606,7 +606,7 @@
                 android:layout_height="44dp"
                 android:minHeight="0dp"
                 android:layout_weight="1"
-                android:text="重置prompt"
+                android:text="重置"
                 android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end"
@@ -760,6 +760,49 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/et_cmd_exit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="4dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="撤销识别"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginEnd="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_undo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="清空识别"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginStart="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_clear"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textSize="12sp"

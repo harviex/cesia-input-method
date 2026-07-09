@@ -89,13 +89,15 @@ class SettingsActivity : AppCompatActivity() {
     private var btnInstallAi: Button? = null
     private var isDownloading = false
 
-    // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式) ===
+    // === 语音命令词 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式、撤销识别、清空识别) ===
     private var etCmdWriting: TextInputEditText? = null    // 智能写作
     private var etCmdCommand: TextInputEditText? = null   // 智能修改
     private var etCmdPolish: TextInputEditText? = null    // 智能润色
     private var etCmdFinish: TextInputEditText? = null    // 结束语音识别
     private var etCmdSend: TextInputEditText? = null      // 立即发送
     private var etCmdExit: TextInputEditText? = null      // 退出语音模式
+    private var etCmdUndo: TextInputEditText? = null      // 撤销识别
+    private var etCmdClear: TextInputEditText? = null     // 清空识别
     private var tvCommandStatus: TextView? = null
 
     // === 个性化设置 ===
@@ -150,10 +152,12 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
         const val PREF_BRAVE_KEY = "tavily_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
+        const val PREF_TEST_TEXT = "test_text"
         const val PREF_MODE = "run_mode"
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_SETTINGS_TITLE = "settings_title"
         const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
+        const val DEFAULT_TEST_TEXT = "嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -279,7 +283,9 @@ class SettingsActivity : AppCompatActivity() {
             etCmdPolish = findViewById(R.id.et_cmd_polish)        // 智能润色
             etCmdFinish = findViewById(R.id.et_cmd_finish)        // 结束语音识别
             etCmdSend = findViewById(R.id.et_cmd_send)            // 立即发送
-            etCmdExit = findViewById(R.id.et_cmd_exit)            // 退出语音模式
+            etCmdExit = findViewById(R.id.et_cmd_exit)        // 退出语音模式
+            etCmdUndo = findViewById(R.id.et_cmd_undo)        // 撤销识别
+            etCmdClear = findViewById(R.id.et_cmd_clear)      // 清空识别
             tvCommandStatus = findViewById(R.id.tv_command_status)
         } catch (_: Exception) {}
 
@@ -522,6 +528,15 @@ class SettingsActivity : AppCompatActivity() {
 
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
+        // 加载测试文本（首次写入默认，之后用用户保存的值）
+        val savedTestText = prefs.getString(PREF_TEST_TEXT, null)
+        if (savedTestText == null) {
+            etTestText.setText(DEFAULT_TEST_TEXT)
+            prefs.edit().putString(PREF_TEST_TEXT, DEFAULT_TEST_TEXT).apply()
+        } else {
+            etTestText.setText(savedTestText)
+        }
+
         // 加载语音命令词（新键名，兼容旧键名）
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
         etCmdWriting?.setText(cmdPrefs.getString("cmd_writing", "写作"))
@@ -530,6 +545,8 @@ class SettingsActivity : AppCompatActivity() {
         etCmdFinish?.setText(cmdPrefs.getString("cmd_finish", "结束"))
         etCmdSend?.setText(cmdPrefs.getString("cmd_send", "发送"))
         etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出"))
+        etCmdUndo?.setText(cmdPrefs.getString("cmd_undo", "撤销"))
+        etCmdClear?.setText(cmdPrefs.getString("cmd_clear", "清空"))
 
         // 加载个性化设置
         etStatusIdle?.setText(prefs.getString("status_idle", "人工智能已就绪"))
@@ -614,6 +631,13 @@ class SettingsActivity : AppCompatActivity() {
         etPolishPrompt.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) savePolishPrompt()
         }
+        etTestText.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val t = etTestText.text?.toString() ?: ""
+                prefs.edit().putString(PREF_TEST_TEXT, t).apply()
+                appendLog("测试文本已保存")
+            }
+        }
 
         // 语音命令词 - 焦点离开时自动保存（含校验）
         val cmdFields = listOf(
@@ -622,7 +646,9 @@ class SettingsActivity : AppCompatActivity() {
             etCmdPolish to "cmd_polish",
             etCmdFinish to "cmd_finish",
             etCmdSend to "cmd_send",
-            etCmdExit to "cmd_exit"
+            etCmdExit to "cmd_exit",
+            etCmdUndo to "cmd_undo",
+            etCmdClear to "cmd_clear"
         )
         cmdFields.forEach { (field, key) ->
             field?.setOnFocusChangeListener { _, hasFocus ->
@@ -992,8 +1018,10 @@ class SettingsActivity : AppCompatActivity() {
     private fun resetPolishPrompt() {
         etPolishPrompt.setText(DEFAULT_POLISH_PROMPT)
         prefs.edit().putString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT).apply()
-        appendLog("🔄 润色 Prompt 已重置为默认值")
-        Toast.makeText(this, "已重置为默认 Prompt", Toast.LENGTH_SHORT).show()
+        etTestText.setText(DEFAULT_TEST_TEXT)
+        prefs.edit().putString(PREF_TEST_TEXT, DEFAULT_TEST_TEXT).apply()
+        appendLog("🔄 已重置为默认 Prompt 与测试文本")
+        Toast.makeText(this, "已重置为默认", Toast.LENGTH_SHORT).show()
     }
 
     // ======================== 模型下载 ========================
