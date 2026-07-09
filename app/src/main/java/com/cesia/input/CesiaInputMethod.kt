@@ -367,7 +367,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 长按检测
     private var longPressHandler = Handler(Looper.getMainLooper())
     private var longPressRunnable: Runnable? = null
-    private var functionalLongPressRunnable: Runnable? = null
+    // 每个按键码独立记录长按 runnable，避免快速连续输入时“取消共享字段”误伤/泄漏导致首个按键功能被触发
+    private val functionalLongPressRunnables = mutableMapOf<Int, Runnable>()
     private var currentLongPressKey: Keyboard.Key? = null
     private var longPressTriggered = false
     private var longPressConsumed = false
@@ -5758,9 +5759,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 取消所有长按相关的 runnable（滑动切换时调用，彻底防止误触发） */
     private fun cancelAllLongPressActions() {
         cancelLongPress()
-        // 取消功能键长按
-        functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-        functionalLongPressRunnable = null
+        // 取消功能键长按（每个按键码独立）
+        functionalLongPressRunnables.values.forEach { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        functionalLongPressRunnables.clear()
         // 取消剪贴板粘贴长按
         clipboardPasteRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         clipboardPasteRunnable = null
@@ -6807,8 +6808,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             in 97..122 -> {
                 // 输入新拼音时退出联想模式
                 exitAssociationMode()
-                functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-                functionalLongPressRunnable = null
+                functionalLongPressRunnables[primaryCode]?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                functionalLongPressRunnables.remove(primaryCode)
                 shortPressHandled = true
                 if (isAsciiMode) {
                     // Shift模式：走英文词典联想（en schema 的 table_translator）
@@ -7173,7 +7174,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
             if (getFunctionalLongAction(primaryCode) != null) {
                 skipPopupLongPress = true
-                functionalLongPressRunnable = Runnable {
+                val runnable = Runnable {
                     if (!shortPressHandled) {
                         getFunctionalLongAction(primaryCode)?.invoke()
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -7181,8 +7182,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         longPressConsumed = false
                     }
                     currentLongPressKey = null
+                    functionalLongPressRunnables.remove(primaryCode)
                 }
-                Handler(Looper.getMainLooper()).postDelayed(functionalLongPressRunnable!!, 700)
+                functionalLongPressRunnables[primaryCode] = runnable
+                Handler(Looper.getMainLooper()).postDelayed(runnable, 700)
             }
         }
         // popupCharacters 长按检测（功能键不注册，避免与功能长按冲突）
@@ -7258,8 +7261,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
-        functionalLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-        functionalLongPressRunnable = null
+        functionalLongPressRunnables[primaryCode]?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        functionalLongPressRunnables.remove(primaryCode)
         clipboardPasteRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         clipboardPasteRunnable = null
         clipboardCutRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
