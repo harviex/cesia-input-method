@@ -1507,7 +1507,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestLocalAi?.isEnabled = false
         btnTestLocalAi?.tag = 0
-        applyButtonProgress(btnTestLocalAi, 5, "加载模型...")
+        applyButtonProgress(btnTestLocalAi, 5, "加载中")
         appendLog("🔄 正在加载模型并润色...")
 
         Thread {
@@ -1557,7 +1557,7 @@ class SettingsActivity : AppCompatActivity() {
                     return@Thread
                 }
                 appendLog("模型加载成功 (${loadTime}ms)")
-                animateProgressTo(btnTestLocalAi, 60, "推理中...")
+                animateProgressTo(btnTestLocalAi, 60, "推理中")
 
                 // 推理（60 秒超时）
                 appendLog("开始推理（最多 60 秒）...")
@@ -1567,7 +1567,7 @@ class SettingsActivity : AppCompatActivity() {
                         aiEngine.polish(inputText, "润色")
                     }
                 }
-                animateProgressTo(btnTestLocalAi, 85, "推理中...")
+                animateProgressTo(btnTestLocalAi, 85, "推理中")
                 val inferTime = System.currentTimeMillis() - inferStart
 
                 aiEngine.release()

@@ -73,6 +73,37 @@ class CesiaKeyboardView @JvmOverloads constructor(
     // 追踪第一根手指的 ID，用于忽略多指触控时的滑动检测
     private var activePointerId = -1
     private var multiTouch = false
+    // 多指手势期间抑制按键触发（防止抬起某根手指时误触发第一根手指的功能键）
+    private var suppressKeyTrigger = false
+    // 真实的键盘动作监听器（被代理包装）
+    private var realKeyboardActionListener: KeyboardView.OnKeyboardActionListener? = null
+
+    override fun setOnKeyboardActionListener(listener: KeyboardView.OnKeyboardActionListener?) {
+        realKeyboardActionListener = listener
+        // 包装一层：多指手势期间丢弃 onKey/onText，防止误触发第一根手指的功能键
+        // 单指点击、单指长按不受影响（suppressKeyTrigger 仅在多指时为 true）
+        val proxy = object : KeyboardView.OnKeyboardActionListener {
+            override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
+                if (suppressKeyTrigger) return
+                realKeyboardActionListener?.onKey(primaryCode, keyCodes)
+            }
+            override fun onText(text: CharSequence?) {
+                if (suppressKeyTrigger) return
+                realKeyboardActionListener?.onText(text)
+            }
+            override fun onPress(primaryCode: Int) {
+                realKeyboardActionListener?.onPress(primaryCode)
+            }
+            override fun onRelease(primaryCode: Int) {
+                realKeyboardActionListener?.onRelease(primaryCode)
+            }
+            override fun swipeLeft() { realKeyboardActionListener?.swipeLeft() }
+            override fun swipeRight() { realKeyboardActionListener?.swipeRight() }
+            override fun swipeDown() { realKeyboardActionListener?.swipeDown() }
+            override fun swipeUp() { realKeyboardActionListener?.swipeUp() }
+        }
+        super.setOnKeyboardActionListener(proxy)
+    }
 
     override fun onTouchEvent(me: android.view.MotionEvent): Boolean {
         when (me.actionMasked) {
@@ -83,6 +114,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
                 activePointerId = me.getPointerId(0)
                 multiTouch = false
+                suppressKeyTrigger = false
                 gestureStartX = me.x
                 gestureStartY = me.y
                 isSwipeDetected = false
@@ -93,6 +125,9 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 multiTouch = true
                 isSwipeDetected = false
                 swipeEarlyNotified = false
+                // 多指手势：抑制所有按键触发，防止抬起某根手指误触发第一根手指功能
+                suppressKeyTrigger = true
+                clearAllKeysPressed()
             }
             android.view.MotionEvent.ACTION_MOVE -> {
                 // 多指状态下不检测滑动（防止双键同时按下被判为滑动手势）
@@ -134,8 +169,12 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     isSwipeDetected = false
                     return true
                 }
-                activePointerId = -1
+                val handled = super.onTouchEvent(me)
+                // 多指手势结束：复位抑制标志，确保下一根手指是干净的单指
+                suppressKeyTrigger = false
                 multiTouch = false
+                activePointerId = -1
+                return handled
             }
         }
         return super.onTouchEvent(me)
