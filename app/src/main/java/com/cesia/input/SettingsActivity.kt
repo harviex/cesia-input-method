@@ -128,6 +128,8 @@ class SettingsActivity : AppCompatActivity() {
     // 词库信息（已并入运行日志开头）
     private val prefs by lazy { getSharedPreferences("cesia_settings", MODE_PRIVATE) }
     private var accentColor: Int = 0xFF81D8D0.toInt()
+    // 连续点击"检查更新"且已是最新版的次数（用于"不要再拉了"提示）
+    private var upToDateCheckCount = 0
     private var themeMode: Int = THEME_LIGHT
 
     private val testClient = OkHttpClient.Builder()
@@ -188,6 +190,14 @@ class SettingsActivity : AppCompatActivity() {
             val drawable = ContextCompat.getDrawable(this, R.drawable.ic_expand_more)?.mutate()
             drawable?.setTint(accentColor)
             it.setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
+        }
+
+        // 三个自定义下拉（API URL / Key / Tavily）边框 + 箭头跟随主题色
+        listOf(tvApiUrl, tvApiKey, tvTavilyKey).forEach { tv ->
+            tv.background = createSpinnerBackground(accentColor)
+            val drawable = ContextCompat.getDrawable(this, R.drawable.ic_expand_more)?.mutate()
+            drawable?.setTint(accentColor)
+            tv.setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
         }
 
         // 语音与 AI 本地化设置 helper（仅用于模型扫描/状态，按钮绑定已移到本 Activity）
@@ -504,9 +514,9 @@ class SettingsActivity : AppCompatActivity() {
         val savedUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
         tvApiUrl.text = savedUrl
         val savedKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
-        tvApiKey.text = if (savedKey.isEmpty()) "点击选择或输入" else savedKey
+        tvApiKey.text = if (savedKey.isEmpty()) "点击选择或输入" else if (savedKey.length > 20) maskSecret(savedKey) else savedKey
         val savedTavily = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
-        tvTavilyKey.text = if (savedTavily.isEmpty()) "点击选择或输入" else savedTavily
+        tvTavilyKey.text = if (savedTavily.isEmpty()) "点击选择或输入" else if (savedTavily.length > 20) maskSecret(savedTavily) else savedTavily
 
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
@@ -603,7 +613,7 @@ class SettingsActivity : AppCompatActivity() {
             if (!hasFocus) savePolishPrompt()
         }
 
-        // 语音命令词 - 焦点离开时自动保存
+        // 语音命令词 - 焦点离开时自动保存（含校验）
         val cmdFields = listOf(
             etCmdWriting to "cmd_writing",
             etCmdCommand to "cmd_command",
@@ -616,12 +626,38 @@ class SettingsActivity : AppCompatActivity() {
             field?.setOnFocusChangeListener { _, hasFocus ->
                 if (!hasFocus) {
                     val value = field.text?.toString()?.trim() ?: ""
-                    if (value.isNotEmpty()) {
-                        val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
-                        cmdPrefs.edit().putString(key, value).apply()
-                        updateVoiceEngineCommands()
-                        appendLog("命令词已保存: $key=$value")
+                    val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+                    val old = cmdPrefs.getString(key, "") ?: ""
+                    if (value.isEmpty()) {
+                        // 清空时若无变动不处理；有变动才恢复默认
+                        if (old.isNotEmpty()) {
+                            cmdPrefs.edit().putString(key, "").apply()
+                            updateVoiceEngineCommands()
+                            appendLog("命令词已清空: $key")
+                        }
+                        return@setOnFocusChangeListener
                     }
+                    if (value == old) return@setOnFocusChangeListener // 无变动不保存
+                    // 校验：仅中文/英文，不含符号与数字
+                    if (!value.matches(Regex("^[\\u4e00-\\u9fa5a-zA-Z]+\$"))) {
+                        appendLog("❌ 命令词「$value」仅允许中英文，已忽略")
+                        Toast.makeText(this, "命令词仅允许中英文", Toast.LENGTH_SHORT).show()
+                        field.setText(old) // 还原
+                        return@setOnFocusChangeListener
+                    }
+                    // 校验：6 个命令词不可重复
+                    val others = cmdFields.mapNotNull { (f, k) ->
+                        if (k == key) null else (f?.text?.toString()?.trim() ?: cmdPrefs.getString(k, "") ?: "")
+                    }
+                    if (others.contains(value)) {
+                        appendLog("❌ 命令词「$value」与其他命令词重复，已忽略")
+                        Toast.makeText(this, "命令词不可重复", Toast.LENGTH_SHORT).show()
+                        field.setText(old) // 还原
+                        return@setOnFocusChangeListener
+                    }
+                    cmdPrefs.edit().putString(key, value).apply()
+                    updateVoiceEngineCommands()
+                    appendLog("命令词已保存: $key=$value")
                 }
             }
         }
@@ -630,22 +666,31 @@ class SettingsActivity : AppCompatActivity() {
         etStatusIdle?.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 val value = etStatusIdle?.text?.toString()?.trim() ?: ""
-                prefs.edit().putString("status_idle", value).apply()
-                appendLog("个性化已保存: status_idle=$value")
+                val old = prefs.getString("status_idle", "") ?: ""
+                if (value != old) {
+                    prefs.edit().putString("status_idle", value).apply()
+                    appendLog("个性化已保存: status_idle=$value")
+                }
             }
         }
         etSmartWritingLabel?.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 val value = etSmartWritingLabel?.text?.toString()?.trim() ?: ""
-                prefs.edit().putString("smart_writing_label", value).apply()
-                appendLog("个性化已保存: smart_writing_label=$value")
+                val old = prefs.getString("smart_writing_label", "") ?: ""
+                if (value != old) {
+                    prefs.edit().putString("smart_writing_label", value).apply()
+                    appendLog("个性化已保存: smart_writing_label=$value")
+                }
             }
         }
         etMagicBookTitle?.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 val value = etMagicBookTitle?.text?.toString()?.trim() ?: ""
-                prefs.edit().putString("magic_book_title", value).apply()
-                appendLog("个性化已保存: magic_book_title=$value")
+                val old = prefs.getString("magic_book_title", "") ?: ""
+                if (value != old) {
+                    prefs.edit().putString("magic_book_title", value).apply()
+                    appendLog("个性化已保存: magic_book_title=$value")
+                }
             }
         }
 
@@ -758,8 +803,9 @@ class SettingsActivity : AppCompatActivity() {
     ) {
         prefs.edit().putString(prefKey, value).apply()
         addHistory(historyKey, value)
-        valueView.text = if (isSecret && value.isEmpty()) "点击选择或输入" else value
-        val disp = if (isSecret) "已设置(${value.take(8)}...)" else value
+        // 密钥类字段在设置页上也只显示脱敏（前15 + 后5）
+        valueView.text = if (isSecret && value.length > 20) maskSecret(value) else value
+        val disp = if (isSecret) "已设置(${if (value.length > 20) maskSecret(value) else value})" else value
         appendLog("$title: $disp")
     }
 
@@ -778,11 +824,13 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun maskSecret(s: String): String {
-        return if (s.length <= 8) s else "${s.take(8)}..."
+        return if (s.length <= 20) s else "${s.take(15)}****${s.takeLast(5)}"
     }
 
     private fun savePolishPrompt() {
         val prompt = etPolishPrompt.text?.toString()?.trim() ?: ""
+        val old = prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT) ?: DEFAULT_POLISH_PROMPT
+        if (prompt == old) return // 无变动不保存、不记日志
         prefs.edit().putString(PREF_POLISH_PROMPT, prompt).apply()
         if (prompt.isNotEmpty()) {
             appendLog("润色 Prompt 已保存: ${prompt.take(50)}...")
@@ -1426,6 +1474,7 @@ class SettingsActivity : AppCompatActivity() {
         val lastCheck = prefs.getLong("last_update_check", 0)
         val now = System.currentTimeMillis()
         if (now - lastCheck > 24 * 60 * 60 * 1000L) {
+            upToDateCheckCount = 0 // 新的一天，重置"已是最新版"提示计数
             checkForUpdates()
         }
     }
@@ -1488,9 +1537,18 @@ class SettingsActivity : AppCompatActivity() {
                 runOnUiThread {
                     showVersion()
                     if (cmp > 0) {
+                        upToDateCheckCount = 0
                         showUpdateDialog(latestVersionName, releaseUrl, releaseNotes, apkUrl)
                     } else {
-                        appendLog("已是最新版本")
+                        upToDateCheckCount++
+                        val vtext = " $latestVersionName"
+                        if (upToDateCheckCount >= 2) {
+                            appendLog("不要再拉了，已是最新版$vtext")
+                            Toast.makeText(this, "不要再拉了，已是最新版$vtext", Toast.LENGTH_SHORT).show()
+                        } else {
+                            appendLog("已是最新版$vtext")
+                            Toast.makeText(this, "已是最新版$vtext", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -1676,7 +1734,7 @@ class SettingsActivity : AppCompatActivity() {
                         list.add(
                             CloudModel(
                                 id = m.optString("id", ""),
-                                name = m.optString("name", m.optString("id", "")),
+                                name = m.optString("name", m.optString("id", "")).replace(Regex("\\s*\\(free\\)"), ""),
                                 provider = m.optString("provider", ""),
                                 contextLength = m.optLong("context_length", 0),
                                 hasTools = m.optBoolean("has_tools", false),
