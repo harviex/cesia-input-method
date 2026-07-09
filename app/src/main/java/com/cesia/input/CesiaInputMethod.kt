@@ -1848,6 +1848,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 上屏选中的词
                 commitCandidateText(selected)
             }
+            // 上屏后清空 Rime 组合状态：避免已提交的拼音/词组残留，
+            // 导致下一次按键又浮出同一词组造成重复上屏（如“有马”→“有有马”）。
+            rimeEngine.clear()
             if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
                 t9InputBuffer.clear()
                 rimeEngine.clear()
@@ -5652,13 +5655,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         val digits = t9InputBuffer.toString()
-        if (digits.isNotEmpty()) {
-            // 重建session，输入完整数字串
+        if (digits.isEmpty()) return
+        // 仅在“新词起始”（缓冲为空）时重建 session 并清空旧组合；
+        // 后续每个数字都追加进同一个 composition，让 Rime 能累积多音节形成词组
+        // （如 ni→nihao 拼出“你好”），而不是每次都从零开始导致无法组词。
+        if (digits.length == 1) {
             rimeEngine.clear()
             rimeEngine.createSession()
-            for (d in digits) {
-                rimeEngine.processKey(d.toString())
-            }
+        }
+        // 把当前完整数字串重新送入（Rime 按 T9 derive 规则映射到拼音并组词）
+        for (d in digits) {
+            rimeEngine.processKey(d.toString())
         }
         updateCandidateBar()
     }
@@ -7201,6 +7208,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region 按键事件
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false
+        // 任意新按键按下时，取消其它按键残留的功能长按计时（含多指/快速连续输入场景）：
+        // 按下第二个字母时，第一个字母可能仍按住未释放，其长按 runnable 仍在计时；
+        // 不在此清除，会导致按到第三个键时第一个键的长按功能键被误触发。
+        // 当前按键自身的 runnable 在下方注册（或已被上层逻辑处理），不作清除。
+        functionalLongPressRunnables.keys.filter { it != primaryCode }.forEach { code ->
+            functionalLongPressRunnables[code]?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+            functionalLongPressRunnables.remove(code)
+        }
         // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
         // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
         // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突
