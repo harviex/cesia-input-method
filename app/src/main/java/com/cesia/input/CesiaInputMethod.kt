@@ -1852,24 +1852,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 t9InputBuffer.clear()
                 rimeEngine.clear()
                 rimeEngine.createSession()
-            }
-            // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
-            val associations = rimeEngine.getAssociations(selected).take(20)
-            if (associations.isNotEmpty()) {
-                // 有联想词，进入联想模式
-                isAssociationMode = true
-                associationPrefix = selected
-                associationCandidates = associations
-                if (isPanelExpanded) collapseCandidatePanel()
-                showAssociationCandidates()
             } else {
-                // 没有联想词
-                isAssociationMode = false
-                associationPrefix = ""
-                associationCandidates = emptyList()
-                if (isPanelExpanded) collapseCandidatePanel()
-                updateCandidateBar()
+                // 选完候选后清空 Rime 组合，回到待输入；
+                // 不自动进入联想模式，避免整词上屏后又被当作联想前缀叠加造成重复上屏
+                // （如逐字组词时多出一个字）。Rime 原生组词（xixi→希希整词）本身已正常工作。
+                rimeEngine.clear()
             }
+            if (isPanelExpanded) collapseCandidatePanel()
+            updateCandidateBar()
         }
         } catch (e: Exception) {
             Log.e("Cesia", "selectCandidateByGlobalIndex crash: ${e.message}")
