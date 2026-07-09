@@ -581,7 +581,6 @@ class SettingsActivity : AppCompatActivity() {
                 ),
                 historyKey = "api_url_history",
                 prefKey = PREF_API_URL,
-                currentValue = if (tvApiUrl.text.toString() == "请选择模型供应方") "" else tvApiUrl.text.toString(),
                 valueView = tvApiUrl,
                 isSecret = false
             )
@@ -592,7 +591,6 @@ class SettingsActivity : AppCompatActivity() {
                 presets = emptyList(),
                 historyKey = "api_key_history",
                 prefKey = PREF_OPENROUTER_KEY,
-                currentValue = if (tvApiKey.text.toString() == "点击选择或输入") "" else tvApiKey.text.toString(),
                 valueView = tvApiKey,
                 isSecret = true,
                 freeUrl = "https://openrouter.ai/"
@@ -604,7 +602,6 @@ class SettingsActivity : AppCompatActivity() {
                 presets = emptyList(),
                 historyKey = "tavily_key_history",
                 prefKey = PREF_BRAVE_KEY,
-                currentValue = if (tvTavilyKey.text.toString() == "点击选择或输入") "" else tvTavilyKey.text.toString(),
                 valueView = tvTavilyKey,
                 isSecret = true,
                 freeUrl = "https://www.tavily.com/"
@@ -759,15 +756,21 @@ class SettingsActivity : AppCompatActivity() {
         presets: List<Pair<String, String>>, // (value, displayName)
         historyKey: String,
         prefKey: String,
-        currentValue: String,
         valueView: TextView,
         isSecret: Boolean,
         freeUrl: String = ""
     ) {
+        // 真实当前值（直接读 prefs，不使用 TextView 上的脱敏/友好名显示）
+        val realCurrent = prefs.getString(prefKey, "") ?: ""
+        // 已被用户删除的预选项不再出现
+        val deletedPresets = getDeletedPresets(historyKey)
+        val activePresets = presets.filter { it.first !in deletedPresets }
+        val history = getHistory(historyKey)
+        // 列表项 = 预选 + 历史 + 当前(若不在前两者中)；不重复
         val allItems = LinkedHashSet<String>().apply {
-            if (currentValue.isNotEmpty()) add(currentValue)
-            addAll(presets.map { it.first })
-            addAll(getHistory(historyKey))
+            addAll(activePresets.map { it.first })
+            addAll(history)
+            if (realCurrent.isNotEmpty()) add(realCurrent)
         }.toList().toMutableList()
 
         // value -> 显示文案（API URL 等需要把地址映射成友好名）
@@ -785,7 +788,7 @@ class SettingsActivity : AppCompatActivity() {
         val btnApplyFree = dialogView.findViewById<Button>(R.id.btn_apply_free)
 
         tvTitle.text = title
-        etCustom.hint = if (isSecret) "自定义：输入后点“保存并使用”" else "自定义：输入后点“保存并使用”"
+        etCustom.hint = "自定义：输入后点“保存并使用”"
 
         val adapter = object : ArrayAdapter<String>(
             this, R.layout.item_custom_value, R.id.tv_item_text, allItems
@@ -796,8 +799,11 @@ class SettingsActivity : AppCompatActivity() {
                 val btnDel = view.findViewById<TextView>(R.id.tv_item_delete)
                 val v = allItems[position]
                 tv.text = displayOf(v)
+                // 当前选中项高亮（主题色文字）
+                tv.setTextColor(if (v == realCurrent) accentColor else 0xFF333333.toInt())
                 btnDel.setOnClickListener {
                     removeHistory(historyKey, v)
+                    if (presets.any { it.first == v }) addDeletedPreset(historyKey, v)
                     allItems.remove(v)
                     remove(v)
                     notifyDataSetChanged()
@@ -841,6 +847,18 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    // 记录被删除的预选项（避免重开对话框时重新出现）
+    private fun getDeletedPresets(historyKey: String): Set<String> {
+        val raw = prefs.getString("${historyKey}_deleted", "") ?: ""
+        if (raw.isEmpty()) return emptySet()
+        return raw.split("||").filter { it.isNotEmpty() }.toSet()
+    }
+    private fun addDeletedPreset(historyKey: String, value: String) {
+        val set = getDeletedPresets(historyKey).toMutableSet()
+        set.add(value)
+        prefs.edit().putString("${historyKey}_deleted", set.joinToString("||")).apply()
     }
 
     // 应用值并做针对性审查（openrouter key / tavily key）
@@ -999,6 +1017,71 @@ class SettingsActivity : AppCompatActivity() {
         btn.background = layer
         btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
+    }
+
+    // 润色/推理进度动画：根据输入字数估算总时长，平滑递增到 100%，
+    // 到达 100% 后停留 END_HOLD_MS 再复位（让进度条看起来真实而非瞬间跳变）
+    private fun startPolishProgress(
+        button: android.widget.Button?,
+        text: String,
+        inputLen: Int,
+        onFinished: () -> Unit
+    ) {
+        val btn = button ?: return
+        val totalMs = (1500 + inputLen * 120).coerceIn(2000, 12000)
+        val tickMs = 100L
+        val steps = (totalMs / tickMs).toInt().coerceAtLeast(1)
+        val handler = android.os.Handler(mainLooper)
+        var step = 0
+        btn.isEnabled = false
+        val runnable = object : Runnable {
+            override fun run() {
+                step++
+                val percent = if (step >= steps) 100 else ((step * 100 / steps) * 0.92).toInt()
+                applyButtonProgress(btn, percent, text)
+                if (step < steps) {
+                    handler.postDelayed(this, tickMs)
+                } else {
+                    // 停在 100% 多等一会
+                    handler.postDelayed({ onFinished() }, 900)
+                }
+            }
+        }
+        handler.post(runnable)
+    }
+
+    // 平滑过渡到目标进度（用于本地 AI 的真实阶段：加载->推理->完成）
+    private fun animateProgressTo(button: android.widget.Button?, target: Int, text: String) {
+        val btn = button ?: return
+        val current = (btn.tag as? Int) ?: 0
+        if (current >= target) {
+            applyButtonProgress(btn, target, text)
+            btn.tag = target
+            return
+        }
+        val handler = android.os.Handler(mainLooper)
+        var p = current
+        val runnable = object : Runnable {
+            override fun run() {
+                p += ((target - p) / 4).coerceAtLeast(1)
+                if (p >= target) p = target
+                applyButtonProgress(btn, p, text)
+                btn.tag = p
+                if (p < target) handler.postDelayed(this, 60)
+            }
+        }
+        handler.post(runnable)
+    }
+
+    // 润色完成：进度拉满到 100%，多停留一会再复位并恢复可用
+    private fun finishPolishButton(button: android.widget.Button?, text: String) {
+        val btn = button ?: return
+        animateProgressTo(btn, 100, text)
+        android.os.Handler(mainLooper).postDelayed({
+            btn.tag = 0
+            btn.isEnabled = true
+            resetButtonBg(btn, text)
+        }, 900)
     }
 
     // 初始/重置态：跟随主题色底 + 白字
@@ -1314,11 +1397,11 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestApi.isEnabled = false
-        applyButtonProgress(btnTestApi, 30, "润色中...")
         appendLog("🔄 正在润色...")
-
-        Thread {
-            try {
+        // 按字数估算进度（动画），动画结束后才真正发请求
+        startPolishProgress(btnTestApi, "润色中...", inputText.length) {
+            Thread {
+                try {
                 val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
                 val isOr = apiUrl.contains("openrouter.ai")
 
@@ -1399,20 +1482,21 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
-                    resetButtonBg(btnTestApi, "API 润色")
+                    finishPolishButton(btnTestApi, "API 润色")
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
-                    resetButtonBg(btnTestApi, "API 润色")
+                    finishPolishButton(btnTestApi, "API 润色")
                 }
             }
         }.start()
-    }
+        }
+        }
 
-    // ======================== 本地 AI 测试 ========================
+        // ======================== 本地 AI 测试 ========================
 
     private fun testLocalAiConnection() {
         val inputText = etTestText.text?.toString()?.trim() ?: ""
@@ -1422,7 +1506,8 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestLocalAi?.isEnabled = false
-        applyButtonProgress(btnTestLocalAi, 20, "推理中...")
+        btnTestLocalAi?.tag = 0
+        applyButtonProgress(btnTestLocalAi, 5, "加载模型...")
         appendLog("🔄 正在加载模型并润色...")
 
         Thread {
@@ -1472,7 +1557,7 @@ class SettingsActivity : AppCompatActivity() {
                     return@Thread
                 }
                 appendLog("模型加载成功 (${loadTime}ms)")
-                applyButtonProgress(btnTestLocalAi, 60, "推理中...")
+                animateProgressTo(btnTestLocalAi, 60, "推理中...")
 
                 // 推理（60 秒超时）
                 appendLog("开始推理（最多 60 秒）...")
@@ -1482,7 +1567,7 @@ class SettingsActivity : AppCompatActivity() {
                         aiEngine.polish(inputText, "润色")
                     }
                 }
-                applyButtonProgress(btnTestLocalAi, 85, "推理中...")
+                animateProgressTo(btnTestLocalAi, 85, "推理中...")
                 val inferTime = System.currentTimeMillis() - inferStart
 
                 aiEngine.release()
@@ -1499,16 +1584,14 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(true, "润色结果为空")
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
-                    btnTestLocalAi?.isEnabled = true
-                    resetButtonBg(btnTestLocalAi, "本地 AI")
+                    finishPolishButton(btnTestLocalAi, "本地 AI")
                 }
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
                 runOnUiThread {
                     showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
-                    btnTestLocalAi?.isEnabled = true
-                    resetButtonBg(btnTestLocalAi, "本地 AI")
+                    finishPolishButton(btnTestLocalAi, "本地 AI")
                 }
             }
         }.start()
