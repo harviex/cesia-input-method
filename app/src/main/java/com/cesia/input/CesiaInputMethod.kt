@@ -4645,7 +4645,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         ic.deleteSurroundingText(removeLen, 0)
                                     }
                                     // 剩余文字以组合态保留（不上屏），继续监听后续语音
-                                    ic.setComposingText(prefix, 1)
+                                    if (prefix.isNotEmpty()) {
+                                        ic.setComposingText(prefix, 1)
+                                    } else {
+                                        // 内容已全部撤销：清除组合态，避免残留空组合字符（空字）
+                                        ic.finishComposingText()
+                                    }
                                     recognizedText = prefix
                                     updateStatus("↩️ 已撤销最近语段：$prefix")
                                     resumeRecordingKeepText()
