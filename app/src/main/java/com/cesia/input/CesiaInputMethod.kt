@@ -6876,21 +6876,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         keyboardView.invalidateAllKeys()
                     }
                 } else {
-                    // 中文模式：先走 Rime 引擎
+                    // 中文模式：走 Rime 引擎
                     val hadComposing = rimeEngine.isComposing
                     exitAssociationMode()
                     val accepted = rimeEngine.processKey(primaryCode.toChar())
-                    Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'")
                     if (accepted) {
-                        // 如果之前没有 composing，且输入后 Rime 产生了 composing，说明是拼音输入
-                        // 如果之前没有 composing，且输入后也没有 composing，说明是英文输入
-                        if (!hadComposing && !rimeEngine.isComposing) {
-                            // Rime 没有进入 composing 状态，直接上屏英文
-                            ic?.commitText(primaryCode.toChar().toString(), 1)
-                        }
+                        // Rime 已接受：保持在 composing 状态继续组词，不在此上屏英文字母，
+                        // 避免多字拼音被拆成单字母（如 xixi→希希 组词失败）。
+                        // 仅当 Rime 真正处于 composing（有拼音预编辑）时才等待选词。
                         updateCandidateBar()
                     } else {
-                        // Rime 不接受该按键，直接上屏
+                        // Rime 完全不接受该按键（非法的拼音片段等），直接上屏该字母
                         ic?.commitText(primaryCode.toChar().toString(), 1)
                         updateCandidateBar()
                     }

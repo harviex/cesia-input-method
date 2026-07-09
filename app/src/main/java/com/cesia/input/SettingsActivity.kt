@@ -1107,6 +1107,40 @@ class SettingsActivity : AppCompatActivity() {
         }, 900)
     }
 
+    // 简单的文字闪烁（替代进度条）：按钮文字在「原文字」与「提示文字」之间慢速闪烁，
+    // 润色/加载完成后停止并恢复原文字。按钮高度固定不变、不会撑大。
+    private val buttonFlashRunnables = mutableMapOf<android.widget.Button, Runnable>()
+    private fun startButtonFlash(button: android.widget.Button?, flashingText: String) {
+        val btn = button ?: return
+        btn.isEnabled = false
+        btn.foreground = null
+        btn.minimumHeight = 0
+        val fixedPx = (44f * resources.displayMetrics.density).toInt()
+        btn.layoutParams.height = fixedPx
+        val base = btn.text?.toString() ?: ""
+        var showFlash = false
+        val handler = android.os.Handler(mainLooper)
+        val runnable = object : Runnable {
+            override fun run() {
+                btn.text = if (showFlash) flashingText else base
+                showFlash = !showFlash
+                handler.postDelayed(this, 600)
+            }
+        }
+        buttonFlashRunnables[btn] = runnable
+        handler.post(runnable)
+    }
+    private fun stopButtonFlash(button: android.widget.Button?, restoreText: String) {
+        val btn = button ?: return
+        buttonFlashRunnables[btn]?.let { android.os.Handler(mainLooper).removeCallbacks(it) }
+        buttonFlashRunnables.remove(btn)
+        btn.isEnabled = true
+        btn.minimumHeight = 0
+        val fixedPx = (44f * resources.displayMetrics.density).toInt()
+        btn.layoutParams.height = fixedPx
+        btn.text = restoreText
+    }
+
     // 初始/重置态：跟随主题色底 + 白字
     private fun resetButtonBg(button: android.widget.Button?, text: String) {
         val btn = button ?: return
@@ -1427,10 +1461,10 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestApi.isEnabled = false
         appendLog("🔄 正在润色...")
-        // 按字数估算进度（动画），动画结束后才真正发请求
-        startPolishProgress(btnTestApi, "润色中...", inputText.length) {
-            Thread {
-                try {
+        // 文字闪烁提示（不发网络请求前先开始闪烁）
+        startButtonFlash(btnTestApi, "润色中...")
+        Thread {
+            try {
                 val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
                 val isOr = apiUrl.contains("openrouter.ai")
 
@@ -1511,21 +1545,20 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
-                    finishPolishButton(btnTestApi, "API 润色")
+                    stopButtonFlash(btnTestApi, "API 润色")
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
-                    finishPolishButton(btnTestApi, "API 润色")
+                    stopButtonFlash(btnTestApi, "API 润色")
                 }
             }
         }.start()
-        }
-        }
+    }
 
-        // ======================== 本地 AI 测试 ========================
+    // ======================== 本地 AI 测试 ========================
 
     private fun testLocalAiConnection() {
         val inputText = etTestText.text?.toString()?.trim() ?: ""
@@ -1535,8 +1568,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestLocalAi?.isEnabled = false
-        btnTestLocalAi?.tag = 0
-        applyButtonProgress(btnTestLocalAi, 5, "加载中", foreground = true)
+        startButtonFlash(btnTestLocalAi, "加载中")
         appendLog("🔄 正在加载模型并润色...")
 
         Thread {
@@ -1548,8 +1580,7 @@ class SettingsActivity : AppCompatActivity() {
                     runOnUiThread {
                         showTestResult(false, "未安装 AI 模型")
                         appendLog("本地 AI 失败: 模型未安装")
-                        btnTestLocalAi?.isEnabled = true
-                        resetButtonBg(btnTestLocalAi, "本地 AI")
+                        stopButtonFlash(btnTestLocalAi, "本地 AI")
                     }
                     return@Thread
                 }
@@ -1580,13 +1611,11 @@ class SettingsActivity : AppCompatActivity() {
                         if (mnnLog.isNotEmpty()) {
                             appendLog("MNN log: $mnnLog")
                         }
-                        btnTestLocalAi?.isEnabled = true
-                        resetButtonBg(btnTestLocalAi, "本地 AI")
+                        stopButtonFlash(btnTestLocalAi, "本地 AI")
                     }
                     return@Thread
                 }
                 appendLog("模型加载成功 (${loadTime}ms)")
-                animateProgressTo(btnTestLocalAi, 60, "推理中")
 
                 // 推理（60 秒超时）
                 appendLog("开始推理（最多 60 秒）...")
@@ -1596,7 +1625,6 @@ class SettingsActivity : AppCompatActivity() {
                         aiEngine.polish(inputText, "润色")
                     }
                 }
-                animateProgressTo(btnTestLocalAi, 85, "推理中")
                 val inferTime = System.currentTimeMillis() - inferStart
 
                 aiEngine.release()
@@ -1613,14 +1641,14 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(true, "润色结果为空")
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
-                    finishPolishButton(btnTestLocalAi, "本地 AI")
+                    stopButtonFlash(btnTestLocalAi, "本地 AI")
                 }
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
                 runOnUiThread {
                     showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
-                    finishPolishButton(btnTestLocalAi, "本地 AI")
+                    stopButtonFlash(btnTestLocalAi, "本地 AI")
                 }
             }
         }.start()

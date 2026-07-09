@@ -41,6 +41,8 @@ engine:
 # 英文词典翻译器
 english:
   dictionary: en
+  import_tables:
+    - en_dicts/en        # 若已下载完整词库（full.zip 解压的 en_dicts/en），自动合并使用；缺失则仅用内置 240 词
   enable_completion: true    # 启用联想补全
   enable_sentence: true      # 启用多词/短语模式（支持英文词组连续输入）
   enable_user_dict: true     # 启用用户词典（记住常用词组）
