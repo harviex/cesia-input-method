@@ -3510,57 +3510,69 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    /** Tavily Search API（互联网搜索） */
+    /** Tavily Search API（互联网搜索）
+     *  支持多个 API Key：优先用当前选中的 key，失败后依次尝试历史记录里的其他 key（避免“只能1条/新键顶旧键”）
+     */
     private fun performSearXNGSearch(query: String): String {
         Log.d("Cesia", "TavilySearch: start, query=$query")
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        val tavilyApiKey = prefs.getString("tavily_api_key", "") ?: ""
-        if (tavilyApiKey.isEmpty()) {
+        val activeKey = prefs.getString("tavily_api_key", "") ?: ""
+        val historyKeys = prefs.getString("tavily_key_history", "")?.split("||")
+            ?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+        // 去重后的 key 池：当前选中在前
+        val keyPool = (listOf(activeKey) + historyKeys).filter { it.isNotEmpty() }.distinct()
+        if (keyPool.isEmpty()) {
             Log.w("Cesia", "TavilySearch: API key not configured")
             return ""
         }
-        try {
-            val url = "https://api.tavily.com/search"
-            // 判断是否为新闻类查询，使用新闻搜索通道
-            val newsKeywords = listOf("新闻", "最新", "今天", "日报", "时报", "早报", "晚报", "时事", "热点", "头条", "战况", "比分")
-            val isNewsQuery = newsKeywords.any { query.contains(it) }
-            val jsonBody = org.json.JSONObject().apply {
-                put("query", query)
-                put("max_results", 5)
-                put("include_answer", true)
-                put("search_depth", "basic")
-                // 强制使用新闻通道 + 最近1天，确保时效性
-                put("topic", "news")
-                put("days", 1)
-            }.toString()
-            val body = jsonBody.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("Authorization", "Bearer $tavilyApiKey")
-                .post(body)
-                .build()
-            val client = OkHttpClient.Builder()
-                .connectTimeout(8, TimeUnit.SECONDS)
-                .readTimeout(12, TimeUnit.SECONDS)
-                .build()
-            val response = client.newCall(request).execute()
-            val code = response.code
-            Log.d("Cesia", "TavilySearch: HTTP $code")
-            if (code == 200) {
-                val json = response.body?.string() ?: ""
-                Log.d("Cesia", "TavilySearch: response length=${json.length}")
-                val results = parseTavilyResults(json)
-                Log.d("Cesia", "TavilySearch: results=${results.length} chars")
-                if (results.isNotEmpty()) {
-                    return results
+
+        // 构造请求体（与 key 无关，只构造一次）
+        val jsonBody = org.json.JSONObject().apply {
+            put("query", query)
+            put("max_results", 5)
+            put("include_answer", true)
+            put("search_depth", "basic")
+            put("topic", "news")
+            put("days", 1)
+        }.toString()
+        val body = jsonBody.toRequestBody("application/json".toMediaType())
+        val client = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .build()
+
+        // 依次尝试每个 key，第一个成功的即用
+        for ((idx, key) in keyPool.withIndex()) {
+            try {
+                val request = Request.Builder()
+                    .url("https://api.tavily.com/search")
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(body)
+                    .build()
+                val response = client.newCall(request).execute()
+                val code = response.code
+                Log.d("Cesia", "TavilySearch[$idx]: HTTP $code")
+                if (code == 200) {
+                    val json = response.body?.string() ?: ""
+                    val results = parseTavilyResults(json)
+                    if (results.isNotEmpty()) {
+                        if (idx != 0) {
+                            Log.i("Cesia", "TavilySearch: 使用第 ${idx + 1} 个 key 成功")
+                        }
+                        return results
+                    }
+                    response.close()
+                } else {
+                    Log.w("Cesia", "TavilySearch[$idx] error HTTP $code: ${response.body?.string()?.take(200)}")
+                    response.close()
+                    // 401/429 等说明该 key 失效，继续尝试下一个
+                    if (code == 401 || code == 429) continue
                 }
-            } else {
-                Log.w("Cesia", "TavilySearch error HTTP $code: ${response.body?.string()?.take(200)}")
+            } catch (e: Exception) {
+                Log.w("Cesia", "TavilySearch[$idx] failed: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w("Cesia", "TavilySearch failed: ${e.message}")
         }
-        Log.d("Cesia", "TavilySearch: returning empty")
+        Log.d("Cesia", "TavilySearch: all keys failed or empty")
         return ""
     }
 
@@ -7154,9 +7166,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region 按键事件
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false
-        // 快速连续输入时，先取消上一个按键残留的长按 runnable（功能键长按/剪贴板/Shift/回车等），
-        // 防止上一个字母的长按在下一个键按下后被误触发
-        cancelAllLongPressActions()
         // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
         // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
         // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突

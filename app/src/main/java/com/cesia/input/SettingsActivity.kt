@@ -996,6 +996,8 @@ class SettingsActivity : AppCompatActivity() {
     // 按钮即进度条：圆角，主题色为进度填充，主题色减淡 50% 为背景
     private fun applyButtonProgress(button: android.widget.Button?, percent: Int, text: String) {
         val btn = button ?: return
+        // 冻结当前高度，防止自定义背景 Drawable 被重新测量导致按钮被撑大
+        val fixedH = btn.height
         val accent = accentColor
         val bg = lighten(accent, 0.5f)
         val radius = 10f * resources.displayMetrics.density
@@ -1015,6 +1017,11 @@ class SettingsActivity : AppCompatActivity() {
             btn.backgroundTintList = null
         }
         btn.background = layer
+        // 固定高度（px），避免背景 Drawable 改变测量高度
+        if (fixedH > 0) {
+            btn.layoutParams.height = fixedH
+            btn.requestLayout()
+        }
         btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
     }

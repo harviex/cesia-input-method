@@ -111,7 +111,7 @@ class PolishService(
         val json = JSONObject().apply {
             put("model", model)
             put("messages", messages)
-            put("temperature", 0.3)
+            put("temperature", 0.5)
             put("max_tokens", 4096)
             put("stop", JSONArray().apply {
                 put("</assistant>")
@@ -423,6 +423,12 @@ class PolishService(
         const val OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
         const val OPENROUTER_MODEL_FALLBACK = "mistralai/mistral-7b-instruct:free"
         const val DEFAULT_CUSTOM_URL = "https://typeless-ai-service.vercel.app/api/polish"
-        const val DEFAULT_POLISH_PROMPT = """你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如"润色后："）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过"换行分段"或使用"* "进行分点陈列。"""
+        const val DEFAULT_POLISH_PROMPT = """你是一个中文文本润色与排版助手。请将输入的口语/语音识别文字处理为通顺的书面中文，严格执行：
+1. 保持原文语言：输入是中文就只输出中文，绝对禁止翻译成英文或其他语言。
+2. 严禁删减核心信息，严禁随意扩写、补充解释或发挥。
+3. 仅修正错别字、口语化表达和语序，并补全标点。
+4. 只输出润色后的纯文本，禁止任何解释、前缀（如“润色后：”）或后缀。
+5. 仅在原文明显包含多个独立观点/步骤时，才用换行或“* ”分点；否则保持为一段连贯文字，不要强行分点。
+6. 输出长度应与原文字数大致相当，不要显著变长。"""
     }
 }

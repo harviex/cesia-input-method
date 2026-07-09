@@ -910,7 +910,6 @@ class VoiceEngine(private val context: Context) {
                     numEnd++
                 }
                 val chineseNumStr = text.substring(numStart, numEnd)
-
                 // 序数：前面是“第/初”则不转换，原样保留
                 val prev = if (numStart > 0) chars[numStart - 1] else null
                 if (prev != null && prev in ordinalPrefixes) {
@@ -923,8 +922,11 @@ class VoiceEngine(private val context: Context) {
                     } else {
                         result.append(chineseNumStr)
                     }
+                } else if (chineseNumStr.length == 1) {
+                    // 单个中文数字：保持汉字（如“五”→“五”，不转“5”）
+                    result.append(chineseNumStr)
                 } else {
-                    // 无单位的连续中文数字：逐字转阿拉伯，保留原顺序（如“四三五”→“435”）
+                    // 两个及以上连续中文数字：转阿拉伯，保留原顺序（如“四三五”→“435”）
                     for (ch in chineseNumStr) {
                         val d = chineseDigits[ch]
                         if (d != null) result.append(d) else result.append(ch)
