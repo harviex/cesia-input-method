@@ -553,7 +553,9 @@ class SettingsActivity : AppCompatActivity() {
             cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
             cmdPrefs.getString("cmd_send", "发送") ?: "发送",
             cmdPrefs.getString("cmd_command", "修改") ?: "修改",
-            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
+            cmdPrefs.getString("cmd_writing", "写作") ?: "写作",
+            cmdPrefs.getString("cmd_undo", "撤销") ?: "撤销",
+            cmdPrefs.getString("cmd_clear", "清空") ?: "清空"
         )
 
         appendLog("已加载设置")
@@ -981,7 +983,9 @@ class SettingsActivity : AppCompatActivity() {
             cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
             cmdPrefs.getString("cmd_send", "发送") ?: "发送",
             cmdPrefs.getString("cmd_command", "修改") ?: "修改",
-            cmdPrefs.getString("cmd_writing", "写作") ?: "写作"
+            cmdPrefs.getString("cmd_writing", "写作") ?: "写作",
+            cmdPrefs.getString("cmd_undo", "撤销") ?: "撤销",
+            cmdPrefs.getString("cmd_clear", "清空") ?: "清空"
         )
     }
 
@@ -994,7 +998,14 @@ class SettingsActivity : AppCompatActivity() {
 
     // ======================== 模型下载 ========================
     // 按钮即进度条：圆角，主题色为进度填充，主题色减淡 50% 为背景
-    private fun applyButtonProgress(button: android.widget.Button?, percent: Int, text: String) {
+    // foreground=true 时用前景覆盖层渲染进度（按钮自身背景/tint 不变 → 高度绝不会被撑大），
+    // 用于测试按钮；下载按钮用 background 方式（与套件下载一致）。
+    private fun applyButtonProgress(
+        button: android.widget.Button?,
+        percent: Int,
+        text: String,
+        foreground: Boolean = false
+    ) {
         val btn = button ?: return
         val accent = accentColor
         val bg = lighten(accent, 0.5f)
@@ -1010,16 +1021,22 @@ class SettingsActivity : AppCompatActivity() {
         )
         clip.level = (percent.coerceIn(0, 100) * 100).coerceIn(0, 10000)
         val layer = android.graphics.drawable.LayerDrawable(arrayOf(base, clip))
-        // 清除 backgroundTint，否则 MaterialButton 会用 tint 覆盖进度层
-        if (btn is com.google.android.material.button.MaterialButton) {
-            btn.backgroundTintList = null
-        }
-        btn.background = layer
         // 锁死高度：minHeight 会覆盖 layout_height，必须同时清零；并强制 layoutParams 高度固定 44dp，
         // 确保自定义背景 Drawable 不会被重新测量把按钮撑大（不论主题 minHeight 多大）
         btn.minimumHeight = 0
         val fixedPx = (44f * resources.displayMetrics.density).toInt()
         btn.layoutParams.height = fixedPx
+
+        if (foreground) {
+            // 前景覆盖：按钮自身背景/描边完全不动，仅在上层叠加进度填充 → 高度绝不变
+            btn.foreground = layer
+        } else {
+            // 清除 backgroundTint，否则 MaterialButton 会用 tint 覆盖进度层
+            if (btn is com.google.android.material.button.MaterialButton) {
+                btn.backgroundTintList = null
+            }
+            btn.background = layer
+        }
         btn.requestLayout()
         btn.setTextColor(0xFFFFFFFF.toInt())
         btn.text = text
@@ -1044,7 +1061,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun run() {
                 step++
                 val percent = if (step >= steps) 100 else ((step * 100 / steps) * 0.92).toInt()
-                applyButtonProgress(btn, percent, text)
+                applyButtonProgress(btn, percent, text, foreground = true)
                 if (step < steps) {
                     handler.postDelayed(this, tickMs)
                 } else {
@@ -1061,7 +1078,7 @@ class SettingsActivity : AppCompatActivity() {
         val btn = button ?: return
         val current = (btn.tag as? Int) ?: 0
         if (current >= target) {
-            applyButtonProgress(btn, target, text)
+            applyButtonProgress(btn, target, text, foreground = true)
             btn.tag = target
             return
         }
@@ -1071,7 +1088,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun run() {
                 p += ((target - p) / 4).coerceAtLeast(1)
                 if (p >= target) p = target
-                applyButtonProgress(btn, p, text)
+                applyButtonProgress(btn, p, text, foreground = true)
                 btn.tag = p
                 if (p < target) handler.postDelayed(this, 60)
             }
@@ -1099,6 +1116,7 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             btn.setBackgroundColor(accent)
         }
+        btn.foreground = null
         btn.minimumHeight = 0
         val fixedPx = (44f * resources.displayMetrics.density).toInt()
         btn.layoutParams.height = fixedPx
@@ -1374,7 +1392,9 @@ class SettingsActivity : AppCompatActivity() {
         if (success) {
             til.error = null
             til.boxStrokeColor = accent
-            // 闪烁：主题色 <-> 白色 交替几次后定格主题色
+            // 闪烁结束后恢复为原本的字体颜色（深色，清晰可读），而非定格主题色
+            val originalColor = (ed.textColors?.defaultColor ?: 0xFF222222.toInt())
+            // 闪烁：主题色 <-> 白色 交替几次后恢复原本颜色
             val white = 0xFFFFFFFF.toInt()
             val handler = android.os.Handler(mainLooper)
             var count = 0
@@ -1386,7 +1406,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (count <= total) {
                         handler.postDelayed(this, 160)
                     } else {
-                        ed.setTextColor(accent)
+                        ed.setTextColor(originalColor)
                     }
                 }
             }
@@ -1516,7 +1536,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnTestLocalAi?.isEnabled = false
         btnTestLocalAi?.tag = 0
-        applyButtonProgress(btnTestLocalAi, 5, "加载中")
+        applyButtonProgress(btnTestLocalAi, 5, "加载中", foreground = true)
         appendLog("🔄 正在加载模型并润色...")
 
         Thread {

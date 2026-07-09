@@ -4614,6 +4614,40 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         }
                                     }
                                 }
+                                "undo" -> {
+                                    // 撤销：以空格为分界，去除最近一个已识别但未上屏的语段
+                                    val seg = recognizedText.trimEnd()
+                                    val cut = if (seg.isEmpty()) "" else {
+                                        val idx = seg.lastIndexOf(' ')
+                                        if (idx < 0) seg else seg.substring(0, idx)
+                                    }
+                                    val removedLen = recognizedText.length - cut.length
+                                    if (removedLen > 0) {
+                                        ic.deleteSurroundingText(removedLen, 0)
+                                    }
+                                    recognizedText = cut
+                                    updateStatus("↩️ 已撤销最近语段")
+                                    // 锁定模式：继续录音；非锁定模式：结束语音输入
+                                    if (isVoiceLocked) {
+                                        startRecordingLocked()
+                                    } else {
+                                        resetToIdle()
+                                    }
+                                }
+                                "clear" -> {
+                                    // 清空：去除所有已识别但未上屏的文字，并结束本次语音输入
+                                    if (recognizedText.isNotEmpty()) {
+                                        ic.deleteSurroundingText(recognizedText.length, 0)
+                                    }
+                                    recognizedText = ""
+                                    updateStatus("🧹 已清空并结束语音输入")
+                                    // 普通语音输入：结束；锁定模式：不退出锁定，继续录音
+                                    if (isVoiceLocked) {
+                                        startRecordingLocked()
+                                    } else {
+                                        resetToIdle()
+                                    }
+                                }
                             }
                         }
                     }
@@ -7174,6 +7208,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (!isAsciiMode && primaryCode in 97..122 && keyboardMode == KeyboardMode.QWERTY && !rimeEngine.isComposing) {
             if (getFunctionalLongAction(primaryCode) != null) {
                 skipPopupLongPress = true
+                // 快速/多指连续输入时，上一个按键（仍按住未释放）的功能长按 runnable 可能残留，
+                // 在此按码清除“其它按键”的残留 runnable，避免首个按键功能被误触发；
+                // 当前按键自身的 runnable 保留（注册在下方），单指长按功能不受影响。
+                functionalLongPressRunnables.keys.filter { it != primaryCode }.forEach { code ->
+                    functionalLongPressRunnables[code]?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                    functionalLongPressRunnables.remove(code)
+                }
                 val runnable = Runnable {
                     if (!shortPressHandled) {
                         getFunctionalLongAction(primaryCode)?.invoke()

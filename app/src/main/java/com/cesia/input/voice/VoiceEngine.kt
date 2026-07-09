@@ -54,22 +54,30 @@ class VoiceEngine(private val context: Context) {
         @Volatile
         var cmdWriting: String = "写作"
 
+        @Volatile
+        var cmdUndo: String = "撤销"
+
+        @Volatile
+        var cmdClear: String = "清空"
+
         /**
          * 更新命令词（从设置页面调用）
          */
-        fun updateCommandWords(exit: String, polish: String, finish: String, send: String, command: String, writing: String = "写作") {
+        fun updateCommandWords(exit: String, polish: String, finish: String, send: String, command: String, writing: String = "写作", undo: String = "撤销", clear: String = "清空") {
             cmdExit = exit
             cmdPolish = polish
             cmdFinish = finish
             cmdSend = send
             cmdCommand = command
             cmdWriting = writing
-            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing")
+            cmdUndo = undo
+            cmdClear = clear
+            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing, undo=$undo, clear=$clear")
         }
 
         /** 获取语音命令词提示字符串 */
         fun getCommandHints(): String {
-            return "退出 / $cmdPolish / $cmdFinish / $cmdSend / $cmdWriting"
+            return "退出 / $cmdPolish / $cmdFinish / $cmdSend / $cmdCommand / $cmdWriting / $cmdUndo / $cmdClear"
         }
     }
 
@@ -1017,6 +1025,12 @@ class VoiceEngine(private val context: Context) {
             trimmed.endsWith(cmdWriting) -> {
                 val beforeWriting = trimmed.dropLast(cmdWriting.length).trimEnd()
                 Pair(beforeWriting, "writing")
+            }
+            trimmed.endsWith(cmdUndo) -> {
+                Pair(trimmed.dropLast(cmdUndo.length).trimEnd(), "undo")
+            }
+            trimmed.endsWith(cmdClear) -> {
+                Pair(trimmed.dropLast(cmdClear.length).trimEnd(), "clear")
             }
             else -> null
         }
