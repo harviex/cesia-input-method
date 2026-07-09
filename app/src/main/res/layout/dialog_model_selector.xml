@@ -40,8 +40,8 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_model_list"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:nestedScrollingEnabled="false"
+        android:layout_height="300dp"
+        android:nestedScrollingEnabled="true"
         android:layout_marginBottom="12dp" />
 
     <!-- 自定义模型 -->

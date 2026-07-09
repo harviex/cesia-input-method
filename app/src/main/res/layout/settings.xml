@@ -547,7 +547,7 @@
                 android:minLines="2"
                 android:gravity="top"
                 android:textSize="12sp"
-                android:text="嗯那个我今天去了一个很好吃的餐厅然后我们点了很多菜真的很好吃你会推荐什么菜呢" />
+                android:text="嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <LinearLayout
@@ -568,7 +568,7 @@
                 app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
-                android:layout_marginEnd="4dp" />
+                android:layout_marginEnd="0dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_test_local_ai"
@@ -582,7 +582,7 @@
                 app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
-                android:layout_marginStart="4dp" />
+                android:layout_marginStart="6dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_reset_prompt"
@@ -596,7 +596,7 @@
                 app:strokeColor="#81D8D0"
                 app:strokeWidth="1dp"
                 app:cornerRadius="8dp"
-                android:layout_marginStart="4dp" />
+                android:layout_marginStart="6dp" />
         </LinearLayout>
 
         <!-- ═══════════ 分隔 ═══════════ -->

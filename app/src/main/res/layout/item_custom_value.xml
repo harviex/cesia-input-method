@@ -22,10 +22,9 @@
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:gravity="center"
-        android:text="🗑"
-        android:textSize="18sp"
-        android:textColor="#E53935"
         android:background="?attr/selectableItemBackground"
+        android:text=""
+        android:drawableTop="@android:drawable/ic_menu_delete"
         android:contentDescription="删除" />
 
 </LinearLayout>

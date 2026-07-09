@@ -213,6 +213,8 @@ class SettingsActivity : AppCompatActivity() {
         // 根据已安装状态刷新下载按钮文字/底色
         refreshVoiceInstallState()
         refreshAiInstallState()
+        // 根据已选供应方/已装模型刷新测试按钮可用状态
+        updateTestButtonStates()
         // 初始化 VoiceEngine 命令词
         try {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -762,13 +764,11 @@ class SettingsActivity : AppCompatActivity() {
         isSecret: Boolean,
         freeUrl: String = ""
     ) {
-        // 当前显示值（用于列表里把当前选中项标出来）
-        val history = getHistory(historyKey).toMutableList()
         val allItems = LinkedHashSet<String>().apply {
             if (currentValue.isNotEmpty()) add(currentValue)
             addAll(presets.map { it.first })
-            addAll(history)
-        }.toList()
+            addAll(getHistory(historyKey))
+        }.toList().toMutableList()
 
         // value -> 显示文案（API URL 等需要把地址映射成友好名）
         fun displayOf(v: String): String {
@@ -798,7 +798,8 @@ class SettingsActivity : AppCompatActivity() {
                 tv.text = displayOf(v)
                 btnDel.setOnClickListener {
                     removeHistory(historyKey, v)
-                    allItems.toMutableList().remove(v)
+                    allItems.remove(v)
+                    remove(v)
                     notifyDataSetChanged()
                     appendLog("已删除: ${if (isSecret) maskSecret(v) else v}")
                 }
@@ -897,6 +898,7 @@ class SettingsActivity : AppCompatActivity() {
         addHistory(historyKey, value)
         if (prefKey == PREF_API_URL) {
             prefs.edit().putBoolean("api_url_configured", true).apply()
+            updateTestButtonStates()
         }
         // 显示：密钥脱敏（前15 + 后5）；API URL 显示友好名
         valueView.text = when {
@@ -1102,6 +1104,7 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             resetButtonBg(btnInstallAi, "选装本地AI模型(1.2G)")
         }
+        updateTestButtonStates()
     }
 
     private fun downloadVoiceModel() {
@@ -1311,7 +1314,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestApi.isEnabled = false
-        btnTestApi.text = "测试中..."
+        applyButtonProgress(btnTestApi, 30, "润色中...")
         appendLog("🔄 正在润色...")
 
         Thread {
@@ -1339,7 +1342,7 @@ class SettingsActivity : AppCompatActivity() {
                         put("temperature", 0.3)
                         put("max_tokens", 512)
                     }
-                    val apiKey = tvApiKey.text?.toString()?.trim() ?: ""
+                    val apiKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
                     Request.Builder()
                         .url(apiUrl)
                         .post(json.toString().toRequestBody("application/json".toMediaType()))
@@ -1396,14 +1399,14 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
-                    btnTestApi.text = "API 润色"
+                    resetButtonBg(btnTestApi, "API 润色")
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
-                    btnTestApi.text = "API 润色"
+                    resetButtonBg(btnTestApi, "API 润色")
                 }
             }
         }.start()
@@ -1419,7 +1422,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestLocalAi?.isEnabled = false
-        btnTestLocalAi?.text = "推理中..."
+        applyButtonProgress(btnTestLocalAi, 20, "推理中...")
         appendLog("🔄 正在加载模型并润色...")
 
         Thread {
@@ -1432,7 +1435,7 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(false, "未安装 AI 模型")
                         appendLog("本地 AI 失败: 模型未安装")
                         btnTestLocalAi?.isEnabled = true
-                        btnTestLocalAi?.text = "本地 AI"
+                        resetButtonBg(btnTestLocalAi, "本地 AI")
                     }
                     return@Thread
                 }
@@ -1464,11 +1467,12 @@ class SettingsActivity : AppCompatActivity() {
                             appendLog("MNN log: $mnnLog")
                         }
                         btnTestLocalAi?.isEnabled = true
-                        btnTestLocalAi?.text = "本地 AI"
+                        resetButtonBg(btnTestLocalAi, "本地 AI")
                     }
                     return@Thread
                 }
                 appendLog("模型加载成功 (${loadTime}ms)")
+                applyButtonProgress(btnTestLocalAi, 60, "推理中...")
 
                 // 推理（60 秒超时）
                 appendLog("开始推理（最多 60 秒）...")
@@ -1478,6 +1482,7 @@ class SettingsActivity : AppCompatActivity() {
                         aiEngine.polish(inputText, "润色")
                     }
                 }
+                applyButtonProgress(btnTestLocalAi, 85, "推理中...")
                 val inferTime = System.currentTimeMillis() - inferStart
 
                 aiEngine.release()
@@ -1495,7 +1500,7 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
                     btnTestLocalAi?.isEnabled = true
-                    btnTestLocalAi?.text = "本地 AI"
+                    resetButtonBg(btnTestLocalAi, "本地 AI")
                 }
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
@@ -1503,13 +1508,27 @@ class SettingsActivity : AppCompatActivity() {
                     showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
                     btnTestLocalAi?.isEnabled = true
-                    btnTestLocalAi?.text = "本地 AI"
+                    resetButtonBg(btnTestLocalAi, "本地 AI")
                 }
             }
         }.start()
     }
 
     // ======================== 统计 & 日志 ========================
+
+    // 根据是否已选择供应方 / 是否已安装本地 AI 模型，更新测试按钮可用状态
+    private fun updateTestButtonStates() {
+        val urlConfigured = prefs.getBoolean("api_url_configured", false)
+        btnTestApi?.isEnabled = urlConfigured
+        btnTestApi?.alpha = if (urlConfigured) 1f else 0.4f
+
+        val aiModelFile = try {
+            com.cesia.input.model.ModelManager(this).getInstalledAiModelFile()
+        } catch (_: Exception) { null }
+        val aiInstalled = aiModelFile != null && aiModelFile.exists()
+        btnTestLocalAi?.isEnabled = aiInstalled
+        btnTestLocalAi?.alpha = if (aiInstalled) 1f else 0.4f
+    }
 
     override fun onResume() {
         super.onResume()
