@@ -42,8 +42,8 @@ engine:
 english:
   dictionary: en
   enable_completion: true    # 启用联想补全
-  enable_sentence: false     # 不启用句子模式
-  enable_user_dict: false    # 不启用用户词典
+  enable_sentence: true      # 启用多词/短语模式（支持英文词组连续输入）
+  enable_user_dict: true     # 启用用户词典（记住常用词组）
   initial_quality: 1         # 初始质量
 
 # 拼写器
