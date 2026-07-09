@@ -66,9 +66,9 @@ import java.io.File
 class SettingsActivity : AppCompatActivity() {
 
     // === 云端功能设置 ===
-    private lateinit var etApiUrl: TextInputEditText
-    private lateinit var etApiKey: TextInputEditText
-    private lateinit var etTavilyKey: TextInputEditText
+    private lateinit var tvApiUrl: TextView
+    private lateinit var tvApiKey: TextView
+    private lateinit var tvTavilyKey: TextView
     private var tvCloudModel: TextView? = null
     private lateinit var etPolishPrompt: TextInputEditText
     private lateinit var etTestText: TextInputEditText
@@ -242,9 +242,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        etApiUrl = findViewById(R.id.et_api_url)
-        etApiKey = findViewById(R.id.et_openrouter_key)
-        etTavilyKey = findViewById(R.id.et_brave_api_key)
+        tvApiUrl = findViewById(R.id.tv_api_url)
+        tvApiKey = findViewById(R.id.tv_api_key)
+        tvTavilyKey = findViewById(R.id.tv_tavily_key)
         tvCloudModel = findViewById(R.id.tv_cloud_model)
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
@@ -501,11 +501,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
-        etApiUrl.setText(prefs.getString(PREF_API_URL, DEFAULT_API_URL))
-        // OpenRouter API Key - 直接显示真实 key（恢复原有行为）
-        etApiKey.setText(prefs.getString(PREF_OPENROUTER_KEY, ""))
-        // Tavily API Key - 直接显示真实 key（与 OpenRouter 一致）
-        etTavilyKey.setText(prefs.getString(PREF_BRAVE_KEY, ""))
+        val savedUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
+        tvApiUrl.text = savedUrl
+        val savedKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
+        tvApiKey.text = if (savedKey.isEmpty()) "点击选择或输入" else savedKey
+        val savedTavily = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
+        tvTavilyKey.text = if (savedTavily.isEmpty()) "点击选择或输入" else savedTavily
 
         etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
@@ -559,24 +560,42 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // API URL - 焦点离开时自动保存
-        etApiUrl.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) saveApiUrl()
+        // API URL / Key / Tavily - 点击打开下拉菜单（含自定义输入 + 历史记忆）
+        tvApiUrl.setOnClickListener {
+            showCustomValueDialog(
+                title = "AI API URL",
+                presets = listOf(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    "https://api.openai.com/v1/chat/completions"
+                ),
+                historyKey = "api_url_history",
+                prefKey = PREF_API_URL,
+                currentValue = tvApiUrl.text.toString(),
+                valueView = tvApiUrl,
+                isSecret = false
+            )
         }
-        etApiUrl.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {}
-        })
-
-        // API Key - 焦点离开时自动保存（直接显示真实 key，无需脱敏）
-        etApiKey.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) saveApiKey()
+        tvApiKey.setOnClickListener {
+            showCustomValueDialog(
+                title = "AI API Key",
+                presets = emptyList(),
+                historyKey = "api_key_history",
+                prefKey = PREF_OPENROUTER_KEY,
+                currentValue = if (tvApiKey.text.toString() == "点击选择或输入") "" else tvApiKey.text.toString(),
+                valueView = tvApiKey,
+                isSecret = true
+            )
         }
-
-        // Tavily API Key - 焦点离开时自动保存（与 OpenRouter 一致）
-        etTavilyKey.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) saveTavilyKey()
+        tvTavilyKey.setOnClickListener {
+            showCustomValueDialog(
+                title = "Tavily API Key",
+                presets = emptyList(),
+                historyKey = "tavily_key_history",
+                prefKey = PREF_BRAVE_KEY,
+                currentValue = if (tvTavilyKey.text.toString() == "点击选择或输入") "" else tvTavilyKey.text.toString(),
+                valueView = tvTavilyKey,
+                isSecret = true
+            )
         }
 
         // 润色 Prompt - 焦点离开时自动保存
@@ -671,26 +690,95 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallAi?.setOnLongClickListener { showUninstallMenu(false); true }
     }
 
-    // ======================== 自动保存辅助方法 ========================
+    // ======================== API URL/Key 下拉自定义 ========================
 
-    private fun saveApiUrl() {
-        val url = etApiUrl.text?.toString()?.trim() ?: ""
-        if (url.isNotEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
-            prefs.edit().putString(PREF_API_URL, url).apply()
-            appendLog("API URL 已保存: $url")
+    // 通用下拉选择对话框：预选项 + 历史记忆 + 自定义输入
+    // 选中或保存后写入 prefs(prefKey) 并更新显示(valueView)，同时把值记入 historyKey 列表供下次直接选择
+    private fun showCustomValueDialog(
+        title: String,
+        presets: List<String>,
+        historyKey: String,
+        prefKey: String,
+        currentValue: String,
+        valueView: TextView,
+        isSecret: Boolean
+    ) {
+        val history = getHistory(historyKey).toMutableList()
+        // 当前值若不在预设/历史中，置顶显示
+        val allItems = LinkedHashSet<String>().apply {
+            if (currentValue.isNotEmpty()) add(currentValue)
+            addAll(presets)
+            addAll(history)
+        }.toList()
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_value, null)
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tv_title)
+        val lvValues = dialogView.findViewById<ListView>(R.id.lv_values)
+        val etCustom = dialogView.findViewById<EditText>(R.id.et_custom)
+        val btnSave = dialogView.findViewById<Button>(R.id.btn_save)
+
+        tvTitle.text = title
+        etCustom.hint = if (isSecret) "自定义：输入后点“保存并使用”" else "自定义：输入后点“保存并使用”"
+
+        val display = if (isSecret) allItems.map { maskSecret(it) } else allItems
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, display)
+        lvValues.adapter = adapter
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        lvValues.setOnItemClickListener { _, _, position, _ ->
+            val value = allItems[position]
+            applyValue(prefKey, historyKey, value, valueView, isSecret, title)
+            dialog.dismiss()
         }
+
+        btnSave.setOnClickListener {
+            val value = etCustom.text?.toString()?.trim() ?: ""
+            if (value.isNotEmpty()) {
+                applyValue(prefKey, historyKey, value, valueView, isSecret, title)
+                dialog.dismiss()
+            } else {
+                Toast.makeText(this, "请输入内容", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialog.show()
     }
 
-    private fun saveApiKey() {
-        val apiKey = etApiKey.text?.toString()?.trim() ?: ""
-        prefs.edit().putString(PREF_OPENROUTER_KEY, apiKey).apply()
-        appendLog("OpenRouter API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
+    private fun applyValue(
+        prefKey: String,
+        historyKey: String,
+        value: String,
+        valueView: TextView,
+        isSecret: Boolean,
+        title: String
+    ) {
+        prefs.edit().putString(prefKey, value).apply()
+        addHistory(historyKey, value)
+        valueView.text = if (isSecret && value.isEmpty()) "点击选择或输入" else value
+        val disp = if (isSecret) "已设置(${value.take(8)}...)" else value
+        appendLog("$title: $disp")
     }
 
-    private fun saveTavilyKey() {
-        val apiKey = etTavilyKey.text?.toString()?.trim() ?: ""
-        prefs.edit().putString(PREF_BRAVE_KEY, apiKey).apply()
-        appendLog("Tavily API Key: ${if (apiKey.isNotEmpty()) "已设置(${apiKey.take(8)}...)" else "已清除"}")
+    private fun getHistory(key: String): List<String> {
+        val raw = prefs.getString(key, "") ?: ""
+        if (raw.isEmpty()) return emptyList()
+        return raw.split("||").filter { it.isNotEmpty() }
+    }
+
+    private fun addHistory(key: String, value: String) {
+        val list = getHistory(key).toMutableList()
+        list.remove(value)
+        list.add(0, value)
+        val trimmed = list.take(10)
+        prefs.edit().putString(key, trimmed.joinToString("||")).apply()
+    }
+
+    private fun maskSecret(s: String): String {
+        return if (s.length <= 8) s else "${s.take(8)}..."
     }
 
     private fun savePolishPrompt() {
@@ -871,7 +959,7 @@ class SettingsActivity : AppCompatActivity() {
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
                             val overall = (percent * 0.5).toInt()
-                            setBothVoiceProgress(overall, "语音模型 $fileName $pctStr")
+                            setBothVoiceProgress(overall, "下载语音模型")
                         }
                     }
                 }
@@ -887,7 +975,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 // 阶段二：下载雾凇词库（50%~100%）
                 runOnUiThread {
-                    setBothVoiceProgress(50, "下载雾凇词库 0%")
+                    setBothVoiceProgress(50, "正在下载雾凇词库")
                 }
                 var dictOk = false
                 var dictMsg = ""
@@ -895,7 +983,7 @@ class SettingsActivity : AppCompatActivity() {
                     onProgress = { percent, _, _, msg ->
                         runOnUiThread {
                             val overall = 50 + (percent * 0.5).toInt()
-                            setBothVoiceProgress(overall, "雾凇词库 $percent%")
+                            setBothVoiceProgress(overall, "正在下载雾凇词库")
                         }
                     },
                     onComplete = { success, msg ->
@@ -953,7 +1041,7 @@ class SettingsActivity : AppCompatActivity() {
                             val pctStr = String.format("%.1f%%", percent)
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                            setBothAiProgress(percent.toInt(), "$name $pctStr")
+                            setBothAiProgress(percent.toInt(), "下载AI模型")
                         }
                     }
                 }
@@ -1064,7 +1152,7 @@ class SettingsActivity : AppCompatActivity() {
 
         Thread {
             try {
-                val apiUrl = etApiUrl.text?.toString()?.trim() ?: DEFAULT_API_URL
+                val apiUrl = tvApiUrl.text?.toString()?.trim() ?: DEFAULT_API_URL
                 val isOr = apiUrl.contains("openrouter.ai")
 
                 val request = if (isOr) {
@@ -1087,7 +1175,7 @@ class SettingsActivity : AppCompatActivity() {
                         put("temperature", 0.3)
                         put("max_tokens", 512)
                     }
-                    val apiKey = etApiKey.text?.toString()?.trim() ?: ""
+                    val apiKey = tvApiKey.text?.toString()?.trim() ?: ""
                     Request.Builder()
                         .url(apiUrl)
                         .post(json.toString().toRequestBody("application/json".toMediaType()))
@@ -1441,6 +1529,7 @@ class SettingsActivity : AppCompatActivity() {
         tvVersionWithDot?.text = "v$version"
         versionDot?.visibility = View.GONE
         pbVersionDownload?.visibility = View.VISIBLE
+        pbVersionDownload?.progressTintList = android.content.res.ColorStateList.valueOf(accentColor)
         pbVersionDownload?.progress = 0
         appendLog("开始下载: $apkUrl")
 

@@ -408,41 +408,51 @@
             android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
+        <!-- AI API URL（下拉菜单 + 自定义） -->
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:hint="AI API URL"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#81D8D0"
-            app:hintTextColor="#81D8D0"
-            android:layout_marginBottom="6dp">
+            android:text="AI API URL"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:layout_marginBottom="4dp" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_api_url"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textUri"
-                android:textSize="12sp"
-                android:text="https://openrouter.ai/api/v1/chat/completions" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
+        <TextView
+            android:id="@+id/tv_api_url"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="AI API Key"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#81D8D0"
-            app:hintTextColor="#81D8D0"
-            android:layout_marginBottom="6dp">
+            android:layout_height="40dp"
+            android:layout_marginBottom="6dp"
+            android:padding="12dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/spinner_bg_white"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:text="https://openrouter.ai/api/v1/chat/completions"
+            android:drawableEnd="@drawable/ic_expand_more"
+            android:drawablePadding="8dp" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_openrouter_key"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword"
-                android:textSize="12sp"
-                android:text="" />
-        </com.google.android.material.textfield.TextInputLayout>
+        <!-- AI API Key（下拉菜单 + 自定义） -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AI API Key"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tv_api_key"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginBottom="6dp"
+            android:padding="12dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/spinner_bg_white"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:text="点击选择或输入"
+            android:drawableEnd="@drawable/ic_expand_more"
+            android:drawablePadding="8dp" />
 
         <!-- 云端模型 -->
         <TextView
@@ -467,23 +477,28 @@
             android:drawableEnd="@drawable/ic_expand_more"
             android:drawablePadding="8dp" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
+        <!-- Tavily API Key（下拉菜单 + 自定义） -->
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:hint="Tavily API Key（互联网搜索）"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-            app:boxStrokeColor="#81D8D0"
-            app:hintTextColor="#81D8D0"
-            android:layout_marginBottom="6dp">
+            android:text="Tavily API Key（互联网搜索）"
+            android:textSize="12sp"
+            android:textColor="#81D8D0"
+            android:layout_marginBottom="4dp" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_brave_api_key"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword"
-                android:textSize="12sp"
-                android:text="" />
-        </com.google.android.material.textfield.TextInputLayout>
+        <TextView
+            android:id="@+id/tv_tavily_key"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginBottom="6dp"
+            android:padding="12dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/spinner_bg_white"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:text="点击选择或输入"
+            android:drawableEnd="@drawable/ic_expand_more"
+            android:drawablePadding="8dp" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
@@ -807,16 +822,6 @@
                     android:layout_height="1dp"
                     android:background="#E0E0E0"
                     android:layout_marginBottom="12dp" />
-
-        <!-- ═══════════ 日志 ═══════════ -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="运行日志"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#333333"
-            android:layout_marginBottom="6dp" />
 
         <!-- 运行日志区域：点击展开/折叠，无滚动条限制 -->
         <TextView
