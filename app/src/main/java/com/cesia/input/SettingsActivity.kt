@@ -1109,7 +1109,29 @@ class SettingsActivity : AppCompatActivity() {
 
     // 简单的文字闪烁（替代进度条）：按钮文字在「原文字」与「提示文字」之间慢速闪烁，
     // 润色/加载完成后停止并恢复原文字。按钮高度固定不变、不会撑大。
-    private val buttonFlashRunnables = mutableMapOf<android.widget.Button, Runnable>()
+    // 文字闪烁用的 runnable：自带 stopped 标志，
+    // 即使 removeCallbacks 命中“正在执行中”的窗口（didn't cancel enqueued），
+    // 下一次 run 也会因 stopped=true 而停止重投并恢复原文字，避免闪烁永不停止。
+    private class FlashRunnable(
+        private val btn: android.widget.Button,
+        private val base: String,
+        private val flashingText: String,
+        private val handler: android.os.Handler
+    ) : Runnable {
+        @Volatile var stopped = false
+        private var showFlash = false
+        override fun run() {
+            if (stopped) {
+                btn.text = base
+                return
+            }
+            btn.text = if (showFlash) flashingText else base
+            showFlash = !showFlash
+            handler.postDelayed(this, 600)
+        }
+    }
+
+    private val buttonFlashRunnables = mutableMapOf<android.widget.Button, FlashRunnable>()
     private fun startButtonFlash(button: android.widget.Button?, flashingText: String) {
         val btn = button ?: return
         btn.isEnabled = false
@@ -1118,21 +1140,22 @@ class SettingsActivity : AppCompatActivity() {
         val fixedPx = (44f * resources.displayMetrics.density).toInt()
         btn.layoutParams.height = fixedPx
         val base = btn.text?.toString() ?: ""
-        var showFlash = false
         val handler = android.os.Handler(mainLooper)
-        val runnable = object : Runnable {
-            override fun run() {
-                btn.text = if (showFlash) flashingText else base
-                showFlash = !showFlash
-                handler.postDelayed(this, 600)
-            }
+        // 若已在闪烁，先停掉旧的（置 stopped 并取消挂起回调），避免多个 runnable 叠加
+        buttonFlashRunnables[btn]?.let { old ->
+            old.stopped = true
+            handler.removeCallbacks(old)
         }
+        val runnable = FlashRunnable(btn, base, flashingText, handler)
         buttonFlashRunnables[btn] = runnable
         handler.post(runnable)
     }
     private fun stopButtonFlash(button: android.widget.Button?, restoreText: String) {
         val btn = button ?: return
-        buttonFlashRunnables[btn]?.let { android.os.Handler(mainLooper).removeCallbacks(it) }
+        buttonFlashRunnables[btn]?.let { r ->
+            r.stopped = true
+            android.os.Handler(mainLooper).removeCallbacks(r)
+        }
         buttonFlashRunnables.remove(btn)
         btn.isEnabled = true
         btn.minimumHeight = 0
