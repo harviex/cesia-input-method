@@ -323,12 +323,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var lastMicClickTime = 0L
     private var voiceStartTime = 0L
     private var pendingAiMode: Boolean? = null
-    private var recognizedText: String = ""        // 当前组合态文本（含已确认前缀 + 本次会话新识别片段）
-    private var committedPrefix: String = ""        // 跨语音段保留的已确认前缀（撤销/清空后剩余、续说时拼接到新识别之前）
+    private var recognizedText: String = ""        // 当前组合态显示文本（流式每轮会更新它，仅用于展示）
     private var isContinuingSession: Boolean = false // 撤销/清空后处于“继续识别”态，下次识别结果需拼到前缀之后
-    // 续识别态下保留的文字同时备份到内存变量 kePtText，
-    // 防止输入法窗口隐藏（回主屏/来电）时 composing text 被系统丢弃导致内容全失。
-    private var kePtText: String = ""
+    // 下划线（组合态）唯一真相源：仅由“追加说话 / 撤销 / 清空”三类操作修改，
+    // 流式 onSegmentResult 永不重写它，仅读取它来拼接显示。这样跨段保留内容不会被新一轮识别覆盖吃掉。
+    private var voiceKeptText: String = ""
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
@@ -4398,6 +4397,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isRecording = true
         isWaitingForChoice = false
         recognizedText = ""
+        voiceKeptText = ""
         pendingAiMode = null
         setStatusDot("recording")
         startVoiceWave()
@@ -4427,7 +4427,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isRecording = true
         isWaitingForChoice = false
         recognizedText = ""
-        committedPrefix = ""
+        voiceKeptText = ""
         isContinuingSession = false
         pendingAiMode = null
         setStatusDot("recording")
@@ -4442,8 +4442,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /**
-     * 撤销/清空命令后继续录音：保留已确认前缀（committedPrefix），
-     * 标记 isContinuingSession，重新启动识别循环；下次识别片段会拼到前缀之后。
+     * 撤销/清空命令后继续录音：保持下划线（组合态）续识别。
+     * 注意：voiceKeptText（真相源）已由调用方在撤销/清空分支里改好，这里【不】再改它。
      */
     private fun resumeRecordingKeepText() {
         isVoiceLocked = true
@@ -4452,8 +4452,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         pendingAiMode = null
         isProcessingResult = false
         isContinuingSession = true
-        // 备份当前保留内容到内存，避免窗口隐藏时 composing 被丢弃
-        kePtText = recognizedText
         setStatusDot("recording")
         keyboardView.visibility = View.GONE
         candidateBar.visibility = View.GONE
@@ -4509,9 +4507,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     onSegmentResult = { text, isFinal ->
                         segmentCount++
                         Log.i("Cesia", "onSegmentResult #$segmentCount: text='${text.take(50)}', isFinal=$isFinal")
-                        // 续识别态：把新识别片段拼到当前组合缓冲（recognizedText）之后，保留已确认内容不被清/不被上屏
-                        val prefix = if (isContinuingSession && recognizedText.isNotEmpty()) recognizedText.trimEnd() else ""
-                        val display = if (prefix.isNotEmpty()) "$prefix $text" else text
+                        // 续识别态：把新识别片段拼到【下划线真相源 voiceKeptText】之后显示，
+                        // 注意：这里只“读取”voiceKeptText 做拼接展示，绝不重写它（防止新一轮覆盖保住的内容）。
+                        val base = voiceKeptText.trimEnd()
+                        val display = if (base.isNotEmpty()) "$base $text" else text
                         if (text.isNotEmpty() && text != lastStreamingText) {
                             lastStreamingText = text
                             recognizedText = display
@@ -4529,8 +4528,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (isFinal) {
                             withContext(Dispatchers.Main) {
                                 if (isContinuingSession) {
-                                    // 续识别态：保持组合态（不提交、不弹按钮），继续监听后续命令/内容
-                                    Log.i("Cesia", "onSegmentResult: 续识别态 isFinal，保持组合态 display='${recognizedText.take(50)}'")
+                                    // 续识别态：把本轮新内容正式并入真相源 voiceKeptText（空格分隔追加），
+                                    // 然后保持组合态继续监听后续命令/内容。
+                                    if (text.isNotEmpty()) {
+                                        voiceKeptText = if (voiceKeptText.isNotEmpty()) "${voiceKeptText.trimEnd()} $text" else text
+                                    }
+                                    Log.i("Cesia", "onSegmentResult: 续识别态 isFinal，voiceKeptText='${voiceKeptText.take(50)}'")
                                     resumeRecordingKeepText()
                                 } else if (text.isNotEmpty()) {
                                     // 最终结果：确认组合文本
@@ -4563,23 +4566,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
                             // 直接由下方分支用 setComposingText 整体替换 composing 区域。
                             if (command != "undo" && command != "clear") {
-                                // 计算“本次会话新识别文本”（去掉跨段保留的前缀，避免命令词长度算错）
-                                val newSessionText = if (isContinuingSession && committedPrefix.isNotEmpty()
-                                    && recognizedText.startsWith(committedPrefix)) {
-                                    recognizedText.substring(committedPrefix.length).trimStart()
-                                } else {
-                                    recognizedText
-                                }
-                                // 1. 先 finishComposingText 确认当前组合文本（前缀随之提交，不会被清/上屏异常）
+                                // 1. 先 finishComposingText 确认当前组合文本
                                 ic.finishComposingText()
-
-                                // 2. 删除末尾的命令词（长度 = 新会话文本 - 去掉命令词后的文本）
-                                val cmdWordLength = newSessionText.length - text.length
+                                // 2. 删除末尾的命令词（长度 = 下划线真相源末尾 - 去掉命令词后的文本）
+                                val kePtLen = voiceKeptText.length
+                                val cmdWordLength = kePtLen - text.length
                                 if (cmdWordLength > 0) {
                                     ic.deleteSurroundingText(cmdWordLength, 0)
                                 }
-
-                                // 3. 更新 recognizedText（去掉命令词后的文本）
+                                // 3. 更新真相源（去掉命令词后的文本）
+                                voiceKeptText = text
                                 recognizedText = text
                             }
 
@@ -4589,7 +4585,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     ic.finishComposingText()
                                     isVoiceLocked = false
                                     isContinuingSession = false
-                                    committedPrefix = ""
+                                    voiceKeptText = ""
                                     updateMicButtonLockedState()
                                     updateStatus("🔓 已退出语音输入")
                                     resetToIdle()
@@ -4608,20 +4604,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     }
                                     // 发送后退出语音识别（锁定仍保留，可再次长按语音键进入）
                                     isContinuingSession = false
-                                    committedPrefix = ""
+                                    voiceKeptText = ""
                                     resetToIdle()
                                 }
                                 "ai" -> {
                                     // 润色（中等级）：对删除命令词后的完整文本（含前缀）润色，完成后退出识别
-                                    val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
-                                        "$committedPrefix $text".trim()
+                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
+                                        "$voiceKeptText $text".trim()
                                     } else {
                                         text
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 没有需要润色的文字")
                                         isContinuingSession = false
-                                        committedPrefix = ""
+                                        voiceKeptText = ""
                                         resetToIdle()
                                     } else {
                                         updateStatus("✨ 语音润色中...")
@@ -4633,29 +4629,29 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         // 命令词说完后必须退出语音识别：置 isVoiceLocked=false，
                                         // 使其内部收尾走 resetToIdle（而非继续录音）。
                                         isContinuingSession = false
-                                        committedPrefix = ""
+                                        voiceKeptText = ""
                                         isVoiceLocked = false
                                         polishRecognizedText(fullText)
                                     }
                                 }
                                 "cmd" -> {
                                     // 命令模式（中等级）：执行指令（含前缀），完成后退出识别
-                                    val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
-                                        "$committedPrefix $text".trim()
+                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
+                                        "$voiceKeptText $text".trim()
                                     } else {
                                         text
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入指令")
                                         isContinuingSession = false
-                                        committedPrefix = ""
+                                        voiceKeptText = ""
                                         resetToIdle()
                                     } else {
                                         Log.i("Cesia", "命令模式: 指令='$fullText'")
                                         // 命令词说完后必须退出语音识别：置 isVoiceLocked=false，
                                         // 使 executeVoiceCommand 内部收尾走 resetToIdle（而非继续录音）。
                                         isContinuingSession = false
-                                        committedPrefix = ""
+                                        voiceKeptText = ""
                                         isVoiceLocked = false
                                         executeVoiceCommand(fullText)
                                     }
@@ -4665,20 +4661,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     ic.finishComposingText()
                                     updateStatus(" 已上屏")
                                     isContinuingSession = false
-                                    committedPrefix = ""
+                                    voiceKeptText = ""
                                     resetToIdle()
                                 }
                                 "writing" -> {
                                     // 写作（中等级）：执行写作指令（含前缀），完成后退出识别
-                                    val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
-                                        "$committedPrefix $text".trim()
+                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
+                                        "$voiceKeptText $text".trim()
                                     } else {
                                         text
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入写作内容")
                                         isContinuingSession = false
-                                        committedPrefix = ""
+                                        voiceKeptText = ""
                                         resetToIdle()
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$fullText'")
@@ -4688,43 +4684,44 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                             delay(1000)
                                             // 删除输入框中剩余的写作指令文字（本次会话新识别部分）
                                             val ic2 = currentInputConnection
-                                            val newPart = if (committedPrefix.isNotEmpty()) fullText.removePrefix(committedPrefix).trimStart() else fullText
+                                            val newPart = if (voiceKeptText.isNotEmpty()) fullText.removePrefix(voiceKeptText).trimStart() else fullText
                                             if (ic2 != null && newPart.isNotEmpty()) {
                                                 ic2.deleteSurroundingText(newPart.length, 0)
                                             }
                                             executeSmartCommand(fullText)
                                             // 写作完成后退出语音识别（保留锁定）
                                             isContinuingSession = false
-                                            committedPrefix = ""
+                                            voiceKeptText = ""
                                             resetToIdle()
                                         }
                                     }
                                 }
                                 "undo" -> {
                                     // 撤销（低等级）：不结束下划线、不提交。
-                                    // 基于“当前组合缓冲（recognizedText，已含所有已保留内容且已去掉命令词）”删最后空格语段。
-                                    val base = recognizedText.trimEnd()
-                                    val idx = base.lastIndexOf(' ')
-                                    val remaining = if (idx < 0) "" else base.substring(0, idx)
+                                    // 操作对象 = 下划线真相源 voiceKeptText（流式永不改它，所以保留内容不会被新一轮覆盖）。
+                                    // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，就删掉该起点之后的所有内容（不含空格，与“只有顶端”一致）。
+                                    val base = voiceKeptText.trimEnd()
+                                    val idx = base.lastIndexOf(' ')   // -1 表示到达顶端（整段都是一句）
+                                    val remaining = if (idx < 0) "" else base.substring(0, idx)  // 不含空格
+                                    voiceKeptText = remaining
                                     if (remaining.isNotEmpty()) {
-                                        // 保留剩余内容（组合态），不提交
+                                        // 还有上一句：保留为组合态（不提交）
                                         ic.setComposingText(remaining, 1)
                                         recognizedText = remaining
-                                        kePtText = remaining
                                         updateStatus("↩️ 已撤销最近语段：$remaining")
                                     } else {
-                                        // 全部撤销：清空组合态（不 finish，避免“撤销”二字被提交上屏）
+                                        // 已无上一句：清空组合态（用 setComposingText 而非 finish，避免“撤销”二字被提交上屏）
                                         ic.setComposingText("", 1)
                                         recognizedText = ""
-                                        kePtText = ""
                                         updateStatus("↩️ 已撤销全部")
                                     }
                                     isContinuingSession = true
                                     resumeRecordingKeepText()
                                 }
                                 "clear" -> {
-                                    // 清空（低等级）：不结束下划线、不提交，直接清空组合区域
+                                    // 清空（低等级）：不结束下划线、不提交，直接清空组合区域（真相源一并清空）
                                     ic.setComposingText("", 1)
+                                    voiceKeptText = ""
                                     recognizedText = ""
                                     updateStatus("🧹 已清空，继续识别")
                                     isContinuingSession = true
@@ -4836,7 +4833,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isRecording = true
         isWaitingForChoice = false
         recognizedText = ""
-        committedPrefix = ""
+        voiceKeptText = ""
         isContinuingSession = false
         pendingAiMode = null
         setStatusDot("recording")
@@ -5071,7 +5068,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isWaitingForChoice = false
         isProcessingResult = false
         recognizedText = ""
-        kePtText = ""
+        voiceKeptText = ""
         pendingAiMode = null
         stopVoiceWave()
         // 取消所有语音识别协程
@@ -5104,9 +5101,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 2. 把保留内容落定上屏（组合态 → 已提交，切换窗口后不丢）
         try {
             val ic = currentInputConnection
-            if (ic != null && recognizedText.isNotEmpty()) {
+            if (ic != null && voiceKeptText.isNotEmpty()) {
                 ic.finishComposingText()
-                ic.commitText(recognizedText, 1)
+                ic.commitText(voiceKeptText, 1)
             } else {
                 ic?.finishComposingText()
             }
@@ -5117,9 +5114,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isProcessingResult = false
         isVoiceLocked = false
         isContinuingSession = false
-        committedPrefix = ""
+        voiceKeptText = ""
         recognizedText = ""
-        kePtText = ""
         pendingAiMode = null
         stopVoiceWave()
         stopMicButtonGlow()
