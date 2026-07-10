@@ -4566,17 +4566,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
                             // 直接由下方分支用 setComposingText 整体替换 composing 区域。
                             if (command != "undo" && command != "clear") {
-                                // 1. 先 finishComposingText 确认当前组合文本
-                                ic.finishComposingText()
-                                // 2. 删除末尾的命令词（长度 = 下划线真相源末尾 - 去掉命令词后的文本）
-                                val kePtLen = voiceKeptText.length
-                                val cmdWordLength = kePtLen - text.length
-                                if (cmdWordLength > 0) {
-                                    ic.deleteSurroundingText(cmdWordLength, 0)
+                                // 把“已保留内容 + 本轮说的（去命令词）”拼成整体，作为要上屏/处理的真相源，
+                                // 这样“结束/退出/发送/润色/命令/写作”执行时不会把命令词本身带上屏。
+                                val combined = when {
+                                    voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
+                                    text.isNotEmpty() -> text
+                                    else -> voiceKeptText
                                 }
-                                // 3. 更新真相源（去掉命令词后的文本）
-                                voiceKeptText = text
-                                recognizedText = text
+                                // 先 setComposingText(combined) 把组合区整体替换成“去掉命令词后的原文”，
+                                // 再 finishComposingText 提交（避免把“结束/退出”等命令词提交上屏）。
+                                ic.setComposingText(combined, 1)
+                                ic.finishComposingText()
+                                voiceKeptText = combined
+                                recognizedText = combined
                             }
 
                             when (command) {
@@ -4698,13 +4700,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "undo" -> {
                                     // 撤销（低等级）：不结束下划线、不提交。
-                                    // 操作对象 = 下划线真相源 voiceKeptText。
-                                    // 注意：续识别态单说“撤销”时 voiceKeptText 已有值；
-                                    // 但若“内容+撤销”同句说出（首轮 isFinal 走 handleCloudVoiceResult，不会写 voiceKeptText），
-                                    // 此时 voiceKeptText 为空，需回退用命令词传来的 text（=去命令词后的正文）当真相源。
-                                    val source = if (voiceKeptText.isNotEmpty()) voiceKeptText else text
-                                    val base = source.trimEnd()
-                                    // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，删掉起点之后的所有内容（不含空格，与“只有顶端”一致）。
+                                    // 把“已保留内容 + 本轮说的（去命令词）”拼成整体 combined，再删最后一句（空格断句）。
+                                    // 关键：必须拼起来，单说“撤销”时 text 为空不能丢 voiceKeptText，
+                                    // 同句说“第四 撤销”时 text 是“第四”不能丢 voiceKeptText 里已保留的“第一”，否则会把“第一”当整句删光。
+                                    val combined = when {
+                                        voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
+                                        text.isNotEmpty() -> text
+                                        else -> voiceKeptText
+                                    }
+                                    val base = combined.trimEnd()
+                                    // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，删掉起点之后的所有内容（不含空格）。
                                     val idx = base.lastIndexOf(' ')   // -1 表示到达顶端（整段都是一句）
                                     val remaining = if (idx < 0) "" else base.substring(0, idx)  // 不含空格
                                     voiceKeptText = remaining
