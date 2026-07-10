@@ -4496,14 +4496,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     onSegmentResult = { text, isFinal ->
                         segmentCount++
                         Log.i("Cesia", "onSegmentResult #$segmentCount: text='${text.take(50)}', isFinal=$isFinal")
+                        // 续识别态：把新识别片段拼到已确认前缀之后，保持前缀不被清/不被上屏
+                        var display = if (isContinuingSession && committedPrefix.isNotEmpty()) {
+                            "$committedPrefix $text"
+                        } else {
+                            text
+                        }
                         if (text.isNotEmpty() && text != lastStreamingText) {
                             lastStreamingText = text
-                            // 续识别态：把新识别片段拼到已确认前缀之后，保持前缀不被清/不被上屏
-                            val display = if (isContinuingSession && committedPrefix.isNotEmpty()) {
-                                "$committedPrefix $text"
-                            } else {
-                                text
-                            }
                             recognizedText = display
                             withContext(Dispatchers.Main) {
                                 // 检测到识别文本，隐藏语音命令提示
@@ -4518,12 +4518,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         }
                         if (isFinal) {
                             withContext(Dispatchers.Main) {
-                                Log.i("Cesia", "onSegmentResult: isFinal, text='${text.take(50)}', recognizedText='${recognizedText.take(50)}'")
+                                Log.i("Cesia", "onSegmentResult: isFinal, text='${text.take(50)}', display='${display.take(50)}', recognizedText='${recognizedText.take(50)}'")
                                 if (text.isNotEmpty()) {
-                                    // 最终结果：确认组合文本
+                                    // 最终结果：确认组合文本（含跨段前缀，避免续说把未撤销内容删掉）
                                     val ic = currentInputConnection ?: return@withContext
                                     ic.finishComposingText()
-                                    handleCloudVoiceResult(text)
+                                    handleCloudVoiceResult(display)
                                 } else {
                                     Log.w("Cesia", "onSegmentResult: isFinal but text is empty!")
                                     handleCloudVoiceResult("")
@@ -4572,7 +4572,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                             when (command) {
                                 "exit" -> {
-                                    // 退出（高等级）：结束识别 + 结束语音锁定（含已确认前缀一并提交上屏）
+                                    // 退出（最高等级）：结束识别 + 结束语音锁定（含已确认前缀一并提交上屏）
                                     ic.finishComposingText()
                                     isVoiceLocked = false
                                     isContinuingSession = false
@@ -4582,9 +4582,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     resetToIdle()
                                 }
                                 "send" -> {
-                                    // 发送：确认文本（含前缀）+ 发送
+                                    // 发送（中等级）：确认文本（含前缀）+ 发送，然后退出语音识别（保留锁定）
                                     updateStatus("📤 已发送")
-                                    // 检查当前输入框是否支持发送动作
                                     val editorInfo = currentInputEditorInfo
                                     val canSend = editorInfo != null &&
                                         (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
@@ -4594,14 +4593,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
                                         updateStatus(" 已上屏（当前输入框不支持自动发送）")
                                     }
-                                    // 发送后结束语音识别但保持语音锁定（继续录音）
+                                    // 发送后退出语音识别（锁定仍保留，可再次长按语音键进入）
                                     isContinuingSession = false
                                     committedPrefix = ""
-                                    isVoiceLocked = true
-                                    startRecordingLocked()
+                                    resetToIdle()
                                 }
                                 "ai" -> {
-                                    // 润色：对删除命令词后的完整文本（含前缀）润色
+                                    // 润色（中等级）：对删除命令词后的完整文本（含前缀）润色，完成后退出识别
                                     val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
                                         "$committedPrefix $text".trim()
                                     } else {
@@ -4611,18 +4609,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         updateStatus("⚠️ 没有需要润色的文字")
                                         isContinuingSession = false
                                         committedPrefix = ""
-                                        startRecordingLocked()
+                                        resetToIdle()
                                     } else {
                                         updateStatus("✨ 语音润色中...")
                                         setStatusDot("processing")
                                         isProcessingResult = true
                                         isWaitingForChoice = false
                                         hideAiChoiceButtons()
+                                        // 润色结束后由 polishRecognizedText 内部处理；标记非续识别，识别到此结束
+                                        isContinuingSession = false
+                                        committedPrefix = ""
                                         polishRecognizedText(fullText)
                                     }
                                 }
                                 "cmd" -> {
-                                    // 命令模式：指令内容（含前缀）
+                                    // 命令模式（中等级）：执行指令（含前缀），完成后退出识别
                                     val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
                                         "$committedPrefix $text".trim()
                                     } else {
@@ -4632,23 +4633,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         updateStatus("⚠️ 请输入指令")
                                         isContinuingSession = false
                                         committedPrefix = ""
-                                        startRecordingLocked()
+                                        resetToIdle()
                                     } else {
                                         Log.i("Cesia", "命令模式: 指令='$fullText'")
+                                        isContinuingSession = false
+                                        committedPrefix = ""
                                         executeVoiceCommand(fullText)
                                     }
                                 }
                                 "finish" -> {
-                                    // 结束（中等级）：把组合态文本（含前缀）提交上屏，继续识别
+                                    // 结束（中等级）：把组合态文本（含前缀）提交上屏，退出语音识别（保留锁定）
                                     ic.finishComposingText()
                                     updateStatus(" 已上屏")
                                     isContinuingSession = false
                                     committedPrefix = ""
-                                    isVoiceLocked = true
-                                    startRecordingLocked()
+                                    resetToIdle()
                                 }
                                 "writing" -> {
-                                    // 写作：text 是写作指令（如"帮我写篇文章"）
+                                    // 写作（中等级）：执行写作指令（含前缀），完成后退出识别
                                     val fullText = if (isContinuingSession && committedPrefix.isNotEmpty()) {
                                         "$committedPrefix $text".trim()
                                     } else {
@@ -4658,8 +4660,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         updateStatus("⚠️ 请输入写作内容")
                                         isContinuingSession = false
                                         committedPrefix = ""
-                                        isVoiceLocked = true
-                                        startRecordingLocked()
+                                        resetToIdle()
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$fullText'")
                                         updateStatus("✨ 语音写作中...")
@@ -4673,11 +4674,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                                 ic2.deleteSurroundingText(newPart.length, 0)
                                             }
                                             executeSmartCommand(fullText)
-                                            // 结束语音识别但保持语音锁定（继续录音）
+                                            // 写作完成后退出语音识别（保留锁定）
                                             isContinuingSession = false
                                             committedPrefix = ""
-                                            isVoiceLocked = true
-                                            startRecordingLocked()
+                                            resetToIdle()
                                         }
                                     }
                                 }
