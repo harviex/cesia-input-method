@@ -4698,9 +4698,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "undo" -> {
                                     // 撤销（低等级）：不结束下划线、不提交。
-                                    // 操作对象 = 下划线真相源 voiceKeptText（流式永不改它，所以保留内容不会被新一轮覆盖）。
-                                    // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，就删掉该起点之后的所有内容（不含空格，与“只有顶端”一致）。
-                                    val base = voiceKeptText.trimEnd()
+                                    // 操作对象 = 下划线真相源 voiceKeptText。
+                                    // 注意：续识别态单说“撤销”时 voiceKeptText 已有值；
+                                    // 但若“内容+撤销”同句说出（首轮 isFinal 走 handleCloudVoiceResult，不会写 voiceKeptText），
+                                    // 此时 voiceKeptText 为空，需回退用命令词传来的 text（=去命令词后的正文）当真相源。
+                                    val source = if (voiceKeptText.isNotEmpty()) voiceKeptText else text
+                                    val base = source.trimEnd()
+                                    // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，删掉起点之后的所有内容（不含空格，与“只有顶端”一致）。
                                     val idx = base.lastIndexOf(' ')   // -1 表示到达顶端（整段都是一句）
                                     val remaining = if (idx < 0) "" else base.substring(0, idx)  // 不含空格
                                     voiceKeptText = remaining
