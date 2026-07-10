@@ -3,6 +3,9 @@ package com.cesia.input
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyManager
 import android.graphics.drawable.AnimationDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
@@ -323,6 +326,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var recognizedText: String = ""        // 当前组合态文本（含已确认前缀 + 本次会话新识别片段）
     private var committedPrefix: String = ""        // 跨语音段保留的已确认前缀（撤销/清空后剩余、续说时拼接到新识别之前）
     private var isContinuingSession: Boolean = false // 撤销/清空后处于“继续识别”态，下次识别结果需拼到前缀之后
+    // 续识别态下保留的文字同时备份到内存变量 kePtText，
+    // 防止输入法窗口隐藏（回主屏/来电）时 composing text 被系统丢弃导致内容全失。
+    private var kePtText: String = ""
+    private var telephonyManager: TelephonyManager? = null
+    private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     // === 词语联想 ===
@@ -2073,7 +2081,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun setupButtonListeners() {
         // 语音按钮：参考魔法书模式，OnTouchListener 统一处理单击和长按
-        micButton.setOnClickListener { micOnClickListener() }
+        micButton.setOnClickListener {
+            // 纯 OnTouchListener 处理点击/长按，这里仅作兜底（正常不会走到 performClick 路径）
+        }
         micButton.setOnTouchListener { v, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
@@ -2085,7 +2095,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 android.view.MotionEvent.ACTION_UP -> {
                     cancelMicLongPressDetection()
                     if (!micLongPressTriggered) {
-                        v.performClick()
+                        // 直接走点击逻辑，不再 performClick（避免发光动画干扰点击命中，需按两下）
+                        micOnClickListener()
                     }
                     true
                 }
@@ -4441,6 +4452,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         pendingAiMode = null
         isProcessingResult = false
         isContinuingSession = true
+        // 备份当前保留内容到内存，避免窗口隐藏时 composing 被丢弃
+        kePtText = recognizedText
         setStatusDot("recording")
         keyboardView.visibility = View.GONE
         candidateBar.visibility = View.GONE
@@ -4697,11 +4710,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         // 保留剩余内容（组合态），不提交
                                         ic.setComposingText(remaining, 1)
                                         recognizedText = remaining
+                                        kePtText = remaining
                                         updateStatus("↩️ 已撤销最近语段：$remaining")
                                     } else {
                                         // 全部撤销：清空组合态（不 finish，避免“撤销”二字被提交上屏）
                                         ic.setComposingText("", 1)
                                         recognizedText = ""
+                                        kePtText = ""
                                         updateStatus("↩️ 已撤销全部")
                                     }
                                     isContinuingSession = true
@@ -5056,6 +5071,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isWaitingForChoice = false
         isProcessingResult = false
         recognizedText = ""
+        kePtText = ""
         pendingAiMode = null
         stopVoiceWave()
         // 取消所有语音识别协程
@@ -5069,6 +5085,73 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
         updateStatus(statusIdleText)
+    }
+
+    /**
+     * 强制退出语音输入模式（用于：输入法切后台/来电）。
+     * 与 resetToIdle 的区别：先把当前组合态内容 commit 上屏（避免切后台时系统丢弃 composing text 导致内容全失），
+     * 再彻底清理语音状态。
+     */
+    private fun forceExitVoiceMode() {
+        if (!isRecording && recognizedText.isEmpty() && !isVoiceLocked) return
+        Log.i("Cesia", "forceExitVoiceMode: 切后台/来电，退出语音模式，保留内容='${recognizedText.take(50)}'")
+        // 1. 停录音、取消协程
+        try {
+            typelessEngine?.stopListening()
+            voiceEngine.releaseRecorder()
+            voiceEngineScope.coroutineContext.cancelChildren()
+        } catch (_: Exception) {}
+        // 2. 把保留内容落定上屏（组合态 → 已提交，切换窗口后不丢）
+        try {
+            val ic = currentInputConnection
+            if (ic != null && recognizedText.isNotEmpty()) {
+                ic.finishComposingText()
+                ic.commitText(recognizedText, 1)
+            } else {
+                ic?.finishComposingText()
+            }
+        } catch (_: Exception) {}
+        // 3. 彻底重置状态
+        isRecording = false
+        isWaitingForChoice = false
+        isProcessingResult = false
+        isVoiceLocked = false
+        isContinuingSession = false
+        committedPrefix = ""
+        recognizedText = ""
+        kePtText = ""
+        pendingAiMode = null
+        stopVoiceWave()
+        stopMicButtonGlow()
+        resetMagicHighlight()
+        setStatusDot("idle")
+        hideAiChoiceButtons()
+        keyboardView.visibility = View.VISIBLE
+        updateMicButtonLockedState()
+        updateStatus(statusIdleText)
+    }
+
+    /** 注册来电监听：来电时自动退出语音模式，避免录音卡死 */
+    private fun registerPhoneStateListener() {
+        if (phoneStateListener != null) return
+        try {
+            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            val tm = telephonyManager ?: return
+            phoneStateListener = object : PhoneStateListener() {
+                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                    super.onCallStateChanged(state, phoneNumber)
+                    if (state == TelephonyManager.CALL_STATE_RINGING ||
+                        state == TelephonyManager.CALL_STATE_OFFHOOK) {
+                        Log.i("Cesia", "PhoneStateListener: 来电/接通，强制退出语音模式")
+                        forceExitVoiceMode()
+                    }
+                }
+            }
+            @Suppress("DEPRECATION")
+            tm.listen(phoneStateListener!!, PhoneStateListener.LISTEN_CALL_STATE)
+        } catch (e: Exception) {
+            Log.e("Cesia", "registerPhoneStateListener 失败", e)
+        }
     }
 
     /**
@@ -7465,6 +7548,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             preloadWhisperModel()
             preloadAiModel()
 
+            // 注册来电监听（来电时自动退出语音模式，避免卡死）
+            registerPhoneStateListener()
+
             // RSS 自动抓取：如果缓存不存在或过期（>1h），后台自动刷新
             Log.d("Cesia", "onStartInputView: step3 autoRefreshRssCache")
             autoRefreshRssCache()
@@ -7553,6 +7639,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         directionalRepeatRunnable = null
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
+        // 语音输入中切后台（窗口隐藏）→ 自动退出语音模式，并把保留内容落定上屏（避免系统丢弃 composing text）
+        if (isRecording || isVoiceLocked || recognizedText.isNotEmpty()) {
+            forceExitVoiceMode()
+        }
         // 清除联想模式和候选，恢复初始状态
         if (isAssociationMode || rimeEngine.isComposing) {
             isAssociationMode = false
@@ -7572,6 +7662,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         voiceEngine.release()
         aiEngine.release()
         voiceEngineScope.cancel()
+        // 注销来电监听
+        try {
+            phoneStateListener?.let { listener ->
+                telephonyManager?.let { tm ->
+                    @Suppress("DEPRECATION")
+                    tm.listen(listener, PhoneStateListener.LISTEN_NONE)
+                }
+            }
+            phoneStateListener = null
+            telephonyManager = null
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 
