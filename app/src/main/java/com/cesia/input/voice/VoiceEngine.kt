@@ -49,7 +49,7 @@ class VoiceEngine(private val context: Context) {
         var cmdSend: String = "发送"
 
         @Volatile
-        var cmdCommand: String = "指令"
+        var cmdCommand: String = "修改"
 
         @Volatile
         var cmdWriting: String = "写作"
@@ -60,10 +60,13 @@ class VoiceEngine(private val context: Context) {
         @Volatile
         var cmdClear: String = "清空"
 
+        @Volatile
+        var cmdRestore: String = "恢复"
+
         /**
          * 更新命令词（从设置页面调用）
          */
-        fun updateCommandWords(exit: String, polish: String, finish: String, send: String, command: String, writing: String = "写作", undo: String = "撤销", clear: String = "清空") {
+        fun updateCommandWords(exit: String, polish: String, finish: String, send: String, command: String, writing: String = "写作", undo: String = "撤销", clear: String = "清空", restore: String = "恢复") {
             cmdExit = exit
             cmdPolish = polish
             cmdFinish = finish
@@ -72,12 +75,13 @@ class VoiceEngine(private val context: Context) {
             cmdWriting = writing
             cmdUndo = undo
             cmdClear = clear
-            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing, undo=$undo, clear=$clear")
+            cmdRestore = restore
+            Log.d(TAG, "命令词已更新: exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing, undo=$undo, clear=$clear, restore=$restore")
         }
 
         /** 获取语音命令词提示字符串 */
         fun getCommandHints(): String {
-            return "退出 / $cmdPolish / $cmdFinish / $cmdSend / $cmdCommand / $cmdWriting / $cmdUndo / $cmdClear"
+            return "退出 / $cmdPolish / $cmdFinish / $cmdSend / $cmdCommand / $cmdWriting / $cmdUndo / $cmdClear / $cmdRestore"
         }
     }
 
@@ -1048,6 +1052,9 @@ class VoiceEngine(private val context: Context) {
             }
             trimmed.endsWith(cmdClear) -> {
                 Pair(trimmed.dropLast(cmdClear.length).trimEnd(), "clear")
+            }
+            trimmed.endsWith(cmdRestore) -> {
+                Pair(trimmed.dropLast(cmdRestore.length).trimEnd(), "restore")
             }
             else -> null
         }

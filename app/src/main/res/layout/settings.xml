@@ -799,10 +799,29 @@
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                         app:boxStrokeColor="#81D8D0"
                         app:hintTextColor="#81D8D0"
-                        android:layout_marginStart="2dp">
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/et_cmd_clear"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textSize="12sp"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="恢复识别"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                        app:boxStrokeColor="#81D8D0"
+                        app:hintTextColor="#81D8D0"
+                        android:layout_marginStart="2dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_cmd_restore"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textSize="12sp"

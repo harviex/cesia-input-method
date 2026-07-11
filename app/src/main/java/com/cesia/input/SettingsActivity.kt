@@ -98,6 +98,7 @@ class SettingsActivity : AppCompatActivity() {
     private var etCmdExit: TextInputEditText? = null      // 退出语音模式
     private var etCmdUndo: TextInputEditText? = null      // 撤销识别
     private var etCmdClear: TextInputEditText? = null     // 清空识别
+    private var etCmdRestore: TextInputEditText? = null   // 恢复识别
     private var tvCommandStatus: TextView? = null
 
     // === 个性化设置 ===
@@ -227,7 +228,7 @@ class SettingsActivity : AppCompatActivity() {
                 cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
                 cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
                 cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
-                cmdPrefs.getString("cmd_command", "智能修改") ?: "智能修改"
+                cmdPrefs.getString("cmd_command", "修改") ?: "修改"
             )
         } catch (_: Exception) {}
         setupListeners()
@@ -286,6 +287,7 @@ class SettingsActivity : AppCompatActivity() {
             etCmdExit = findViewById(R.id.et_cmd_exit)        // 退出语音模式
             etCmdUndo = findViewById(R.id.et_cmd_undo)        // 撤销识别
             etCmdClear = findViewById(R.id.et_cmd_clear)      // 清空识别
+            etCmdRestore = findViewById(R.id.et_cmd_restore)  // 恢复识别
             tvCommandStatus = findViewById(R.id.tv_command_status)
         } catch (_: Exception) {}
 
@@ -547,6 +549,7 @@ class SettingsActivity : AppCompatActivity() {
         etCmdExit?.setText(cmdPrefs.getString("cmd_exit", "退出"))
         etCmdUndo?.setText(cmdPrefs.getString("cmd_undo", "撤销"))
         etCmdClear?.setText(cmdPrefs.getString("cmd_clear", "清空"))
+        etCmdRestore?.setText(cmdPrefs.getString("cmd_restore", "恢复"))
 
         // 加载个性化设置
         etStatusIdle?.setText(prefs.getString("status_idle", "人工智能已就绪"))
@@ -572,7 +575,8 @@ class SettingsActivity : AppCompatActivity() {
             cmdPrefs.getString("cmd_command", "修改") ?: "修改",
             cmdPrefs.getString("cmd_writing", "写作") ?: "写作",
             cmdPrefs.getString("cmd_undo", "撤销") ?: "撤销",
-            cmdPrefs.getString("cmd_clear", "清空") ?: "清空"
+            cmdPrefs.getString("cmd_clear", "清空") ?: "清空",
+            cmdPrefs.getString("cmd_restore", "恢复") ?: "恢复"
         )
 
         appendLog("已加载设置")
@@ -648,7 +652,8 @@ class SettingsActivity : AppCompatActivity() {
             etCmdSend to "cmd_send",
             etCmdExit to "cmd_exit",
             etCmdUndo to "cmd_undo",
-            etCmdClear to "cmd_clear"
+            etCmdClear to "cmd_clear",
+            etCmdRestore to "cmd_restore"
         )
         cmdFields.forEach { (field, key) ->
             field?.setOnFocusChangeListener { _, hasFocus ->
@@ -1011,7 +1016,8 @@ class SettingsActivity : AppCompatActivity() {
             cmdPrefs.getString("cmd_command", "修改") ?: "修改",
             cmdPrefs.getString("cmd_writing", "写作") ?: "写作",
             cmdPrefs.getString("cmd_undo", "撤销") ?: "撤销",
-            cmdPrefs.getString("cmd_clear", "清空") ?: "清空"
+            cmdPrefs.getString("cmd_clear", "清空") ?: "清空",
+            cmdPrefs.getString("cmd_restore", "恢复") ?: "恢复"
         )
     }
 

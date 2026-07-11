@@ -328,6 +328,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 下划线（组合态）唯一真相源：仅由“追加说话 / 撤销 / 清空”三类操作修改，
     // 流式 onSegmentResult 永不重写它，仅读取它来拼接显示。这样跨段保留内容不会被新一轮识别覆盖吃掉。
     private var voiceKeptText: String = ""
+    // 撤销/清空的回收站：存最近一次撤销/清空前的完整内容，供“恢复”命令词还原。
+    private var voiceUndoBackup: String = ""
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
@@ -1046,9 +1048,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val send = cmdPrefs.getString("cmd_send", null)
             val command = cmdPrefs.getString("cmd_command", null)
             val writing = cmdPrefs.getString("cmd_writing", null)
+            val undo = cmdPrefs.getString("cmd_undo", "撤销") ?: "撤销"
+            val clear = cmdPrefs.getString("cmd_clear", "清空") ?: "清空"
+            val restore = cmdPrefs.getString("cmd_restore", "恢复") ?: "恢复"
             if (exit != null && polish != null && finish != null && send != null && command != null && writing != null) {
-                VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing)
-                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing")
+                VoiceEngine.updateCommandWords(exit, polish, finish, send, command, writing, undo, clear, restore)
+                Log.i("Cesia", "初始化: 已加载自定义命令词 exit=$exit, polish=$polish, finish=$finish, send=$send, command=$command, writing=$writing, undo=$undo, clear=$clear, restore=$restore")
             }
         }
 
@@ -4592,7 +4597,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
                             // 直接由下方分支用 setComposingText 整体替换 composing 区域。
-                            if (command != "undo" && command != "clear") {
+                            if (command != "undo" && command != "clear" && command != "restore") {
                                 // 把“已保留内容 + 本轮说的（去命令词）”拼成整体，作为要上屏/处理的真相源，
                                 // 这样“结束/退出/发送/润色/命令/写作”执行时不会把命令词本身带上屏。
                                 val combined = when {
@@ -4722,6 +4727,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         else -> voiceKeptText
                                     }
                                     val base = combined.trimEnd()
+                                    // 撤销前先把完整内容存入回收站，供“恢复”命令词还原
+                                    if (base.isNotEmpty()) voiceUndoBackup = base
                                     // 从后往前遍历，遇到空格（=上一句起点）或到达顶端，删掉起点之后的所有内容（不含空格）。
                                     val idx = base.lastIndexOf(' ')   // -1 表示到达顶端（整段都是一句）
                                     val remaining = if (idx < 0) "" else base.substring(0, idx)  // 不含空格
@@ -4742,10 +4749,30 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "clear" -> {
                                     // 清空（低等级）：不结束下划线、不提交，直接清空组合区域（真相源一并清空）
+                                    // 清空前把完整内容存入回收站，供“恢复”还原
+                                    val combined = when {
+                                        voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
+                                        text.isNotEmpty() -> text
+                                        else -> voiceKeptText
+                                    }.trimEnd()
+                                    if (combined.isNotEmpty()) voiceUndoBackup = combined
                                     ic.setComposingText("", 1)
                                     voiceKeptText = ""
                                     recognizedText = ""
                                     updateStatus("🧹 已清空，继续识别")
+                                    isContinuingSession = true
+                                    resumeRecordingKeepText()
+                                }
+                                "restore" -> {
+                                    // 恢复（低等级）：把最近一次撤销/清空删掉的内容还原到下划线，继续识别
+                                    if (voiceUndoBackup.isNotEmpty()) {
+                                        voiceKeptText = voiceUndoBackup
+                                        recognizedText = voiceUndoBackup
+                                        ic.setComposingText(voiceUndoBackup, 1)
+                                        updateStatus("♻️ 已恢复：$voiceUndoBackup")
+                                    } else {
+                                        updateStatus("⚠️ 没有可恢复的内容")
+                                    }
                                     isContinuingSession = true
                                     resumeRecordingKeepText()
                                 }
