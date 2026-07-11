@@ -946,7 +946,24 @@ class VoiceEngine(private val context: Context) {
                 i++
             }
         }
-        return result.toString()
+        return cleanupOrdinalSpacing(result.toString())
+    }
+
+    /**
+     * 清理 ASR 分段在序数词内部插入的空格和前缀重复：
+     * - "第 一" / "第 七" → "第一" / "第七"（去掉 第/初 后紧跟的空格）
+     * - "第 第一" / "第第一" → "第一"（折叠重复的序数前缀）
+     * 注意：只处理序数前缀，语段之间的空格（如 "第一 第二"）必须保留，撤销分段依赖它。
+     */
+    private fun cleanupOrdinalSpacing(text: String): String {
+        var s = text
+        // 折叠重复序数前缀："第 第" / "第第" → "第"（初 同理）
+        s = s.replace(Regex("第[\\s]*第"), "第")
+        s = s.replace(Regex("初[\\s]*初"), "初")
+        // 去掉序数前缀与其后数字之间的空格："第 一" → "第一"
+        s = s.replace(Regex("第[\\s]+"), "第")
+        s = s.replace(Regex("初[\\s]+"), "初")
+        return s
     }
 
     /**
