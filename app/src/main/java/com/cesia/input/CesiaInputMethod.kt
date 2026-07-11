@@ -330,6 +330,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var voiceKeptText: String = ""
     // 撤销/清空的回收站：存最近一次撤销/清空前的完整内容，供“恢复”命令词还原。
     private var voiceUndoBackup: String = ""
+    // 标记“刚在锁定态执行发送”：发送后输入框 finish 触发 onFinishInputView 时不解除锁定（由后续恢复监听接管）。
+    private var justSentWhileLocked: Boolean = false
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
@@ -4631,6 +4633,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     val canSend = editorInfo != null &&
                                         (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
                                     if (canSend) {
+                                        // 标记“刚在锁定态发送”，避免发送后输入框 finish 触发 onFinishInputView
+                                        // → forceExitVoiceMode 把锁定解除。发送后由 finishCommandResumeIfLocked 重新进入监听。
+                                        justSentWhileLocked = isVoiceLocked
                                         ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
                                     } else {
                                         Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
@@ -5139,6 +5144,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 再彻底清理语音状态。
      */
     private fun forceExitVoiceMode() {
+        // 锁定态刚执行“发送”后，输入框 finish 会触发这里；此时不应解除锁定，
+        // 由 send 分支的 finishCommandResumeIfLocked 重新进入监听接管。
+        if (justSentWhileLocked) {
+            justSentWhileLocked = false
+            Log.i("Cesia", "forceExitVoiceMode: 跳过（刚在锁定态发送，由恢复监听接管）")
+            return
+        }
         if (!isRecording && recognizedText.isEmpty() && !isVoiceLocked) return
         Log.i("Cesia", "forceExitVoiceMode: 切后台/来电，退出语音模式，保留内容='${recognizedText.take(50)}'")
         // 1. 停录音、取消协程
@@ -5264,14 +5276,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun polishWithCommandPrompt(text: String, prompt: String, cmdLabel: String) {
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val hasLocalModel = modelManager.hasAiModel()
-                val result = if (hasLocalModel) {
+                // 与智能写作(executeSmartCommand)一致的路由：本地模式且装了 MNN 模型才走本地，
+                // 否则走云端 PolishService(OpenRouter)。修复：以前只看 hasAiModel()，
+                // 而 Zipformer 语音识别模型也让 hasAiModel()=true，导致误走本地 aiEngine 卡死。
+                val useLocal = isLocalPolishMode() && modelManager.hasAiModel()
+                Log.d("Cesia", "polishWithCommandPrompt: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}")
+                val result = if (useLocal) {
+                    val modelFile = modelManager.getInstalledAiModelFile()
+                    if (modelFile != null && modelFile.exists() && !aiEngine.isModelLoaded()) {
+                        val configPath = if (modelFile.isDirectory) File(modelFile, "config.json").absolutePath else modelFile.absolutePath
+                        aiEngine.loadLocalModel(configPath)
+                    }
                     aiEngine.polishWithPrompt(prompt)
                 } else {
-                    // 无本地模型 → 尝试云端
-                    // TODO: 云端润色
-                    null
+                    val polishService = typelessEngine?.getPolishService()
+                    Log.d("Cesia", "polishWithCommandPrompt: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}")
+                    polishService?.polishWithPrompt(prompt)
                 }
+                Log.d("Cesia", "polishWithCommandPrompt: result=${result?.take(80) ?: "NULL"}")
 
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false

@@ -224,10 +224,10 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
             com.cesia.input.voice.VoiceEngine.updateCommandWords(
-                cmdPrefs.getString("cmd_exit", "退出语音模式") ?: "退出语音模式",
-                cmdPrefs.getString("cmd_polish", "智能润色") ?: "智能润色",
-                cmdPrefs.getString("cmd_finish", "结束语音识别") ?: "结束语音识别",
-                cmdPrefs.getString("cmd_send", "立即发送") ?: "立即发送",
+                cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
+                cmdPrefs.getString("cmd_polish", "润色") ?: "润色",
+                cmdPrefs.getString("cmd_finish", "结束") ?: "结束",
+                cmdPrefs.getString("cmd_send", "发送") ?: "发送",
                 cmdPrefs.getString("cmd_command", "修改") ?: "修改"
             )
         } catch (_: Exception) {}
