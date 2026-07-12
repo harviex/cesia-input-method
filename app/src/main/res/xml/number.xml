@@ -25,7 +25,7 @@
         <Key android:codes="12290" android:keyLabel="" android:popupCharacters="." android:keyEdgeFlags="left"
             android:keyWidth="20%p" />
         <Key android:codes="52" android:keyLabel="" android:popupCharacters="4" android:keyWidth="22%p" />
-        <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" android:keyWidth="22%p" />
+        <Key android:codes="53" android:keyLabel="" android:popupCharacters="5" android:keyWidth="25%p" />
         <Key android:codes="54" android:keyLabel="" android:popupCharacters="6" android:keyWidth="22%p" />
         <Key android:codes="65281" android:keyLabel="" android:popupCharacters="：" android:keyEdgeFlags="right"
             android:keyWidth="20%p" />
@@ -44,7 +44,7 @@
     <Row>
         <Key android:codes="-100" android:keyWidth="14%p" android:keyEdgeFlags="left" />
         <Key android:codes="-999" android:keyWidth="14%p" />
-        <Key android:codes="32" android:keyWidth="30%p" android:popupCharacters="0" />
+        <Key android:codes="32" android:keyWidth="35%p" android:popupCharacters="0" />
         <Key android:codes="-108" android:keyWidth="14%p" />
         <Key android:codes="-109" android:keyWidth="14%p" />
         <Key android:codes="10" android:keyWidth="14%p" android:keyEdgeFlags="right" />
