@@ -1309,6 +1309,22 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun downloadVoiceModel() {
+        val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
+        val dictInstalled = dictManager.hasDownloadedDict()
+        // 已安装时再次点击 → 先弹确认框，取消不下载，确定才重新下载
+        if (voiceInstalled && dictInstalled) {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("重新下载语音套件")
+                .setMessage("语音文字输入套件已安装，确定要重新下载吗？")
+                .setNegativeButton("取消") { _, _ -> }
+                .setPositiveButton("确定") { _, _ -> doDownloadVoiceModel() }
+                .show()
+            return
+        }
+        doDownloadVoiceModel()
+    }
+
+    private fun doDownloadVoiceModel() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
         btnInstallVoice?.isEnabled = false
         setBothVoiceProgress(0, "准备下载...")
@@ -1392,6 +1408,27 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun downloadAiModel() {
+        // 已安装时再次点击 → 先弹确认框，取消不下载，确定才重新下载
+        val installed = modelManager.hasAiModel()
+        Log.i("Cesia", "downloadAiModel: hasAiModel=$installed")
+        if (installed) {
+            try {
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("重新下载AI模型")
+                    .setMessage("本地AI模型已安装，确定要重新下载吗？")
+                    .setNegativeButton("取消") { _, _ -> }
+                    .setPositiveButton("确定") { _, _ -> doDownloadAiModel() }
+                    .show()
+            } catch (e: Exception) {
+                Log.e("Cesia", "downloadAiModel dialog failed: ${e.message}", e)
+                doDownloadAiModel()
+            }
+            return
+        }
+        doDownloadAiModel()
+    }
+
+    private fun doDownloadAiModel() {
         val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
             ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: return
         btnInstallAi?.isEnabled = false
@@ -1517,6 +1554,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestApi.isEnabled = false
+        // 互斥：开始云端润色 → 本地按钮变灰不可点，直到润色完成恢复
+        btnTestLocalAi?.isEnabled = false
+        btnTestLocalAi?.alpha = 0.4f
         appendLog("🔄 正在润色...")
         // 文字闪烁提示（不发网络请求前先开始闪烁）
         startButtonFlash(btnTestApi, "润色中...")
@@ -1602,14 +1642,18 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
                     btnTestApi.isEnabled = true
-                    stopButtonFlash(btnTestApi, "API 润色")
+                    stopButtonFlash(btnTestApi, "云端AI润色")
+                    // 润色完成 → 恢复对方按钮状态
+                    updateTestButtonStates()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
                     btnTestApi.isEnabled = true
-                    stopButtonFlash(btnTestApi, "API 润色")
+                    stopButtonFlash(btnTestApi, "云端AI润色")
+                    // 润色完成 → 恢复对方按钮状态
+                    updateTestButtonStates()
                 }
             }
         }.start()
@@ -1625,6 +1669,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnTestLocalAi?.isEnabled = false
+        // 互斥：开始本地润色 → 云端按钮变灰不可点，直到润色完成恢复
+        btnTestApi?.isEnabled = false
+        btnTestApi?.alpha = 0.4f
         startButtonFlash(btnTestLocalAi, "加载中")
         appendLog("🔄 正在加载模型并润色...")
 
@@ -1637,7 +1684,9 @@ class SettingsActivity : AppCompatActivity() {
                     runOnUiThread {
                         showTestResult(false, "未安装 AI 模型")
                         appendLog("本地 AI 失败: 模型未安装")
-                        stopButtonFlash(btnTestLocalAi, "本地 AI")
+                        stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                        // 润色完成 → 恢复对方按钮状态
+                        updateTestButtonStates()
                     }
                     return@Thread
                 }
@@ -1668,7 +1717,9 @@ class SettingsActivity : AppCompatActivity() {
                         if (mnnLog.isNotEmpty()) {
                             appendLog("MNN log: $mnnLog")
                         }
-                        stopButtonFlash(btnTestLocalAi, "本地 AI")
+                        stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                        // 润色完成 → 恢复对方按钮状态
+                        updateTestButtonStates()
                     }
                     return@Thread
                 }
@@ -1698,14 +1749,18 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(true, "润色结果为空")
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
-                    stopButtonFlash(btnTestLocalAi, "本地 AI")
+                    stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                    // 润色完成 → 恢复对方按钮状态
+                    updateTestButtonStates()
                 }
             } catch (e: Exception) {
                 Log.e("SettingsActivity", "本地 AI 测试异常", e)
                 runOnUiThread {
                     showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
-                    stopButtonFlash(btnTestLocalAi, "本地 AI")
+                    stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                    // 润色完成 → 恢复对方按钮状态
+                    updateTestButtonStates()
                 }
             }
         }.start()
