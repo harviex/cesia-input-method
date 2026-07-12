@@ -7602,6 +7602,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 .getInt(PREF_THEME_MODE, THEME_LIGHT)
             isDarkTheme = themeMode == THEME_DARK
             applyKeyboardTheme()
+            // 恢复 Rime schema：灭屏/重连后 onFinishInputView 可能 clear composing，
+            // 亮屏激活时若 schema 停留在非 T9 方案，T9 数字串无法转拼音 → 退化成纯数字。
+            // 按当前键盘模式重新 selectSchema + reload，确保 T9 必为 t9_pinyin。
+            if (keyboardMode == KeyboardMode.NUMBER) {
+                rimeEngine.selectSchema("t9_pinyin")
+                rimeEngine.reload()
+            } else if (keyboardMode == KeyboardMode.QWERTY) {
+                rimeEngine.selectSchema(if (qwertyShiftLocked || qwertyShiftTemp) "en" else "pinyin")
+                rimeEngine.reload()
+            }
             aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getString(PREF_AI_STYLE, "自然") ?: "自然"
             // 外部词库下载后需要重新部署 Rime
