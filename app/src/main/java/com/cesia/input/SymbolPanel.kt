@@ -13,6 +13,7 @@ import android.widget.PopupWindow
 import android.content.Context
 import android.util.TypedValue
 import android.view.inputmethod.InputConnection
+import android.view.Gravity as AndroidGravity
 import com.cesia.input.R
 
 /**
@@ -26,32 +27,61 @@ class SymbolPanel(
     private val accentColor: Int,
     private val onCommit: (String) -> Unit
 ) {
-    // 分类 → 符号列表（借鉴 rime-ice symbols_v.yaml 的实用分组）
+    // 分类 → 符号列表（借鉴 rime-ice symbols_v.yaml 的实用分组，已扩充）
     private val categories: List<Pair<String, List<String>>> = listOf(
         "常用" to listOf(
             "，", "。", "！", "？", "、", "；", "：", "“", "”", "‘", "’",
-            "（", "）", "《", "》", "…", "—", "·", "～", "@", "#", "&", "*"
+            "（", "）", "《", "》", "〈", "〉", "「", "」", "『", "』",
+            "【", "】", "〔", "〕", "「", "」", "『", "』", "…", "—",
+            "·", "～", "ˉ", "ˇ", "¨", "‘", "’", "「", "」", "￥", "＄"
         ),
         "标点" to listOf(
             "，", "。", "！", "？", "、", "；", "：", "“", "”", "‘", "’",
             "（", "）", "《", "》", "〈", "〉", "「", "」", "『", "』",
-            "【", "】", "〔", "〕", "…", "—", "·", "～", "ˉ", "ˇ", "¨"
+            "【", "】", "〔", "〕", "…", "—", "·", "～", "ˉ", "ˇ", "¨",
+            "々", "〆", "〇", "「", "」", "『", "』", "｛", "｝", "［", "］"
         ),
         "数学" to listOf(
             "＋", "－", "×", "÷", "＝", "≠", "≈", "≤", "≥", "±", "√", "∞",
             "％", "‰", "°", "∠", "⊥", "∥", "∈", "∉", "∩", "∪", "⊆", "⊇",
-            "∑", "∏", "∫", "∂", "∇", "∀", "∃", "∵", "∴", "≡", "≌"
+            "∑", "∏", "∫", "∬", "∂", "∇", "∀", "∃", "∵", "∴", "≡", "≌",
+            "≅", "∝", "∮", "∝", "∧", "∨", "⊕", "⊗", "⊙", "⊥", "⌈", "⌉",
+            "⌊", "⌋", "∣", "∤", "≪", "≫", "⋮", "⋯", "∷", "≜", "≝", "∆"
         ),
         "箭头" to listOf(
             "→", "←", "↑", "↓", "↕", "↔", "↖", "↗", "↙", "↘",
-            "⇒", "⇐", "⇑", "⇓", "↩", "↪", "➜", "➤", "➥"
+            "⇒", "⇐", "⇑", "⇓", "↩", "↪", "➜", "➤", "➥", "➦",
+            "↞", "↟", "↠", "↡", "↢", "↣", "↤", "↥", "↧", "↨",
+            "⇄", "⇅", "⇆", "⇇", "⇈", "⇉", "⇊", "⇋", "⇌", "⇍", "⇎", "⇏"
         ),
         "货币" to listOf(
-            "￥", "＄", "€", "£", "¥", "₩", "₽", "₺", "₪", "₫"
+            "￥", "＄", "€", "£", "¥", "₩", "₽", "₺", "₪", "₫",
+            "₴", "₦", "₡", "₢", "₣", "₤", "₥", "₦", "₧", "₨",
+            "₩", "₪", "₫", "₭", "₮", "₯", "₰", "₱", "₲", "₳", "₴", "₵"
         ),
         "特殊" to listOf(
             "★", "☆", "●", "○", "■", "□", "◆", "◇", "♠", "♥", "♣", "♦",
-            "♪", "♫", "✓", "✗", "✘", "§", "¶", "†", "‡", "¦", "⁄", "¨"
+            "♪", "♫", "✓", "✗", "✘", "§", "¶", "†", "‡", "¦", "⁄", "¨",
+            "●", "◐", "◑", "◒", "◓", "◯", "⬟", "⬠", "⬡", "⬢", "⬣", "⬤",
+            "▣", "▤", "▥", "▦", "▧", "▨", "▩", "◈", "◉", "◊", "❂", "❖"
+        ),
+        "希腊" to listOf(
+            "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ",
+            "ν", "ξ", "ο", "π", "ρ", "σ", "τ", "υ", "φ", "χ", "ψ", "ω",
+            "Α", "Β", "Γ", "Δ", "Ε", "Ζ", "Η", "Θ", "Ι", "Κ", "Λ", "Μ",
+            "Ν", "Ξ", "Ο", "Π", "Ρ", "Σ", "Τ", "Υ", "Φ", "Χ", "Ψ", "Ω"
+        ),
+        "罗马" to listOf(
+            "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ",
+            "Ⅺ", "Ⅻ", "Ⅼ", "Ⅽ", "Ⅾ", "Ⅿ", "ⅰ", "ⅱ", "ⅲ", "ⅳ",
+            "ⅴ", "ⅵ", "ⅶ", "ⅷ", "ⅸ", "ⅹ", "ⅺ", "ⅻ", "ⅼ", "ⅽ", "ⅾ", "ⅿ"
+        ),
+        "Emoji" to listOf(
+            "😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤔",
+            "😅", "😭", "😡", "👍", "👎", "👏", "🙏", "💪", "🔥", "❤️",
+            "✨", "🌟", "🌹", "🌈", "☀️", "🌙", "⭐", "💡", "⚡", "🔔",
+            "🎉", "🎊", "💯", "✅", "❌", "⭕", "❗", "❓", "💤", "🌸",
+            "🌿", "🍎", "🍊", "🍉", "🍓", "🍔", "🍜", "☕", "🍻", "🚀"
         )
     )
 
@@ -69,14 +99,13 @@ class SymbolPanel(
         val tabContainer = tabStrip.findViewById<ViewGroup>(R.id.symbol_tab_container)
         val grid = view.findViewById<GridLayout>(R.id.symbol_grid)
 
-        // 构建分类标签
         tabContainer.removeAllViews()
         categories.forEachIndexed { idx, (name, _) ->
             val tab = TextView(context).apply {
                 text = name
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 textSize = 14f
-                gravity = Gravity.CENTER
+                gravity = AndroidGravity.CENTER
                 if (idx == currentCatIndex) {
                     setTextColor(Color.WHITE)
                     background = makeTabBg(accentColor)
@@ -86,7 +115,6 @@ class SymbolPanel(
                 }
                 setOnClickListener {
                     currentCatIndex = idx
-                    // 刷新标签高亮
                     for (i in 0 until tabContainer.childCount) {
                         val t = tabContainer.getChildAt(i) as TextView
                         if (i == idx) {
@@ -113,10 +141,7 @@ class SymbolPanel(
         ).apply {
             isOutsideTouchable = true
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
-            // 锚定在键盘上方
-            val loc = IntArray(2)
-            anchor.getLocationInWindow(loc)
-            showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
+            showAtLocation(anchor, AndroidGravity.BOTTOM or AndroidGravity.START, 0, 0)
         }
     }
 
@@ -135,14 +160,19 @@ class SymbolPanel(
             val btn = TextView(context).apply {
                 text = sym
                 textSize = 20f
-                gravity = Gravity.CENTER
-                setPadding(dp(6), dp(10), dp(6), dp(10))
+                gravity = AndroidGravity.CENTER
+                setPadding(dp(4), dp(12), dp(4), dp(12))
                 background = makeKeyBg(0xFFF2F2F2.toInt())
-                setOnClickListener {
-                    onCommit(sym)
-                    // 点击后保持面板打开，方便连点
-                }
+                setOnClickListener { onCommit(sym) }
             }
+            // 关键：显式 LayoutParams + columnSpec weight=1f，让 8 列均分父宽，
+            // 避免窄字符集中在左侧（默认 WRAP_CONTENT 导致的布局异常）。
+            val lp = GridLayout.LayoutParams().apply {
+                width = 0
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            }
+            btn.layoutParams = lp
             grid.addView(btn)
         }
     }
