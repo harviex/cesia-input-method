@@ -190,8 +190,8 @@ class AIEngine(private val context: Context) {
             if (text.isBlank()) return@withContext ""
 
             // 长文本分块润色：本地 LLM 在长 prompt 下易生成失败/超时返回空 → 导致返回 null
-            // 按 ~60 字切分（优先在句末标点处断），逐块润色后拼接，避免单次过长
-            val CHUNK_THRESHOLD = 60
+            // 按 ~400 字切分（优先在句末标点处断），逐块润色后拼接，避免单次过长
+            val CHUNK_THRESHOLD = 400
             if (text.length > CHUNK_THRESHOLD) {
                 val chunks = splitIntoChunks(text, CHUNK_THRESHOLD)
                 Log.d(TAG, "Polish: 长文本分 ${chunks.size} 块 (总长 ${text.length})")
@@ -211,7 +211,7 @@ class AIEngine(private val context: Context) {
     private fun polishSingle(text: String, instruction: String): String? {
         try {
             mnnEngine.nativeReset()
-            val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 1024)
+            val maxTokens = (text.length * 2.5).toInt().coerceIn(64, 1536)
             Log.d(TAG, "Polish: textLen=${text.length}, maxTokens=$maxTokens")
             val prompt = buildPolishPrompt(text, instruction)
             System.gc()
