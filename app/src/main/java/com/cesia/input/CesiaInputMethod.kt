@@ -894,6 +894,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         super.onCreate()
     }
 
+    /**
+     * 防闪烁：禁用全屏提取模式。
+     * 部分 ROM（非三星机型）在输入框较小时会默认进入全屏提取视图，
+     * 导致普通键盘窗口与全屏窗口反复切换 → 输入法整体闪烁。
+     * 强制返回 false 让 IME 始终以常规窗口显示，根治此闪烁。
+     */
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
     override fun onCreateInputView(): View {
         try {
             return createInputViewSafe()
