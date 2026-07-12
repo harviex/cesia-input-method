@@ -473,7 +473,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
             // ===== 2. popupCharacters / T9 副字符数字（红色，右上角） =====
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
-                val symbol = popup[0].toString()
+                // 支持多字符副标签（如"符库"），最多取前2字避免溢出
+                val symbol = (if (popup.length <= 2) popup else popup.substring(0, 2)).toString()
                 val y = if (fnLabel != null) {
                     key.y + 10f + spSize + popupSpSize + 2f
                 } else {

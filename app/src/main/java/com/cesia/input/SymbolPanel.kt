@@ -19,12 +19,11 @@ import com.google.gson.reflect.TypeToken
 import com.cesia.input.R
 
 /**
- * 长按符号切换键弹出的分类符号面板（PopupWindow）。
- * 分类借鉴雾凇拼音 symbols_v.yaml 的实用分组（已剔除数百个生僻字母变体），
- * 另增「网络」类（@ / 斜线等常用网络符号）。
+ * 长按符号切换键(-100，副字符"符库")弹出的分类符号面板（PopupWindow）。
+ * 分类借鉴雾凇拼音 symbols_v.yaml 的实用分组，另增「网络」类。
  * 点击符号 → commitText 上屏；面板保持打开可连点，点击外部关闭。
- * 符号网格用 RecyclerView + GridLayoutManager(10) 均分占满整行，同类多可滚动。
- * 「常用」类按点击频率动态排序（SharedPreferences 记录）。
+ * 「常用」类按点击频率动态排序；标签按使用频率自动调整顺序；
+ * 「常用」标签长按清空频率；符号长按弹出菜单（取消/设为常用）。
  */
 class SymbolPanel(
     private val context: Context,
@@ -36,13 +35,13 @@ class SymbolPanel(
         context.getSharedPreferences("cesia_symbol_freq", Context.MODE_PRIVATE)
     private val gson = Gson()
 
-    // 各类符号（源自 rime-ice symbols_v.yaml 实用部分；网络类为新增）
+    // 各类符号（源自 rime-ice symbols_v.yaml 实用部分；网络/序号/制表/线条为新增/整合）
     private val allCategories: List<Pair<String, List<String>>> = listOf(
         "网络" to listOf(
             "@", "#", "&", "*", "/", "\\", "~", "_", "-", "+", "=",
             "|", "<", ">", "`", "^", "%", "(", ")", "[", "]", "{", "}",
             ";", ":", ",", ".", "!", "?", "\"", "'", "￥", "＄", "§",
-            "¶", "°", "•", "·", "…", "—", "©", "®", "™", "#"
+            "¶", "°", "•", "·", "…", "—", "©", "®", "™"
         ),
         "标点" to listOf(
             "。", "．", "，", "、", "：", "；", "！", "‼", "？", "⁇",
@@ -58,7 +57,7 @@ class SymbolPanel(
             "∥", "¬", "⊕", "∧", "∨", "∩", "∪", "∫", "∮", "∴",
             "∵", "∷", "∽", "≈", "≌", "≒", "≡", "≤", "≥", "≦",
             "≧", "⊖", "⊗", "⊙", "⊥", "⊿", "㏑", "㏒", "π", "°",
-            "℃", "℉", "‰", "‱"
+            "℃", "℉", "‰", "‱", "☰", "☱", "☲", "☳", "☴", "☵", "☶", "☷"
         ),
         "箭头" to listOf(
             "↑", "↓", "←", "→", "↕", "↔", "↖", "↗", "↙", "↘",
@@ -76,7 +75,7 @@ class SymbolPanel(
         ),
         "特殊" to listOf(
             "★", "☆", "⛤", "⛥", "⛦", "⛧", "✡", "❋", "❊", "❉",
-            "❈", "❇", "❆", "❅", "❄", "❃", "❂", "❁", "❀", "✿",
+            "❈", "❇", "❆", "❅", "❄", "❃", "❁", "❀", "✿",
             "✾", "✽", "✼", "✻", "✺", "✹", "✸", "✷", "✶", "✵",
             "✴", "✳", "✲", "✱", "✰", "✯", "✮", "✭", "✬", "✫",
             "✪", "✩", "✧", "✦", "█", "▓", "▒", "░", "▚", "▜"
@@ -109,25 +108,24 @@ class SymbolPanel(
             "❾", "❿", "⑴", "⑵", "⑶", "⑷", "⑸", "⑹", "⑺", "⑻",
             "⑼", "⑽", "⒈", "⒉", "⒊", "⒋", "⒌", "⒍", "⒎", "⒏", "⒐", "⒑"
         ),
+        "序号" to listOf(
+            "㊀", "㊁", "㊂", "㊃", "㊄", "㊅", "㊆", "㊇", "㊈", "㊉",
+            "㈠", "㈡", "㈢", "㈣", "㈤", "㈥", "㈦", "㈧", "㈨", "㈩",
+            "㈪", "㈫", "㈬", "㈭", "㈮", "㈯", "㈰", "㈱", "㈲", "㈳",
+            "🅰", "🅱", "🅲", "🅳", "🅴", "🅵", "🅶", "🅷", "🅸", "🅹", "🅺", "🅻", "🅼", "🅽", "🅾", "🅿",
+            "ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ", "ⓖ", "ⓗ", "ⓘ", "ⓙ", "ⓚ", "ⓛ", "ⓜ", "ⓝ", "ⓞ", "ⓟ", "ⓠ", "ⓡ", "ⓢ", "ⓣ", "ⓤ", "ⓥ", "ⓦ", "ⓧ", "ⓨ", "ⓩ"
+        ),
         "单位" to listOf(
             "℃", "℉", "°", "％", "‰", "‱", "Å", "㎜", "㎝", "㎞",
             "㎏", "㎡", "㏄", "㎎", "㎐", "㎑", "㎒", "㎓", "㎖", "㎗",
             "㎘", "㏔", "㏕", "㎢", "㎦", "㎪", "㎫", "㎰", "㎴", "㎺",
             "㎭", "㎮", "㎯", "㏛", "㎩", "㎉"
         ),
-        "天气" to listOf("☀", "☁", "⛅", "⛈", "☂", "☔", "☃", "⛄", "⛇"),
-        "星座" to listOf(
-            "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑",
-            "♒", "♓"
-        ),
-        "八卦" to listOf("☰", "☱", "☲", "☳", "☴", "☵", "☶", "☷"),
-        "俄文" to listOf(
-            "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и",
-            "й", "к", "л", "м", "н", "о", "п", "р", "с", "т",
-            "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь",
-            "э", "ю", "я", "А", "Б", "В", "Г", "Д", "Е", "Ё",
-            "Ж", "З", "И", "Й", "К", "Л", "М", "Н", "О", "П",
-            "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Э", "Ю", "Я"
+        "线条" to listOf(
+            "─", "│", "┌", "┐", "└", "┘", "├", "┤", "┬", "┴",
+            "┼", "═", "║", "╔", "╗", "╚", "╝", "╠", "╣", "╦",
+            "╩", "╬", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "▔",
+            "▕", "▖", "▗", "▘", "▝", "▞", "▟"
         ),
         "Emoji" to listOf(
             "😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤔",
@@ -135,11 +133,12 @@ class SymbolPanel(
             "✨", "🌟", "🌹", "🌈", "☀️", "🌙", "⭐", "💡", "⚡", "🔔",
             "🎉", "🎊", "💯", "✅", "❌", "⭕", "❗", "❓", "💤", "🌸",
             "🌿", "🍎", "🍊", "🍉", "🍓", "🍔", "🍜", "☕", "🍻", "🚀",
-            "👌", "😱", "😮", "😰", "💩", "⚽", "🐱", "🐶", "🌍", "📱"
+            "👌", "😱", "😮", "😰", "💩", "⚽", "🐱", "🐶", "🌍", "📱",
+            "☀", "☁", "⛅", "⛈", "☂", "☔", "☃", "⛄", "⛇",
+            "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"
         )
     )
 
-    // 「常用」类基础候选（频率为空时兜底）
     private val commonBase = listOf(
         "，", "。", "！", "？", "、", "；", "：", "“", "”", "（",
         "）", "《", "》", "…", "—", "·", "～", "@", "#", "&",
@@ -147,13 +146,10 @@ class SymbolPanel(
         "≈", "≤", "≥", "★", "☆", "●", "○", "■", "□", "€", "£", "¥", "✓", "✗"
     )
 
-    // 动态分类：第一个是「常用」（按频率），其余为固定分类
-    private val categories: List<Pair<String, List<String>>>
-        get() = listOf("常用" to commonSymbols()) + allCategories
-
     private var popup: PopupWindow? = null
     private var currentCatIndex = 0
     private var grid: RecyclerView? = null
+    private var tabContainer: ViewGroup? = null
 
     private fun loadFreq(): MutableMap<String, Int> {
         val json = prefs.getString("freq", null) ?: return mutableMapOf()
@@ -171,7 +167,6 @@ class SymbolPanel(
     private fun commonSymbols(): List<String> {
         val freq = loadFreq()
         if (freq.isEmpty()) return commonBase
-        // 按点击次数降序取前 50，不足则用 base 补齐
         val top = freq.entries.sortedByDescending { it.value }.take(50).map { it.key }
         val result = top.toMutableList()
         for (s in commonBase) {
@@ -187,6 +182,15 @@ class SymbolPanel(
         saveFreq(freq)
     }
 
+    // 标签顺序：常用固定首位，其余按该类符号累计点击频率降序
+    private fun orderedCategories(): List<Pair<String, List<String>>> {
+        val freq = loadFreq()
+        val rest = allCategories.sortedByDescending { (_, syms) ->
+            syms.sumOf { freq[it] ?: 0 }
+        }
+        return listOf("常用" to commonSymbols()) + rest
+    }
+
     fun show() {
         if (popup?.isShowing == true) {
             popup?.dismiss()
@@ -195,12 +199,31 @@ class SymbolPanel(
         }
         val view = LayoutInflater.from(context).inflate(R.layout.symbol_panel, null)
         val tabStrip = view.findViewById<HorizontalScrollView>(R.id.symbol_tabs)
-        val tabContainer = tabStrip.findViewById<ViewGroup>(R.id.symbol_tab_container)
+        tabContainer = tabStrip.findViewById(R.id.symbol_tab_container)
         grid = view.findViewById(R.id.symbol_grid)
         grid?.layoutManager = GridLayoutManager(context, 10)
 
-        val cats = categories
-        tabContainer.removeAllViews()
+        buildTabs()
+        val cats = orderedCategories()
+        // 保持 currentCatIndex 指向同名分类（顺序变化后索引会变）
+        val safeIndex = currentCatIndex.coerceIn(0, cats.lastIndex)
+        selectCategory(safeIndex, cats)
+
+        popup = PopupWindow(
+            view,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            false
+        ).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
+            showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
+        }
+    }
+
+    private fun buildTabs() {
+        val cats = orderedCategories()
+        tabContainer?.removeAllViews()
         cats.forEachIndexed { idx, (name, _) ->
             val tab = TextView(context).apply {
                 text = name
@@ -214,36 +237,44 @@ class SymbolPanel(
                     setTextColor(0xFF666666.toInt())
                     background = null
                 }
-                setOnClickListener {
-                    currentCatIndex = idx
-                    for (i in 0 until tabContainer.childCount) {
-                        val t = tabContainer.getChildAt(i) as TextView
-                        if (i == idx) {
-                            t.setTextColor(Color.WHITE)
-                            t.background = makeTabBg(accentColor)
-                        } else {
-                            t.setTextColor(0xFF666666.toInt())
-                            t.background = null
-                        }
+                setOnClickListener { selectCategory(idx, cats) }
+                // 「常用」标签长按清空频率
+                if (name == "常用") {
+                    setOnLongClickListener {
+                        clearFreq()
+                        true
                     }
-                    fillGrid(cats[idx].second)
                 }
             }
-            tabContainer.addView(tab)
+            tabContainer?.addView(tab)
         }
+    }
 
-        fillGrid(cats[currentCatIndex].second)
+    private fun clearFreq() {
+        prefs.edit().remove("freq").apply()
+        // 重建标签并回到常用类
+        currentCatIndex = 0
+        buildTabs()
+        val cats = orderedCategories()
+        fillGrid(cats[0].second)
+    }
 
-        popup = PopupWindow(
-            view,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            false
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
-            showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
+    private fun selectCategory(idx: Int, cats: List<Pair<String, List<String>>>) {
+        currentCatIndex = idx
+        // 刷新标签高亮
+        tabContainer?.let { container ->
+            for (i in 0 until container.childCount) {
+                val t = container.getChildAt(i) as TextView
+                if (i == idx) {
+                    t.setTextColor(Color.WHITE)
+                    t.background = makeTabBg(accentColor)
+                } else {
+                    t.setTextColor(0xFF666666.toInt())
+                    t.background = null
+                }
+            }
         }
+        fillGrid(cats[idx].second)
     }
 
     fun dismiss() {
@@ -277,11 +308,50 @@ class SymbolPanel(
             holder.tv.text = sym
             holder.tv.setOnClickListener {
                 onCommit(sym)
-                bumpSymbol(sym) // 记录点击频率
+                bumpSymbol(sym)
+            }
+            holder.tv.setOnLongClickListener {
+                showSymbolContextMenu(holder.tv, sym)
+                true
             }
         }
 
         override fun getItemCount(): Int = symbols.size
+    }
+
+    // 符号长按菜单：常用类显示「取消常用」，其他类显示「设为常用」
+    private fun showSymbolContextMenu(anchorView: View, symbol: String) {
+        val isCommon = (currentCatIndex == 0)
+        val menuView = LayoutInflater.from(context)
+            .inflate(R.layout.symbol_context_menu, null)
+        val title = menuView.findViewById<TextView>(R.id.menu_title)
+        val action = menuView.findViewById<TextView>(R.id.menu_action)
+        title.text = symbol
+        action.text = if (isCommon) "取消常用" else "设为常用"
+
+        val menu = PopupWindow(
+            menuView,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
+        }
+        action.setOnClickListener {
+            val freq = loadFreq()
+            if (isCommon) {
+                freq.remove(symbol) // 取消常用
+            } else {
+                freq[symbol] = (freq[symbol] ?: 0) + 1000 // 设为常用（推到最前）
+            }
+            saveFreq(freq)
+            if (isCommon) {
+                // 刷新当前常用类
+                fillGrid(commonSymbols())
+            }
+            menu.dismiss()
+        }
+        menu.showAsDropDown(anchorView)
     }
 
     private fun dp(v: Int): Int =

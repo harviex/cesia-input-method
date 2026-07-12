@@ -42,7 +42,7 @@
     </Row>
 
     <Row>
-        <Key android:codes="-100" android:keyWidth="14%p" android:keyEdgeFlags="left" />
+        <Key android:codes="-100" android:keyLabel="符" android:popupCharacters="符库" android:keyWidth="14%p" android:keyEdgeFlags="left" />
         <Key android:codes="-999" android:keyWidth="14%p" />
         <Key android:codes="32" android:keyWidth="35%p" android:popupCharacters="0" />
         <Key android:codes="-108" android:keyWidth="14%p" />
