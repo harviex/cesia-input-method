@@ -27,19 +27,11 @@
         android:background="#EEEEEE"
         android:layout_marginTop="6dp" />
 
-    <ScrollView
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/symbol_grid"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="none"
-        android:layout_marginTop="6dp">
-
-        <GridLayout
-            android:id="@+id/symbol_grid"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:columnCount="8"
-            android:alignmentMode="alignBounds" />
-    </ScrollView>
+        android:layout_height="280dp"
+        android:padding="8dp"
+        android:scrollbars="none" />
 
 </LinearLayout>

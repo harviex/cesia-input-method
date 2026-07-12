@@ -6,20 +6,20 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.GridLayout
-import android.widget.HorizontalScrollView
 import android.widget.TextView
+import android.widget.HorizontalScrollView
 import android.widget.PopupWindow
 import android.content.Context
 import android.util.TypedValue
-import android.view.inputmethod.InputConnection
-import android.view.Gravity as AndroidGravity
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.cesia.input.R
 
 /**
  * 长按符号切换键弹出的分类符号面板（PopupWindow）。
  * 符号分类借鉴雾凇拼音 symbols_v.yaml 的实用分组，数据内联，不依赖 Rime。
  * 点击符号 → commitText 上屏；面板保持打开可连点，点击外部关闭。
+ * 符号网格用 RecyclerView + GridLayoutManager(10) 均分占满整行，同类多可滚动。
  */
 class SymbolPanel(
     private val context: Context,
@@ -32,21 +32,21 @@ class SymbolPanel(
         "常用" to listOf(
             "，", "。", "！", "？", "、", "；", "：", "“", "”", "‘", "’",
             "（", "）", "《", "》", "〈", "〉", "「", "」", "『", "』",
-            "【", "】", "〔", "〕", "「", "」", "『", "』", "…", "—",
-            "·", "～", "ˉ", "ˇ", "¨", "‘", "’", "「", "」", "￥", "＄"
+            "【", "】", "〔", "〕", "…", "—", "·", "～", "ˉ", "ˇ", "¨",
+            "々", "〆", "〇", "｛", "｝", "［", "］", "￥", "＄", "＃", "＆", "＊"
         ),
         "标点" to listOf(
             "，", "。", "！", "？", "、", "；", "：", "“", "”", "‘", "’",
             "（", "）", "《", "》", "〈", "〉", "「", "」", "『", "』",
             "【", "】", "〔", "〕", "…", "—", "·", "～", "ˉ", "ˇ", "¨",
-            "々", "〆", "〇", "「", "」", "『", "』", "｛", "｝", "［", "］"
+            "々", "〆", "〇", "｛", "｝", "［", "］", "｟", "｠", "«", "»", "‹", "›"
         ),
         "数学" to listOf(
             "＋", "－", "×", "÷", "＝", "≠", "≈", "≤", "≥", "±", "√", "∞",
             "％", "‰", "°", "∠", "⊥", "∥", "∈", "∉", "∩", "∪", "⊆", "⊇",
             "∑", "∏", "∫", "∬", "∂", "∇", "∀", "∃", "∵", "∴", "≡", "≌",
-            "≅", "∝", "∮", "∝", "∧", "∨", "⊕", "⊗", "⊙", "⊥", "⌈", "⌉",
-            "⌊", "⌋", "∣", "∤", "≪", "≫", "⋮", "⋯", "∷", "≜", "≝", "∆"
+            "≅", "∝", "∮", "∧", "∨", "⊕", "⊗", "⊙", "⌈", "⌉", "⌊", "⌋",
+            "∣", "∤", "≪", "≫", "⋮", "⋯", "∷", "≜", "≝", "∆", "∱", "∲"
         ),
         "箭头" to listOf(
             "→", "←", "↑", "↓", "↕", "↔", "↖", "↗", "↙", "↘",
@@ -56,14 +56,14 @@ class SymbolPanel(
         ),
         "货币" to listOf(
             "￥", "＄", "€", "£", "¥", "₩", "₽", "₺", "₪", "₫",
-            "₴", "₦", "₡", "₢", "₣", "₤", "₥", "₦", "₧", "₨",
-            "₩", "₪", "₫", "₭", "₮", "₯", "₰", "₱", "₲", "₳", "₴", "₵"
+            "₴", "₦", "₡", "₢", "₣", "₤", "₥", "₧", "₨", "₩",
+            "₪", "₫", "₭", "₮", "₯", "₰", "₱", "₲", "₳", "₴", "₵", "₶"
         ),
         "特殊" to listOf(
             "★", "☆", "●", "○", "■", "□", "◆", "◇", "♠", "♥", "♣", "♦",
             "♪", "♫", "✓", "✗", "✘", "§", "¶", "†", "‡", "¦", "⁄", "¨",
-            "●", "◐", "◑", "◒", "◓", "◯", "⬟", "⬠", "⬡", "⬢", "⬣", "⬤",
-            "▣", "▤", "▥", "▦", "▧", "▨", "▩", "◈", "◉", "◊", "❂", "❖"
+            "◐", "◑", "◒", "◓", "◯", "⬟", "⬠", "⬡", "⬢", "⬣", "⬤", "◈",
+            "▣", "▤", "▥", "▦", "▧", "▨", "▩", "◉", "◊", "❂", "❖", "❣"
         ),
         "希腊" to listOf(
             "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ",
@@ -87,6 +87,7 @@ class SymbolPanel(
 
     private var popup: PopupWindow? = null
     private var currentCatIndex = 0
+    private var grid: RecyclerView? = null
 
     fun show() {
         if (popup?.isShowing == true) {
@@ -97,7 +98,8 @@ class SymbolPanel(
         val view = LayoutInflater.from(context).inflate(R.layout.symbol_panel, null)
         val tabStrip = view.findViewById<HorizontalScrollView>(R.id.symbol_tabs)
         val tabContainer = tabStrip.findViewById<ViewGroup>(R.id.symbol_tab_container)
-        val grid = view.findViewById<GridLayout>(R.id.symbol_grid)
+        grid = view.findViewById(R.id.symbol_grid)
+        grid?.layoutManager = GridLayoutManager(context, 10)
 
         tabContainer.removeAllViews()
         categories.forEachIndexed { idx, (name, _) ->
@@ -105,7 +107,7 @@ class SymbolPanel(
                 text = name
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 textSize = 14f
-                gravity = AndroidGravity.CENTER
+                gravity = Gravity.CENTER
                 if (idx == currentCatIndex) {
                     setTextColor(Color.WHITE)
                     background = makeTabBg(accentColor)
@@ -125,13 +127,13 @@ class SymbolPanel(
                             t.background = null
                         }
                     }
-                    fillGrid(grid, idx)
+                    fillGrid(idx)
                 }
             }
             tabContainer.addView(tab)
         }
 
-        fillGrid(grid, currentCatIndex)
+        fillGrid(currentCatIndex)
 
         popup = PopupWindow(
             view,
@@ -141,7 +143,7 @@ class SymbolPanel(
         ).apply {
             isOutsideTouchable = true
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
-            showAtLocation(anchor, AndroidGravity.BOTTOM or AndroidGravity.START, 0, 0)
+            showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
         }
     }
 
@@ -152,29 +154,33 @@ class SymbolPanel(
 
     fun isShowing(): Boolean = popup?.isShowing == true
 
-    private fun fillGrid(grid: GridLayout, catIndex: Int) {
-        grid.removeAllViews()
-        grid.columnCount = 8
+    private fun fillGrid(catIndex: Int) {
         val symbols = categories[catIndex].second
-        symbols.forEach { sym ->
-            val btn = TextView(context).apply {
-                text = sym
+        grid?.adapter = SymbolAdapter(symbols)
+    }
+
+    private inner class SymbolAdapter(private val symbols: List<String>) :
+        RecyclerView.Adapter<SymbolAdapter.VH>() {
+
+        inner class VH(val tv: TextView) : RecyclerView.ViewHolder(tv)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val tv = TextView(context).apply {
                 textSize = 20f
-                gravity = AndroidGravity.CENTER
+                gravity = Gravity.CENTER
                 setPadding(dp(4), dp(12), dp(4), dp(12))
                 background = makeKeyBg(0xFFF2F2F2.toInt())
-                setOnClickListener { onCommit(sym) }
             }
-            // 关键：显式 LayoutParams + columnSpec weight=1f，让 8 列均分父宽，
-            // 避免窄字符集中在左侧（默认 WRAP_CONTENT 导致的布局异常）。
-            val lp = GridLayout.LayoutParams().apply {
-                width = 0
-                height = ViewGroup.LayoutParams.WRAP_CONTENT
-                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-            }
-            btn.layoutParams = lp
-            grid.addView(btn)
+            return VH(tv)
         }
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val sym = symbols[position]
+            holder.tv.text = sym
+            holder.tv.setOnClickListener { onCommit(sym) }
+        }
+
+        override fun getItemCount(): Int = symbols.size
     }
 
     private fun dp(v: Int): Int =
