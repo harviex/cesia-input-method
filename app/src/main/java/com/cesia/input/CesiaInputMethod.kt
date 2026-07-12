@@ -428,6 +428,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // -100 键长按检测（符号键盘切换）
     private var symbolKeyLongPressRunnable: Runnable? = null
+    // 长按符号键弹出的分类符号面板
+    private var symbolPanel: SymbolPanel? = null
+    private var symbolPanelLongPressTriggered = false
+
+    /** 长按符号切换键 → 弹出分类符号面板（PopupWindow） */
+    private fun showSymbolPanel() {
+        if (symbolPanel?.isShowing() == true) {
+            symbolPanel?.dismiss()
+            symbolPanel = null
+            return
+        }
+        symbolPanel = SymbolPanel(
+            this,
+            keyboardView,
+            themeAccent,
+            onCommit = { sym ->
+                currentInputConnection?.commitText(sym, 1)
+            }
+        )
+        symbolPanel?.show()
+    }
+
+    private fun dismissSymbolPanel() {
+        symbolPanel?.dismiss()
+        symbolPanel = null
+    }
 
     // 魔法模式
     private var magicMode = false
@@ -7307,9 +7333,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             -1 -> { shortPressHandled = true; handleShiftKey() }
 
             // ======================== 符号切换（符）=======================
-            KEYCODE_SWITCH_SYMBOL -> toggleSymbolKeyboard()
+            KEYCODE_SWITCH_SYMBOL -> {
+                if (symbolPanelLongPressTriggered) {
+                    symbolPanelLongPressTriggered = false
+                } else {
+                    toggleSymbolKeyboard()
+                }
+            }
 
-            // ======================== 符号语言切换（中英符号）=======================
+            // ======================== 符号语言切换（中英符号）========================
             KEYCODE_SWITCH_SYMBOL_LANG -> toggleSymbolLanguage()
 
             // ======================== 数字切换（123）=======================
@@ -7496,6 +7528,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
             Handler(Looper.getMainLooper()).postDelayed(clipboardCutRunnable!!, 700)
+        }
+        // 符号切换键(-100)长按：弹出分类符号面板
+        if (primaryCode == KEYCODE_SWITCH_SYMBOL) {
+            symbolPanelLongPressTriggered = false
+            symbolKeyLongPressRunnable = Runnable {
+                if (!shortPressHandled) {
+                    symbolPanelLongPressTriggered = true
+                    longPressTriggered = true
+                    longPressConsumed = true
+                    keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    showSymbolPanel()
+                }
+            }
+            Handler(Looper.getMainLooper()).postDelayed(symbolKeyLongPressRunnable!!, 700)
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {
@@ -7719,6 +7765,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        // 关闭符号面板（避免切出输入法后残留）
+        dismissSymbolPanel()
         // 停止所有可能的重复（方向键/退格），防止切出输入法后光标卡住
         directionalRepeatActive = false
         directionalRepeatRunnable?.let { directionalRepeatHandler.removeCallbacks(it) }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FFFFFF"
+    android:paddingTop="6dp"
+    android:paddingBottom="10dp">
+
+    <HorizontalScrollView
+        android:id="@+id/symbol_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingHorizontal="8dp">
+
+        <LinearLayout
+            android:id="@+id/symbol_tab_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1px"
+        android:background="#EEEEEE"
+        android:layout_marginTop="6dp" />
+
+    <GridLayout
+        android:id="@+id/symbol_grid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:columnCount="8" />
+
+</LinearLayout>
