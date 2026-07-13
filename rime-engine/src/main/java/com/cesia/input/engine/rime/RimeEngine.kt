@@ -17,6 +17,8 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MIN_WEIGHT_THRESHOLD = 50
         /** 每个首字桶最多保留的词条数：只保留权重最高的 300 个 */
         private const val MAX_ENTRIES_PER_BUCKET = 300
+        /** 候选词最多返回前 60 个（限制简拼/全输入爆炸候选，缓解卡顿） */
+        private const val MAX_CANDIDATE_COUNT = 60
     }
 
     private var session: RimeSession? = null
@@ -37,7 +39,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     override val composingText: String
         get() = session?.composingText ?: ""
     override val candidates: List<String>
-        get() = session?.candidates ?: emptyList()
+        get() = (session?.candidates ?: emptyList()).take(MAX_CANDIDATE_COUNT)
     override val hasCandidates: Boolean
         get() = session?.hasCandidates() ?: false
     override val pageCount: Int
