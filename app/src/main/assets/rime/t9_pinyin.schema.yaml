@@ -80,18 +80,6 @@ speller:
     - derive/([ypfm])ou$/$1uo/              # ou → uo (o/u 邻键)
     - derive/([qjlxn])iang$/$1aing/        # jiang → jiang 邻键 (保留一条最高频)
 
-    # ===== 模糊音（按需开启，可能扩大候选）=====
-    - derive/^l/n/                      # l/n 不分（南方口音）
-    - derive/^n/l/
-    - derive/^f/h/                      # f/h 不分
-    - derive/^h/f/
-    - derive/^an/ang/                   # 前后鼻音
-    - derive/^ang/an/
-    - derive/^en/eng/
-    - derive/^eng/en/
-    - derive/^in/ing/
-    - derive/^ing/in/
-
     # ===== 字母 → T9 数字映射（核心，置于末尾）=====
     - derive/[abc]/2/
     - derive/[def]/3/
