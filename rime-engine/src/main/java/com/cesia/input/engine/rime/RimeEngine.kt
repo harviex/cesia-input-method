@@ -19,23 +19,6 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MAX_ENTRIES_PER_BUCKET = 300
     }
 
-    // ===== 后台线程：librime 要求 initialize + 所有 native 调用在同一线程 =====
-    // 主线程只负责 UI，native 计算搬到 worker，避免按键冻屏
-    private val workerThread = android.os.HandlerThread("rime-worker").apply { start() }
-    private val workerHandler = android.os.Handler(workerThread.looper)
-    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-
-    /** 候选更新监听器（由上层设为 updateCandidateBar），worker 算完后主线程回调 */
-    var candidateListener: (() -> Unit)? = null
-    /** 组合文本/提交变化监听器 */
-    var commitListener: ((text: String) -> Unit)? = null
-
-    // 主线程可见快照（worker 算完后由主线程赋值，避免跨线程读 session 不一致）
-    @Volatile private var latestCandidates: List<String> = emptyList()
-    @Volatile private var latestComposingText: String = ""
-    @Volatile private var latestHasCandidates: Boolean = false
-    @Volatile private var latestIsComposing: Boolean = false
-
     private var session: RimeSession? = null
     private val prefs = context.getSharedPreferences("cesia_rime", Context.MODE_PRIVATE)
 
@@ -46,50 +29,44 @@ class RimeEngine(private val context: Context) : InputEngine {
         get() = isInitialized && RimeJni.isAvailable()
 
     override val isComposing: Boolean
-        get() = latestIsComposing
+        get() = try {
+            RimeJni.isComposing()
+        } catch (_: Throwable) {
+            session?.hasComposing() ?: false
+        }
     override val composingText: String
-        get() = latestComposingText
+        get() = session?.composingText ?: ""
     override val candidates: List<String>
-        get() = latestCandidates
+        get() = session?.candidates ?: emptyList()
     override val hasCandidates: Boolean
-        get() = latestHasCandidates
+        get() = session?.hasCandidates() ?: false
     override val pageCount: Int
         get() = session?.pageCount ?: 0
     override val currentPage: Int
         get() = session?.currentPage ?: 0
 
     override fun initialize(): Boolean {
-        // 后台线程执行 native 初始化（librime 要求 initialize + 调用同一线程）
-        workerHandler.post {
-            if (isInitialized) {
-                mainHandler.post { initCallback?.invoke(true) }
-                return@post
-            }
-            copyRimeAssetsIfNeeded()
-            val success = RimeJni.initialize(context)
-            isInitialized = success
-            if (!success) {
-                Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
-            } else {
-                // 后台预构建联想索引，避免首次查询时卡顿
-                Thread {
-                    try {
-                        dictIndexBuildTime = System.currentTimeMillis()
-                        dictIndex = buildDictIndex()
-                        dictIndexBuilt = true
-                        Log.d(TAG, "联想索引后台构建完成")
-                    } catch (_: Exception) {
-                        Log.e(TAG, "联想索引构建失败")
-                    }
-                }.start()
-            }
-            mainHandler.post { initCallback?.invoke(success) }
+        if (isInitialized) return true
+        copyRimeAssetsIfNeeded()
+        val success = RimeJni.initialize(context)
+        isInitialized = success
+        if (!success) {
+            Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
+        } else {
+            // 后台预构建联想索引，避免首次查询时卡顿
+            Thread {
+                try {
+                    dictIndexBuildTime = System.currentTimeMillis()
+                    dictIndex = buildDictIndex()
+                    dictIndexBuilt = true
+                    Log.d(TAG, "联想索引后台构建完成")
+                } catch (_: Exception) {
+                    Log.e(TAG, "联想索引构建失败")
+                }
+            }.start()
         }
-        return true // 已提交初始化
+        return success
     }
-
-    /** 初始化完成回调（主线程） */
-    var initCallback: ((Boolean) -> Unit)? = null
 
     fun lastError(): String? = RimeJni.unavailableMessage()
 
@@ -138,146 +115,69 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     override fun shutdown() {
-        workerHandler.post {
-            RimeJni.shutdown()
-            session = null
-            isInitialized = false
-        }
+        RimeJni.shutdown()
+        session = null
+        isInitialized = false
     }
 
     fun reload(): Boolean {
-        workerHandler.post {
-            RimeJni.shutdown()
-            session = null
-            // 重新初始化（在 worker 串行执行）
-            copyRimeAssetsIfNeeded()
-            val success = RimeJni.initialize(context)
-            isInitialized = success
-            mainHandler.post { initCallback?.invoke(success) }
-        }
-        return true
+        shutdown()
+        return initialize()
     }
 
     /** 词库更新后触发重新部署（比 reload 轻量） */
     fun redeploy() {
-        workerHandler.post {
-            session = null
-            RimeJni.shutdown()
-            RimeJni.initialize(context)
-        }
+        session = null
+        // 重新部署：退出再启动
+        RimeJni.shutdown()
+        RimeJni.initialize(context)
     }
 
     override fun createSession(): RimeSession {
-        // 主线程调用方走 worker；worker 内部直接调 RimeJni.createSession
-        var result: RimeSession? = null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        workerHandler.post {
-            val s = RimeJni.createSession()
-            session = s
-            result = s
-            latch.countDown()
-        }
-        try { latch.await(2, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
-        return result ?: RimeSession(1L)
+        val s = RimeJni.createSession()
+        session = s
+        return s
     }
 
     override fun destroySession(session: RimeSession) {
-        workerHandler.post {
-            RimeJni.destroySession(session)
-            if (this.session?.id == session.id) this.session = null
-        }
+        RimeJni.destroySession(session)
+        if (this.session?.id == session.id) this.session = null
     }
 
     override fun processKey(key: String): Boolean {
-        // 异步：native 计算在 worker 线程，算完主线程触发 candidateListener 刷新候选栏
-        workerHandler.post {
-            val s = session ?: RimeJni.createSession().also { session = it }
-            s.processKey(key)
-            val cands = s.candidates
-            val comp = s.composingText
-            val composing = s.hasComposing()
-            mainHandler.post {
-                latestCandidates = cands
-                latestComposingText = comp
-                latestHasCandidates = cands.isNotEmpty()
-                latestIsComposing = composing
-                candidateListener?.invoke()
-            }
-        }
-        return true
+        val s = session ?: createSession()
+        return s.processKey(key)
     }
 
     override fun processKey(c: Char): Boolean = processKey(c.toString())
 
     override fun processKeyCode(keyCode: Int): Boolean {
-        workerHandler.post {
-            val s = session ?: RimeJni.createSession().also { session = it }
-            s.processKeyCode(keyCode)
-            val cands = s.candidates
-            mainHandler.post {
-                latestCandidates = cands
-                candidateListener?.invoke()
-            }
-        }
-        return true
+        val s = session ?: createSession()
+        return s.processKeyCode(keyCode)
     }
 
     override fun selectCandidate(index: Int): String {
-        // 异步：选中在 worker 执行，结果经 commitListener 回主线程上屏
-        workerHandler.post {
-            val s = session ?: run { mainHandler.post { commitListener?.invoke("") }; return@post }
-            val text = s.selectCandidate(index)
-            mainHandler.post {
-                commitListener?.invoke(text)
-            }
-        }
-        return "" // 结果经 commitListener 异步返回
+        val s = session ?: return ""
+        return s.selectCandidate(index)
     }
 
     override fun commit(): String {
-        workerHandler.post {
-            val s = session ?: return@post
-            val text = s.commit()
-            mainHandler.post { commitListener?.invoke(text) }
-        }
-        return ""
+        val s = session ?: return ""
+        return s.commit()
     }
 
     override fun clear() {
-        workerHandler.post {
-            session?.clear()
-            mainHandler.post {
-                latestCandidates = emptyList()
-                latestComposingText = ""
-                latestHasCandidates = false
-                latestIsComposing = false
-                candidateListener?.invoke()
-            }
-        }
+        session?.clear()
     }
 
     override fun nextPage(): List<String> {
-        workerHandler.post {
-            session?.nextPage()
-            val cands = session?.candidates ?: emptyList()
-            mainHandler.post {
-                latestCandidates = cands
-                candidateListener?.invoke()
-            }
-        }
-        return emptyList()
+        session?.nextPage()
+        return candidates
     }
 
     override fun prevPage(): List<String> {
-        workerHandler.post {
-            session?.prevPage()
-            val cands = session?.candidates ?: emptyList()
-            mainHandler.post {
-                latestCandidates = cands
-                candidateListener?.invoke()
-            }
-        }
-        return emptyList()
+        session?.prevPage()
+        return candidates
     }
 
     /** 获取所有页的候选词（合并） */
@@ -313,29 +213,27 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     fun getCurrentPinyin(): String = composingText
 
-    // ======================== 模式切换 =======================
+    // ======================== 模式切换 ========================
 
     fun setAsciiMode(ascii: Boolean) {
-        workerHandler.post { RimeJni.setAsciiMode(ascii) }
+        RimeJni.setAsciiMode(ascii)
     }
 
     /** 简繁切换：通过 Rime setOption 切换（需要 schema 中配置 traditional 开关） */
     fun setTraditional(trad: Boolean) {
-        workerHandler.post { RimeJni.setOption("traditional", trad) }
+        RimeJni.setOption("traditional", trad)
     }
 
     /** 切换 Rime schema */
     fun selectSchema(schemaId: String): Boolean {
-        workerHandler.post {
-            Rime.selectRimeSchemas(arrayOf(schemaId))
-            clearSession()
-        }
-        return true // 已在 worker 异步执行
+        val ok = Rime.selectRimeSchemas(arrayOf(schemaId))
+        if (ok) clearSession()
+        return ok
     }
 
     /** 清除当前 session（切换 schema 后调用，下次按键自动用新 schema 创建新 session） */
     fun clearSession() {
-        workerHandler.post { session = null }
+        session = null
     }
 
     /** 调试：获取 Rime 完整状态 */
