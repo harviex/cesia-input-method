@@ -365,6 +365,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9ShiftTemp = false         // T9 临时 shift（单字符后自动退出）
     private var symbolShiftLocked = false   // 符号键盘 shift 锁定
     private var t9InputBuffer = StringBuilder()  // T9 数字输入缓冲
+    // 本次组合已上屏的文本累积（逐字组词时用于去除最后一步整串返回的重复前缀）
+    private var t9ComposedSoFar = StringBuilder()
     private val t9Map = mapOf(
         2 to "abc", 3 to "def", 4 to "ghi", 5 to "jkl",
         6 to "mno", 7 to "pqrs", 8 to "tuv", 9 to "wxyz", 0 to " "
@@ -1879,24 +1881,28 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         while (curPage > targetPage) { rimeEngine.prevPage() }
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
+            // 去重：逐字组词时最后一步会返回整串(六牛柳)，而前面(六/牛)已上屏，
+            // 此处把前面已上屏的前缀去掉，只上屏新增的尾巴(柳)，避免重复。
+            val toCommit = stripDuplicatePrefix(selected)
+            t9ComposedSoFar.append(selected)
             if (smartEditMode) {
                 // 智能写作编辑模式：写入 buffer 而不是上屏
-                smartEditBuffer.append(selected)
+                smartEditBuffer.append(toCommit)
                 rimeEngine.clear()
                 updateSmartEditStatus()
             } else if (magicEditMode) {
                 // 魔法编辑模式：写入 buffer 而不是上屏
-                magicEditBuffer.append(selected)
+                magicEditBuffer.append(toCommit)
                 rimeEngine.clear()
                 updateMagicEditStatus()
             } else if (clipboardAddMode) {
                 // 剪贴板新增模式：写入 buffer 而不是上屏
-                clipboardAddBuffer.append(selected)
+                clipboardAddBuffer.append(toCommit)
                 rimeEngine.clear()
                 updateClipboardAddStatus()
             } else {
                 // 上屏选中的词
-                commitCandidateText(selected)
+                commitCandidateText(toCommit)
             }
             if (keyboardMode == KeyboardMode.NUMBER) {
                 // T9 选词后：数字已转成字，清显示缓存
@@ -1906,6 +1912,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // session 让用户在下一音节继续选字；仅当 composing 真正结束才清。
                 if (!rimeEngine.isComposing) {
                     rimeEngine.clear()
+                    t9ComposedSoFar.clear()  // 组合结束，清空累积
                 }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
@@ -1922,8 +1929,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isAssociationMode = false
                 associationPrefix = ""
                 associationCandidates = emptyList()
-                if (isPanelExpanded) collapseCandidatePanel()
+                // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
                 updateCandidateBar()
+                gvCandidates?.setSelection(0)
             }
         }
         } catch (e: Exception) {
@@ -4210,6 +4218,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         updateCandidateBar()
     }
 
+    /** 逐字组词去重：若 Rime 最后一步返回整串(如"六牛柳")，而前面已上屏"六牛"，
+     *  则只返回新增尾巴("柳")。无前缀累积或不是前缀时原样返回。 */
+    private fun stripDuplicatePrefix(selected: String): String {
+        val soFar = t9ComposedSoFar.toString()
+        if (soFar.isNotEmpty() && selected.startsWith(soFar)) {
+            return selected.substring(soFar.length)
+        }
+        return selected
+    }
+
     /** 候选词选中上屏：根据当前简繁状态做转换 */
     private fun commitCandidateText(text: String) {
         try {
@@ -5910,6 +5928,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun processT9Input() {
+        t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
         val digits = t9InputBuffer.toString()
         if (digits.isNotEmpty()) {
             // 重建session，输入完整数字串

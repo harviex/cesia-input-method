@@ -192,11 +192,10 @@ object RimeJni {
             // 先获取候选词文本（选中前）
             val cands = getCandidates(sessionId)
             val selectedText = if (index < cands.size) cands[index] else ""
-            // 选中候选
+            // 选中候选（false=不立即commit，剩余拼音保留在composition供逐字组词）
             TrimeRime.selectRimeCandidate(index, false)
             // 检查是否有 commit 产生
             val commitText = TrimeRime.getRimeCommit().text ?: ""
-            Log.d(TAG, "selectCandidate index=$index selected='$selectedText' commit='$commitText' composing=${isComposing()}")
             // 如果有 commit 文本，使用 commit 文本；否则使用选中的候选词文本
             commitText.ifEmpty { selectedText }
         } catch (e: Throwable) {
