@@ -122,8 +122,8 @@ translator:
   enable_completion: true
   enable_sentence: true
   enable_user_dict: true
-  # 限制同音/补全候选总数（简拼单键会爆几百候选，限 60 缓解卡顿）
-  max_homophones: 60
+  # 限制同音/补全候选总数（简拼单键会爆几百候选，限 100 缓解卡顿）
+  max_homophones: 100
   comment_format:
     - xform/.*//
 
