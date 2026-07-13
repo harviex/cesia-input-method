@@ -56,7 +56,56 @@ speller:
   delimiter: "'"
   max_code_length: 20
   algebra:
-    # 字母 → T9 数字映射（核心：让 Rime 能把数字匹配到对应字母的拼音）
+    # ===== 超级简拼（取首字母出词）=====
+    - erase/^hm$/
+    - erase/^m$/
+    - erase/^n$/
+    - erase/^ng$/
+    - abbrev/^([a-z]).+$/$1/            # 超级简拼：nj → 南京/年纪
+    - abbrev/^([zcs]h).+$/$1/          # zh/ch/sh 视为整体：ch'sh → 城市
+
+    # ===== u / v(ü) 转换 =====
+    - derive/^([nl])ve$/$1ue/
+    - derive/^([jqxy])u/$1v/
+    - derive/^([nl])ue$/$1ve/
+    - derive/^([jqxy])v/$1u/
+
+    # ===== 自动纠错（T9 邻键误触）=====
+    - derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/  # hzi → zhi
+    - derive/([zcs])h([aeiu])$/$1$2h/  # zih → zhi
+    - derive/([wghk])ai$/$1ia/         # wia → wai
+    - derive/([wfghkz])ei$/$1ie/        # wie → wei
+    - derive/([jqx])ie$/$1ei/           # jei → jie
+    - derive/([rtypsdghklzcbnm])ao$/$1oa/
+    - derive/([ypfm])ou$/$1uo/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1nag/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1agn/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1neg/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1egn/
+    - derive/([qtypdjlxbnm])ing$/$1nig/
+    - derive/([qtypdjlxbnm])ing$/$1ign/
+    - derive/([qjlxn])iang$/$1aing/
+    - derive/([qjlxn])iang$/$1inag/
+    - derive/([rtysdghklzxc])uan$/$1aun/
+    - derive/([nlyjqx])ue$/$1eu/
+    - derive/([rtsdghkzc])o(u|ng)$/$1o/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+    - derive/([tl])eng$/$1en/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+
+    # ===== 模糊音（按需开启，可能扩大候选）=====
+    - derive/^l/n/                      # l/n 不分（南方口音）
+    - derive/^n/l/
+    - derive/^f/h/                      # f/h 不分
+    - derive/^h/f/
+    - derive/^an/ang/                   # 前后鼻音
+    - derive/^ang/an/
+    - derive/^en/eng/
+    - derive/^eng/en/
+    - derive/^in/ing/
+    - derive/^ing/in/
+
+    # ===== 字母 → T9 数字映射（核心，置于末尾）=====
     - derive/[abc]/2/
     - derive/[def]/3/
     - derive/[ghi]/4/
