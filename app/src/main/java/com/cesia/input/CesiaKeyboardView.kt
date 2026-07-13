@@ -475,12 +475,19 @@ class CesiaKeyboardView @JvmOverloads constructor(
             if (!popup.isNullOrEmpty()) {
                 // 支持多字符副标签（如"符库"），最多取前2字避免溢出
                 val symbol = (if (popup.length <= 2) popup else popup.substring(0, 2)).toString()
-                val y = if (fnLabel != null) {
-                    key.y + 10f + spSize + popupSpSize + 2f
+                // 符号切换键(-100)的"符库"副字符：与粘贴/剪切一致（灰色 labelPaint + spSize 字号）
+                // 其余键（T9数字副字符）保持原 popupPaint（主题色）
+                if (code == -100) {
+                    val y = key.y + 10f + spSize
+                    canvas.drawText(symbol, x, y, labelPaint)
                 } else {
-                    key.y + 10f + popupSpSize
+                    val y = if (fnLabel != null) {
+                        key.y + 10f + spSize + popupSpSize + 2f
+                    } else {
+                        key.y + 10f + popupSpSize
+                    }
+                    canvas.drawText(symbol, x, y, popupPaint)
                 }
-                canvas.drawText(symbol, x, y, popupPaint)
             }
 
                     // ===== 4. Shift 锁定圆点（脉冲发光效果）=====
