@@ -1898,10 +1898,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 上屏选中的词
                 commitCandidateText(selected)
             }
-            if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
+            if (keyboardMode == KeyboardMode.NUMBER) {
+                // T9 选词后：数字已转成字，清显示缓存
                 t9InputBuffer.clear()
-                rimeEngine.clear()
-                rimeEngine.createSession()
+                // 关键：不要无条件 clear Rime！若还有剩余音节（逐字组词场景，
+                // 如 624'624 选了第一个“麦”），composing 仍在继续，应保留 Rime
+                // session 让用户在下一音节继续选字；仅当 composing 真正结束才清。
+                if (!rimeEngine.isComposing) {
+                    rimeEngine.clear()
+                }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
             val associations = rimeEngine.getAssociations(selected).take(20)
