@@ -1066,9 +1066,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
         rimeEngine = RimeEngine(this)
-        val rimeOk = rimeEngine.initialize()
-        Log.i("Cesia", "Rime 引擎初始化: ok=$rimeOk")
-        val rimeErrorMsg = if (!rimeOk) rimeEngine.lastError() ?: "未知" else null
+        // 后台线程刷新候选栏（RimeEngine 已 worker 化，结果经 listener 回主线程）
+        rimeEngine.candidateListener = { updateCandidateBar() }
+        rimeEngine.commitListener = { text -> if (text.isNotEmpty()) commitCandidateText(text) }
+        rimeEngine.initCallback = { ok ->
+            if (!ok) {
+                val msg = rimeEngine.lastError() ?: "未知"
+                Log.e("Cesia", "Rime 初始化失败: $msg")
+                updateStatus("Cesia 已就绪 | Rime 初始化失败: $msg")
+            } else {
+                Log.i("Cesia", "Rime 引擎初始化成功(后台线程)")
+            }
+        }
+        rimeEngine.initialize()
+        Log.i("Cesia", "Rime 引擎初始化: 已提交后台线程")
 
         // 初始化语音引擎和模型管理器
         modelManager = ModelManager(this)
@@ -1285,8 +1296,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setupCandidatePanel()
         applyKeyboardTheme()
 
-        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}" +
-            (rimeErrorMsg?.let { " | 错误: $it" } ?: ""))
+        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}")
         setStatusDot("idle")
         isViewInitialized = true
 
@@ -5920,10 +5930,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun commitT9AndClear() {
         if (t9InputBuffer.isNotEmpty()) {
             if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                val selected = rimeEngine.selectCandidate(0)
-                if (selected.isNotEmpty()) {
-                    commitCandidateText(selected)
-                }
+                // 异步选词：结果经 commitListener 上屏（RimeEngine worker 线程）
+                rimeEngine.selectCandidate(0)
             }
             t9InputBuffer.clear()
             rimeEngine.clear()
