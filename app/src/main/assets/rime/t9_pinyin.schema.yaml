@@ -70,15 +70,40 @@ speller:
     - derive/^([nl])ue$/$1ve/
     - derive/^([jqxy])v/$1u/
 
-    # ===== 自动纠错（仅保留 T9 高频邻键误触，低频多音节派生已移除以降低开销）=====
+    # ===== 自动纠错（T9 邻键误触，全量）=====
     - derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/  # hzi → zhi
     - derive/([zcs])h([aeiu])$/$1$2h/  # zih → zhi
-    - derive/([jqx])ie$/$1ei/           # jei → jie
     - derive/([wghk])ai$/$1ia/         # wia → wai
     - derive/([wfghkz])ei$/$1ie/        # wie → wei
-    - derive/([rtypsdghklzcbnm])ao$/$1oa/   # ao → oa (a/o 邻键)
-    - derive/([ypfm])ou$/$1uo/              # ou → uo (o/u 邻键)
-    - derive/([qjlxn])iang$/$1aing/        # jiang → jiang 邻键 (保留一条最高频)
+    - derive/([jqx])ie$/$1ei/           # jei → jie
+    - derive/([rtypsdghklzcbnm])ao$/$1oa/
+    - derive/([ypfm])ou$/$1uo/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1nag/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1agn/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1neg/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1egn/
+    - derive/([qtypdjlxbnm])ing$/$1nig/
+    - derive/([qtypdjlxbnm])ing$/$1ign/
+    - derive/([qjlxn])iang$/$1aing/
+    - derive/([qjlxn])iang$/$1inag/
+    - derive/([rtysdghklzxc])uan$/$1aun/
+    - derive/([nlyjqx])ue$/$1eu/
+    - derive/([rtsdghkzc])o(u|ng)$/$1o/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+    - derive/([tl])eng$/$1en/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+
+    # ===== 模糊音（双向 derive，可能扩大候选）=====
+    - derive/^l/n/                      # l/n 不分（南方口音）
+    - derive/^n/l/
+    - derive/^f/h/                      # f/h 不分
+    - derive/^h/f/
+    - derive/^an/ang/                   # 前后鼻音
+    - derive/^ang/an/
+    - derive/^en/eng/
+    - derive/^eng/en/
+    - derive/^in/ing/
+    - derive/^ing/in/
 
     # ===== 字母 → T9 数字映射（核心，置于末尾）=====
     - derive/[abc]/2/
