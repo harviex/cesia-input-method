@@ -19,6 +19,8 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MAX_ENTRIES_PER_BUCKET = 300
         /** 候选词最多返回前 60 个（限制简拼/全输入爆炸候选，缓解卡顿） */
         private const val MAX_CANDIDATE_COUNT = 60
+        /** getAllCandidates 最多翻页步数（pageSize=5 → 20页足够取60候选，防翻遍数千页卡死） */
+        private const val MAX_PAGE_WALK = 20
     }
 
     private var session: RimeSession? = null
@@ -185,21 +187,24 @@ class RimeEngine(private val context: Context) : InputEngine {
     /** 获取所有页的候选词（合并） */
     fun getAllCandidates(): List<String> {
         val s = session ?: return emptyList()
-        if (s.pageCount <= 1) return s.candidates
+        if (s.pageCount <= 1) return s.candidates.take(MAX_CANDIDATE_COUNT)
         val all = mutableListOf<String>()
         val startPage = s.currentPage
         // 先回到第0页
         while (s.currentPage > 0) s.prevPage()
-        // 从第0页开始往后收集
+        // 从第0页开始往后收集，但最多收集 MAX_CANDIDATE_COUNT 个（避免翻遍数千页导致卡顿）
         all.addAll(s.candidates)
-        while (s.currentPage < s.pageCount - 1) {
+        var pagesWalked = 0
+        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < MAX_PAGE_WALK) {
             if (!s.nextPage()) break
             all.addAll(s.candidates)
+            pagesWalked++
         }
-        // 回到起始页
-        while (s.currentPage < startPage) s.nextPage()
-        while (s.currentPage > startPage) s.prevPage()
-        return all
+        // 回到起始页（同样限制回翻步数，避免起始页在极远处时卡顿）
+        var back = 0
+        while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
+        while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }
+        return all.take(MAX_CANDIDATE_COUNT)
     }
 
     // 兼容方法
