@@ -17,10 +17,12 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MIN_WEIGHT_THRESHOLD = 50
         /** 每个首字桶最多保留的词条数：只保留权重最高的 300 个 */
         private const val MAX_ENTRIES_PER_BUCKET = 300
-        /** 候选词最多返回前 60 个（限制简拼/全输入爆炸候选，缓解卡顿） */
+        /** 候选词组最多返回前 60 个（限制简拼/全输入爆炸候选，缓解卡顿） */
         private const val MAX_CANDIDATE_COUNT = 60
-        /** getAllCandidates 最多翻页步数（pageSize=5 → 20页足够取60候选，防翻遍数千页卡死） */
-        private const val MAX_PAGE_WALK = 20
+        /** 单字候选最多追加 20 个（排在词组后，供逐字点选组新词，触发 Rime 自动造词） */
+        private const val MAX_SINGLE_COUNT = 20
+        /** getAllCandidates 最多翻页步数（pageSize=5 → 24页最多扫120候选，兼顾凑够单字且防卡顿） */
+        private const val MAX_PAGE_WALK = 24
     }
 
     private var session: RimeSession? = null
@@ -184,27 +186,48 @@ class RimeEngine(private val context: Context) : InputEngine {
         return candidates
     }
 
-    /** 获取所有页的候选词（合并） */
+    /** 获取所有页的候选词（合并）：前面是词组(最多60)，后面追加单字(最多20)供逐字造词 */
     fun getAllCandidates(): List<String> {
         val s = session ?: return emptyList()
-        if (s.pageCount <= 1) return s.candidates.take(MAX_CANDIDATE_COUNT)
-        val all = mutableListOf<String>()
+        val phrases = mutableListOf<String>()   // 词组桶（长度≥2）
+        val singles = mutableListOf<String>()   // 单字桶（长度==1）
+
+        fun collect(list: List<String>) {
+            for (c in list) {
+                if (c.isEmpty()) continue
+                // 用 codePoint 计数：一个汉字算 1（含 emoji/生僻字代理对）
+                val charLen = c.codePointCount(0, c.length)
+                if (charLen >= 2) {
+                    if (phrases.size < MAX_CANDIDATE_COUNT) phrases.add(c)
+                } else {
+                    if (singles.size < MAX_SINGLE_COUNT) singles.add(c)
+                }
+            }
+        }
+
+        if (s.pageCount <= 1) {
+            collect(s.candidates)
+            return phrases + singles
+        }
+
         val startPage = s.currentPage
         // 先回到第0页
         while (s.currentPage > 0) s.prevPage()
-        // 从第0页开始往后收集，但最多收集 MAX_CANDIDATE_COUNT 个（避免翻遍数千页导致卡顿）
-        all.addAll(s.candidates)
+        collect(s.candidates)
         var pagesWalked = 0
-        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < MAX_PAGE_WALK) {
+        // 词组或单字任一未满就继续翻，但翻页步数有硬上限防卡顿
+        while (s.currentPage < s.pageCount - 1 &&
+               (phrases.size < MAX_CANDIDATE_COUNT || singles.size < MAX_SINGLE_COUNT) &&
+               pagesWalked < MAX_PAGE_WALK) {
             if (!s.nextPage()) break
-            all.addAll(s.candidates)
+            collect(s.candidates)
             pagesWalked++
         }
-        // 回到起始页（同样限制回翻步数，避免起始页在极远处时卡顿）
+        // 回到起始页（限制回翻步数，避免起始页在极远处时卡顿）
         var back = 0
         while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
         while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }
-        return all.take(MAX_CANDIDATE_COUNT)
+        return phrases + singles
     }
 
     // 兼容方法
