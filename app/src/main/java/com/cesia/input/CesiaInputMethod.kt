@@ -341,6 +341,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var associationCandidates = emptyList<String>()  // 当前联想候选词列表
     private var isAssociationMode = false   // 是否处于联想模式
     private var selectedCandidateIndex = 0   // 当前长按选中的候选词 index（用于菜单定位）
+    // 候选列表快照：lastAllCands = Rime 合并后原始顺序(应用 pin/降频 之前的顺序)；
+    // lastDisplayedCands = 经 CandidatePrefs.reorder 后实际显示在候选栏的顺序。
+    // 点击时用 displayed 位置反查 word，再在 allCands 中定位真实 Rime 索引，避免 reorder/filter 错位。
+    private var lastAllCands: List<String> = emptyList()
+    private var lastDisplayedCands: List<String> = emptyList()
 
     // === 按钮提示计数（最多2次） ===
     private val buttonHintCount = mutableMapOf<String, Int>()
@@ -1893,14 +1898,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 正常模式：点击的是 Rime 候选词
-        val curSize = rimeEngine.candidates.size
-        if (curSize <= 0) return
-        val targetPage = globalIndex / curSize
-        val idxInPage = globalIndex % curSize
+        // 关键修复：显示列表经 reorder(置顶/降频) 和 T9选音过滤重排，与 Rime 原始顺序不同。
+        // 必须先用「显示位置」反查到具体词，再在 Rime 原始合并列表(lastAllCands)中定位真实索引，
+        // 翻到对应页后 selectCandidate，避免点到的词与实际上屏词错位（如降频后点管字出扈从、选音后点频字出拼字）。
+        if (globalIndex >= lastDisplayedCands.size) return
+        val clickedWord = lastDisplayedCands[globalIndex]
+        val realMergedIndex = lastAllCands.indexOf(clickedWord)
+        if (realMergedIndex < 0) return
+        val pageSize = maxOf(1, rimeEngine.candidates.size)
+        val targetPage = realMergedIndex / pageSize
+        val idxInPage = realMergedIndex % pageSize
         // 翻页到目标页
         var curPage = rimeEngine.currentPage
         while (curPage < targetPage) { rimeEngine.nextPage(); curPage++ }
-        while (curPage > targetPage) { rimeEngine.prevPage() }
+        while (curPage > targetPage) { rimeEngine.prevPage(); curPage-- }
         val selected = rimeEngine.selectCandidate(idxInPage)
         if (selected.isNotEmpty()) {
             // 去重：逐字组词时最后一步会返回整串(六牛柳)，而前面(六/牛)已上屏，
@@ -1997,6 +2008,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         var allCands = rimeEngine.getAllCandidates()
+        // 快照未过滤的原始合并列表（Rime 真实索引顺序），供点击反查真实页/索引
+        lastAllCands = allCands
 
         // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（如选了 ssps → 只留拼音首字母 ssps 的候选）
         if (t9SpellPrefix.isNotEmpty()) {
@@ -2051,6 +2064,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 应用候选偏好（置顶/降频），全局持久化
         val reordered = CandidatePrefs.reorder(this, displayCands)
+        // 快照：供点击时反查真实 Rime 索引（lastAllCands=过滤后Rime原始序，lastDisplayedCands=重排后显示序）
+        lastAllCands = allCands
+        lastDisplayedCands = reordered
 
         // 更新候选词列表
         candidateAdapter?.updateData(reordered)
