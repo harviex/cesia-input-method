@@ -1998,8 +1998,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val pinyin = rimeEngine.composingText
         var allCands = rimeEngine.getAllCandidates()
 
-        // 逐键选音：已选字母已通过 t9_spell schema 锁定（Rime 直接按字母查词），无需上层过滤
-        // （t9_spell schema 认字母，喂「已选字母+剩余数字」即接近全键盘结果）
+        // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（如选了 ssps → 只留拼音首字母 ssps 的候选）
+        if (t9SpellPrefix.isNotEmpty()) {
+            val pinyins = rimeEngine.getAllCandidatePinyins()
+            allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
+        }
 
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
@@ -2058,8 +2061,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCandsPanel = rimeEngine.getAllCandidates()
-            // 候选已由 t9_spell schema 按字母锁定过滤，下拉直接取全量候选
-            val displayPanel = if (isTraditional) allCandsPanel.map { toTraditional(it) } else allCandsPanel
+            // 与候选栏一致：按已选字母前缀(拼音首字母)全局过滤下拉菜单
+            val filteredPanel = if (t9SpellPrefix.isNotEmpty()) {
+                filterCandsBySpellPrefix(allCandsPanel, rimeEngine.getAllCandidatePinyins(), t9SpellPrefix.toString())
+            } else allCandsPanel
+            val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
             panelAdapter?.addAll(reorderedPanel)
@@ -5966,31 +5972,41 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
+        // 基本功能：数字队列直接喂 Rime（t9 schema 只认数字键），出九宫格候选词
         if (t9DigitQueue.isNotEmpty()) {
             rimeEngine.clear()
-            // 先切 schema，再建 session（否则 session 会用旧 schema，字母键被忽略）
-            if (t9SpellPrefix.isNotEmpty()) {
-                rimeEngine.selectSchema("t9_spell")
-            } else {
-                rimeEngine.selectSchema("t9_pinyin")
-            }
             rimeEngine.createSession()
-            // 逐键选音：已选字母非空时，喂「已选字母 + 剩余数字」
-            // （数字在该 schema 内仍 derive 成对应字母集；字母原样锁定 → 接近全键盘结果）
-            if (t9SpellPrefix.isNotEmpty()) {
-                val feed = t9SpellPrefix.toString() + t9DigitQueue.substring(t9SpellPrefix.length)
-                for (ch in feed) {
-                    rimeEngine.processKey(ch.toString())
-                }
-            } else {
-                // 基本功能：数字队列直接喂 Rime，出九宫格候选词
-                for (d in t9DigitQueue) {
-                    rimeEngine.processKey(d.toString())
-                }
+            for (d in t9DigitQueue) {
+                rimeEngine.processKey(d.toString())
             }
         }
         updateSpellBar()
         updateCandidateBar()
+    }
+
+    /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
+    private fun buildT9SpellFeed(): String {
+        if (t9DigitQueue.isEmpty()) return ""
+        val sb = StringBuilder(t9SpellPrefix)
+        val remaining = t9DigitQueue.drop(t9SpellPrefix.length)
+        for (d in remaining) {
+            val letters = t9Map[d.digitToInt()] ?: " "
+            sb.append(letters.firstOrNull() ?: ' ')
+        }
+        return sb.toString()
+    }
+
+    /** 按已选字母前缀(拼音首字母)过滤候选词列表，返回过滤后的子集（候选拼音首字母以 prefix 开头）。
+     *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
+    private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
+        if (prefix.isEmpty()) return cands
+        val filtered = cands.mapIndexedNotNull { i, cand ->
+            val py = pinyins.getOrElse(i) { "" }
+            val initials = py.split(Regex("[\\s'·]")).filter { it.isNotEmpty() }
+                .joinToString("") { it.first().toString() }
+            if (initials.startsWith(prefix)) cand else null
+        }
+        return if (filtered.isNotEmpty()) filtered else cands
     }
 
     /** 逐键选音：点击候选栏字母区第 letterIndex 个字母（如 9→wxyz 的第0个 w） */
