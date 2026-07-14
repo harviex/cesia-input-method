@@ -1,0 +1,151 @@
+# Rime schema — Cesia T9 逐键选音（专用）
+# 基于 t9_pinyin：alphabet 额外加入 a-z，使已选字母被 Rime 直接识别（锁定），
+# 未选位数字仍通过 derive 映射回对应字母集合（如 8→t/u/v），实现"接近全键盘"选音。
+schema:
+  schema_id: t9_spell
+  name: 九键选音
+  version: "1.0.0"
+  author:
+    - Cesia
+  description: |
+    T9 逐键选音 - 已选字母锁定 + 剩余数字按 T9 字母映射
+    例：38 选 d → 喂 d8 → 第1音节锁 d，第2音节∈{t/u/v} → 电梯/独特/倒退
+
+# 开关
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中, Ａ ]
+  - name: traditional
+    reset: 0
+    states: [ 简, 繁 ]
+
+# 输入引擎
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - script_translator
+  filters:
+    - uniquifier
+    - simplifier@traditional
+
+# OpenCC 简繁转换
+traditional:
+  opencc_config: s2t.json
+  option_name: traditional
+  show_in_popup_menu: true
+  tips: all
+
+# T9 选音拼写器：数字 + 字母混合
+speller:
+  # 数字键(2-9)仍走 derive 映射；字母键(a-z)原样通过（锁定已选音）
+  alphabet: "23456789abcdefghijklmnopqrstuvwxyz"
+  delimiter: "'"
+  max_code_length: 20
+  algebra:
+    # ===== 超级简拼（取首字母出词）=====
+    - erase/^hm$/
+    - erase/^m$/
+    - erase/^n$/
+    - erase/^ng$/
+    - abbrev/^([a-z]).+$/$1/            # 超级简拼：nj → 南京/年纪
+    - abbrev/^([zcs]h).+$/$1/          # zh/ch/sh 视为整体：ch'sh → 城市
+
+    # ===== u / v(ü) 转换 =====
+    - derive/^([nl])ve$/$1ue/
+    - derive/^([jqxy])u/$1v/
+    - derive/^([nl])ue$/$1ve/
+    - derive/^([jqxy])v/$1u/
+
+    # ===== 自动纠错（T9 邻键误触，全量）=====
+    - derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/  # hzi → zhi
+    - derive/([zcs])h([aeiu])$/$1$2h/  # zih → zhi
+    - derive/([wghk])ai$/$1ia/         # wia → wai
+    - derive/([wfghkz])ei$/$1ie/        # wie → wei
+    - derive/([jqx])ie$/$1ei/           # jei → jie
+    - derive/([rtypsdghklzcbnm])ao$/$1oa/
+    - derive/([ypfm])ou$/$1uo/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1nag/
+    - derive/([wrtypsdfghklzcbnm])ang$/$1agn/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1neg/
+    - derive/([wrtypsdfghklzcbnm])eng$/$1egn/
+    - derive/([qtypdjlxbnm])ing$/$1nig/
+    - derive/([qtypdjlxbnm])ing$/$1ign/
+    - derive/([qjlxn])iang$/$1aing/
+    - derive/([qjlxn])iang$/$1inag/
+    - derive/([rtysdghklzxc])uan$/$1aun/
+    - derive/([nlyjqx])ue$/$1eu/
+    - derive/([rtsdghkzc])o(u|ng)$/$1o/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+    - derive/([tl])eng$/$1en/
+    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+
+    # ===== 模糊音（双向 derive，可能扩大候选）=====
+    - derive/^l/n/                      # l/n 不分（南方口音）
+    - derive/^n/l/
+    - derive/^f/h/                      # f/h 不分
+    - derive/^h/f/
+    - derive/^an/ang/                   # 前后鼻音
+    - derive/^ang/an/
+    - derive/^en/eng/
+    - derive/^eng/en/
+    - derive/^in/ing/
+    - derive/^ing/in/
+
+    # ===== 字母 → T9 数字映射（核心，置于末尾）=====
+    - derive/[abc]/2/
+    - derive/[def]/3/
+    - derive/[ghi]/4/
+    - derive/[jkl]/5/
+    - derive/[mno]/6/
+    - derive/[pqrs]/7/
+    - derive/[tuv]/8/
+    - derive/[wxyz]/9/
+
+# 翻译器 — script_translator 支持拼音切分、词组
+translator:
+  dictionary: rime_ice
+  spelling_hints: 5
+  enable_completion: true
+  # 关闭整句联想续写：逐字造词场景更干净
+  enable_sentence: false
+  enable_user_dict: true
+  # 限制同音/补全候选总数（缓解卡顿）
+  max_homophones: 100
+  # 注释保留拼音（候选栏显示用）
+  # comment_format:
+  #   - xform/.*//
+
+# 标点
+punctuator:
+  half_shape:
+    "," : { commit: "," }
+    "." : { commit: "." }
+    "?" : { commit: "?" }
+    "!" : { commit: "!" }
+
+# 翻页
+key_binder:
+  bindings:
+    - { when: has_menu, accept: minus, send: Page_Up }
+    - { when: has_menu, accept: equal, send: Page_Down }
+    - { when: paging, accept: comma, send: Page_Up }
+    - { when: has_menu, accept: period, send: Page_Down }
+
+recognizer:
+  patterns:
+    t9: "^[2-9a-z]+$"
