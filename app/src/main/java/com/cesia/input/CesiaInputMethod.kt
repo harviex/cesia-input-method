@@ -5968,18 +5968,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
         if (t9DigitQueue.isNotEmpty()) {
             rimeEngine.clear()
-            rimeEngine.createSession()
-            // 逐键选音：已选字母非空时，切到 t9_spell schema，喂「已选字母 + 剩余数字」
-            // （数字在该 schema 内仍 derive 成对应字母集；字母原样锁定 → 接近全键盘结果）
+            // 先切 schema，再建 session（否则 session 会用旧 schema，字母键被忽略）
             if (t9SpellPrefix.isNotEmpty()) {
                 rimeEngine.selectSchema("t9_spell")
+            } else {
+                rimeEngine.selectSchema("t9_pinyin")
+            }
+            rimeEngine.createSession()
+            // 逐键选音：已选字母非空时，喂「已选字母 + 剩余数字」
+            // （数字在该 schema 内仍 derive 成对应字母集；字母原样锁定 → 接近全键盘结果）
+            if (t9SpellPrefix.isNotEmpty()) {
                 val feed = t9SpellPrefix.toString() + t9DigitQueue.substring(t9SpellPrefix.length)
                 for (ch in feed) {
                     rimeEngine.processKey(ch.toString())
                 }
             } else {
-                // 基本功能：数字队列直接喂 Rime（t9_pinyin schema），出九宫格候选词
-                rimeEngine.selectSchema("t9_pinyin")
+                // 基本功能：数字队列直接喂 Rime，出九宫格候选词
                 for (d in t9DigitQueue) {
                     rimeEngine.processKey(d.toString())
                 }
