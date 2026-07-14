@@ -126,8 +126,9 @@ translator:
   enable_user_dict: true
   # 限制同音/补全候选总数（简拼单键会爆几百候选，限 100 缓解卡顿）
   max_homophones: 100
-  comment_format:
-    - xform/.*//
+  # 注释保留拼音（供 T9 逐键选音上层按首字母过滤候选）；若需隐藏可恢复 xform/.*//
+  # comment_format:
+  #   - xform/.*//
 
 # 标点
 punctuator:

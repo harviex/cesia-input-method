@@ -42,6 +42,9 @@ class RimeEngine(private val context: Context) : InputEngine {
         get() = session?.composingText ?: ""
     override val candidates: List<String>
         get() = (session?.candidates ?: emptyList()).take(MAX_CANDIDATE_COUNT)
+    /** 候选词拼音列表（与 candidates 一一对应），用于 T9 逐键选音按首字母过滤 */
+    val candidatePinyins: List<String>
+        get() = session?.candidatePinyins ?: emptyList()
     override val hasCandidates: Boolean
         get() = session?.hasCandidates() ?: false
     override val pageCount: Int
@@ -201,6 +204,26 @@ class RimeEngine(private val context: Context) : InputEngine {
             pagesWalked++
         }
         // 回到起始页（同样限制回翻步数，避免起始页在极远处时卡顿）
+        var back = 0
+        while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
+        while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }
+        return all.take(MAX_CANDIDATE_COUNT)
+    }
+
+    /** 与 getAllCandidates 对应的拼音列表（按相同页遍历顺序） */
+    fun getAllCandidatePinyins(): List<String> {
+        val s = session ?: return emptyList()
+        if (s.pageCount <= 1) return s.candidatePinyins.take(MAX_CANDIDATE_COUNT)
+        val all = mutableListOf<String>()
+        val startPage = s.currentPage
+        while (s.currentPage > 0) s.prevPage()
+        all.addAll(s.candidatePinyins)
+        var pagesWalked = 0
+        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < MAX_PAGE_WALK) {
+            if (!s.nextPage()) break
+            all.addAll(s.candidatePinyins)
+            pagesWalked++
+        }
         var back = 0
         while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
         while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }

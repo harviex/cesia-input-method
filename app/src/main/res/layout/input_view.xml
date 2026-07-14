@@ -98,6 +98,67 @@
         android:paddingEnd="4dp"
         android:visibility="gone">
 
+        <!-- 候选栏最左：逐键选音 4 字母点选区（T9 输入数字时显示，点击锁定当前位字母） -->
+        <LinearLayout
+            android:id="@+id/ll_t9_spell"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_t9_spell0"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell1"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell2"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell3"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="20dp"
+                android:background="#CCCCCC"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+        </LinearLayout>
+
         <!-- T9 字母区（如 pqrs），输入数字时显示 -->
         <TextView
             android:id="@+id/tv_t9_letters"
@@ -198,17 +259,24 @@
             android:fastScrollEnabled="false" />
     </LinearLayout>
 
-    <!-- 键盘区域 -->
-    <com.cesia.input.CesiaKeyboardView
-        android:id="@+id/keyboard_view"
+    <!-- 键盘区域（FrameLayout 包装，供候选音覆盖层叠加） -->
+    <FrameLayout
+        android:id="@+id/fl_keyboard_wrapper"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#E8E8E8"
-        android:keyTextColor="#333333"
-        android:keyBackground="@drawable/key_background"
-        android:keyTextSize="13sp"
-        android:verticalGap="4dp"
-        android:horizontalGap="2dp" />
+        android:layout_height="wrap_content">
+
+        <com.cesia.input.CesiaKeyboardView
+            android:id="@+id/keyboard_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#E8E8E8"
+            android:keyTextColor="#333333"
+            android:keyBackground="@drawable/key_background"
+            android:keyTextSize="13sp"
+            android:verticalGap="4dp"
+            android:horizontalGap="2dp" />
+
+    </FrameLayout>
 
     <!-- 底部功能按钮栏 -->
     <LinearLayout

@@ -23,6 +23,10 @@ class RimeSession(val id: Long) {
     val candidates: List<String>
         get() = RimeJni.getCandidates(id)
 
+    /** 候选词拼音列表（spelling hint），用于 T9 逐键选音按首字母过滤 */
+    val candidatePinyins: List<String>
+        get() = RimeJni.getCandidatePinyinList(id)
+
     /**
      * 是否有候选词
      */

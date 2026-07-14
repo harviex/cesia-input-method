@@ -367,6 +367,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9InputBuffer = StringBuilder()  // T9 数字输入缓冲
     // 本次组合已上屏的文本累积（逐字组词时用于去除最后一步整串返回的重复前缀）
     private var t9ComposedSoFar = StringBuilder()
+    // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
+    private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
+    private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
+    private var t9EffectiveInput = ""             // 有效输入串（字母替换数字后）：如前缀ws+队列97剩7 → "ws7"
+    private var llT9Spell: android.widget.LinearLayout? = null          // 候选栏最左 4 字母点选区
+    private var t9SpellTVs: List<android.widget.TextView>? = null        // 4 个字母 TextView
     private val t9Map = mapOf(
         2 to "abc", 3 to "def", 4 to "ghi", 5 to "jkl",
         6 to "mno", 7 to "pqrs", 8 to "tuv", 9 to "wxyz", 0 to " "
@@ -977,6 +983,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // RecyclerView 候选词列表
         rvCandidates = view.findViewById(R.id.rv_candidates)
+        // 逐键选音：候选栏最左 4 字母点选区（点击锁定当前位字母）
+        llT9Spell = view.findViewById(R.id.ll_t9_spell)
+        t9SpellTVs = listOf(
+            view.findViewById(R.id.tv_t9_spell0),
+            view.findViewById(R.id.tv_t9_spell1),
+            view.findViewById(R.id.tv_t9_spell2),
+            view.findViewById(R.id.tv_t9_spell3)
+        )
+        t9SpellTVs?.forEachIndexed { idx, tv ->
+            tv.isClickable = true
+            tv.isEnabled = true
+            tv.setOnClickListener { onT9SpellLetterClick(idx) }
+        }
         candidateAdapter = CandidateAdapter(
             onItemClick = { index, _ ->
                 if (rimeEngine.hasCandidates || isAssociationMode) {
@@ -1309,15 +1328,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 主题 ========================
 
     private fun applyKeyboardTheme() {
+        val keyBgColor: Int
         if (isDarkTheme) {
-            keyboardView.setBackgroundColor(0xFF0F0F23.toInt())
+            keyBgColor = 0xFF0F0F23.toInt()
+            keyboardView.setBackgroundColor(keyBgColor)
             (statusText.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
             candidateBar.setBackgroundColor(0xFF16213E.toInt())
             (btnClipboard.parent as? View)?.setBackgroundColor(0xFF1A1A2E.toInt())
         } else {
             // 使用动态背景灰度
             val base = themeBgGrayBase
-            keyboardView.setBackgroundColor(colorGray(base))
+            keyBgColor = colorGray(base)
+            keyboardView.setBackgroundColor(keyBgColor)
             (statusText.parent as? View)?.setBackgroundColor(colorGray((base - 8).coerceIn(0, 255)))
             candidateBar.setBackgroundColor(colorGray((base + 16).coerceIn(0, 255)))
             (btnClipboard.parent as? View)?.setBackgroundColor(colorGray(base))
@@ -1913,6 +1935,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (!rimeEngine.isComposing) {
                     rimeEngine.clear()
                     t9ComposedSoFar.clear()  // 组合结束，清空累积
+                    t9DigitQueue.clear(); t9SpellPrefix.clear()
                 }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
@@ -1973,7 +1996,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        val allCands = rimeEngine.getAllCandidates()
+        var allCands = rimeEngine.getAllCandidates()
+
+        // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（如选了 ssps → 只留拼音首字母 ssps 的候选）
+        if (t9SpellPrefix.isNotEmpty()) {
+            val pinyins = rimeEngine.getAllCandidatePinyins()
+            allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
+        }
 
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
@@ -1993,9 +2022,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 有输入时
         candidateBar.visibility = View.VISIBLE
 
-        // T9 模式：状态栏显示数字序列（不再显示英文字母区和分隔线）
-        if (keyboardMode == KeyboardMode.NUMBER && t9InputBuffer.isNotEmpty()) {
-            updateStatus(t9InputBuffer.toString())
+        // T9 模式：状态栏显示「已选字母 + 剩余未选数字」（逐键选音进度）；选满后只显示字母
+        if (keyboardMode == KeyboardMode.NUMBER && (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty())) {
+            val remaining = t9DigitQueue.substring(t9SpellPrefix.length)  // 未选字母的剩余数字
+            updateStatus(t9SpellPrefix.toString() + remaining)
         } else {
             updateStatus(pinyin)
         }
@@ -2031,7 +2061,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
             val allCandsPanel = rimeEngine.getAllCandidates()
-            val displayPanel = if (isTraditional) allCandsPanel.map { toTraditional(it) } else allCandsPanel
+            // 与候选栏一致：按已选字母前缀(拼音首字母)全局过滤下拉菜单
+            val filteredPanel = if (t9SpellPrefix.isNotEmpty()) {
+                filterCandsBySpellPrefix(allCandsPanel, rimeEngine.getAllCandidatePinyins(), t9SpellPrefix.toString())
+            } else allCandsPanel
+            val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
             panelAdapter?.addAll(reorderedPanel)
@@ -5621,6 +5655,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 清除输入状态，防止切换后残留
         rimeEngine.clear()
         t9InputBuffer.clear()
+        t9DigitQueue.clear(); t9SpellPrefix.clear()
         candidateBar.visibility = View.GONE
         updateStatus(statusIdleText)
         // UI 立即切换，schema 切换放后台（轻量 reload，保留 build 缓存）
@@ -5697,6 +5732,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             (1.5f * resources.displayMetrics.density).toInt() // ≈3px on xhdpi
         } else 0
         keyboardView.setPadding(paddingPx, 0, paddingPx, 0)
+        // 切换到非 T9 模式（全键盘/符号）时，候选栏字母点选区同步消失
+        if (mode != KeyboardMode.NUMBER) {
+            llT9Spell?.visibility = android.view.View.GONE
+        } else {
+            updateSpellBar()
+        }
     }
 
     private fun toggleSymbolLanguage() {
@@ -5743,6 +5784,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun resetT9State() {
         t9InputBuffer.clear()
+        t9DigitQueue.clear(); t9SpellPrefix.clear()
         rimeEngine.clear()
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
@@ -5756,6 +5798,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         t9ShiftTemp = false
         // qwertyShiftLocked 和 t9ShiftLocked 不在此处清除，各键盘状态独立
         t9InputBuffer.clear()
+        t9DigitQueue.clear(); t9SpellPrefix.clear()
         updateShiftIndicator()
     }
 
@@ -5898,7 +5941,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 主字符模式：T9拼音输入
             val t9Digit = mainToSub[primaryCode]
             if (t9Digit != null) {
-                t9InputBuffer.append(t9Digit)
+                t9DigitQueue.append(t9Digit)  // 逐键选音：数字进队列，字母通过覆盖层锁定
                 processT9Input()
             } else {
                 when (primaryCode) {
@@ -5929,16 +5972,77 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
-        val digits = t9InputBuffer.toString()
-        if (digits.isNotEmpty()) {
-            // 重建session，输入完整数字串
+        // 基本功能：数字队列直接喂 Rime（t9 schema 只认数字键），出九宫格候选词
+        if (t9DigitQueue.isNotEmpty()) {
             rimeEngine.clear()
             rimeEngine.createSession()
-            for (d in digits) {
+            for (d in t9DigitQueue) {
                 rimeEngine.processKey(d.toString())
             }
         }
+        updateSpellBar()
         updateCandidateBar()
+    }
+
+    /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
+    private fun buildT9SpellFeed(): String {
+        if (t9DigitQueue.isEmpty()) return ""
+        val sb = StringBuilder(t9SpellPrefix)
+        val remaining = t9DigitQueue.drop(t9SpellPrefix.length)
+        for (d in remaining) {
+            val letters = t9Map[d.digitToInt()] ?: " "
+            sb.append(letters.firstOrNull() ?: ' ')
+        }
+        return sb.toString()
+    }
+
+    /** 按已选字母前缀(拼音首字母)过滤候选词列表，返回过滤后的子集（候选拼音首字母以 prefix 开头）。
+     *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
+    private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
+        if (prefix.isEmpty()) return cands
+        val filtered = cands.mapIndexedNotNull { i, cand ->
+            val py = pinyins.getOrElse(i) { "" }
+            val initials = py.split(Regex("[\\s'·]")).filter { it.isNotEmpty() }
+                .joinToString("") { it.first().toString() }
+            if (initials.startsWith(prefix)) cand else null
+        }
+        return if (filtered.isNotEmpty()) filtered else cands
+    }
+
+    /** 逐键选音：点击候选栏字母区第 letterIndex 个字母（如 9→wxyz 的第0个 w） */
+    private fun onT9SpellLetterClick(letterIndex: Int) {
+        if (t9SpellPrefix.length >= t9DigitQueue.length) return
+        val curDigit = t9DigitQueue[t9SpellPrefix.length]
+        val letters = t9Map[curDigit.digitToInt()] ?: return
+        if (letterIndex >= letters.length) return
+        t9SpellPrefix.append(letters[letterIndex])  // 锁定该位字母
+        processT9Input()                             // 重算（实时收窄候选）
+    }
+
+    /** 刷新候选音：驱动候选栏最左 4 字母点选区。
+     *  全选完 / 候选区空 / 非T9模式 时同步隐藏。 */
+    private fun updateSpellBar() {
+        val showSpell = keyboardMode == KeyboardMode.NUMBER
+                && t9SpellPrefix.length < t9DigitQueue.length
+                && rimeEngine.hasCandidates
+        val spellZone = llT9Spell
+        val spellTVs = t9SpellTVs
+        if (spellZone == null || spellTVs == null || !showSpell) {
+            spellZone?.visibility = android.view.View.GONE
+            return
+        }
+        spellZone.visibility = android.view.View.VISIBLE
+        val curDigit = t9DigitQueue[t9SpellPrefix.length]
+        val letters = t9Map[curDigit.digitToInt()] ?: ""
+        for (i in 0..3) {
+            val tv = spellTVs.getOrNull(i) ?: continue
+            if (i < letters.length) {
+                tv.visibility = android.view.View.VISIBLE
+                tv.text = letters[i].toString()
+            } else {
+                tv.visibility = android.view.View.GONE
+            }
+        }
     }
 
     private fun commitT9AndClear() {
@@ -5950,6 +6054,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
             t9InputBuffer.clear()
+            t9DigitQueue.clear(); t9SpellPrefix.clear()
             rimeEngine.clear()
             updateCandidateBar()
         }
@@ -7236,7 +7341,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             t9ShiftTemp = false
                             updateShiftIndicator()
                         }
-                    } else if (t9InputBuffer.isNotEmpty()) {
+                    } else if (t9DigitQueue.isNotEmpty()) {
                         // T9模式：空格 = 选择首候选上屏
                         val cands = rimeEngine.candidates
                         if (cands.isNotEmpty()) {
@@ -7300,17 +7405,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     return
                 }
                 if (keyboardMode == KeyboardMode.NUMBER) {
-                    // 数字键盘退格
-                    if (!t9ShiftTemp && t9InputBuffer.isNotEmpty()) {
-                        // 先告诉 Rime 删除一个按键
-                        rimeEngine.processKey("BackSpace")
-                        // 同步更新缓冲
-                        t9InputBuffer.deleteCharAt(t9InputBuffer.length - 1)
-                        if (t9InputBuffer.isEmpty()) {
+                    // 数字键盘退格（逐键选音：优先撤销已选字母；撤销字母不会删除原数字，仅缩短前缀）
+                    if (!t9ShiftTemp && (t9SpellPrefix.isNotEmpty() || t9DigitQueue.isNotEmpty())) {
+                        if (t9SpellPrefix.isNotEmpty()) {
+                            t9SpellPrefix.deleteCharAt(t9SpellPrefix.length - 1)
+                        } else {
+                            t9DigitQueue.deleteCharAt(t9DigitQueue.length - 1)
+                        }
+                        if (t9DigitQueue.isEmpty() && t9SpellPrefix.isEmpty()) {
                             rimeEngine.clear()
                             resetT9State()
                         } else {
-                            updateCandidateBar()
+                            processT9Input()
                         }
                     } else {
                         deleteSelectionOrChar()
@@ -7810,6 +7916,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus(statusIdleText)
         }
         if (finishingInput && isRecording) stopRecording()
+        // 切到后台/收起输入法时，候选栏字母点选区同步消失
+        llT9Spell?.visibility = android.view.View.GONE
     }
 
     override fun onDestroy() {

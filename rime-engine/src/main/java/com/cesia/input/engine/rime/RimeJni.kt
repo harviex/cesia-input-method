@@ -137,6 +137,24 @@ object RimeJni {
     }
 
     /**
+     * 获取当前页候选词的拼音（来自 Rime spelling hint / comment）。
+     * 用于 T9 逐键选音：按拼音首字母过滤候选。
+     */
+    fun getCandidatePinyinList(sessionId: Long): List<String> {
+        if (!initialized) return emptyList()
+        return try {
+            val menu = TrimeRime.getRimeContext().menu
+            menu.candidates.map { cand ->
+                // comment 通常形如 "shi shi qiu shi"（带空格的拼音），取每节首字母拼成首字母串
+                val cm = cand.comment?.trim().orEmpty()
+                if (cm.isEmpty()) cand.text else cm
+            }
+        } catch (e: Throwable) {
+            emptyList()
+        }
+    }
+
+    /**
      * 获取当前菜单的分页信息
      */
     fun getPageInfo(sessionId: Long): PageInfo {
