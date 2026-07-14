@@ -124,8 +124,8 @@ translator:
   # 整词续写，误点导致重复上屏(六牛+六牛柳)。逐字造词场景更干净。
   enable_sentence: false
   enable_user_dict: true
-  # 限制同音/补全候选总数（简拼单键会爆几百候选，限 100 缓解卡顿）
-  max_homophones: 300
+  # 限制同音/补全候选总数（简拼单键会爆几百候选，限 500 缓解卡顿，同时允许更多候选填满下拉）
+  max_homophones: 500
   # 注释保留拼音（供 T9 逐键选音上层按首字母过滤候选）；若需隐藏可恢复 xform/.*//
   # comment_format:
   #   - xform/.*//
