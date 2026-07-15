@@ -393,6 +393,9 @@ class PolishService(
 
     private fun normalizeApiUrl(url: String): String {
         if (url.isEmpty()) return DEFAULT_OPENROUTER_URL
+        // 已是 OpenAI 兼容格式（Ollama/vLLM/LM Studio 等），原样返回
+        if (url.contains("/v1/chat/completions") || url.contains("/v1/")) return url
+        // 旧自定义/OpenRouter 格式：含 /api/ 或需补路径
         if (url.contains("/api/")) return url
         if (url.endsWith("/")) return "${url}api/v1/chat/completions"
         return "$url/api/v1/chat/completions"

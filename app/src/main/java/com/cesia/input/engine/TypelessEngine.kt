@@ -303,6 +303,8 @@ class TypelessEngine(
      */
     private fun normalizeApiUrl(url: String): String {
         if (url.isEmpty()) return DEFAULT_OPENROUTER_URL
+        // 已是 OpenAI 兼容格式（Ollama/vLLM/LM Studio 等），原样返回
+        if (url.contains("/v1/chat/completions") || url.contains("/v1/")) return url
         // 如果 URL 已经包含 /api/ 路径，直接返回
         if (url.contains("/api/")) return url
         // 如果 URL 以 / 结尾，追加 chat/completions
