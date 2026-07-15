@@ -122,9 +122,11 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     override fun shutdown() {
-        RimeJni.shutdown()
-        session = null
-        isInitialized = false
+        synchronized(this) {
+            RimeJni.shutdown()
+            session = null
+            isInitialized = false
+        }
     }
 
     fun reload(): Boolean {
@@ -133,6 +135,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     /** 词库更新后触发重新部署（比 reload 轻量） */
+    @Synchronized
     fun redeploy() {
         session = null
         // 重新部署：退出再启动
@@ -140,54 +143,65 @@ class RimeEngine(private val context: Context) : InputEngine {
         RimeJni.initialize(context)
     }
 
+    @Synchronized
     override fun createSession(): RimeSession {
         val s = RimeJni.createSession()
         session = s
         return s
     }
 
+    @Synchronized
     override fun destroySession(session: RimeSession) {
         RimeJni.destroySession(session)
         if (this.session?.id == session.id) this.session = null
     }
 
+    @Synchronized
     override fun processKey(key: String): Boolean {
         val s = session ?: createSession()
         return s.processKey(key)
     }
 
+    @Synchronized
     override fun processKey(c: Char): Boolean = processKey(c.toString())
 
+    @Synchronized
     override fun processKeyCode(keyCode: Int): Boolean {
         val s = session ?: createSession()
         return s.processKeyCode(keyCode)
     }
 
+    @Synchronized
     override fun selectCandidate(index: Int): String {
         val s = session ?: return ""
         return s.selectCandidate(index)
     }
 
+    @Synchronized
     override fun commit(): String {
         val s = session ?: return ""
         return s.commit()
     }
 
+    @Synchronized
     override fun clear() {
         session?.clear()
     }
 
+    @Synchronized
     override fun nextPage(): List<String> {
         session?.nextPage()
         return candidates
     }
 
+    @Synchronized
     override fun prevPage(): List<String> {
         session?.prevPage()
         return candidates
     }
 
     /** 获取所有页的候选词（合并）：线性取前 MAX_CANDIDATE_COUNT 个（含词组与单字，按需自然混排） */
+    @Synchronized
     fun getAllCandidates(): List<String> {
         val s = session ?: return emptyList()
         if (s.pageCount <= 1) return s.candidates.take(MAX_CANDIDATE_COUNT)
@@ -211,6 +225,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     /** 与 getAllCandidates 对应的拼音列表（按相同页遍历顺序） */
+    @Synchronized
     fun getAllCandidatePinyins(): List<String> {
         val s = session ?: return emptyList()
         if (s.pageCount <= 1) return s.candidatePinyins.take(MAX_CANDIDATE_COUNT)
@@ -231,11 +246,13 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     // 兼容方法
+    @Synchronized
     fun inputLetter(c: Char): String {
         processKey(c)
         return composingText
     }
 
+    @Synchronized
     fun backspace(): String {
         processKey("BackSpace")
         return composingText
@@ -245,16 +262,19 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     // ======================== 模式切换 ========================
 
+    @Synchronized
     fun setAsciiMode(ascii: Boolean) {
         RimeJni.setAsciiMode(ascii)
     }
 
     /** 简繁切换：通过 Rime setOption 切换（需要 schema 中配置 traditional 开关） */
+    @Synchronized
     fun setTraditional(trad: Boolean) {
         RimeJni.setOption("traditional", trad)
     }
 
     /** 切换 Rime schema */
+    @Synchronized
     fun selectSchema(schemaId: String): Boolean {
         val ok = Rime.selectRimeSchemas(arrayOf(schemaId))
         if (ok) clearSession()
@@ -262,6 +282,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     /** 清除当前 session（切换 schema 后调用，下次按键自动用新 schema 创建新 session） */
+    @Synchronized
     fun clearSession() {
         session = null
     }

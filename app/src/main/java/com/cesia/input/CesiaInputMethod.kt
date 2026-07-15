@@ -942,11 +942,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 生命周期 ========================
 
     override fun onCreate() {
+        installCrashHandler()
         val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt(PREF_THEME_MODE, THEME_LIGHT)
         isDarkTheme = themeMode == THEME_DARK
         setTheme(if (isDarkTheme) R.style.Theme_Cesia_Dark else R.style.Theme_Cesia)
         super.onCreate()
+    }
+
+    /** 封测期：未捕获异常写入本地文件（不联网），便于真机崩溃后回收日志 */
+    private fun installCrashHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
+            try {
+                val dir = getExternalFilesDir(null) ?: filesDir
+                val logFile = java.io.File(dir, "crash.log")
+                val ts = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+                val sb = StringBuilder()
+                sb.append("=== CRASH $ts (thread=${thread.name}) ===\n")
+                sb.append(android.util.Log.getStackTraceString(ex))
+                sb.append("\n\n")
+                logFile.appendText(sb.toString())
+            } catch (_: Exception) { /* 写日志失败不影响默认处理 */ }
+            defaultHandler?.uncaughtException(thread, ex)
+        }
     }
 
     /**
@@ -1657,7 +1676,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             false
         )
-        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.isOutsideTouchable = true
         themePopup = popup
@@ -2872,10 +2891,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         magicHistoryManager?.addRecord(instruction)
                         saveUndoHistory(magicOriginalText, instruction)
                         try {
+                            if (!isInputViewShown) {
+                                updateStatus("⚠️ 键盘已收起，AI结果未上屏")
+                                resetToIdle()
+                            } else {
                             val ic2 = currentInputConnection
                             ic2?.performContextMenuAction(android.R.id.selectAll)
                             ic2?.commitText(result, 1)
                             resetToIdle()
+                            }
                         } catch (e2: Exception) {
                             Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
                             updateStatus("❌ 上屏失败: ${e2.message}")
@@ -2994,10 +3018,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 magicHistoryManager?.addRecord(instruction)
                 saveUndoHistory(fullText, instruction)
                 try {
+                    if (!isInputViewShown) {
+                        updateStatus("⚠️ 键盘已收起，AI结果未上屏")
+                        resetToIdle()
+                    } else {
                     val ic2 = currentInputConnection
                     ic2?.performContextMenuAction(android.R.id.selectAll)
                     ic2?.commitText(result, 1)
                     resetToIdle()
+                    }
                 } catch (e2: Exception) {
                     Log.e("Cesia", "replaceInputText 异常", e2)
                     updateStatus("❌ 上屏失败: ${e2.message}")
@@ -3096,7 +3125,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
         popup.isOutsideTouchable = false
         popup.elevation = 4f
-        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+        popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.setFocusable(false)
 
@@ -3588,7 +3617,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
             popup.elevation = 4f
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
 
@@ -6689,7 +6718,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
@@ -8007,11 +8036,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         // 全键盘/T9 切换键(-102)长按：将切换目标键盘设为默认（打开输入法即用）
         if (primaryCode == KEYCODE_SWITCH_NUMBER) {
+            defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
             defaultKeyboardLongPressRunnable = Runnable {
                 if (longPressOwnerCode != KEYCODE_SWITCH_NUMBER) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
-                    longPressConsumed = true
+                    longPressConsumed = false
                     val targetMode = if (keyboardMode == KeyboardMode.NUMBER) KeyboardMode.QWERTY else KeyboardMode.NUMBER
                     defaultKeyboardMode = targetMode
                     try {
@@ -8027,11 +8057,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         // T9 全键盘切换键(-999/⌨)长按：将全键盘设为默认（打开输入法即用）
         if (primaryCode == KEYCODE_BACK_KEY) {
+            defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
             defaultKeyboardLongPressRunnable = Runnable {
                 if (longPressOwnerCode != KEYCODE_BACK_KEY) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
-                    longPressConsumed = true
+                    longPressConsumed = false
                     defaultKeyboardMode = KeyboardMode.QWERTY
                     try {
                         getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
@@ -8090,6 +8121,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         enterLongPressRunnable = null
         symbolKeyLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         symbolKeyLongPressRunnable = null
+        defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        defaultKeyboardLongPressRunnable = null
         cancelSendKeyLongPress()
         // 停止 hjkl 方向键重复
         stopDirectionalRepeat()
@@ -8300,6 +8333,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     override fun onDestroy() {
+        cancelAllLongPressActions()
         cancelLongPress()
         typelessEngine?.destroy()
         typelessEngine = null

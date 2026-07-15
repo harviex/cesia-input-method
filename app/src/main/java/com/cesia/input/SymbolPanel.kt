@@ -406,20 +406,25 @@ private class SwipeFrameLayout(context: Context) : FrameLayout(context) {
     private var startX = 0f
     private var startY = 0f
     private var swiped = false
-    private val threshold = 100f
-    private val maxYDrift = 80f
+    private val threshold = 60f
+    private val ratio = 2f  // 横向位移需 > 2倍纵向漂移，才算类别切换（防误吞竖向滚动）
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 startX = ev.x; startY = ev.y; swiped = false
             }
+            // 第二指落下：放弃当前手势，避免误触
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                swiped = true
+            }
             MotionEvent.ACTION_MOVE -> {
                 if (!swiped) {
                     val dx = ev.x - startX
                     val adx = abs(dx)
                     val ady = abs(ev.y - startY)
-                    if (adx > threshold && ady < maxYDrift) {
+                    // 比值判定：横向位移足够大且明显大于纵向漂移
+                    if (adx > threshold && adx > ratio * ady) {
                         swiped = true
                         onSwipe?.invoke(if (dx < 0) -1 else 1)
                         return true  // 消费本次滑动，防止误触子 view
