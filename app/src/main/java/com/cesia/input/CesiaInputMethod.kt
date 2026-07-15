@@ -1923,7 +1923,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 else -> commitCandidateText(toCommit)
             }
             rimeEngine.clear()
-            resetT9State()
+            // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
+            val newAssoc = rimeEngine.getAssociations(clickedWord).take(20)
+            if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode && !clipboardAddMode) {
+                isAssociationMode = true
+                associationPrefix = clickedWord
+                associationCandidates = newAssoc
+                if (isPanelExpanded) collapseCandidatePanel()
+                showAssociationCandidates()
+            } else {
+                resetT9State()
+            }
             updateCandidateBar()
             return
         }
@@ -6033,7 +6043,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val digits = t9DigitQueue.toString().map { it.digitToInt() }
                 if (t9SpellPrefix.isEmpty()) {
                     // 未锁定时：枚举每位数字所有字母组合(完整笛卡尔积)，合并出全部简拼候选
-                    val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
+                    // 卡顿防护：组合数 = ∏每位字母数(如77777=4^5=1024)。超限时截断每位枚举字母数，
+                    // 优先保留前2个字母(覆盖最高频首字母)，把组合数压到可控范围(如2^5=32)。
+                    val rawSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
+                    val totalCombos = rawSets.fold(1L) { acc, s -> acc * maxOf(1, s.length) }
+                    val maxPerDigit = when {
+                        totalCombos <= 256 -> 4   // 正常：完整枚举
+                        totalCombos <= 1024 -> 3  // 中等：每数字取前3字母(3^5=243)
+                        else -> 2                 // 过大：每数字取前2字母(2^5=32)
+                    }
+                    val letterSets = rawSets.map { it.take(maxPerDigit) }
                     var combos = listOf("")
                     for (set in letterSets) {
                         val next = mutableListOf<String>()
