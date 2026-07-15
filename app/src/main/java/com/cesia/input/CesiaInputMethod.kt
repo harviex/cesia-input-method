@@ -2039,8 +2039,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 快照未过滤的原始合并列表（Rime 真实全局序），供点击反查真实全局索引
         lastAllCands = allCands
 
-        // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（如选了 ssps → 只留拼音首字母 ssps 的候选）
-        if (t9SpellPrefix.isNotEmpty()) {
+        // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
+        if (t9SpellPrefix.isNotEmpty() && !t9FenCiOn) {
             val pinyins = rimeEngine.getAllCandidatePinyins()
             allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
         }
@@ -6028,26 +6028,35 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
         if (t9DigitQueue.isNotEmpty()) {
             if (t9FenCiOn) {
-                // 简拼：枚举每位数字的所有字母组合，直接喂 Rime 简拼（如 23 → bd/bf/cd/ce... 出部队/测，
-                // 单键 2 → a/b/c 各自出词；不再用 2'3' 分隔符（会出「啊饿」垃圾））
+                // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
+                // 如 23 未锁 → 仍枚举全部组合(出 400 混合候选)；锁 b、f → bf 直接出 bf 开头词
                 val digits = t9DigitQueue.toString().map { it.digitToInt() }
-                val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
-                var combos = listOf("")
-                for (set in letterSets) {
-                    val next = mutableListOf<String>()
-                    for (prefix in combos) for (c in set) next.add(prefix + c)
-                    combos = next
-                }
-                val merged = LinkedHashSet<String>()
-                for (combo in combos) {
+                if (t9SpellPrefix.isEmpty()) {
+                    // 未锁定时：枚举每位数字所有字母组合(完整笛卡尔积)，合并出全部简拼候选
+                    val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
+                    var combos = listOf("")
+                    for (set in letterSets) {
+                        val next = mutableListOf<String>()
+                        for (prefix in combos) for (c in set) next.add(prefix + c)
+                        combos = next
+                    }
+                    val merged = LinkedHashSet<String>()
+                    for (combo in combos) {
+                        rimeEngine.clear(); rimeEngine.createSession()
+                        for (ch in combo) rimeEngine.processKey(ch.toString())
+                        for (w in rimeEngine.getAllCandidates()) merged.add(w)
+                    }
+                    t9FenCiMerged = merged.toList()
+                    // 主会话取首个组合，保证点击/状态一致
                     rimeEngine.clear(); rimeEngine.createSession()
-                    for (ch in combo) rimeEngine.processKey(ch.toString())
-                    for (w in rimeEngine.getAllCandidates()) merged.add(w)
+                    if (combos.isNotEmpty()) for (ch in combos.first()) rimeEngine.processKey(ch.toString())
+                } else {
+                    // 已锁定时：用锁定字母+剩余首位拼简拼码(如 bf)，精确出该范围候选
+                    val feed = buildT9SpellFeed()
+                    rimeEngine.clear(); rimeEngine.createSession()
+                    for (ch in feed) rimeEngine.processKey(ch.toString())
+                    t9FenCiMerged = rimeEngine.getAllCandidates()
                 }
-                t9FenCiMerged = merged.toList()
-                // 恢复主会话（取首个组合作为主候选，保证点击/状态一致）
-                rimeEngine.clear(); rimeEngine.createSession()
-                if (combos.isNotEmpty()) for (ch in combos.first()) rimeEngine.processKey(ch.toString())
             } else {
                 // 全拼：数字直连，如 83 → 83（走全拼，出"特"等单字）
                 rimeEngine.clear()
@@ -6066,6 +6075,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         t9FenCiOn = !t9FenCiOn
         // 同步 1 键文字（参考全选键样式，由 CesiaKeyboardView 绘制）
         keyboardView.t9FenCiLabel = if (t9FenCiOn) "简拼" else "全拼"
+        // 切换模式时清选音锁定（两种模式锁定含义不同，避免串扰）
+        t9SpellPrefix.clear()
         // 切换时重算候选（保留已输入数字串，只改分词符有无）
         if (t9DigitQueue.isNotEmpty()) {
             processT9Input()
