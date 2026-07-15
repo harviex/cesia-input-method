@@ -1230,6 +1230,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             engine.onRecognitionComplete = { text ->
                 Handler(Looper.getMainLooper()).post {
+                    // 语音结果统一转阿拉伯数字（Google 路径兜底，与本地 sherpa 路径一致）
+                    val text = voiceEngine.convertChineseDigitsToArabic(text)
                     // 魔法模式停止时，直接用 Google 识别结果触发 AI
                     if (magicStopRequested) {
                         Log.d("Cesia", "onRecognitionComplete: 魔法模式停止中，直接触发 AI")
@@ -1476,15 +1478,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val accent = themeAccent
         val accentStateList = android.content.res.ColorStateList.valueOf(accent)
 
-        // 简繁切换
-        if (::btnTraditional.isInitialized) {
-            if (isTraditional) {
-                btnTraditional.setTextColor(accent)
-                btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
-            } else {
-                btnTraditional.setTextColor(0xFF888888.toInt())
-                btnTraditional.setBackgroundColor(0x00000000)
-            }
+        // 简繁切换：仅在 traditionalGlowing（即正体模式）时随主题刷新；
+        // 简体模式下跳过，避免主题漂移/长按功能键时简繁键背景闪动
+        if (::btnTraditional.isInitialized && traditionalGlowing) {
+            btnTraditional.setTextColor(accent)
+            btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
         }
 
         // 功能按钮层级（智能写作、修改、清退、发送） - 移除阴影
@@ -2850,6 +2848,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun handleMagicResult(recognizedText: String) {
+        // 语音结果统一转阿拉伯数字（Google 魔法路径兜底，与本地 sherpa 路径一致）
+        val recognizedText = voiceEngine.convertChineseDigitsToArabic(recognizedText)
         // 防重入：如果 AI 正在处理中，忽略重复触发
         if (isAiProcessing) {
             Log.d("Cesia", "handleMagicResult: AI 正在处理中，忽略重复触发")
@@ -4427,6 +4427,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 简繁切换：通过 Rime 原生 OpenCC 转换（候选词和输出均自动转换） */
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
+        traditionalGlowing = isTraditional  // 正体模式才允许简繁键高亮随主题刷新
         maybeShowButtonHint("traditional", if (isTraditional) "正体输入模式" else "简体输入模式")
         updateTraditionalButton()
         // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
@@ -4473,6 +4474,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             typelessEngine?.getPolishService()?.updateApiKey(apiKey)
             val modelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
             typelessEngine?.updateModelId(modelId)
+            // 备用 API（上一个用过的）：仅默认 API 网络层失败时自动回退
+            val fbUrl = prefs.getString("fallback_api_url", "") ?: ""
+            val fbKey = prefs.getString("fallback_api_key", "") ?: ""
+            val fbModel = prefs.getString("fallback_model_id", "") ?: ""
+            if (fbUrl.isNotEmpty()) {
+                typelessEngine?.getPolishService()?.setFallbackApi(fbUrl, fbKey, fbModel)
+            } else {
+                typelessEngine?.getPolishService()?.setFallbackApi(null, null, null)
+            }
             // 用户设定的默认键盘（长按切换键设定，打开输入法即用）
             val savedDefault = prefs.getString("default_keyboard_mode", "NUMBER") ?: "NUMBER"
             defaultKeyboardMode = try { KeyboardMode.valueOf(savedDefault) } catch (_: Exception) { KeyboardMode.NUMBER }
@@ -5072,8 +5082,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 处理云端/本地识别结果 → 显示 AI+/AI× 按钮（锁定模式自动处理） */
-    private fun handleCloudVoiceResult(text: String) {
-        Log.i("Cesia", "handleCloudVoiceResult: text='${text.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}', pendingAiMode=$pendingAiMode, isProcessingResult=$isProcessingResult, isVoiceLocked=$isVoiceLocked")
+    private fun handleCloudVoiceResult(rawText: String) {
+        Log.i("Cesia", "handleCloudVoiceResult: text='${rawText.take(50)}', isRecording=$isRecording, recognizedText='${recognizedText.take(50)}', pendingAiMode=$pendingAiMode, isProcessingResult=$isProcessingResult, isVoiceLocked=$isVoiceLocked")
+        // 语音识别结果统一转阿拉伯数字：本地 sherpa 路径已在 VoiceEngine 转过，
+        // 但 Google 语音路径（FallbackRecognizer）不经过转换，这里兜底，
+        // 保证“识别到什么、上屏就是什么”，不出现“先阿拉伯后又变回汉字”。
+        val text = voiceEngine.convertChineseDigitsToArabic(rawText)
         // 已在点击 AI+/AI× 时处理过，跳过
         if (isProcessingResult) {
             Log.i("Cesia", "handleCloudVoiceResult: already processed, skipping")
@@ -7637,10 +7651,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val isPureEnglish = composing && composingText.isNotEmpty() &&
                         composingText.all { it in 'a'..'z' }
                     if (isPureEnglish) {
-                        // 英文输入中按数字：上屏英文原文 + 数字，无空格
-                        rimeEngine.clear()
-                        ic?.commitText(composingText + primaryCode.toChar().toString(), 1)
-                        autoExitShift()
+                        if (composingText.length <= 2) {
+                            // 1~2 个英文后按数字：英文+数字一起直接上屏（如 t9 / ab9）
+                            rimeEngine.clear()
+                            ic?.commitText(composingText + primaryCode.toChar().toString(), 1)
+                            autoExitShift()
+                        } else {
+                            // 超过 2 个英文后按数字：仅上屏数字，英文留在候选栏继续备选
+                            // 先清掉可见组合区（不破坏 Rime 状态），提交数字，再把英文恢复为组合态
+                            ic?.setComposingText("", 1)
+                            ic?.commitText(primaryCode.toChar().toString(), 1)
+                            ic?.setComposingText(composingText, 1)
+                            updateCandidateBar()
+                        }
                     } else if (!isAsciiMode && composing && hasCands) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
                         if (index < cands.size) {

@@ -562,11 +562,9 @@ class SettingsActivity : AppCompatActivity() {
         etSettingsTitle?.setText(prefs.getString(PREF_SETTINGS_TITLE, "Cesia AI智能输入法"))
 
         // 初始化云端模型显示
-        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
-        tvCloudModel?.let { textView ->
-            // 先显示默认文本，fetchModels 完成后会更新
-            textView.text = "请选择模型"
-        }
+        refreshCloudModelText()
+        // 根据当前 API URL 自动拉取模型列表（OpenRouter 远程 / Ollama 本地）
+        loadModelsForCurrentUrl()
 
         // 更新 VoiceEngine 命令词
         VoiceEngine.updateCommandWords(
@@ -750,7 +748,10 @@ class SettingsActivity : AppCompatActivity() {
         btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
 
         // 云端模型选择 - 点击 TextView 打开选择对话框
-        tvCloudModel?.setOnClickListener { showModelSelectorDialog(cloudModelList ?: emptyList()) }
+        tvCloudModel?.setOnClickListener {
+            loadModelsForCurrentUrl()
+            showModelSelectorDialog(cloudModelList ?: emptyList())
+        }
 
         // 版本号点击检查更新
         tvVersion?.setOnClickListener { checkForUpdates() }
@@ -831,11 +832,18 @@ class SettingsActivity : AppCompatActivity() {
             override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
                 val view = convertView ?: layoutInflater.inflate(R.layout.item_custom_value, parent, false)
                 val tv = view.findViewById<TextView>(R.id.tv_item_text)
+                val btnEdit = view.findViewById<TextView>(R.id.tv_item_edit)
                 val btnDel = view.findViewById<TextView>(R.id.tv_item_delete)
                 val v = allItems[position]
                 tv.text = displayOf(v)
                 // 当前选中项高亮（主题色文字）
                 tv.setTextColor(if (v == realCurrent) accentColor else 0xFF333333.toInt())
+                btnEdit.setOnClickListener {
+                    // 修改：把当前值预填到编辑框，方便改 IP 等
+                    etCustom.setText(v)
+                    etCustom.setSelection(v.length)
+                    etCustom.requestFocus()
+                }
                 btnDel.setOnClickListener {
                     removeHistory(historyKey, v)
                     if (presets.any { it.first == v }) addDeletedPreset(historyKey, v)
@@ -950,8 +958,22 @@ class SettingsActivity : AppCompatActivity() {
         prefs.edit().putString(prefKey, value).apply()
         addHistory(historyKey, value)
         if (prefKey == PREF_API_URL) {
+            // 切换前，把“上一个用过的 API”存为 fallback（仅网络层失败时才回退）
+            val oldUrl = prefs.getString(PREF_API_URL, "") ?: ""
+            val oldKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
+            val oldModel = prefs.getString(PREF_MODEL_ID, "") ?: ""
+            prefs.edit().putString(prefKey, value).apply()
+            addHistory(historyKey, value)
             prefs.edit().putBoolean("api_url_configured", true).apply()
             updateTestButtonStates()
+            // 旧 API（若存在且与新值不同）记为备用 API
+            if (oldUrl.isNotEmpty() && oldUrl != value) {
+                prefs.edit().putString("fallback_api_url", oldUrl).apply()
+                prefs.edit().putString("fallback_api_key", oldKey).apply()
+                prefs.edit().putString("fallback_model_id", oldModel).apply()
+            }
+            // API 切换后，自动选中该 API 此前用过的模型
+            applyModelForApi(value)
         }
         // 显示：密钥脱敏（前15 + 后5）；API URL 显示友好名
         valueView.text = when {
@@ -2166,14 +2188,7 @@ class SettingsActivity : AppCompatActivity() {
                         )
                     }
                     cloudModelList = list
-                    runOnUiThread {
-                        // 更新 TextView 显示当前选中的模型名称
-                        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
-                        val currentModel = list.find { it.id == savedModelId }
-                        currentModel?.let {
-                            tvCloudModel?.text = it.name
-                        }
-                    }
+                    refreshCloudModelText()
                 } catch (e: Exception) {
                     runOnUiThread {
                         tvCloudModel?.text = "⚠️ 加载失败"
@@ -2181,6 +2196,72 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    /** 根据当前 API URL 自动拉取模型列表：OpenRouter 走远程，Ollama 走本地 /api/tags */
+    private fun loadModelsForCurrentUrl() {
+        val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
+        val isOr = apiUrl.contains("openrouter.ai") || apiUrl.contains("api.cesia.cc")
+        if (isOr) {
+            loadOpenRouterFreeModels()
+        } else {
+            loadOllamaModels(apiUrl)
+        }
+    }
+
+    /** 从 Ollama 的 /api/tags 拉取本地模型列表 */
+    private fun loadOllamaModels(apiUrl: String) {
+        // 提取 host:port（支持 http://host:port 或 http://ip:port）
+        val regex = Regex("""https?://([^/]+)""")
+        val host = regex.find(apiUrl)?.groupValues?.get(1) ?: run {
+            runOnUiThread { tvCloudModel?.text = "⚠️ 无法解析 Ollama 地址" }
+            return
+        }
+        val tagsUrl = "http://$host/api/tags"
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        val request = okhttp3.Request.Builder().url(tagsUrl).build()
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                runOnUiThread {
+                    tvCloudModel?.text = "⚠️ Ollama 连接失败：${e.message}"
+                }
+            }
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread { tvCloudModel?.text = "⚠️ Ollama HTTP ${response.code}" }
+                    return
+                }
+                val body = response.body?.string() ?: return
+                try {
+                    val json = org.json.JSONObject(body)
+                    val models = json.getJSONArray("models")
+                    val list = mutableListOf<CloudModel>()
+                    for (i in 0 until models.length()) {
+                        val name = models.getJSONObject(i).optString("name", "")
+                        if (name.isNotEmpty()) {
+                            list.add(CloudModel(id = name, name = name, provider = "Ollama", contextLength = 0, hasTools = false, hasVision = false))
+                        }
+                    }
+                    cloudModelList = list
+                    refreshCloudModelText()
+                } catch (e: Exception) {
+                    runOnUiThread { tvCloudModel?.text = "⚠️ Ollama 解析失败" }
+                }
+            }
+        })
+    }
+
+    /** 刷新主界面模型名显示：优先远程列表，回退自定义列表，再回退直接显示 id */
+    private fun refreshCloudModelText() {
+        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        val fromList = cloudModelList?.find { it.id == savedModelId }
+        val name = fromList?.name
+            ?: getCustomModels().find { it == savedModelId }
+            ?: savedModelId
+        runOnUiThread { tvCloudModel?.text = name }
     }
 
     private fun showModelSelectorDialog(models: List<CloudModel>) {
@@ -2210,11 +2291,35 @@ class SettingsActivity : AppCompatActivity() {
             .create()
 
         rvModels.layoutManager = LinearLayoutManager(this)
-        rvModels.adapter = ModelSelectorAdapter(allModels, savedModelId) { model ->
-            tvCloudModel?.text = model.name
-            prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
-            appendLog("模型已保存: ${model.id}")
-            dialog.dismiss()
+        val adapter = ModelSelectorAdapter(allModels, savedModelId,
+            onModelClick = { model ->
+                tvCloudModel?.text = model.name
+                prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
+                // 记录 当前API -> 该模型 的联动关系
+                val curApi = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
+                saveApiModelMapping(curApi, model.id)
+                appendLog("模型已保存: ${model.id}")
+                dialog.dismiss()
+            },
+            onDeleteClick = { model ->
+                removeCustomModel(model.id)
+                allModels.remove(model)
+                (rvModels.adapter as ModelSelectorAdapter).notifyDataSetChanged()
+                appendLog("已删除自定义模型: ${model.id}")
+                if (model.id == savedModelId) {
+                    tvTitle.text = "当前: (未选择)"
+                }
+            }
+        )
+        rvModels.adapter = adapter
+
+        // 自适应高度：按 item 数估算，封顶 400dp，避免长模型名/长列表溢出
+        rvModels.post {
+            val itemH = (56 * resources.displayMetrics.density).toInt()
+            val desired = allModels.size * itemH
+            val maxH = (400 * resources.displayMetrics.density).toInt()
+            rvModels.layoutParams.height = minOf(desired, maxH)
+            rvModels.requestLayout()
         }
 
         btnSaveCustom.setOnClickListener {
@@ -2250,15 +2355,53 @@ class SettingsActivity : AppCompatActivity() {
         prefs.edit().putString("custom_models", list.take(20).joinToString("||")).apply()
     }
 
+    /** API↔模型 联动记忆：记录每个 API URL 上次选的模型。格式 url<<<modelId 以 || 分隔 */
+    private fun saveApiModelMapping(apiUrl: String, modelId: String) {
+        val map = getApiModelMap().toMutableMap()
+        map[apiUrl] = modelId
+        prefs.edit().putString("api_model_map", map.entries.joinToString("||") { "${it.key}<<<${it.value}" }).apply()
+    }
+
+    private fun getApiModelMap(): Map<String, String> {
+        val raw = prefs.getString("api_model_map", "") ?: ""
+        if (raw.isEmpty()) return emptyMap()
+        return raw.split("||").mapNotNull { entry ->
+            val parts = entry.split("<<<", limit = 2)
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }.toMap()
+    }
+
+    /** 切换 API 时，自动选中该 API 此前用过的模型（若有） */
+    private fun applyModelForApi(apiUrl: String) {
+        val modelId = getApiModelMap()[apiUrl] ?: return
+        prefs.edit().putString(PREF_MODEL_ID, modelId).apply()
+        refreshCloudModelText()
+        // 输入法会在下次唤起时通过 loadSettings 读取 PREF_MODEL_ID 自动生效
+    }
+
+    private fun removeCustomModel(id: String) {
+        val list = getCustomModels().toMutableList()
+        list.remove(id)
+        prefs.edit().putString("custom_models", list.joinToString("||")).apply()
+        // 若删除的是当前选中模型，清空选择
+        val saved = prefs.getString(PREF_MODEL_ID, "") ?: ""
+        if (saved == id) {
+            prefs.edit().remove(PREF_MODEL_ID).apply()
+            refreshCloudModelText()
+        }
+    }
+
     private inner class ModelSelectorAdapter(
-        private val models: List<CloudModel>,
+        private val models: MutableList<CloudModel>,
         private val selectedModelId: String,
-        private val onModelClick: (CloudModel) -> Unit
+        private val onModelClick: (CloudModel) -> Unit,
+        private val onDeleteClick: (CloudModel) -> Unit
     ) : RecyclerView.Adapter<ModelSelectorAdapter.ModelViewHolder>() {
 
         inner class ModelViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val tvName: TextView = view.findViewById(R.id.tv_model_name)
             val tvProvider: TextView = view.findViewById(R.id.tv_model_provider)
+            val btnDelete: TextView = view.findViewById(R.id.btn_delete_custom)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ModelViewHolder {
@@ -2279,6 +2422,15 @@ class SettingsActivity : AppCompatActivity() {
             val isSelected = model.id == selectedModelId
             holder.itemView.setBackgroundColor(if (isSelected) accentColor else 0xFFFFFFFF.toInt())
             holder.itemView.setOnClickListener { onModelClick(model) }
+            // 仅自定义模型显示删除按钮
+            if (model.provider == "自定义") {
+                holder.btnDelete.visibility = View.VISIBLE
+                holder.btnDelete.setOnClickListener {
+                    onDeleteClick(model)
+                }
+            } else {
+                holder.btnDelete.visibility = View.GONE
+            }
         }
 
         override fun getItemCount() = models.size

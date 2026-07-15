@@ -61,7 +61,7 @@ class PolishService(
             return@withContext PolishResult.EmptyInput
         }
 
-        try {
+        val primary = try {
             if (isOpenRouterUrl(apiUrl)) {
                 polishWithOpenRouter(text)
             } else if (isOpenAiCompatibleUrl(apiUrl)) {
@@ -76,6 +76,28 @@ class PolishService(
             Log.e("PolishService", "处理错误", e)
             PolishResult.Error("处理失败: ${e.message ?: "未知"}")
         }
+
+        // 默认 API 网络层失败 → 自动回退到上一个用过的 API
+        if (primary is PolishResult.Error && primary.isNetworkError && hasFallback) {
+            Log.w("PolishService", "默认 API 网络失败，回退到备用 API: $prevApiUrl")
+            val fallback = withFallback {
+                try {
+                    if (isOpenRouterUrl(apiUrl)) {
+                        polishWithOpenRouter(text)
+                    } else if (isOpenAiCompatibleUrl(apiUrl)) {
+                        polishWithOpenAiCompatible(text)
+                    } else {
+                        polishWithCustomApi(text)
+                    }
+                } catch (e: IOException) {
+                    PolishResult.Error("备用 API 网络失败: ${e.message ?: "未知"}", isNetworkError = true)
+                } catch (e: Exception) {
+                    PolishResult.Error("备用 API 处理失败: ${e.message ?: "未知"}")
+                }
+            }
+            return@withContext fallback
+        }
+        primary
     }
 
     /** 判断是否为 OpenRouter URL */
@@ -367,6 +389,43 @@ class PolishService(
     private var _modelId: String = OPENROUTER_MODEL
     private var _polishPrompt: String? = null  // 用户自定义润色 prompt，null 使用默认
 
+    // ===== 默认 API + 备用 API（fallback）=====
+    // 默认 API 即主 apiUrl/_apiKey/_modelId；prev* 为“上一个用过的 API”，
+    // 仅当默认 API 网络层失败时自动回退到 prev*。
+    private var prevApiUrl: String? = null
+    private var prevApiKey: String? = null
+    private var prevModelId: String? = null
+
+    /** 设置备用 API（上一个用过的 API）。传 null 清空。 */
+    fun setFallbackApi(url: String?, key: String?, model: String?) {
+        prevApiUrl = url?.let { normalizeApiUrl(it.trim()) }
+        prevApiKey = key?.trim()
+        prevModelId = model?.trim()
+        Log.d("PolishService", "备用 API 已设置: $prevApiUrl")
+    }
+
+    private val hasFallback: Boolean get() = !prevApiUrl.isNullOrEmpty()
+
+    /** 魔法模式上次调用是否网络层失败（用于 fallback 判定） */
+    private var lastPromptNetworkError = false
+
+    /** 在 fallback 状态下执行 block（临时切换 apiUrl/_apiKey/_modelId 到备用值） */
+    private inline fun <R> withFallback(block: () -> R): R {
+        val savedUrl = apiUrl
+        val savedKey = _apiKey
+        val savedModel = _modelId
+        try {
+            apiUrl = prevApiUrl!!
+            _apiKey = prevApiKey
+            _modelId = prevModelId ?: savedModel
+            return block()
+        } finally {
+            apiUrl = savedUrl
+            _apiKey = savedKey
+            _modelId = savedModel
+        }
+    }
+
     fun updateApiKey(key: String) {
         _apiKey = key.trim()
         Log.d("PolishService", "OpenRouter API Key 已更新")
@@ -415,7 +474,8 @@ class PolishService(
 
     /** 魔法模式：使用自定义 prompt 调用 API（可指定 max_tokens） */
     fun polishWithPrompt(prompt: String, maxTokens: Int): String? {
-        return try {
+        lastPromptNetworkError = false
+        val primary = try {
             Log.d("PolishService", "polishWithPrompt: apiUrl=$apiUrl, isOpenRouter=${isOpenRouterUrl(apiUrl)}, isOpenAi=${isOpenAiCompatibleUrl(apiUrl)}")
             if (isOpenRouterUrl(apiUrl)) {
                 polishWithPromptOpenRouter(prompt, maxTokens)
@@ -424,10 +484,39 @@ class PolishService(
             } else {
                 polishWithPromptCustom(prompt, maxTokens)
             }
+        } catch (e: IOException) {
+            lastPromptNetworkError = true
+            Log.e("PolishService", "魔法模式网络异常", e)
+            null
         } catch (e: Exception) {
             Log.e("PolishService", "魔法模式异常", e)
             null
         }
+
+        // 默认 API 网络层失败 → 回退到上一个用过的 API
+        if (primary == null && lastPromptNetworkError && hasFallback) {
+            Log.w("PolishService", "魔法模式默认 API 网络失败，回退到备用 API: $prevApiUrl")
+            return withFallback {
+                lastPromptNetworkError = false
+                try {
+                    if (isOpenRouterUrl(apiUrl)) {
+                        polishWithPromptOpenRouter(prompt, maxTokens)
+                    } else if (isOpenAiCompatibleUrl(apiUrl)) {
+                        polishWithPromptOpenAi(prompt, maxTokens)
+                    } else {
+                        polishWithPromptCustom(prompt, maxTokens)
+                    }
+                } catch (e: IOException) {
+                    lastPromptNetworkError = true
+                    Log.e("PolishService", "魔法模式备用 API 网络异常", e)
+                    null
+                } catch (e: Exception) {
+                    Log.e("PolishService", "魔法模式备用 API 异常", e)
+                    null
+                }
+            }
+        }
+        return primary
     }
 
     private fun polishWithPromptOpenRouter(prompt: String, maxTokens: Int): String? {
@@ -488,6 +577,9 @@ class PolishService(
                 } else {
                     Log.w("PolishService", "魔法模型 $model HTTP ${result.code}: ${result.body?.string()?.take(100)}")
                 }
+            } catch (e: java.io.IOException) {
+                lastPromptNetworkError = true
+                Log.w("PolishService", "魔法模型 $model 网络异常: ${e.message}")
             } catch (e: Exception) {
                 Log.w("PolishService", "魔法模型 $model 异常: ${e.message}")
             }
@@ -540,6 +632,10 @@ class PolishService(
                 )
                 if (content.isNotEmpty() && content != "null") return content
             }
+            null
+        } catch (e: java.io.IOException) {
+            lastPromptNetworkError = true
+            Log.w("PolishService", "OpenAI兼容魔法网络异常: ${e.message}")
             null
         } catch (e: Exception) {
             Log.w("PolishService", "OpenAI兼容魔法异常: ${e.message}")

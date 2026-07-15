@@ -274,7 +274,7 @@
             android:id="@+id/check_auto_time_theme"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="随手机时间自动变化"
+            android:text="主题色每分钟渐变"
             android:textSize="13sp"
             android:textColor="#333333" />
 

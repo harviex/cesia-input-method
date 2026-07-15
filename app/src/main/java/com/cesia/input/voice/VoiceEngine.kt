@@ -896,7 +896,8 @@ class VoiceEngine(private val context: Context) {
      * 将识别结果中的中文数字（一二三四五六七八九十百千万亿）转换为阿拉伯数字
      * 例如："今天花了三百二十五元" → "今天花了325元"
      */
-    private fun convertChineseDigitsToArabic(text: String): String {
+    /** 中文数字转阿拉伯数字（公开：供 CesiaInputMethod 在上屏/魔法路径兜底统一转换） */
+    fun convertChineseDigitsToArabic(text: String): String {
         val chineseDigits: Map<Char, Long> = mapOf(
             '零' to 0L, '一' to 1L, '二' to 2L, '三' to 3L, '四' to 4L,
             '五' to 5L, '六' to 6L, '七' to 7L, '八' to 8L, '九' to 9L,
