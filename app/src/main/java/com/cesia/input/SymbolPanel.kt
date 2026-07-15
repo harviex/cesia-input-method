@@ -4,8 +4,10 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.HorizontalScrollView
 import android.widget.PopupWindow
@@ -17,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.cesia.input.R
+import kotlin.math.abs
 
 /**
  * 长按符号切换键(-100，副字符"符库")弹出的分类符号面板（PopupWindow）。
@@ -197,10 +200,15 @@ class SymbolPanel(
             popup = null
             return
         }
-        val view = LayoutInflater.from(context).inflate(R.layout.symbol_panel, null)
-        val tabStrip = view.findViewById<HorizontalScrollView>(R.id.symbol_tabs)
+        val content = LayoutInflater.from(context).inflate(R.layout.symbol_panel, null)
+        // 用 SwipeFrameLayout 包裹，拦截横向滑动切类别（不被内部 RecyclerView 吞手势）
+        val view = SwipeFrameLayout(context).apply {
+            addView(content, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val tabStrip = content.findViewById<HorizontalScrollView>(R.id.symbol_tabs)
         tabContainer = tabStrip.findViewById(R.id.symbol_tab_container)
-        grid = view.findViewById(R.id.symbol_grid)
+        grid = content.findViewById(R.id.symbol_grid)
         grid?.layoutManager = GridLayoutManager(context, 10)
 
         buildTabs()
@@ -220,32 +228,16 @@ class SymbolPanel(
             showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
         }
 
-        // 左右滑动切换符号类别（同全键盘/T9 切换的滑动方案）
-        var swipeStartX = 0f
-        var swipeStartY = 0f
-        var swipeConsumed = false
-        view.setOnTouchListener { _, ev ->
-            when (ev.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    swipeStartX = ev.x; swipeStartY = ev.y; swipeConsumed = false
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val dx = ev.x - swipeStartX
-                    val adx = kotlin.math.abs(dx)
-                    val ady = kotlin.math.abs(ev.y - swipeStartY)
-                    if (!swipeConsumed && adx > 100 && ady < 60) {
-                        swipeConsumed = true
-                        val cats = orderedCategories()
-                        val next = if (dx < 0) currentCatIndex + 1 else currentCatIndex - 1
-                        val ni = next.coerceIn(0, cats.lastIndex)
-                        if (ni != currentCatIndex) {
-                            buildTabs()
-                            selectCategory(ni, cats)
-                        }
-                    }
-                }
+        // 左右滑动切换符号类别（同全键盘/T9 切换的滑动方案：水平>100px 且垂直<80px）
+        (view as SwipeFrameLayout).onSwipe = { dir ->
+            // dir>0 右滑(手指右拖)→看左侧相邻类别(currentCatIndex-1)；dir<0 左滑→右侧(+1)
+            val c = orderedCategories()
+            val next = if (dir > 0) currentCatIndex - 1 else currentCatIndex + 1
+            val ni = next.coerceIn(0, c.lastIndex)
+            if (ni != currentCatIndex) {
+                buildTabs()
+                selectCategory(ni, c)
             }
-            false  // 不消费，保留 grid 滚动/点击
         }
     }
 
@@ -402,5 +394,39 @@ class SymbolPanel(
             setColor(color)
             cornerRadius = dp(8).toFloat()
         }
+    }
+}
+
+/**
+ * 包裹符号面板内容，拦截横向滑动切类别（同 CesiaKeyboardView 的滑动方案）。
+ * 横向滑动(dx>100 且 dy<80)触发 onSwipe(dir<0 左滑 / >0 右滑)，纵向滑动放行给子 view。
+ */
+private class SwipeFrameLayout(context: Context) : FrameLayout(context) {
+    var onSwipe: ((dir: Int) -> Unit)? = null
+    private var startX = 0f
+    private var startY = 0f
+    private var swiped = false
+    private val threshold = 100f
+    private val maxYDrift = 80f
+
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startX = ev.x; startY = ev.y; swiped = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!swiped) {
+                    val dx = ev.x - startX
+                    val adx = abs(dx)
+                    val ady = abs(ev.y - startY)
+                    if (adx > threshold && ady < maxYDrift) {
+                        swiped = true
+                        onSwipe?.invoke(if (dx < 0) -1 else 1)
+                        return true  // 消费本次滑动，防止误触子 view
+                    }
+                }
+            }
+        }
+        return false
     }
 }

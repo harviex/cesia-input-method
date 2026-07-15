@@ -322,6 +322,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 状态 ========================
     private var isRecording = false
     private var keyboardMode = KeyboardMode.NUMBER  // 默认 T9 数字键盘
+    private var defaultKeyboardMode = KeyboardMode.NUMBER  // 用户长按切换键设定的默认键盘（打开输入法即用）
     private var prevKeyboardMode = KeyboardMode.NUMBER  // 进入符号键盘前的键盘模式（用于返回）
     private var isCapsLock = false
     private var isProcessingResult = false
@@ -453,6 +454,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // -100 键长按检测（符号键盘切换）
     private var symbolKeyLongPressRunnable: Runnable? = null
+    private var defaultKeyboardLongPressRunnable: Runnable? = null
     // 长按符号键弹出的分类符号面板
     private var symbolPanel: SymbolPanel? = null
     private var symbolPanelLongPressTriggered = false
@@ -971,6 +973,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun createInputViewSafe(): View {
         // 优先加载保存的主题色（必须在 inflate 之前）
         loadThemeColors()
+        // 加载用户设定的默认键盘（长按切换键设定，打开输入法即用）
+        try {
+            val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            val savedDefault = prefs.getString("default_keyboard_mode", "NUMBER") ?: "NUMBER"
+            defaultKeyboardMode = try { KeyboardMode.valueOf(savedDefault) } catch (_: Exception) { KeyboardMode.NUMBER }
+        } catch (_: Exception) { defaultKeyboardMode = KeyboardMode.NUMBER }
         val inflater = LayoutInflater.from(this)
         val view = inflater.inflate(R.layout.input_view, null)
 
@@ -1058,10 +1066,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             Log.e("Cesia", "加载数字键盘失败", e)
             numberKeyboard = qwertyKeyboard
         }
-        currentKeyboard = numberKeyboard
+        currentKeyboard = if (defaultKeyboardMode == KeyboardMode.QWERTY) qwertyKeyboard else numberKeyboard
+        keyboardMode = defaultKeyboardMode
 
         keyboardView.keyboard = currentKeyboard
-        keyboardView.isT9Mode = true
+        keyboardView.isT9Mode = (defaultKeyboardMode == KeyboardMode.NUMBER)
         keyboardView.setOnKeyboardActionListener(this)
 
         // 左右滑动循环切换全键盘/T9
@@ -1093,7 +1102,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // T9 底行功能键副字符（灰色，右上角）
             -108 to "粘贴",  // 粘贴键：副字符
             -109 to "剪切",  // 复制键：副字符
-            10 to "撤销"     // 回车键：副字符
+            10 to "撤销",    // 回车键：副字符
+            -102 to "设默认" // 全键盘/T9 切换键：长按设该键盘为默认
         ))
         // T9Labels 已清空（数字键不再显示灰色副字符）
         keyboardView.setT9Labels(mapOf())
@@ -4431,6 +4441,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             typelessEngine?.getPolishService()?.updateApiKey(apiKey)
             val modelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
             typelessEngine?.updateModelId(modelId)
+            // 用户设定的默认键盘（长按切换键设定，打开输入法即用）
+            val savedDefault = prefs.getString("default_keyboard_mode", "NUMBER") ?: "NUMBER"
+            defaultKeyboardMode = try { KeyboardMode.valueOf(savedDefault) } catch (_: Exception) { KeyboardMode.NUMBER }
         } catch (_: Exception) {
             apiUrl = DEFAULT_API_URL
         }
@@ -7769,8 +7782,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // ======================== 符号语言切换（中英符号）========================
             KEYCODE_SWITCH_SYMBOL_LANG -> toggleSymbolLanguage()
 
-            // ======================== 数字切换（123）=======================
-            KEYCODE_SWITCH_NUMBER -> toggleNumberKeyboard()
+            // ======================== 数字切换（123）========================
+            KEYCODE_SWITCH_NUMBER -> {
+                defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                defaultKeyboardLongPressRunnable = null
+                toggleNumberKeyboard()
+            }
             KEYCODE_CONTROL -> handleControlKey()
             KEYCODE_SHIFT -> {
                 if (keyboardMode == KeyboardMode.QWERTY || keyboardMode == KeyboardMode.NUMBER) {
@@ -7967,6 +7984,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
             Handler(Looper.getMainLooper()).postDelayed(symbolKeyLongPressRunnable!!, 700)
+        }
+        // 全键盘/T9 切换键(-102)长按：将切换目标键盘设为默认（打开输入法即用）
+        if (primaryCode == KEYCODE_SWITCH_NUMBER) {
+            defaultKeyboardLongPressRunnable = Runnable {
+                if (!shortPressHandled) {
+                    longPressTriggered = true
+                    longPressConsumed = true
+                    val targetMode = if (keyboardMode == KeyboardMode.NUMBER) KeyboardMode.QWERTY else KeyboardMode.NUMBER
+                    defaultKeyboardMode = targetMode
+                    try {
+                        getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                            .putString("default_keyboard_mode", targetMode.name).apply()
+                    } catch (_: Exception) {}
+                    keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    val name = if (targetMode == KeyboardMode.QWERTY) "全键盘" else "T9"
+                    updateStatus("已将 $name 设为默认键盘（下次打开即用）")
+                }
+            }
+            Handler(Looper.getMainLooper()).postDelayed(defaultKeyboardLongPressRunnable!!, 700)
         }
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
             backspaceRunnable = object : Runnable {

@@ -328,6 +328,17 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     }
                 }
             }
+            // T9 模式：符号键(-100)主字符「符」由 AOSP 绘制时不跟随主题/字号，
+            // 故同样清空 label，改由下方 t9MainPaint 绘制（跟随灰度/缩放/反白）
+            if (isT9Mode && kb != null) {
+                for (key in keys) {
+                    val code = key.codes?.firstOrNull() ?: continue
+                    if (code == -100 && key.label != null && key.label.length > 0) {
+                        originalLabels[-100] = key.label
+                        key.label = ""
+                    }
+                }
+            }
 
             // Shift模式：临时将字母键label改为大写，让super.onDraw绘制大写（仅 T9 模式不处理）
             if ((isShiftMode || isShiftLocked) && kb != null && !isT9Mode) {
@@ -421,14 +432,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         continue
                     }
                     val t9Func = t9FuncLabels[code]
-                    if (t9Func != null && code != -100 && code != -108 && code != -109) {
+                    if (t9Func != null && code != -108 && code != -109) {
                         val cx = key.x + key.width / 2f
                         val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
                         canvas.drawText(t9Func, cx, cy, t9MainPaint)
                     }
                 }
 
-                // 2. 符号键 - 已由 xml keyLabel="符" 显示，此处不再重复绘制（避免两层符字）
+                // 2. 符号键(-100)主字符「符」已随上方 t9FuncLabels 用 t9MainPaint 绘制（统一跟随主题/缩放/反白）
                 // 3. 粘贴/复制键主字符 - "全选"/"复制"
                 for (key in keys) {
                     val code = key.codes?.firstOrNull() ?: continue
