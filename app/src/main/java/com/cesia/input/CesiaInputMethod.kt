@@ -7651,19 +7651,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val isPureEnglish = composing && composingText.isNotEmpty() &&
                         composingText.all { it in 'a'..'z' }
                     if (isPureEnglish) {
-                        if (composingText.length <= 2) {
-                            // 1~2 个英文后按数字：英文+数字一起直接上屏（如 t9 / ab9）
-                            rimeEngine.clear()
-                            ic?.commitText(composingText + primaryCode.toChar().toString(), 1)
-                            autoExitShift()
-                        } else {
-                            // 超过 2 个英文后按数字：仅上屏数字，英文留在候选栏继续备选
-                            // 先清掉可见组合区（不破坏 Rime 状态），提交数字，再把英文恢复为组合态
-                            ic?.setComposingText("", 1)
-                            ic?.commitText(primaryCode.toChar().toString(), 1)
-                            ic?.setComposingText(composingText, 1)
-                            updateCandidateBar()
-                        }
+                        // 英文输入中按数字：无论多少英文，英文+数字一起直接上屏（如 t9 / abcd9）
+                        rimeEngine.clear()
+                        ic?.commitText(composingText + primaryCode.toChar().toString(), 1)
+                        autoExitShift()
                     } else if (!isAsciiMode && composing && hasCands) {
                         val index = if (primaryCode == 48) 9 else (primaryCode - 49)
                         if (index < cands.size) {
@@ -7799,28 +7790,39 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // ======================== 回车键（只换行，不发送）=======================
             10, Keyboard.KEYCODE_DONE -> {
                 shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
-                if (!isAsciiMode && composing) {
-                    // T9 简拼模式：回车上屏（锁定字母 + 剩余数字），并清空候选栏
-                    if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
-                        val toCommit = t9SpellPrefix.toString() +
-                                t9DigitQueue.substring(t9SpellPrefix.length)  // 锁定字母 + 剩余数字(如 t+9=t9)
-                        t9ComposedSoFar.append(toCommit)
-                        commitCandidateText(toCommit)
-                        rimeEngine.clear()
-                        resetT9State()  // 清空队列/候选栏
-                    } else {
-                        // 直接上屏当前拼音字母（不转换成汉字）
-                        val pinyinText = rimeEngine.composingText?.replace(" ", "")
-                        if (!pinyinText.isNullOrEmpty()) {
-                            ic?.commitText(pinyinText, 1)
-                        } else if (hasCands) {
-                            val selected = rimeEngine.selectCandidate(0)
-                            if (selected.isNotEmpty()) {
-                                commitCandidateText(selected)
+                if (composing) {
+                    if (!isAsciiMode) {
+                        // T9 简拼模式：回车上屏（锁定字母 + 剩余数字），并清空候选栏
+                        if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
+                            val toCommit = t9SpellPrefix.toString() +
+                                    t9DigitQueue.substring(t9SpellPrefix.length)  // 锁定字母 + 剩余数字(如 t+9=t9)
+                            t9ComposedSoFar.append(toCommit)
+                            commitCandidateText(toCommit)
+                            rimeEngine.clear()
+                            resetT9State()  // 清空队列/候选栏
+                        } else {
+                            // 直接上屏当前拼音字母（不转换成汉字），去掉分词符 ' 和空格
+                            val pinyinText = rimeEngine.composingText?.replace(" ", "")?.replace("'", "")
+                            if (!pinyinText.isNullOrEmpty()) {
+                                ic?.commitText(pinyinText, 1)
+                            } else if (hasCands) {
+                                val selected = rimeEngine.selectCandidate(0)
+                                if (selected.isNotEmpty()) {
+                                    commitCandidateText(selected)
+                                }
                             }
+                            rimeEngine.clear()
+                            updateCandidateBar()
+                        }
+                    } else {
+                        // 英文模式：先上屏英文（去掉分词符 '），再换行
+                        val enText = rimeEngine.composingText?.replace("'", "")?.replace(" ", "")
+                        if (!enText.isNullOrEmpty()) {
+                            ic?.commitText(enText, 1)
                         }
                         rimeEngine.clear()
                         updateCandidateBar()
+                        ic?.commitText("\n", 1)
                     }
                 } else {
                     // 只发送换行，不触发发送动作
@@ -8057,7 +8059,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             Handler(Looper.getMainLooper()).postDelayed(symbolKeyLongPressRunnable!!, 700)
         }
-        // 全键盘/T9 切换键(-102)长按：将切换目标键盘设为默认（打开输入法即用）
+        // 全键盘/T9 切换键(-102)长按：将 T9 设为默认键盘并切换到 T9（打开输入法即用）
         if (primaryCode == KEYCODE_SWITCH_NUMBER) {
             defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
             defaultKeyboardLongPressRunnable = Runnable {
@@ -8065,20 +8067,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (!shortPressHandled) {
                     longPressTriggered = true
                     longPressConsumed = false
-                    val targetMode = if (keyboardMode == KeyboardMode.NUMBER) KeyboardMode.QWERTY else KeyboardMode.NUMBER
-                    defaultKeyboardMode = targetMode
+                    defaultKeyboardMode = KeyboardMode.NUMBER
                     try {
                         getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
-                            .putString("default_keyboard_mode", targetMode.name).apply()
+                            .putString("default_keyboard_mode", KeyboardMode.NUMBER.name).apply()
                     } catch (_: Exception) {}
+                    switchToKeyboard(KeyboardMode.NUMBER)
+                    rimeEngine.selectSchema("t9_pinyin")
+                    rimeEngine.reload()
+                    resetNumberKeyboardState()
                     keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                    val name = if (targetMode == KeyboardMode.QWERTY) "全键盘" else "T9"
-                    updateStatus("已将 $name 设为默认键盘（下次打开即用）")
+                    updateStatus("已将 T9 设为默认键盘（下次打开即用）")
                 }
             }
             Handler(Looper.getMainLooper()).postDelayed(defaultKeyboardLongPressRunnable!!, 700)
         }
-        // T9 全键盘切换键(-999/⌨)长按：将全键盘设为默认（打开输入法即用）
+        // T9 全键盘切换键(-999/⌨)长按：将全键盘设为默认并切换到全键盘（打开输入法即用）
         if (primaryCode == KEYCODE_BACK_KEY) {
             defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
             defaultKeyboardLongPressRunnable = Runnable {
@@ -8091,6 +8095,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
                             .putString("default_keyboard_mode", KeyboardMode.QWERTY.name).apply()
                     } catch (_: Exception) {}
+                    switchToKeyboard(KeyboardMode.QWERTY)
+                    rimeEngine.selectSchema("pinyin")
+                    rimeEngine.reload()
+                    if (qwertyShiftLocked) {
+                        isAsciiMode = true
+                        rimeEngine.setAsciiMode(true)
+                        rimeEngine.selectSchema("en")
+                    }
                     keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                     updateStatus("已将 全键盘 设为默认键盘（下次打开即用）")
                 }

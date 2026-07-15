@@ -39,15 +39,15 @@
         <Key android:codes="116" android:keyLabel="t"
             android:popupCharacters="=" />
         <Key android:codes="121" android:keyLabel="y"
-            android:popupCharacters="≠" />
+            android:popupCharacters=":" />
         <Key android:codes="117" android:keyLabel="u"
-            android:popupCharacters="≈" />
+            android:popupCharacters="/" />
         <Key android:codes="105" android:keyLabel="i"
-            android:popupCharacters="±" />
+            android:popupCharacters="\" />
         <Key android:codes="111" android:keyLabel="o"
-            android:popupCharacters="√" />
+            android:popupCharacters="_" />
         <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right"
-            android:popupCharacters="∏" />
+            android:popupCharacters="—" />
     </Row>
 
     <!-- ===== 第2行：ASDF（长按=编辑功能） ===== -->
