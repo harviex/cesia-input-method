@@ -1926,6 +1926,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
             val newAssoc = rimeEngine.getAssociations(clickedWord).take(20)
             if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode && !clipboardAddMode) {
+                // 清 T9 残留（数字队列/候选音区），避免点击上屏后状态栏和候选音不消失
+                t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                updateSpellBar()
                 isAssociationMode = true
                 associationPrefix = clickedWord
                 associationCandidates = newAssoc
@@ -1977,10 +1980,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (keyboardMode == KeyboardMode.NUMBER) {
                 // T9 选词后：数字已转成字，清显示缓存
                 t9InputBuffer.clear()
-                // 关键：不要无条件 clear Rime！若还有剩余音节（逐字组词场景，
-                // 如 624'624 选了第一个“麦”），composing 仍在继续，应保留 Rime
-                // session 让用户在下一音节继续选字；仅当 composing 真正结束才清。
-                if (!rimeEngine.isComposing) {
+                // 选词组(>=2字)或 composing 已结束 → 强制清 Rime composing，确保选词完整并触发词组联想；
+                // 仅选单字(length==1)且 composing 仍在继续时保留(逐字组词场景，如 624'624 选‘麦’后继续选下一音节)。
+                // 注: T9 组词累积靠 t9ComposedSoFar(StringBuilder)，不依赖 Rime composing 跨次保留。
+                if (selectedWord.length >= 2 || !rimeEngine.isComposing) {
                     rimeEngine.clear()
                     t9ComposedSoFar.clear()  // 组合结束，清空累积
                     t9DigitQueue.clear(); t9SpellPrefix.clear()
@@ -1989,6 +1992,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
             val associations = rimeEngine.getAssociations(selectedWord).take(20)
             if (associations.isNotEmpty()) {
+                // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
+                t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
+                updateSpellBar()
                 // 有联想词，进入联想模式
                 isAssociationMode = true
                 associationPrefix = selectedWord
@@ -2000,6 +2007,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isAssociationMode = false
                 associationPrefix = ""
                 associationCandidates = emptyList()
+                // 清 T9 残留（候选音区），避免全拼单字上屏后候选音不消失
+                t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
+                updateSpellBar()
                 // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
                 updateCandidateBar()
                 gvCandidates?.setSelection(0)
