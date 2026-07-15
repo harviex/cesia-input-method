@@ -52,7 +52,8 @@ traditional:
 
 # T9 数字拼写器
 speller:
-  alphabet: "23456789"
+  # 字母也纳入 alphabet：上层枚举字母组合(bd/cd...)喂 Rime 简拼码时需要字母可被 speller 接受
+  alphabet: "23456789abcdefghijklmnopqrstuvwxyz"
   delimiter: "'"
   max_code_length: 20
   algebra:

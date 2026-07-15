@@ -226,11 +226,18 @@ class CesiaKeyboardView @JvmOverloads constructor(
             -5 to "\u232B",       // 退格 ⌫
             -104 to "\u21E7",     // Shift ⇧
             -100 to "符",          // 符号切换
-            -999 to "\u2328",     // 全键盘切换 ⌨
+            -999 to "⌨",      // 全键盘切换 ⌨
             // 32 to "空格",         // 空格键 - 去掉"空格"文字
-            10 to "\u21B5",       // 回车 ↵
-            49 to "Tab"           // 1键：Tab
+            10 to "↵"           // 回车 ↵
+            // 49 不再固定 "Tab"，改由 t9FenCiLabel 动态显示「简拼/全拼」
         )
+
+    // T9 1键分词开关动态文字（默认「简拼」，切全拼显示「全拼」），样式参考全选键
+    var t9FenCiLabel: String = "简拼"
+        set(value) {
+            field = value
+            invalidateAllKeys()
+        }
 
     // 副字符画笔（灰色）
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -400,6 +407,16 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 // 1. 普通功能键主字符（t9MainPaint）
                 for (key in keys) {
                     val code = key.codes?.firstOrNull() ?: continue
+                    if (code == 49) {
+                        // 1键：分词开关动态文字（简拼/全拼），样式参考全选键
+                        val centerPaint = Paint(t9MainPaint).apply {
+                            textSize = t9MainSpSize * 0.85f
+                        }
+                        val cx = key.x + key.width / 2f
+                        val cy = key.y + key.height / 2f + centerPaint.textSize * 0.35f
+                        canvas.drawText(t9FenCiLabel, cx, cy, centerPaint)
+                        continue
+                    }
                     val t9Func = t9FuncLabels[code]
                     if (t9Func != null && code != -100 && code != -108 && code != -109) {
                         val cx = key.x + key.width / 2f

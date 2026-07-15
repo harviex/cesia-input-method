@@ -6018,9 +6018,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
         if (t9DigitQueue.isNotEmpty()) {
             if (t9FenCiOn) {
-                // 简拼：数字间加分词符，如 83 → 8'3'（走简拼 3×3 交叉）
-                val sepFeed = t9DigitQueue.toString().toCharArray().joinToString("'") + "'"
-                // 额外枚举每位数字字母组合（覆盖 23/38 等元音冲突组合，直接喂简拼码出部队/地方）
+                // 简拼：枚举每位数字的所有字母组合，直接喂 Rime 简拼（如 23 → bd/bf/cd/ce... 出部队/测，
+                // 单键 2 → a/b/c 各自出词；不再用 2'3' 分隔符（会出「啊饿」垃圾））
                 val digits = t9DigitQueue.toString().map { it.digitToInt() }
                 val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
                 var combos = listOf("")
@@ -6029,21 +6028,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     for (prefix in combos) for (c in set) next.add(prefix + c)
                     combos = next
                 }
-                rimeEngine.clear()
-                rimeEngine.createSession()
-                for (ch in sepFeed) rimeEngine.processKey(ch.toString())
-                // 收集分词符串候选 + 字母组合简拼候选，合并去重
                 val merged = LinkedHashSet<String>()
-                for (w in rimeEngine.getAllCandidates()) merged.add(w)
                 for (combo in combos) {
                     rimeEngine.clear(); rimeEngine.createSession()
                     for (ch in combo) rimeEngine.processKey(ch.toString())
                     for (w in rimeEngine.getAllCandidates()) merged.add(w)
                 }
                 t9FenCiMerged = merged.toList()
-                // 恢复主会话（取分词符串结果作为主候选，保证点击/状态一致）
+                // 恢复主会话（取首个组合作为主候选，保证点击/状态一致）
                 rimeEngine.clear(); rimeEngine.createSession()
-                for (ch in sepFeed) rimeEngine.processKey(ch.toString())
+                if (combos.isNotEmpty()) for (ch in combos.first()) rimeEngine.processKey(ch.toString())
             } else {
                 // 全拼：数字直连，如 83 → 83（走全拼，出"特"等单字）
                 rimeEngine.clear()
@@ -6060,6 +6054,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 1 键：分词开关切换（默认开=简拼，点一下关=全拼，自由切换） */
     private fun toggleT9FenCi() {
         t9FenCiOn = !t9FenCiOn
+        // 同步 1 键文字（参考全选键样式，由 CesiaKeyboardView 绘制）
+        keyboardView.t9FenCiLabel = if (t9FenCiOn) "简拼" else "全拼"
         // 切换时重算候选（保留已输入数字串，只改分词符有无）
         if (t9DigitQueue.isNotEmpty()) {
             processT9Input()
