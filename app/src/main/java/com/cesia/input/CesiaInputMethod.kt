@@ -109,6 +109,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var accentHue: Float = defaultAccentHsl[0]     // 当前色相 0-360
     private var textThemeSize: Int = 1                     // 0=小, 1=中(default), 2=大, 3=超大
     var textGrayScale: Float = 0.5f                        // 0=纯黑, 0.5=基准灰(默认), 1=纯白
+    // 随手机时间自动变化主题色（勾选后按当前小时动态计算 hue 并定时刷新）
+    private var autoTimeTheme: Boolean = false
+    private val autoThemeHandler = Handler(Looper.getMainLooper())
+    private var autoThemeRunnable: Runnable? = null
 
     private fun loadThemeColors() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -118,6 +122,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         accentHue = prefs.getFloat("theme_accent_hue", defaultAccentHsl[0])
         textThemeSize = prefs.getInt("theme_text_size", 1)
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
+        autoTimeTheme = prefs.getBoolean("auto_time_theme", false)
     }
 
     /**
@@ -161,6 +166,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .putFloat("theme_accent_hue", accentHue)
             .putInt("theme_text_size", textThemeSize)
             .putFloat("text_gray_scale", textGrayScale)
+            .putBoolean("auto_time_theme", autoTimeTheme)
             .apply()
     }
 
@@ -378,6 +384,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
     private var t9FenCiOn = true                  // 分词开关：默认开=简拼（数字间加分词符）；关=全拼（数字直连）
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
+
+    // = 号计算器（复刻 Rime 原生 =expr 求值）：calcExpr 非空即处于计算模式，缓存 = 开头的算式
+    private var calcExpr = StringBuilder()
+    private fun isCalcActive() = calcExpr.isNotEmpty()
     private var llT9Spell: android.widget.LinearLayout? = null          // 候选栏最左 4 字母点选区
     private var t9SpellTVs: List<android.widget.TextView>? = null        // 4 个字母 TextView
     private val t9Map = mapOf(
@@ -1380,6 +1390,51 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
+    /**
+     * 随手机时间自动变化主题色：根据当前小时(0-23)计算色相。
+     * 一天从早到晚：黎明暖橙(约40°)→上午明黄绿(约90°)→正午青蓝(蒂芙尼180°)→
+     * 黄昏暖紫(约300°)→深夜冷蓝(约220°)，形成从早到晚的渐变循环。
+     */
+    private fun timeBasedHue(): Float {
+        val cal = java.util.Calendar.getInstance()
+        val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
+        val m = cal.get(java.util.Calendar.MINUTE)
+        val t = (h * 60 + m) / 1440f  // 0.0(00:00) ~ 1.0(24:00)
+        // 24 小时映射到色相环：以蒂芙尼蓝(180°)为中午基准，向两端偏移
+        // 用三角让色相平滑往返：凌晨偏冷(220°)，正午蒂芙尼(180°)，傍晚暖(320°)
+        val hue = 180f + 140f * kotlin.math.sin((t - 0.5f) * 2 * Math.PI.toFloat())
+        var hh = hue % 360f
+        if (hh < 0) hh += 360f
+        return hh
+    }
+
+    /** 应用随手机时间主题：计算 hue → 更新 accentHue/themeAccent → 应用并保存 */
+    private fun applyAutoTimeTheme() {
+        if (!autoTimeTheme) return
+        accentHue = timeBasedHue()
+        themeAccent = hslToColor(accentHue, defaultAccentHsl[1], defaultAccentHsl[2])
+        applyThemeColors()
+    }
+
+    /** 启动/停止随手机时间主题的定时刷新（每分钟检查一次） */
+    private fun startAutoTimeTheme() {
+        stopAutoTimeTheme()
+        if (!autoTimeTheme) return
+        autoThemeRunnable = object : Runnable {
+            override fun run() {
+                if (!autoTimeTheme) { stopAutoTimeTheme(); return }
+                applyAutoTimeTheme()
+                autoThemeHandler.postDelayed(this, 60_000L)
+            }
+        }
+        autoThemeHandler.post(autoThemeRunnable!!)
+    }
+
+    private fun stopAutoTimeTheme() {
+        autoThemeRunnable?.let { autoThemeHandler.removeCallbacks(it) }
+        autoThemeRunnable = null
+    }
+
     /** 实时应用主题色 + 背景灰度 + 按键灰度到所有UI元素 */
     private fun applyThemeColors() {
         // ① 背景灰度
@@ -1741,6 +1796,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 .putInt(PREF_THEME_MODE, THEME_LIGHT).apply()
             updateThemeModeButtons(btnThemeLight, btnThemeDark, THEME_LIGHT)
             applyThemeColors()
+        }
+
+        // 随手机时间自动变化主题色（单选框）
+        val checkAutoTime = view.findViewById<android.widget.CheckBox>(R.id.check_auto_time_theme)
+        val tvAutoPreview = view.findViewById<android.widget.TextView>(R.id.tv_auto_time_preview)
+        checkAutoTime.isChecked = autoTimeTheme
+        val refreshAutoPreview = {
+            tvAutoPreview.background = makeKeyBgDrawable(themeAccent)
+        }
+        refreshAutoPreview()
+        checkAutoTime.setOnCheckedChangeListener { _, isChecked ->
+            autoTimeTheme = isChecked
+            saveThemeColors()
+            if (isChecked) {
+                applyAutoTimeTheme()
+                startAutoTimeTheme()
+            } else {
+                stopAutoTimeTheme()
+            }
+            refreshAutoPreview()
         }
 
         popup.setOnDismissListener { themePopup = null }
@@ -6122,6 +6197,68 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         return if (filtered.isNotEmpty()) filtered else cands
     }
 
+    /** 简易四则运算求值（复刻 Rime =expr）：支持 + - * / % ^ 及括号、小数、负数。
+     *  返回格式化结果字符串；解析失败返回 null。 */
+    private fun evalMath(expr: String): String? {
+        val e = expr.trim()
+        if (e.isEmpty()) return null
+        // 允许的字符
+        if (!e.all { it.isDigit() || it in "+-*/%^(). " }) return null
+        try {
+            calcSrc = e.replace(" ", "")
+            calcPos = 0
+            val result = evalExpr()
+            if (calcPos != calcSrc.length) return null  // 有未解析尾巴
+            if (result.isNaN() || result.isInfinite()) return null
+            // 去掉多余小数 0：整数显示整数，否则最多 6 位
+            val s = if (result == result.toLong().toDouble()) result.toLong().toString()
+            else String.format("%.6f", result).trimEnd('0').trimEnd('.')
+            return s
+        } catch (_: Exception) {
+            return null
+        }
+    }
+
+    // 递归下降求值（类级私有函数，避免局部函数前向引用限制）
+    private var calcPos = 0
+    private var calcSrc = ""
+    private fun evalExpr(): Double {
+        var v = parseExpr()
+        return v
+    }
+    private fun parseExpr(): Double {
+        var v = parseTerm()
+        while (calcPos < calcSrc.length && (calcSrc[calcPos] == '+' || calcSrc[calcPos] == '-')) {
+            val op = calcSrc[calcPos++]; val r = parseTerm()
+            v = if (op == '+') v + r else v - r
+        }
+        return v
+    }
+    private fun parseTerm(): Double {
+        var v = parseFactor()
+        while (calcPos < calcSrc.length && (calcSrc[calcPos] == '*' || calcSrc[calcPos] == '/' || calcSrc[calcPos] == '%')) {
+            val op = calcSrc[calcPos++]; val r = parseFactor()
+            v = when (op) { '*' -> v * r; '/' -> v / r; else -> v % r }
+        }
+        return v
+    }
+    private fun parseFactor(): Double {
+        var v = parseBase()
+        while (calcPos < calcSrc.length && calcSrc[calcPos] == '^') { calcPos++; v = Math.pow(v, parseFactor()) }
+        return v
+    }
+    private fun parseBase(): Double {
+        if (calcPos < calcSrc.length && calcSrc[calcPos] == '-') { calcPos++; return -parseBase() }
+        if (calcPos < calcSrc.length && calcSrc[calcPos] == '+') { calcPos++; return parseBase() }
+        if (calcPos < calcSrc.length && calcSrc[calcPos] == '(') {
+            calcPos++; val v = parseExpr(); if (calcPos < calcSrc.length && calcSrc[calcPos] == ')') calcPos++; return v
+        }
+        val start = calcPos
+        while (calcPos < calcSrc.length && (calcSrc[calcPos].isDigit() || calcSrc[calcPos] == '.')) calcPos++
+        if (start == calcPos) throw RuntimeException("bad expr")
+        return calcSrc.substring(start, calcPos).toDouble()
+    }
+
     /** 逐键选音：点击候选栏字母区第 letterIndex 个字母（如 9→wxyz 的第0个 w） */
     private fun onT9SpellLetterClick(letterIndex: Int) {
         if (t9SpellPrefix.length >= t9DigitQueue.length) return
@@ -7332,6 +7469,41 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             exitAssociationMode()
         }
 
+        // ======================== = 号计算器（复刻 Rime =expr）============================
+        // 计算模式激活(calcExpr 以 '=' 开头非空)：数字/运算符/括号/小数点追加到算式；
+        // 空格/回车/再次按 = 触求值并上屏；遇到非算式字符则先求值上屏再 fallthrough 走原逻辑。
+        if (isCalcActive()) {
+            val isDigit = primaryCode in 48..57
+            val isOp = primaryCode in listOf(42, 43, 45, 47, 37, 94) // * + - / % ^
+            val isParen = primaryCode == 40 || primaryCode == 41
+            val isDot = primaryCode == 46
+            if (isDigit || isOp || isParen || isDot) {
+                calcExpr.append(primaryCode.toChar())
+                updateStatus("= ${calcExpr.substring(1)}")
+                shortPressHandled = true
+                return
+            }
+            // 触求值：空格/回车/再次按 =
+            if (primaryCode == 32 || primaryCode == 10 || primaryCode == 61) {
+                val res = evalMath(calcExpr.substring(1))
+                calcExpr.clear()
+                if (res != null) commitCandidateText(res) else updateStatus(statusIdleText)
+                shortPressHandled = true
+                return
+            }
+            // 非算式字符：先求值上屏（若有结果），清缓冲后 fallthrough 走原逻辑
+            val res = evalMath(calcExpr.substring(1))
+            calcExpr.clear()
+            if (res != null) commitCandidateText(res)
+        }
+        // 首次按 = 且未激活：进入计算模式
+        if (primaryCode == 61 && !isCalcActive()) {
+            calcExpr.append('=')
+            updateStatus("= ")
+            shortPressHandled = true
+            return
+        }
+
         when (primaryCode) {
 
             // ======================== 字母键 a-z ========================
@@ -7900,6 +8072,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val themeMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getInt(PREF_THEME_MODE, THEME_LIGHT)
             isDarkTheme = themeMode == THEME_DARK
+            // 随手机时间自动变化主题色：每次激活键盘时同步当前小时色相
+            if (autoTimeTheme) {
+                applyAutoTimeTheme()
+                startAutoTimeTheme()
+            } else {
+                stopAutoTimeTheme()
+            }
             applyKeyboardTheme()
             // 恢复 Rime schema：灭屏/重连后 onFinishInputView 可能 clear composing，
             // 亮屏激活时若 schema 停留在非 T9 方案，T9 数字串无法转拼音 → 退化成纯数字。

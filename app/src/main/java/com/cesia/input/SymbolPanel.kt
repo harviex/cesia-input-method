@@ -219,6 +219,34 @@ class SymbolPanel(
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
             showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
         }
+
+        // 左右滑动切换符号类别（同全键盘/T9 切换的滑动方案）
+        var swipeStartX = 0f
+        var swipeStartY = 0f
+        var swipeConsumed = false
+        view.setOnTouchListener { _, ev ->
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = ev.x; swipeStartY = ev.y; swipeConsumed = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val dx = ev.x - swipeStartX
+                    val adx = kotlin.math.abs(dx)
+                    val ady = kotlin.math.abs(ev.y - swipeStartY)
+                    if (!swipeConsumed && adx > 100 && ady < 60) {
+                        swipeConsumed = true
+                        val cats = orderedCategories()
+                        val next = if (dx < 0) currentCatIndex + 1 else currentCatIndex - 1
+                        val ni = next.coerceIn(0, cats.lastIndex)
+                        if (ni != currentCatIndex) {
+                            buildTabs()
+                            selectCategory(ni, cats)
+                        }
+                    }
+                }
+            }
+            false  // 不消费，保留 grid 滚动/点击
+        }
     }
 
     private fun buildTabs() {

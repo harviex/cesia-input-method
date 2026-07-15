@@ -8,6 +8,7 @@ import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import android.util.AttributeSet
 import android.util.TypedValue
+import kotlin.math.min
 
 /**
  * 自定义 KeyboardView
@@ -358,8 +359,10 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 }
             }
 
+            // 功能键副字符(labelPaint)字号上限=大号(1.2f)，即使选超大(1.5f)也不超
+            val subScaleCap = min(textScaleFactor, 1.2f)
             val spSize = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP, labelTextSize * textScaleFactor, resources.displayMetrics
+                TypedValue.COMPLEX_UNIT_SP, labelTextSize * subScaleCap, resources.displayMetrics
             )
             labelPaint.textSize = spSize
             labelPaint.color = labelTextColor

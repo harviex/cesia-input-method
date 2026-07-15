@@ -262,4 +262,32 @@
             android:layout_marginStart="8dp" />
     </LinearLayout>
 
+    <!-- 随手机时间自动变化主题色 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <android.widget.CheckBox
+            android:id="@+id/check_auto_time_theme"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="随手机时间自动变化"
+            android:textSize="13sp"
+            android:textColor="#333333" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tv_auto_time_preview"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
 </LinearLayout>
