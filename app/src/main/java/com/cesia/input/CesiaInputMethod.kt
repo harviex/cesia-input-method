@@ -376,7 +376,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
     private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
-    private var t9EffectiveInput = ""             // 有效输入串（字母替换数字后）：如前缀ws+队列97剩7 → "ws7"
+    private var t9FenCiOn = true                  // 分词开关：默认开=简拼（数字间加分词符）；关=全拼（数字直连）
+    private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
     private var llT9Spell: android.widget.LinearLayout? = null          // 候选栏最左 4 字母点选区
     private var t9SpellTVs: List<android.widget.TextView>? = null        // 4 个字母 TextView
     private val t9Map = mapOf(
@@ -1465,11 +1466,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             micButton?.setBackgroundColor(accent)
         }
 
-        // 候选栏文字色随主题色实时变化（无需重开输入法）
-        candidateAdapter?.let {
-            it.textColor = accent
-            it.notifyDataSetChanged()
-        }
+        // 候选音（候选栏最左字母点选区）跟随主题色实时变化（无需重开输入法）
+        t9SpellTVs?.forEach { it.setTextColor(accent) }
+
+        // 候选栏文字色（字/词）保持原固定色，不随主题变（仅候选音随主题变）
 
         // 持久化
         saveThemeColors()
@@ -1912,6 +1912,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 这样无论降频还是选音过滤，点到的词 = 上屏的词（点频上频、点管字上管字）。
         if (globalIndex >= lastDisplayedCands.size) return
         val clickedWord = lastDisplayedCands[globalIndex]
+        // 简拼模式：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中，直接上屏字符串
+        if (t9FenCiOn && t9FenCiMerged.contains(clickedWord)) {
+            val toCommit = stripDuplicatePrefix(clickedWord)
+            t9ComposedSoFar.append(clickedWord)
+            when {
+                smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
+                magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
+                clipboardAddMode -> { clipboardAddBuffer.append(toCommit); updateClipboardAddStatus() }
+                else -> commitCandidateText(toCommit)
+            }
+            rimeEngine.clear()
+            resetT9State()
+            updateCandidateBar()
+            return
+        }
         // 在「未过滤的 Rime 真实全局序(lastAllCands)」里定位该词，得到真实全局索引；
         // 再按 pageSize 算出页码/页内索引翻页选中。
         // 注意：不能用 pageCount 逐页查找（选音后 pageCount 不可靠，如 746+p 报 pageCount=2 但实有 63+ 候选）。
@@ -2019,7 +2034,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        var allCands = rimeEngine.getAllCandidates()
+        // 简拼模式：用合并后的候选（分词符串 + 字母组合交叉），覆盖全拼单字
+        var allCands = if (t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates()
         // 快照未过滤的原始合并列表（Rime 真实全局序），供点击反查真实全局索引
         lastAllCands = allCands
 
@@ -5973,8 +5989,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } else {
                 when (primaryCode) {
                     49 -> {
-                        // 1键：Tab
-                        sendTabKey()
+                        // 1键：分词开关（默认开=简拼，点一下关=全拼，自由切换）
+                        toggleT9FenCi()
                     }
                     65292 -> {
                         currentInputConnection?.commitText("，", 1)
@@ -5999,16 +6015,56 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
-        // 基本功能：数字队列直接喂 Rime（t9 schema 只认数字键），出九宫格候选词
+        // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
         if (t9DigitQueue.isNotEmpty()) {
-            rimeEngine.clear()
-            rimeEngine.createSession()
-            for (d in t9DigitQueue) {
-                rimeEngine.processKey(d.toString())
+            if (t9FenCiOn) {
+                // 简拼：数字间加分词符，如 83 → 8'3'（走简拼 3×3 交叉）
+                val sepFeed = t9DigitQueue.toString().toCharArray().joinToString("'") + "'"
+                // 额外枚举每位数字字母组合（覆盖 23/38 等元音冲突组合，直接喂简拼码出部队/地方）
+                val digits = t9DigitQueue.toString().map { it.digitToInt() }
+                val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
+                var combos = listOf("")
+                for (set in letterSets) {
+                    val next = mutableListOf<String>()
+                    for (prefix in combos) for (c in set) next.add(prefix + c)
+                    combos = next
+                }
+                rimeEngine.clear()
+                rimeEngine.createSession()
+                for (ch in sepFeed) rimeEngine.processKey(ch.toString())
+                // 收集分词符串候选 + 字母组合简拼候选，合并去重
+                val merged = LinkedHashSet<String>()
+                for (w in rimeEngine.getAllCandidates()) merged.add(w)
+                for (combo in combos) {
+                    rimeEngine.clear(); rimeEngine.createSession()
+                    for (ch in combo) rimeEngine.processKey(ch.toString())
+                    for (w in rimeEngine.getAllCandidates()) merged.add(w)
+                }
+                t9FenCiMerged = merged.toList()
+                // 恢复主会话（取分词符串结果作为主候选，保证点击/状态一致）
+                rimeEngine.clear(); rimeEngine.createSession()
+                for (ch in sepFeed) rimeEngine.processKey(ch.toString())
+            } else {
+                // 全拼：数字直连，如 83 → 83（走全拼，出"特"等单字）
+                rimeEngine.clear()
+                rimeEngine.createSession()
+                for (d in t9DigitQueue) {
+                    rimeEngine.processKey(d.toString())
+                }
             }
         }
         updateSpellBar()
         updateCandidateBar()
+    }
+
+    /** 1 键：分词开关切换（默认开=简拼，点一下关=全拼，自由切换） */
+    private fun toggleT9FenCi() {
+        t9FenCiOn = !t9FenCiOn
+        // 切换时重算候选（保留已输入数字串，只改分词符有无）
+        if (t9DigitQueue.isNotEmpty()) {
+            processT9Input()
+        }
+        updateStatus(if (t9FenCiOn) "简拼模式（分词开）" else "全拼模式（分词关）")
     }
 
     /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
