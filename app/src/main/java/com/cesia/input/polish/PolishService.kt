@@ -50,6 +50,8 @@ class PolishService(
         try {
             if (isOpenRouterUrl(apiUrl)) {
                 polishWithOpenRouter(text)
+            } else if (isOpenAiCompatibleUrl(apiUrl)) {
+                polishWithOpenAiCompatible(text)
             } else {
                 polishWithCustomApi(text)
             }
@@ -65,6 +67,11 @@ class PolishService(
     /** 判断是否为 OpenRouter URL */
     private fun isOpenRouterUrl(url: String): Boolean {
         return url.contains("openrouter.ai") || url.contains("api.cesia.cc")
+    }
+
+    /** 判断是否为 OpenAI 兼容端点（Ollama /v1/chat/completions、vLLM、LM Studio、llama.cpp server 等） */
+    private fun isOpenAiCompatibleUrl(url: String): Boolean {
+        return url.contains("/v1/chat/completions") || url.contains("/v1/")
     }
 
     /** 调用 OpenRouter API，支持429重试和备用模型 */
@@ -170,6 +177,79 @@ class PolishService(
             }
         } catch (e: Exception) {
             Log.e("PolishService", "OpenRouter 异常 [$model]", e)
+            PolishResult.Error("网络错误: ${e.message ?: "未知"}", isNetworkError = true)
+        }
+    }
+
+    /**
+     * 调用 OpenAI 兼容端点（Ollama /v1/chat/completions、vLLM、LM Studio、llama.cpp server 等）
+     * 与 OpenRouter 同格式，但：API Key 为空时不发 Authorization 头（本地 Ollama 通常无需鉴权）
+     */
+    private fun polishWithOpenAiCompatible(text: String): PolishResult {
+        val model = _modelId.ifBlank { OPENROUTER_MODEL }
+        val systemPrompt = getSystemPrompt()
+
+        val messages = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "system")
+                put("content", systemPrompt)
+            })
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", text)
+            })
+        }
+
+        val json = JSONObject().apply {
+            put("model", model)
+            put("messages", messages)
+            put("temperature", 0.5)
+            put("max_tokens", 4096)
+            put("stream", false)
+        }
+
+        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val requestBuilder = Request.Builder()
+            .url(apiUrl)
+            .post(body)
+            .addHeader("Content-Type", "application/json")
+
+        // Ollama 本地部署通常无需鉴权：key 为空则不发 Authorization 头
+        val apiKey = _apiKey
+        if (!apiKey.isNullOrBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+        }
+
+        val request = requestBuilder.build()
+
+        Log.d("PolishService", "OpenAI兼容请求 [$model]: url=$apiUrl text='${text.take(80)}'")
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: "未知错误"
+                    Log.e("PolishService", "OpenAI兼容错误 [$model]: ${response.code} - $errorBody")
+                    return PolishResult.Error("API 错误(${response.code}): ${errorBody.take(200)}")
+                }
+
+                val respBody = response.body?.string() ?: return PolishResult.Error("响应为空")
+                val respJson = JSONObject(respBody)
+                val choices = respJson.optJSONArray("choices")
+                if (choices != null && choices.length() > 0) {
+                    val content = choices.getJSONObject(0)
+                        .optJSONObject("message")
+                        ?.optString("content", "")
+                        ?.trim()
+                        ?: ""
+                    if (content.isNotEmpty()) {
+                        Log.d("PolishService", "OpenAI兼容润色结果 [$model]: '$content'")
+                        return PolishResult.Success(text, content)
+                    }
+                }
+                PolishResult.Error("OpenAI兼容返回格式异常: ${respBody.take(200)}")
+            }
+        } catch (e: Exception) {
+            Log.e("PolishService", "OpenAI兼容异常 [$model]", e)
             PolishResult.Error("网络错误: ${e.message ?: "未知"}", isNetworkError = true)
         }
     }
@@ -322,9 +402,11 @@ class PolishService(
     /** 魔法模式：使用自定义 prompt 调用 API（可指定 max_tokens） */
     fun polishWithPrompt(prompt: String, maxTokens: Int): String? {
         return try {
-            Log.d("PolishService", "polishWithPrompt: apiUrl=$apiUrl, isOpenRouter=${isOpenRouterUrl(apiUrl)}")
+            Log.d("PolishService", "polishWithPrompt: apiUrl=$apiUrl, isOpenRouter=${isOpenRouterUrl(apiUrl)}, isOpenAi=${isOpenAiCompatibleUrl(apiUrl)}")
             if (isOpenRouterUrl(apiUrl)) {
                 polishWithPromptOpenRouter(prompt, maxTokens)
+            } else if (isOpenAiCompatibleUrl(apiUrl)) {
+                polishWithPromptOpenAi(prompt, maxTokens)
             } else {
                 polishWithPromptCustom(prompt, maxTokens)
             }
@@ -396,6 +478,56 @@ class PolishService(
         }
         Log.e("PolishService", "魔法修改所有模型均失败")
         return null
+    }
+
+    private fun polishWithPromptOpenAi(prompt: String, maxTokens: Int): String? {
+        val apiKey = _apiKey
+        val model = _modelId.ifBlank { OPENROUTER_MODEL }
+        val messages = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "system")
+                put("content", "你是一个文本编辑助手。根据用户指令修改原文。只输出修改后的文本，不要解释。")
+            })
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", prompt)
+            })
+        }
+        val json = JSONObject().apply {
+            put("model", model)
+            put("messages", messages)
+            put("temperature", 0.3)
+            put("max_tokens", maxTokens)
+            put("stream", false)
+        }
+        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val requestBuilder = Request.Builder()
+            .url(apiUrl)
+            .post(body)
+            .addHeader("Content-Type", "application/json")
+        if (!apiKey.isNullOrBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+        }
+        val request = requestBuilder.build()
+        return try {
+            val result = client.newCall(request).execute()
+            if (!result.isSuccessful) {
+                Log.w("PolishService", "OpenAI兼容魔法 HTTP ${result.code}: ${result.body?.string()?.take(100)}")
+                return null
+            }
+            val respBody = result.body?.string() ?: return null
+            val respJson = JSONObject(respBody)
+            val choices = respJson.optJSONArray("choices")
+            if (choices != null && choices.length() > 0) {
+                val content = choices.getJSONObject(0).optJSONObject("message")
+                    ?.optString("content", "")?.trim() ?: ""
+                if (content.isNotEmpty() && content != "null") return content
+            }
+            null
+        } catch (e: Exception) {
+            Log.w("PolishService", "OpenAI兼容魔法异常: ${e.message}")
+            null
+        }
     }
 
     private fun polishWithPromptCustom(prompt: String, maxTokens: Int): String? {
