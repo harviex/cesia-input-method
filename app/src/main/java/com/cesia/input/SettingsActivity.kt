@@ -136,7 +136,9 @@ class SettingsActivity : AppCompatActivity() {
     private var themeMode: Int = THEME_LIGHT
 
     private val testClient = OkHttpClient.Builder()
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
     companion object {
@@ -1563,7 +1565,8 @@ class SettingsActivity : AppCompatActivity() {
         Thread {
             try {
                 val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
-                val isOr = apiUrl.contains("openrouter.ai")
+                val isOr = apiUrl.contains("openrouter.ai") || apiUrl.contains("api.cesia.cc")
+                val isOpenAi = apiUrl.contains("/v1/chat/completions") || apiUrl.contains("/v1/")
 
                 val request = if (isOr) {
                     // OpenRouter 格式：使用用户自定义 prompt
@@ -1593,6 +1596,35 @@ class SettingsActivity : AppCompatActivity() {
                         .addHeader("Authorization", "Bearer $apiKey")
                         .addHeader("HTTP-Referer", "https://github.com/harviex/cesia-input-method")
                         .build()
+                } else if (isOpenAi) {
+                    // OpenAI 兼容端点（Ollama /v1/chat/completions、vLLM、LM Studio 等）
+                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: DEFAULT_POLISH_PROMPT
+                    val messages = JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", customPrompt)
+                        })
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", inputText)
+                        })
+                    }
+                    val selectedModel = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID)
+                    val json = JSONObject().apply {
+                        put("model", selectedModel)
+                        put("messages", messages)
+                        put("temperature", 0.3)
+                        put("max_tokens", 512)
+                    }
+                    val reqBuilder = Request.Builder()
+                        .url(apiUrl)
+                        .post(json.toString().toRequestBody("application/json".toMediaType()))
+                        .addHeader("Content-Type", "application/json")
+                    val apiKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
+                    if (apiKey.isNotBlank()) {
+                        reqBuilder.addHeader("Authorization", "Bearer $apiKey")
+                    }
+                    reqBuilder.build()
                 } else {
                     // 自定义 API 格式
                     val json = JSONObject().apply {
@@ -1615,11 +1647,15 @@ class SettingsActivity : AppCompatActivity() {
                     if (respCode in 200..299) {
                         try {
                             val respJson = JSONObject(body)
-                            val polished = if (isOr) {
-                                // OpenRouter 响应格式
+                            val polished = if (isOr || isOpenAi) {
+                                // OpenRouter / OpenAI 兼容响应格式
                                 val choices = respJson.optJSONArray("choices")
                                 if (choices != null && choices.length() > 0) {
-                                    choices.getJSONObject(0).getJSONObject("message").getString("content").trim()
+                                    val msg = choices.getJSONObject(0).optJSONObject("message")
+                                    val c = msg?.optString("content", "")?.trim() ?: ""
+                                    if (c.isNotEmpty()) c
+                                    else (msg?.optString("reasoning", "")?.trim()
+                                        ?: msg?.optString("reasoning_content", "")?.trim() ?: "")
                                 } else ""
                             } else {
                                 // 自定义 API 响应格式

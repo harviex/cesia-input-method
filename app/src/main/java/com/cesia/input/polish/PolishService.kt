@@ -22,10 +22,24 @@ class PolishService(
     private var apiUrl: String = DEFAULT_OPENROUTER_URL
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    /**
+     * 从 OpenAI 兼容响应里提取回答文本。
+     * 推理模型（如 qwen3.5）有时 content 为空、答案放在 reasoning/reasoning_content，
+     * 这里做回退：content → reasoning → reasoning_content。
+     */
+    private fun extractMessageContent(message: JSONObject?): String {
+        if (message == null) return ""
+        val content = message.optString("content", "").trim()
+        if (content.isNotEmpty()) return content
+        val reasoning = message.optString("reasoning", "").trim()
+        if (reasoning.isNotEmpty()) return reasoning
+        return message.optString("reasoning_content", "").trim()
+    }
 
     sealed class PolishResult {
         data class Success(
@@ -155,10 +169,9 @@ class PolishService(
                 val respJson = JSONObject(respBody)
                 val choices = respJson.optJSONArray("choices")
                 if (choices != null && choices.length() > 0) {
-                    val content = choices.getJSONObject(0)
-                        .getJSONObject("message")
-                        .getString("content")
-                        .trim()
+                    val content = extractMessageContent(
+                        choices.getJSONObject(0).optJSONObject("message")
+                    )
 
                     if (content.isNotEmpty()) {
                         Log.d("PolishService", "OpenRouter 润色结果 [$model]: '$content'")
@@ -236,11 +249,9 @@ class PolishService(
                 val respJson = JSONObject(respBody)
                 val choices = respJson.optJSONArray("choices")
                 if (choices != null && choices.length() > 0) {
-                    val content = choices.getJSONObject(0)
-                        .optJSONObject("message")
-                        ?.optString("content", "")
-                        ?.trim()
-                        ?: ""
+                    val content = extractMessageContent(
+                        choices.getJSONObject(0).optJSONObject("message")
+                    )
                     if (content.isNotEmpty()) {
                         Log.d("PolishService", "OpenAI兼容润色结果 [$model]: '$content'")
                         return PolishResult.Success(text, content)
@@ -463,7 +474,9 @@ class PolishService(
                     val respJson = JSONObject(respBody)
                     val choices = respJson.optJSONArray("choices")
                     if (choices != null && choices.length() > 0) {
-                        val content = choices.getJSONObject(0).getJSONObject("message").optString("content", "").trim()
+                        val content = extractMessageContent(
+                            choices.getJSONObject(0).optJSONObject("message")
+                        )
                         if (content.isNotEmpty() && content != "null") {
                             return content
                         }
@@ -519,8 +532,9 @@ class PolishService(
             val respJson = JSONObject(respBody)
             val choices = respJson.optJSONArray("choices")
             if (choices != null && choices.length() > 0) {
-                val content = choices.getJSONObject(0).optJSONObject("message")
-                    ?.optString("content", "")?.trim() ?: ""
+                val content = extractMessageContent(
+                    choices.getJSONObject(0).optJSONObject("message")
+                )
                 if (content.isNotEmpty() && content != "null") return content
             }
             null

@@ -6,11 +6,9 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <!-- 仅对内网网段放行明文（连 Ollama / 本地大模型 / 内网服务） -->
+    <!-- 仅对内网具体地址放行明文（连 Ollama / 本地大模型 / 内网服务） -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.0.0/16</domain>
-        <domain includeSubdomains="true">10.0.0.0/8</domain>
-        <domain includeSubdomains="true">172.16.0.0/12</domain>
+        <domain includeSubdomains="false">192.168.123.33</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
     </domain-config>
