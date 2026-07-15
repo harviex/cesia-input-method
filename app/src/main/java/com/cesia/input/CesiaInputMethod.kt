@@ -5848,10 +5848,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun resetT9State() {
         t9InputBuffer.clear()
         t9DigitQueue.clear(); t9SpellPrefix.clear()
+        t9FenCiMerged = emptyList()   // 清空简拼合并候选，避免上屏/退格后残留
         rimeEngine.clear()
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
         updateCandidateBar()
+        updateSpellBar()               // 同步隐藏候选音区
         updateStatus(statusIdleText)
     }
 
@@ -6042,33 +6044,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 如 23 未锁 → 仍枚举全部组合(出 400 混合候选)；锁 b、f → bf 直接出 bf 开头词
                 val digits = t9DigitQueue.toString().map { it.digitToInt() }
                 if (t9SpellPrefix.isEmpty()) {
-                    // 未锁定时：枚举每位数字所有字母组合(完整笛卡尔积)，合并出全部简拼候选
-                    // 卡顿防护：组合数 = ∏每位字母数(如77777=4^5=1024)。超限时截断每位枚举字母数，
-                    // 优先保留前2个字母(覆盖最高频首字母)，把组合数压到可控范围(如2^5=32)。
-                    val rawSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
-                    val totalCombos = rawSets.fold(1L) { acc, s -> acc * maxOf(1, s.length) }
-                    val maxPerDigit = when {
-                        totalCombos <= 256 -> 4   // 正常：完整枚举
-                        totalCombos <= 1024 -> 3  // 中等：每数字取前3字母(3^5=243)
-                        else -> 2                 // 过大：每数字取前2字母(2^5=32)
-                    }
-                    val letterSets = rawSets.map { it.take(maxPerDigit) }
-                    var combos = listOf("")
-                    for (set in letterSets) {
-                        val next = mutableListOf<String>()
-                        for (prefix in combos) for (c in set) next.add(prefix + c)
-                        combos = next
-                    }
-                    val merged = LinkedHashSet<String>()
-                    for (combo in combos) {
-                        rimeEngine.clear(); rimeEngine.createSession()
-                        for (ch in combo) rimeEngine.processKey(ch.toString())
-                        for (w in rimeEngine.getAllCandidates()) merged.add(w)
-                    }
-                    t9FenCiMerged = merged.toList()
-                    // 主会话取首个组合，保证点击/状态一致
+                    // 未锁定时：不做全组合枚举(避免 77777=4^5 爆炸卡顿)，
+                    // 只取每位数字首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选。
+                    // 用户点选候选音锁定字母后，再走下方的精确组合(已锁定固定，剩余少不卡)。
+                    val firstLetters = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' }.firstOrNull() ?: ' ' }
+                    val feed = firstLetters.joinToString("")
                     rimeEngine.clear(); rimeEngine.createSession()
-                    if (combos.isNotEmpty()) for (ch in combos.first()) rimeEngine.processKey(ch.toString())
+                    for (ch in feed) rimeEngine.processKey(ch.toString())
+                    t9FenCiMerged = rimeEngine.getAllCandidates()
                 } else {
                     // 已锁定时：用锁定字母+剩余首位拼简拼码(如 bf)，精确出该范围候选
                     val feed = buildT9SpellFeed()
