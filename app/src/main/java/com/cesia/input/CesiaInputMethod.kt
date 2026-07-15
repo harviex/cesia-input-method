@@ -455,6 +455,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // -100 键长按检测（符号键盘切换）
     private var symbolKeyLongPressRunnable: Runnable? = null
     private var defaultKeyboardLongPressRunnable: Runnable? = null
+    // 当前正在计时长按的按键码（-999 表示无）。runnable 触发前校验，防止跨键/滑动泄漏误触发
+    private var longPressOwnerCode = -999
     // 长按符号键弹出的分类符号面板
     private var symbolPanel: SymbolPanel? = null
     private var symbolPanelLongPressTriggered = false
@@ -1103,7 +1105,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             -108 to "粘贴",  // 粘贴键：副字符
             -109 to "剪切",  // 复制键：副字符
             10 to "撤销",    // 回车键：副字符
-            -102 to "设默认" // 全键盘/T9 切换键：长按设该键盘为默认
+            -102 to "默认",  // 全键盘/T9 切换键：长按设该键盘为默认
+            -999 to "默认"   // T9 全键盘切换键(⌨)：长按设全键盘为默认
         ))
         // T9Labels 已清空（数字键不再显示灰色副字符）
         keyboardView.setT9Labels(mapOf())
@@ -6432,6 +6435,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         currentLongPressKey = null
         longPressTriggered = false
         longPressConsumed = false
+        longPressOwnerCode = -999
         keyboardView.currentPopupKey = null
         if (prevKey != null) keyboardView.invalidateKey(prevKey)
     }
@@ -6457,6 +6461,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 取消 -100 键长按
         symbolKeyLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
         symbolKeyLongPressRunnable = null
+        // 取消切换键(-102)长按设默认
+        defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        defaultKeyboardLongPressRunnable = null
         // 取消退格长按
         backspaceRunnable?.let { backspaceHandler.removeCallbacks(it) }
         backspaceRunnable = null
@@ -6464,6 +6471,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         cancelSendKeyLongPress()
         // 重置短按标志，防止 runnable 中的 !shortPressHandled 判断泄漏
         shortPressHandled = true
+        // 守卫失效：任何遗留的长按 runnable 触发时都会因码不匹配而跳过
+        longPressOwnerCode = -999
     }
 
     private fun startSendKeyLongPress() {
@@ -7814,7 +7823,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // ======================== 返回键 ========================
-            KEYCODE_BACK_KEY -> switchToDefaultKeyboard()
+            KEYCODE_BACK_KEY -> {
+                defaultKeyboardLongPressRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                defaultKeyboardLongPressRunnable = null
+                switchToDefaultKeyboard()
+            }
 
             // ======================== 发送键（纸飞机）=======================
             -200 -> {
@@ -7903,6 +7916,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region 按键事件
     override fun onPress(primaryCode: Int) {
         shortPressHandled = false
+        // 长按归 owner：本键开始计时，任何其它键/滑动/切换都会先 cancelAllLongPressActions 使旧 owner 失效
+        longPressOwnerCode = primaryCode
         // 功能键长按检测（仅 QWERTY 中文模式，且 Rime 不在 composing 状态）
         // 注意：功能键长按(500ms)优先于 popupCharacters 长按(400ms)
         // 功能键长按注册后，跳过 popupCharacters 长按，避免冲突
@@ -7918,6 +7933,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     functionalLongPressRunnables.remove(code)
                 }
                 val runnable = Runnable {
+                    if (longPressOwnerCode != primaryCode) return@Runnable
                     if (!shortPressHandled) {
                         getFunctionalLongAction(primaryCode)?.invoke()
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -7943,6 +7959,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if ((primaryCode == KEYCODE_SHIFT || primaryCode == -1) &&
             (keyboardMode == KeyboardMode.QWERTY || keyboardMode == KeyboardMode.NUMBER)) {
             shiftLongPressRunnable = Runnable {
+                if (longPressOwnerCode != primaryCode) return@Runnable
                 if (!shortPressHandled) {
                     handleShiftLongPress()
                 }
@@ -7953,6 +7970,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 剪贴板键长按：-108=粘贴，-109=剪切
         if (primaryCode == -108) {
             clipboardPasteRunnable = Runnable {
+                if (longPressOwnerCode != -108) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
                     longPressConsumed = false
@@ -7963,6 +7981,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         if (primaryCode == -109) {
             clipboardCutRunnable = Runnable {
+                if (longPressOwnerCode != -109) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
                     longPressConsumed = false
@@ -7975,6 +7994,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (primaryCode == KEYCODE_SWITCH_SYMBOL) {
             symbolPanelLongPressTriggered = false
             symbolKeyLongPressRunnable = Runnable {
+                if (longPressOwnerCode != KEYCODE_SWITCH_SYMBOL) return@Runnable
                 if (!shortPressHandled) {
                     symbolPanelLongPressTriggered = true
                     longPressTriggered = true
@@ -7988,6 +8008,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 全键盘/T9 切换键(-102)长按：将切换目标键盘设为默认（打开输入法即用）
         if (primaryCode == KEYCODE_SWITCH_NUMBER) {
             defaultKeyboardLongPressRunnable = Runnable {
+                if (longPressOwnerCode != KEYCODE_SWITCH_NUMBER) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
                     longPressConsumed = true
@@ -8000,6 +8021,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                     val name = if (targetMode == KeyboardMode.QWERTY) "全键盘" else "T9"
                     updateStatus("已将 $name 设为默认键盘（下次打开即用）")
+                }
+            }
+            Handler(Looper.getMainLooper()).postDelayed(defaultKeyboardLongPressRunnable!!, 700)
+        }
+        // T9 全键盘切换键(-999/⌨)长按：将全键盘设为默认（打开输入法即用）
+        if (primaryCode == KEYCODE_BACK_KEY) {
+            defaultKeyboardLongPressRunnable = Runnable {
+                if (longPressOwnerCode != KEYCODE_BACK_KEY) return@Runnable
+                if (!shortPressHandled) {
+                    longPressTriggered = true
+                    longPressConsumed = true
+                    defaultKeyboardMode = KeyboardMode.QWERTY
+                    try {
+                        getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                            .putString("default_keyboard_mode", KeyboardMode.QWERTY.name).apply()
+                    } catch (_: Exception) {}
+                    keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    updateStatus("已将 全键盘 设为默认键盘（下次打开即用）")
                 }
             }
             Handler(Looper.getMainLooper()).postDelayed(defaultKeyboardLongPressRunnable!!, 700)
@@ -8020,6 +8059,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 回车键长按：撤销 Ctrl+Z
         if (primaryCode == 10 || primaryCode == Keyboard.KEYCODE_DONE) {
             enterLongPressRunnable = Runnable {
+                // owner 守卫：若已切键/滑动，旧回车长按不再触发（防误撤销大段文字）
+                if (longPressOwnerCode != 10 && longPressOwnerCode != Keyboard.KEYCODE_DONE) return@Runnable
                 if (!shortPressHandled) {
                     longPressTriggered = true
                     longPressConsumed = false
