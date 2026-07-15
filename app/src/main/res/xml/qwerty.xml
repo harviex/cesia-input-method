@@ -43,7 +43,7 @@
         <Key android:codes="117" android:keyLabel="u"
             android:popupCharacters="/" />
         <Key android:codes="105" android:keyLabel="i"
-            android:popupCharacters="&#x5C;" />
+            android:popupCharacters="\\" />
         <Key android:codes="111" android:keyLabel="o"
             android:popupCharacters="_" />
         <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right"

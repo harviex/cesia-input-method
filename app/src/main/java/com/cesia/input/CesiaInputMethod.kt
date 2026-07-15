@@ -4888,15 +4888,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 return@withContext
                             }
 
+                            // 命令词语上屏：统一把中文数字转阿拉伯数字（与本地 sherpa/Google 路径一致），
+                            // 避免“识别数字转阿拉伯数字失效又恢复汉字数字上屏”。
+                            val textConv = voiceEngine.convertChineseDigitsToArabic(text)
+                            val keptConv = voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
+
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
                             // 直接由下方分支用 setComposingText 整体替换 composing 区域。
                             if (command != "undo" && command != "clear" && command != "restore") {
                                 // 把“已保留内容 + 本轮说的（去命令词）”拼成整体，作为要上屏/处理的真相源，
                                 // 这样“结束/退出/发送/润色/命令/写作”执行时不会把命令词本身带上屏。
                                 val combined = when {
-                                    voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
-                                    text.isNotEmpty() -> text
-                                    else -> voiceKeptText
+                                    keptConv.isNotEmpty() && textConv.isNotEmpty() -> "$keptConv $textConv"
+                                    textConv.isNotEmpty() -> textConv
+                                    else -> keptConv
                                 }
                                 // 先 setComposingText(combined) 把组合区整体替换成“去掉命令词后的原文”，
                                 // 再 finishComposingText 提交（避免把“结束/退出”等命令词提交上屏）。
@@ -4937,10 +4942,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "ai" -> {
                                     // 润色（中等级）：对删除命令词后的完整文本（含前缀）润色，完成后——锁定态恢复监听
-                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
-                                        "$voiceKeptText $text".trim()
+                                    val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
+                                        "$keptConv $textConv".trim()
                                     } else {
-                                        text
+                                        textConv
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 没有需要润色的文字")
@@ -4961,10 +4966,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "cmd" -> {
                                     // 命令模式（中等级）：执行指令（含前缀），完成后——锁定态恢复监听
-                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
-                                        "$voiceKeptText $text".trim()
+                                    val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
+                                        "$keptConv $textConv".trim()
                                     } else {
-                                        text
+                                        textConv
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入指令")
@@ -4985,10 +4990,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "writing" -> {
                                     // 写作（中等级）：执行写作指令（含前缀），完成后——锁定态恢复监听
-                                    val fullText = if (isContinuingSession && voiceKeptText.isNotEmpty()) {
-                                        "$voiceKeptText $text".trim()
+                                    val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
+                                        "$keptConv $textConv".trim()
                                     } else {
-                                        text
+                                        textConv
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入写作内容")
@@ -5018,9 +5023,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 关键：必须拼起来，单说“撤销”时 text 为空不能丢 voiceKeptText，
                                     // 同句说“第四 撤销”时 text 是“第四”不能丢 voiceKeptText 里已保留的“第一”，否则会把“第一”当整句删光。
                                     val combined = when {
-                                        voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
-                                        text.isNotEmpty() -> text
-                                        else -> voiceKeptText
+                                        keptConv.isNotEmpty() && textConv.isNotEmpty() -> "$keptConv $textConv"
+                                        textConv.isNotEmpty() -> textConv
+                                        else -> keptConv
                                     }
                                     val base = combined.trimEnd()
                                     // 撤销前先把完整内容存入回收站，供“恢复”命令词还原
@@ -5047,9 +5052,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 清空（低等级）：不结束下划线、不提交，直接清空组合区域（真相源一并清空）
                                     // 清空前把完整内容存入回收站，供“恢复”还原
                                     val combined = when {
-                                        voiceKeptText.isNotEmpty() && text.isNotEmpty() -> "$voiceKeptText $text"
-                                        text.isNotEmpty() -> text
-                                        else -> voiceKeptText
+                                        keptConv.isNotEmpty() && textConv.isNotEmpty() -> "$keptConv $textConv"
+                                        textConv.isNotEmpty() -> textConv
+                                        else -> keptConv
                                     }.trimEnd()
                                     if (combined.isNotEmpty()) voiceUndoBackup = combined
                                     ic.setComposingText("", 1)

@@ -35,7 +35,7 @@
         <Key android:codes="60" android:keyLabel="&lt;" android:popupCharacters="&#x3008;" />
         <Key android:codes="62" android:keyLabel="&gt;" android:popupCharacters="&#x3009;" />
         <Key android:codes="47" android:keyLabel="/" android:popupCharacters="&#xFF0F;" />
-        <Key android:codes="92" android:keyLabel="\" android:popupCharacters="&#xFF3C;" android:keyEdgeFlags="right" />
+        <Key android:codes="92" android:keyLabel="\\" android:popupCharacters="&#xFF3C;" android:keyEdgeFlags="right" />
     </Row>
 
     <!-- ===== 第3行：运算/货币/比较（10键） ===== -->
