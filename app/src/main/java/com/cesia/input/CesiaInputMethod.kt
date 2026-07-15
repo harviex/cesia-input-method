@@ -385,6 +385,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
     private var t9FenCiOn = true                  // 分词开关：默认开=简拼（数字间加分词符）；关=全拼（数字直连）
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
+    private var pendingEnglish = ""               // 英文模式下已直接上屏的连续英文字母缓冲（按数字时连同数字一起上屏）
 
     // = 号计算器（复刻 Rime 原生 =expr 求值）：calcExpr 非空即处于计算模式，缓存 = 开头的算式
     private var calcExpr = StringBuilder()
@@ -2150,8 +2151,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 立即清空候选栏适配器，防止显示旧联想词
             candidateAdapter?.updateData(emptyList())
             rvCandidates?.scrollToPosition(0)
-            candidateBar?.visibility = View.GONE
+            setCandidateBarVisible(false)
         }
+    }
+
+    /** 候选栏显隐：隐藏用 INVISIBLE（保留 36dp 占位，避免 GONE 导致键盘重排版闪烁） */
+    private fun setCandidateBarVisible(show: Boolean) {
+        candidateBar.visibility = if (show) View.VISIBLE else View.INVISIBLE
     }
 
     private fun updateCandidateBar() {
@@ -2187,7 +2193,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
 
         // 有输入时
-        candidateBar.visibility = View.VISIBLE
+        setCandidateBarVisible(true)
 
         // T9 模式：状态栏显示「已选字母 + 剩余未选数字」（逐键选音进度）；选满后只显示字母
         if (keyboardMode == KeyboardMode.NUMBER && (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty())) {
@@ -4131,7 +4137,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val allCands = rimeEngine.getAllCandidates()
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        setCandidateBarVisible(rimeEngine.isComposing)
     }
 
     /** 退出剪贴板新增模式 */
@@ -4188,7 +4194,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val allCands = rimeEngine.getAllCandidates()
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        setCandidateBarVisible(rimeEngine.isComposing)
     }
 
     /** 更新剪贴板新增模式状态（同步候选栏） */
@@ -4204,7 +4210,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val allCands = rimeEngine.getAllCandidates()
         candidateAdapter?.updateData(allCands)
         rvCandidates?.scrollToPosition(0)
-        candidateBar.visibility = if (rimeEngine.isComposing) View.VISIBLE else View.GONE
+        setCandidateBarVisible(rimeEngine.isComposing)
     }
 
     /** 退出智能写作命令编辑模式 */
@@ -5425,6 +5431,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         hideAiChoiceButtons()
         keyboardView.visibility = View.VISIBLE
         updateStatus(statusIdleText)
+        pendingEnglish = ""
     }
 
     /**
@@ -7601,13 +7608,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             val result = rimeEngine.commit()
                             if (result.isNotEmpty()) {
                                 commitCandidateText(result)
+                                pendingEnglish = result
                             } else {
                                 ic?.commitText(keyChar.toString(), 1)
+                                pendingEnglish += keyChar
                             }
                         }
                     } else {
                         // Rime 不接受，直接上屏
                         ic?.commitText(keyChar.toString(), 1)
+                        pendingEnglish += keyChar
                     }
                     // QWERTY临时shift：输入一个字母后自动退回中文（锁定不退出）
                     if (!qwertyShiftLocked && keyboardMode == KeyboardMode.QWERTY && qwertyShiftTemp) {
@@ -7630,11 +7640,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (!hadComposing && !rimeEngine.isComposing) {
                             // Rime 没有进入 composing 状态，直接上屏英文
                             ic?.commitText(primaryCode.toChar().toString(), 1)
+                            pendingEnglish += primaryCode.toChar()
+                        } else if (rimeEngine.isComposing) {
+                            // 进入拼音 composing，英文缓冲失效
+                            pendingEnglish = ""
                         }
                         updateCandidateBar()
                     } else {
                         // Rime 不接受该按键，直接上屏
                         ic?.commitText(primaryCode.toChar().toString(), 1)
+                        pendingEnglish += primaryCode.toChar()
                         updateCandidateBar()
                     }
                 }
@@ -7646,6 +7661,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     handleNumberKeyboardKey(primaryCode)
                 } else {
                     // 全键盘模式的数字键逻辑
+                    // 英文缓冲：多字母直接上屏后按数字，英文+数字一起上屏（如 abcd9）
+                    if (pendingEnglish.isNotEmpty() && !rimeEngine.isComposing) {
+                        rimeEngine.clear()
+                        ic?.commitText(pendingEnglish + primaryCode.toChar().toString(), 1)
+                        pendingEnglish = ""
+                        autoExitShift()
+                        updateCandidateBar()
+                        return@onKey
+                    }
                     // 如果当前 composing 是纯英文（如输入t后按9），直接上屏英文+数字
                     val composingText = rimeEngine.composingText
                     val isPureEnglish = composing && composingText.isNotEmpty() &&
@@ -7707,6 +7731,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         ic?.commitText(" ", 1)
                     }
                 } else if (isAsciiMode) {
+                    if (pendingEnglish.isNotEmpty()) {
+                        ic?.commitText(pendingEnglish, 1)
+                        pendingEnglish = ""
+                    }
                     ic?.commitText(" ", 1)
                 } else {
                     // 全键盘中文模式：参照 T9 空格键逻辑，直接检查 candidates
@@ -7950,6 +7978,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             commitCandidateText(text)
         }
         rimeEngine.clear()
+        pendingEnglish = ""
         if (isPanelExpanded) collapseCandidatePanel()
         updateCandidateBar()
     }
