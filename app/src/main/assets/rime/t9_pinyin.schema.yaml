@@ -52,29 +52,17 @@ traditional:
 
 # T9 数字拼写器
 speller:
-  # 字母 + 数字 都在 alphabet 内（字母用于承载逐音节简拼 bd/bf 等缩写码，
-  # 数字用于直接键入；两者都能匹配同一批候选）
-  alphabet: "zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA9876543210"
-  initials: "zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA9876543210"
+  alphabet: "23456789"
   delimiter: "'"
   max_code_length: 20
   algebra:
-    # ===== 简拼（保留每个音节首字母，支持多位简拼）=====
-    # 单音节擦除
+    # ===== 超级简拼（取首字母出词）=====
     - erase/^hm$/
     - erase/^m$/
     - erase/^n$/
     - erase/^ng$/
-    # 多音节简拼：保留每个音节首字母（如 bu'dui → bd，对应 T9 的 23）
-    - abbrev/^([a-z])[a-z]*'([a-z])[a-z]*'([a-z])[a-z]*'([a-z])[a-z]*$/$1$2$3$4/
-    - abbrev/^([a-z])[a-z]*'([a-z])[a-z]*'([a-z])[a-z]*$/$1$2$3/
-    - abbrev/^([a-z])[a-z]*'([a-z])[a-z]*$/$1$2/
-    # zh/ch/sh 视为整体（每个音节取整体首字母）
-    - abbrev/^([zcs]h)[a-z]*'([zcs]h)[a-z]*'([zcs]h)[a-z]*'([zcs]h)[a-z]*$/$1$2$3$4/
-    - abbrev/^([zcs]h)[a-z]*'([zcs]h)[a-z]*'([zcs]h)[a-z]*$/$1$2$3/
-    - abbrev/^([zcs]h)[a-z]*'([zcs]h)[a-z]*$/$1$2/
-    - abbrev/^([zcs]h).+$/$1/          # zh/ch/sh 整体简拼（仅作用于 zh/ch/sh 起头，不破坏 bd/cs）
-    - abbrev/^([a-z]).+$/$1/           # 单字母超级简拼（兜底，77→事实 依赖此条）
+    - abbrev/^([a-z]).+$/$1/            # 超级简拼：nj → 南京/年纪
+    - abbrev/^([zcs]h).+$/$1/          # zh/ch/sh 视为整体：ch'sh → 城市
 
     # ===== u / v(ü) 转换 =====
     - derive/^([nl])ve$/$1ue/

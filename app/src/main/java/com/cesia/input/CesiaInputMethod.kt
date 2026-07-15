@@ -1906,21 +1906,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 这样无论降频还是选音过滤，点到的词 = 上屏的词（点频上频、点管字上管字）。
         if (globalIndex >= lastDisplayedCands.size) return
         val clickedWord = lastDisplayedCands[globalIndex]
-        // T9 简拼词（来自分隔符会话，不在主 Rime 会话里）：直接上屏字符串，不走翻页选中
-        if (t9SimpliCands.contains(clickedWord)) {
-            val toCommit = stripDuplicatePrefix(clickedWord)
-            t9ComposedSoFar.append(clickedWord)
-            when {
-                smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
-                magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
-                clipboardAddMode -> { clipboardAddBuffer.append(toCommit); updateClipboardAddStatus() }
-                else -> commitCandidateText(toCommit)
-            }
-            rimeEngine.clear()
-            resetT9State()
-            updateCandidateBar()
-            return
-        }
         // 在「未过滤的 Rime 真实全局序(lastAllCands)」里定位该词，得到真实全局索引；
         // 再按 pageSize 算出页码/页内索引翻页选中。
         // 注意：不能用 pageCount 逐页查找（选音后 pageCount 不可靠，如 746+p 报 pageCount=2 但实有 63+ 候选）。
@@ -2029,12 +2014,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         var allCands = rimeEngine.getAllCandidates()
-        // T9 简拼合并：全拼候选在前，简拼词(分隔符会话)去重后追加在后（如 38→du/fu... + 发帖/独特/电梯）
-        if (t9SimpliCands.isNotEmpty()) {
-            val existing = allCands.toHashSet()
-            val extra = t9SimpliCands.filter { it !in existing }
-            if (extra.isNotEmpty()) allCands = allCands + extra
-        }
         // 快照未过滤的原始合并列表（Rime 真实全局序），供点击反查真实全局索引
         lastAllCands = allCands
 
@@ -6023,38 +6002,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
         updateSpellBar()
-        computeT9SimpliCands()
         updateCandidateBar()
-    }
-
-    /** T9 简拼补充候选：用分隔符强制拆音节喂 Rime，取回简拼词（如 38→发帖/独特/电梯）。
-     *  过滤掉单字/无意义候选，与主会话全拼候选合并去重后追加显示。 */
-    private var t9SimpliCands: List<String> = emptyList()
-    private fun computeT9SimpliCands() {
-        t9SimpliCands = emptyList()
-        if (t9DigitQueue.length < 2 || t9SpellPrefix.isNotEmpty()) return
-        val digits = t9DigitQueue.toString().map { it.digitToInt() }
-        if (digits.size > 4) return
-        val letterSets = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' } }
-        // 枚举所有首位字母组合（如 23 → bd/bf/cd/cf/ad/af/ae/be/ce）
-        var combos = listOf("")
-        for (set in letterSets) {
-            val next = mutableListOf<String>()
-            for (prefix in combos) for (c in set) next.add(prefix + c)
-            combos = next
-        }
-        val collected = LinkedHashSet<String>()
-        try {
-            for (combo in combos) {
-                rimeEngine.clear(); rimeEngine.createSession()
-                for (ch in combo) rimeEngine.processKey(ch.toString())
-                for (w in rimeEngine.getAllCandidates()) if (w.length >= 2) collected.add(w)
-            }
-            // 恢复主会话（全拼），保证后续点击/状态一致
-            rimeEngine.clear(); rimeEngine.createSession()
-            for (d in t9DigitQueue) rimeEngine.processKey(d.toString())
-        } catch (e: Exception) { }
-        t9SimpliCands = collected.take(60).toList()
     }
 
     /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
