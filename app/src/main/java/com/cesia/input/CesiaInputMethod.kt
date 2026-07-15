@@ -7541,18 +7541,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             10, Keyboard.KEYCODE_DONE -> {
                 shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
                 if (!isAsciiMode && composing) {
-                    // 直接上屏当前拼音字母（不转换成汉字）
-                    val pinyinText = rimeEngine.composingText?.replace(" ", "")
-                    if (!pinyinText.isNullOrEmpty()) {
-                        ic?.commitText(pinyinText, 1)
-                    } else if (hasCands) {
-                        val selected = rimeEngine.selectCandidate(0)
-                        if (selected.isNotEmpty()) {
-                            commitCandidateText(selected)
+                    // T9 简拼模式：若已锁定候选音(如 ssq)，回车上屏锁定字母串而非数字
+                    if (keyboardMode == KeyboardMode.NUMBER && t9SpellPrefix.isNotEmpty()) {
+                        val toCommit = t9SpellPrefix.toString()
+                        t9ComposedSoFar.append(toCommit)
+                        commitCandidateText(toCommit)
+                        rimeEngine.clear()
+                        resetT9State()
+                        updateCandidateBar()
+                    } else {
+                        // 直接上屏当前拼音字母（不转换成汉字）
+                        val pinyinText = rimeEngine.composingText?.replace(" ", "")
+                        if (!pinyinText.isNullOrEmpty()) {
+                            ic?.commitText(pinyinText, 1)
+                        } else if (hasCands) {
+                            val selected = rimeEngine.selectCandidate(0)
+                            if (selected.isNotEmpty()) {
+                                commitCandidateText(selected)
+                            }
                         }
+                        rimeEngine.clear()
+                        updateCandidateBar()
                     }
-                    rimeEngine.clear()
-                    updateCandidateBar()
                 } else {
                     // 只发送换行，不触发发送动作
                     ic?.commitText("\n", 1)

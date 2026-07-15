@@ -425,15 +425,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
                     }
                 }
 
-                // 2. 符号键 - "符" 字（使用 t9MainPaint，跟随字体缩放/灰度）
-                for (key in keys) {
-                    val code = key.codes?.firstOrNull() ?: continue
-                    if (code == -100) {
-                        val cx = key.x + key.width / 2f
-                        val cy = key.y + key.height / 2f + t9MainSpSize * 0.35f
-                        canvas.drawText("符", cx, cy, t9MainPaint)
-                    }
-                }
+                // 2. 符号键 - 已由 xml keyLabel="符" 显示，此处不再重复绘制（避免两层符字）
                 // 3. 粘贴/复制键主字符 - "全选"/"复制"
                 for (key in keys) {
                     val code = key.codes?.firstOrNull() ?: continue
