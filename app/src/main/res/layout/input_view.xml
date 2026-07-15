@@ -38,6 +38,77 @@
             android:maxLines="3"
             android:ellipsize="end" />
 
+        <!-- 候选音点选区（T9 输入数字时显示在状态栏，字母间隔加宽方便点选） -->
+        <LinearLayout
+            android:id="@+id/ll_t9_spell"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_t9_spell0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_t9_spell3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:gravity="center"
+                android:textSize="18sp"
+                android:textColor="#81D8D0"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/btn_traditional"
             android:layout_width="28dp"
@@ -97,67 +168,6 @@
         android:paddingStart="4dp"
         android:paddingEnd="4dp"
         android:visibility="gone">
-
-        <!-- 候选栏最左：逐键选音 4 字母点选区（T9 输入数字时显示，点击锁定当前位字母） -->
-        <LinearLayout
-            android:id="@+id/ll_t9_spell"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/tv_t9_spell0"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textSize="18sp"
-                android:textColor="#81D8D0"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/tv_t9_spell1"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textSize="18sp"
-                android:textColor="#81D8D0"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/tv_t9_spell2"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textSize="18sp"
-                android:textColor="#81D8D0"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/tv_t9_spell3"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textSize="18sp"
-                android:textColor="#81D8D0"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:visibility="gone" />
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="20dp"
-                android:background="#CCCCCC"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp" />
-        </LinearLayout>
 
         <!-- T9 字母区（如 pqrs），输入数字时显示 -->
         <TextView

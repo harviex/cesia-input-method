@@ -7541,14 +7541,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             10, Keyboard.KEYCODE_DONE -> {
                 shortPressHandled = true  // 阻止长按撤销与短按换行同时触发
                 if (!isAsciiMode && composing) {
-                    // T9 简拼模式：若已锁定候选音(如 ssq)，回车上屏锁定字母串而非数字
-                    if (keyboardMode == KeyboardMode.NUMBER && t9SpellPrefix.isNotEmpty()) {
-                        val toCommit = t9SpellPrefix.toString()
+                    // T9 简拼模式：回车上屏（锁定字母 + 剩余数字），并清空候选栏
+                    if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
+                        val toCommit = t9SpellPrefix.toString() +
+                                t9DigitQueue.substring(t9SpellPrefix.length)  // 锁定字母 + 剩余数字(如 t+9=t9)
                         t9ComposedSoFar.append(toCommit)
                         commitCandidateText(toCommit)
                         rimeEngine.clear()
-                        resetT9State()
-                        updateCandidateBar()
+                        resetT9State()  // 清空队列/候选栏
                     } else {
                         // 直接上屏当前拼音字母（不转换成汉字）
                         val pinyinText = rimeEngine.composingText?.replace(" ", "")
