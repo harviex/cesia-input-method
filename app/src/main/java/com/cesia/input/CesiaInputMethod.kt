@@ -1465,6 +1465,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             micButton?.setBackgroundColor(accent)
         }
 
+        // 候选栏文字色随主题色实时变化（无需重开输入法）
+        candidateAdapter?.let {
+            it.textColor = accent
+            it.notifyDataSetChanged()
+        }
+
         // 持久化
         saveThemeColors()
     }
