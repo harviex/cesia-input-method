@@ -1912,8 +1912,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 这样无论降频还是选音过滤，点到的词 = 上屏的词（点频上频、点管字上管字）。
         if (globalIndex >= lastDisplayedCands.size) return
         val clickedWord = lastDisplayedCands[globalIndex]
-        // 简拼模式：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中，直接上屏字符串
-        if (t9FenCiOn && t9FenCiMerged.contains(clickedWord)) {
+        // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中，直接上屏字符串
+        if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.contains(clickedWord)) {
             val toCommit = stripDuplicatePrefix(clickedWord)
             t9ComposedSoFar.append(clickedWord)
             when {
@@ -2034,8 +2034,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        // 简拼模式：用合并后的候选（分词符串 + 字母组合交叉），覆盖全拼单字
-        var allCands = if (t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates()
+        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；全键盘始终走自身 pinyin 候选
+        var allCands = if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates()
         // 快照未过滤的原始合并列表（Rime 真实全局序），供点击反查真实全局索引
         lastAllCands = allCands
 
@@ -5747,6 +5747,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             rimeEngine.setAsciiMode(false)
             t9ShiftTemp = false  // 每次进入 T9 重置临时 shift
             // t9ShiftLocked 保留（T9 锁定状态不因切换而改变）
+            // 恢复 1 键分词开关文字（保留用户切全拼前的状态）
+            keyboardView.t9FenCiLabel = if (t9FenCiOn) "简拼" else "全拼"
         } else if (mode == KeyboardMode.QWERTY) {
             // 进入全键盘：恢复 QWERTY shift 状态
             isAsciiMode = qwertyShiftLocked || qwertyShiftTemp
@@ -5758,6 +5760,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 rimeEngine.selectSchema("pinyin")
             }
             rimeEngine.clear()
+            // 清理 T9 状态，避免泄漏到全键盘（残留候选/数字队列/简拼合并列表）
+            t9DigitQueue.clear()
+            t9SpellPrefix.clear()
+            t9FenCiMerged = emptyList()
+            t9ComposedSoFar.clear()
+            keyboardView.t9FenCiLabel = "简拼"  // 复位（仅 T9 模式绘制，全键盘不显示）
+            candidateBar.visibility = View.GONE
+            updateStatus(statusIdleText)
         } else {
             // 进入符号键盘：只操作符号相关状态
             isAsciiMode = false
