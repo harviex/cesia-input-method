@@ -64,6 +64,16 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Run lint
+        run: |
+          export JAVA_HOME=$JAVA_HOME_17_X64
+          ./gradlew lintDebug --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
+
+      - name: Run unit tests
+        run: |
+          export JAVA_HOME=$JAVA_HOME_17_X64
+          ./gradlew testDebugUnitTest --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
+
       - name: Build APK with Gradle
         run: |
           export JAVA_HOME=$JAVA_HOME_17_X64
