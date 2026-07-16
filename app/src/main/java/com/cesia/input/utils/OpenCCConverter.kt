@@ -15,13 +15,23 @@ object OpenCCConverter {
     private var TRAD_TO_SIMP_PHRASES: Map<String, String>? = null
     private var loaded = false
 
-    /** 从 assets 加载 OpenCC 简繁映射表（懒加载，只执行一次） */
+    /** 从 assets 加载 OpenCC 简繁映射表（懒加载，只成功加载一次）。
+     * 优先用 AssetManager（生产环境）；拿不到时回退到 classpath 资源（便于 JVM 单元测试）。 */
     @Synchronized
     fun load(assets: AssetManager) {
         if (loaded) return
-        loaded = true
+        val json = try {
+            assets.open("opencc_s2t.json").bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            // AssetManager 不可用（如 JVM 单元测试环境），回退到 classpath 资源
+            OpenCCConverter::class.java.classLoader?.getResourceAsStream("opencc_s2t.json")
+                ?.bufferedReader()?.use { it.readText() }
+        }
+        if (json.isNullOrEmpty()) {
+            markEmpty()
+            return
+        }
         try {
-            val json = assets.open("opencc_s2t.json").bufferedReader().use { it.readText() }
             val obj = JSONObject(json)
             val charObj = obj.getJSONObject("char_map")
             val phraseObj = obj.getJSONObject("phrase_map")
@@ -43,12 +53,18 @@ object OpenCCConverter {
             SIMP_TO_TRAD_PHRASES = phraseMap
             TRAD_TO_SIMP = revCharMap
             TRAD_TO_SIMP_PHRASES = revPhraseMap
+            loaded = true
         } catch (e: Exception) {
-            SIMP_TO_TRAD = emptyMap()
-            SIMP_TO_TRAD_PHRASES = emptyMap()
-            TRAD_TO_SIMP = emptyMap()
-            TRAD_TO_SIMP_PHRASES = emptyMap()
+            markEmpty()
         }
+    }
+
+    private fun markEmpty() {
+        SIMP_TO_TRAD = emptyMap()
+        SIMP_TO_TRAD_PHRASES = emptyMap()
+        TRAD_TO_SIMP = emptyMap()
+        TRAD_TO_SIMP_PHRASES = emptyMap()
+        // 不置 loaded=true，允许后续重试
     }
 
     /** 简→繁转换：先匹配词组（最长4字），再逐字替换 */
