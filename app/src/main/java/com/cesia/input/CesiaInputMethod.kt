@@ -298,7 +298,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             micButton?.text = "🎤☁️"
         }
     }
-    private var longPressActive = false
 
 // endregion 核心组件与引擎
 
@@ -308,10 +307,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var keyboardMode = KeyboardMode.NUMBER  // 默认 T9 数字键盘
     private var defaultKeyboardMode = KeyboardMode.NUMBER  // 用户长按切换键设定的默认键盘（打开输入法即用）
     private var prevKeyboardMode = KeyboardMode.NUMBER  // 进入符号键盘前的键盘模式（用于返回）
-    private var isCapsLock = false
     private var isProcessingResult = false
     private var isWaitingForChoice = false
-    private var lastMicClickTime = 0L
     private var voiceStartTime = 0L
     private var pendingAiMode: Boolean? = null
     private var recognizedText: String = ""        // 当前组合态显示文本（流式每轮会更新它，仅用于展示）
@@ -386,7 +383,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         55 to 7, 56 to 8, 57 to 9, 48 to 0
     )
     // 副字符(T9数字) → 主字符 映射
-    private val subToMain = mainToSub.entries.associate { (k, v) -> v to k }
 
     // 长按检测
     private var longPressHandler = Handler(Looper.getMainLooper())
@@ -403,7 +399,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var sendKeyLongPressTriggered = false
     private var sendKeyHandler = Handler(Looper.getMainLooper())
     private var sendKeyRunnable: Runnable? = null
-    private var sendButtonGlowRunnable: Runnable? = null
     private var sendButtonGlowing = false
 
     // hjkl 方向键长按重复触发
@@ -417,7 +412,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicBookLongPressTriggered = false
     private var magicBookHandler = Handler(Looper.getMainLooper())
     private var magicBookRunnable: Runnable? = null
-    private var magicBookGlowRunnable: Runnable? = null
     // 智能修改按钮（魔法书/笔）长按发光状态
     private var magicBookGlowing = false
 
@@ -660,8 +654,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 语音按钮发光状态（锁定模式）
     private var micButtonGlowing = false
-    private var micButtonGlowRunnable: Runnable? = null
-    private var micGlowHandler = Handler(Looper.getMainLooper())
 
     // ======================== 魔法编辑模式 ========================
     // 当用户点击"➕ 新增"后进入此模式，键盘输入直接写入魔法指令缓冲区
@@ -815,15 +807,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 如果有选中文本则删除选区，否则删除光标前一个字符 */
     /** 发送 Tab 键 */
-    private fun sendTabKey() {
-        val ic = currentInputConnection ?: return
-        ic.sendKeyEvent(KeyEvent(
-            SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
-            KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_TAB, 0))
-        ic.sendKeyEvent(KeyEvent(
-            SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
-            KeyEvent.ACTION_UP, KeyEvent.KEYCODE_TAB, 0))
-    }
 
     private fun deleteSelectionOrChar() {
         val ic = currentInputConnection ?: return
@@ -839,9 +822,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // ======================== OpenCC 简繁转换（委托到 utils/OpenCCConverter）========================
     /** 懒加载 OpenCC 映射表（委托到单例，只加载一次） */
-    private fun ensureOpenCCLoaded() {
-        OpenCCConverter.load(assets)
-    }
 
     /** 简→繁转换（委托到 utils/OpenCCConverter） */
     private fun toTraditional(text: String): String = OpenCCConverter.toTraditional(text)
@@ -1181,8 +1161,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         }
                         return@post
                     }
-                    // 命令词检测（Google 识别结果走这里）
-                    val commandResult = checkVoiceCommandWord(text)
+                    // 命令词检测（Google 识别结果走这里）；复用 VoiceEngine 统一实现
+                    val commandResult = voiceEngine.checkCommandWord(text)
                     if (commandResult != null) {
                         val (textBefore, command) = commandResult
                         Log.i("Cesia", "命令词检测(Google): command='$command', text='${textBefore.take(50)}'")
@@ -1337,10 +1317,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // root_layout
             (keyboardView.parent as? View)?.setBackgroundColor(colorGray((base + 23).coerceIn(0, 255)))
         }
-    }
-
-    private fun isSystemDark(): Boolean {
-        return (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
     }
 
     private fun colorGray(v: Int): Int {
@@ -2632,53 +2608,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    private fun startMagicMode() {
-        val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
-            return
-        }
-        val extracted = ic.getTextBeforeCursor(10000, 0)?.toString() ?: ""
-        val extractedAfter = ic.getTextAfterCursor(10000, 0)?.toString() ?: ""
-        val fullText = extracted + extractedAfter
-
-        // 空文本也允许启动——AI 可以生成新内容
-        magicOriginalText = fullText
-        magicMode = true
-        typelessEngine?.magicMode = true
-
-        // 高亮按钮表示正在录音 + 脉冲发光动画
-        magicIsWaitingForVoice = true
-        magicModeGlowing = true
-        btnMagic.background = makeKeyBgDrawable(themeAccent)
-        btnMagic.setColorFilter(android.graphics.Color.WHITE, android.graphics.PorterDuff.Mode.SRC_ATOP)
-        startMagicButtonGlow()
-
-        updateStatus("🎤 请说出你的想法...（再次点击✨停止）")
-        setStatusDot("recording")
-        startVoiceWave()
-        isRecording = true
-        micButton.text = "🎤 说话"
-        // 显示语音命令词提示
-        showVoiceCommandHints()
-
-        // 根据本地/云端模式选择语音识别后端
-        when (cloudMode) {
-            CloudMode.LOCAL, CloudMode.LOCAL_LOCKED -> {
-                // 本地模式：使用 Sherpa 本地识别
-                if (SherpaOnnxEngine.isLibraryLoaded() && voiceEngine.hasSherpaModel()) {
-                    startMagicLocalRecording()
-                } else {
-                    updateStatus("⚠️ 本地语音不可用，回退到 Google...")
-                    startMagicGoogleRecording()
-                }
-            }
-            CloudMode.CLOUD -> {
-                // 云端模式：使用 Google 语音识别
-                startMagicGoogleRecording()
-            }
-        }
-    }
-
     /**
      * 魔法模式 - 本地语音识别
      * 使用 Sherpa 本地模型，识别结果通过 handleMagicResult 处理
@@ -2971,25 +2900,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         undoHistory.add(0, Pair(originalText, instruction))
         while (undoHistory.size > undoMaxSteps) {
             undoHistory.removeAt(undoHistory.size - 1)
-        }
-    }
-
-    private fun performUndo() {
-        if (undoHistory.isEmpty()) {
-            updateStatus("↩️ 没有可撤销的记录")
-            return
-        }
-        val (originalText, _) = undoHistory.removeAt(0)
-        val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
-            return
-        }
-        try {
-            ic.performContextMenuAction(android.R.id.selectAll)
-            ic.commitText(originalText, 1)
-            updateStatus("↩️ 已撤销到原文")
-        } catch (e: Exception) {
-            updateStatus("❌ 撤销失败: ${e.message}")
         }
     }
 
@@ -3788,15 +3698,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 检查文本中是否包含今天日期 */
-    private fun containsTodayDate(text: String): Boolean {
-        val sdf1 = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINA)
-        val sdf2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA)
-        val sdf3 = java.text.SimpleDateFormat("MM月dd日", java.util.Locale.CHINA)
-        val today1 = sdf1.format(java.util.Date())
-        val today2 = sdf2.format(java.util.Date())
-        val today3 = sdf3.format(java.util.Date())
-        return text.contains(today1) || text.contains(today2) || text.contains(today3)
-    }
 
     /** 解析 Tavily Search JSON 结果 */
     private fun parseTavilyResults(json: String): String {
@@ -4196,68 +4097,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     // 在输入法服务中显示 dialog 的通用方法
-    private fun showImeDialog(dialog: androidx.appcompat.app.AlertDialog) {
-        // 不设置 window type，让系统自动处理（IME 服务有权限创建 dialog）
-        dialog.show()
-    }
 
 // endregion 魔法编辑
 
 // region AI自动回复
     // ======================== AI自动回复 ========================
-
-    private fun showAiStylePicker() {
-        val styles = listOf(
-            Triple("自然", "🌿", "自然流畅的语气"),
-            Triple("幽默", "😄", "幽默风趣的表达"),
-            Triple("圆滑", "🎭", "圆滑得体的措辞"),
-            Triple("官方", "📋", "官方正式的语气"),
-            Triple("简洁", "✂️", "简洁明了不废话"),
-            Triple("正式", "👔", "正式商务的风格"),
-            Triple("亲切", "🤗", "亲切温暖的语气"),
-            Triple("犀利", "🔥", "犀利直接的观点")
-        )
-
-        try {
-            val inflater = android.view.LayoutInflater.from(this)
-            val dialogView = inflater.inflate(R.layout.dialog_ai_style_picker, null)
-            applyAccentToViewTree(dialogView, themeAccent)
-
-            val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-                .setView(dialogView)
-                .setTitle("🎭 选择写作风格")
-                .setNegativeButton("取消", null)
-                .create()
-
-            val container = dialogView.findViewById<LinearLayout>(R.id.style_container)
-            for ((name, icon, desc) in styles) {
-                val item = inflater.inflate(R.layout.item_ai_style, container, false)
-                item.findViewById<TextView>(R.id.tv_style_icon).text = icon
-                item.findViewById<TextView>(R.id.tv_style_name).text = name
-                item.findViewById<TextView>(R.id.tv_style_desc).text = desc
-                if (name == aiReplyStyle) {
-                    btnMagic.background = makeKeyBgDrawable(currentKeyBg)
-                    btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
-                }
-                item.setOnClickListener {
-                    aiReplyStyle = name
-                    getSharedPreferences("cesia_settings", MODE_PRIVATE)
-                        .edit().putString(PREF_AI_STYLE, aiReplyStyle).apply()
-                    updateStatus(" 已切换为「$aiReplyStyle」风格")
-                    dialog.dismiss()
-                }
-                container.addView(item)
-            }
-            dialog.show()
-        } catch (e: Exception) {
-            val styleNames = styles.map { it.first }
-            val currentIdx = styleNames.indexOf(aiReplyStyle)
-            aiReplyStyle = styleNames.getOrElse((currentIdx + 1) % styleNames.size) { "自然" }
-            getSharedPreferences("cesia_settings", MODE_PRIVATE)
-                .edit().putString(PREF_AI_STYLE, aiReplyStyle).apply()
-            updateStatus(" 已切换为「$aiReplyStyle」风格")
-        }
-    }
 
     private fun triggerAiReply() {
         if (isAiProcessing) {
@@ -4506,14 +4350,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 用户分别选择识别后端和润色后端，点确认后保存配置
      */
     /** 本地模式录音 */
-    private fun startLocalRecording() {
-        startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
-    }
 
     /** 云端模式录音 */
-    private fun startCloudRecording() {
-        startRecordingWithChoice(VoiceChoice.GOOGLE, PolishChoice.CLOUD_OPENROUTER)
-    }
 
 // endregion 长按选择
 
@@ -4594,15 +4432,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 同传按钮点击 */
-    private fun onSimulTranslateButtonClick() {
-        // 同声传译功能正在开发中，仅提示用户
-        // 不初始化引擎，避免内存占用导致输入法卡死
-        android.widget.Toast.makeText(
-            this,
-            "🎧 同声传译功能正在开发中，敬请期待",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
-    }
 
     /** 更新同传按钮外观 */
     private fun updateSimulTranslateButton(active: Boolean) {
@@ -5106,43 +4935,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // region 录音选择后端
     // ======================== 录音（根据选择的后端） ========================
 
-    private fun startRecordingImmediately() {
-        isRecording = true
-        isWaitingForChoice = false
-        recognizedText = ""
-        voiceKeptText = ""
-        isContinuingSession = false
-        pendingAiMode = null
-        setStatusDot("recording")
-        startVoiceWave()
-        keyboardView.visibility = View.GONE
-        candidateBar.visibility = View.GONE
-        voiceStartTime = System.currentTimeMillis()
-
-        // 每次录音前更新语音后端（模型状态可能已变化）
-        updateVoiceBackend()
-
-        when (voiceEngine.getBackend()) {
-            VoiceEngine.Backend.LOCAL_SHERPA -> {
-                if (modelManager.hasVoiceModel()) {
-                    startWhisperRecordingAsync()
-                } else {
-                    // 模型被删除了，回退 Google
-                    updateStatus("🎤 正在收听 (Google)...")
-                    typelessEngine?.startListening(continuous = true)
-                }
-            }
-            VoiceEngine.Backend.CLOUD_GROQ -> {
-                // Groq 已移除，回退到 Google
-                updateStatus("🎤 正在收听 (Google)...")
-                typelessEngine?.startListening(continuous = true)
-            }
-        }
-
-        // 立即显示 AI+ / AI× 按钮（原逻辑）
-        showAiChoiceButtons()
-    }
-
     private fun onAiPlusSelected() {
         if (isWaitingForChoice && recognizedText.isNotEmpty()) {
             isWaitingForChoice = false
@@ -5531,8 +5323,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             ic.commitText(cleaned, 1)
                         } else {
                             // 无选区：清空全文后写入
-                            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
-                            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+                            val before = ic.getTextBeforeCursor(64, 0)?.length ?: 0
+                            val after = ic.getTextAfterCursor(64, 0)?.length ?: 0
                             if (before > 0 || after > 0) {
                                 ic.deleteSurroundingText(before, after)
                             }
@@ -5563,8 +5355,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         ic.commitText(text, 1)
                     } else {
                         // 无选区：恢复全文
-                        val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
-                        val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+                        val before = ic.getTextBeforeCursor(64, 0)?.length ?: 0
+                        val after = ic.getTextAfterCursor(64, 0)?.length ?: 0
                         if (before > 0 || after > 0) {
                             ic.deleteSurroundingText(before, after)
                         }
@@ -5643,8 +5435,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun clearInputText() {
         try {
             val ic = currentInputConnection ?: return
-            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
-            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+            val before = ic.getTextBeforeCursor(64, 0)?.length ?: 0
+            val after = ic.getTextAfterCursor(64, 0)?.length ?: 0
             if (before > 0 || after > 0) {
                 ic.deleteSurroundingText(before, after)
             }
@@ -5658,8 +5450,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val ic = currentInputConnection ?: return
             // 先选中全部文字
-            val before = ic.getTextBeforeCursor(10000, 0)?.length ?: 0
-            val after = ic.getTextAfterCursor(10000, 0)?.length ?: 0
+            val before = ic.getTextBeforeCursor(64, 0)?.length ?: 0
+            val after = ic.getTextAfterCursor(64, 0)?.length ?: 0
             if (before > 0 || after > 0) {
                 ic.setSelection(0, 0)  // 移到开头
                 // 选中到末尾
@@ -6356,29 +6148,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    private fun toggleLanguage() {
-        if (qwertyShiftLocked) {
-            // 锁定状态 → 解除
-            qwertyShiftLocked = false
-            qwertyShiftTemp = false
-            isAsciiMode = false
-        } else if (qwertyShiftTemp) {
-            // 临时 shift 状态 → 解除
-            qwertyShiftTemp = false
-            isAsciiMode = false
-        } else {
-            // 正常切换中英文模式
-            isAsciiMode = !isAsciiMode
-        }
-        rimeEngine.setAsciiMode(isAsciiMode)
-        // 如果当前在数字键盘，保持在数字键盘（只是切换中英文模式）
-        if (keyboardMode != KeyboardMode.NUMBER) {
-            switchToKeyboard(KeyboardMode.QWERTY)
-        }
-        rimeEngine.clear()
-        updateCandidateBar()
-    }
-
 // endregion 数字键盘
 
 // region 长按检测
@@ -6782,16 +6551,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         } catch (e: Exception) {
             updateStatus("❌ 剪贴板管理器异常: ${e.message}")
-        }
-    }
-
-    private fun updateClipboardSearchBtn(btnSearch: TextView) {
-        if (clipboardSearchFilter.isNotEmpty()) {
-            btnSearch.text = "🔍 $clipboardSearchFilter"
-            btnSearch.setTextColor(themeAccent)
-        } else {
-            btnSearch.text = "🔍 点击搜索..."
-            btnSearch.setTextColor(0xFF999999.toInt())
         }
     }
 
@@ -8299,11 +8058,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 本地/云端模式切换后的回调 */
-    private fun onLocalModeChanged() {
-        updateVoiceBackend()
-        preloadWhisperModel()
-        preloadAiModel()
-    }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
@@ -8694,32 +8448,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 返回 Pair(命令词前的文本, 命令词类型) 或 null
      * 命令词类型: "ai" 表示 aiover/ai over, "plain" 表示 over
      */
-    private fun checkVoiceCommandWord(text: String): Pair<String, String>? {
-        val trimmed = text.trimEnd()
-        // 正体模式：识别可能是繁体，命令词存简体 → 归一简体再匹配，剥离时保留原文繁体
-        val norm = OpenCCConverter.toSimplified(trimmed)
-        val strip: (String) -> String = { cmd ->
-            val tradCmd = OpenCCConverter.toTraditional(cmd)
-            val s = if (tradCmd.isNotEmpty() && trimmed.endsWith(tradCmd)) {
-                trimmed.dropLast(tradCmd.length)
-            } else {
-                trimmed.dropLast(cmd.length)
-            }
-            s.trimEnd()
-        }
-        return when {
-            norm.endsWith(VoiceEngine.cmdExit) -> Pair(strip(VoiceEngine.cmdExit), "exit")
-            norm.endsWith(VoiceEngine.cmdSend) -> Pair(strip(VoiceEngine.cmdSend), "send")
-            norm.endsWith(VoiceEngine.cmdPolish) -> Pair(strip(VoiceEngine.cmdPolish), "ai")
-            norm.endsWith(VoiceEngine.cmdFinish) -> Pair(strip(VoiceEngine.cmdFinish), "finish")
-            norm.endsWith(VoiceEngine.cmdCommand) -> Pair(strip(VoiceEngine.cmdCommand), "cmd")
-            norm.endsWith(VoiceEngine.cmdWriting) -> Pair(strip(VoiceEngine.cmdWriting), "writing")
-            norm.endsWith(VoiceEngine.cmdUndo) -> Pair(strip(VoiceEngine.cmdUndo), "undo")
-            norm.endsWith(VoiceEngine.cmdClear) -> Pair(strip(VoiceEngine.cmdClear), "clear")
-            norm.endsWith(VoiceEngine.cmdRestore) -> Pair(strip(VoiceEngine.cmdRestore), "restore")
-            else -> null
-        }
-    }
 
 // endregion 语音锁定
 
