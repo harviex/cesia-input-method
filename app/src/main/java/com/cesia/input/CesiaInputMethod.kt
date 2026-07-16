@@ -1851,14 +1851,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             themeBgGrayBase = 0xFF
             themeKeyGrayBase = 0xFF
             textThemeSize = 0
-            textGrayScale = 0.7f
+            textGrayScale = 0.5f
             seekHue.progress = accentHue.toInt()
             seekGray.progress = themeBgGrayBase
             seekKey.progress = themeKeyGrayBase
             updateTextSizeButtons(btnTextSmall, btnTextMedium, btnTextLarge, btnTextXLarge, 0)
-            seekTextGray.progress = 70
-            textGrayScale = 0.7f
-            tvTextGrayPreview.text = "0.7"
+            seekTextGray.progress = 50
+            textGrayScale = 0.5f
+            tvTextGrayPreview.text = "0.5"
             // 重置明暗模式为明亮
             isDarkTheme = false
             getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
@@ -1867,9 +1867,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             applyThemeColors()
         }
 
-        // 随手机时间自动变化主题色（单选框）
+        // 随手机时间自动变化主题色：共用主题色切换条旁的颜色框(tv_hue_preview)，不再单独显示框
         val checkAutoTime = view.findViewById<android.widget.CheckBox>(R.id.check_auto_time_theme)
-        val tvAutoPreview = view.findViewById<android.widget.TextView>(R.id.tv_auto_time_preview)
+        val tvAutoPreview = tvHue
         checkAutoTime.isChecked = autoTimeTheme
         val refreshAutoPreview = {
             tvAutoPreview.background = makeKeyBgDrawable(themeAccent)
