@@ -494,7 +494,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 剪贴板管理器：收藏/锁定条目 (text -> isLocked)
     private val clipboardFavorites = mutableMapOf<String, Boolean>()
-    private val clipboardHistory = mutableListOf<String>()
     private val maxClipboardHistory = 50
     // 剪贴板弹窗引用（搜索编辑模式需要刷新 adapter）
     private var clipboardPopupView: android.view.View? = null
@@ -6870,12 +6869,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 保存剪贴板历史到 SharedPreferences（全部历史 + 收藏标记） */
     private fun saveClipboardHistoryFromClassMembers() {
         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
-        val allTexts = clipboardItems.filter { !it.isEmpty }.map { it.text }
-        val favTexts = clipboardItems.filter { it.isPinned && !it.isEmpty }.map { it.text }
+        // 限制历史条数：置顶/收藏项始终保留，其余按最近顺序保留最多 maxClipboardHistory 条
+        val pinned = clipboardItems.filter { it.isPinned && !it.isEmpty }
+        val normal = clipboardItems.filter { !it.isPinned && !it.isEmpty }
+        val cappedNormal = if (normal.size > maxClipboardHistory - pinned.size) {
+            normal.takeLast(maxClipboardHistory - pinned.size)
+        } else normal
+        val capped = (pinned + cappedNormal).distinctBy { it.text }
+        val allTexts = capped.map { it.text }
+        val favTexts = capped.filter { it.isPinned }.map { it.text }
         prefs.edit()
             .putString("history", allTexts.joinToString("\n"))
             .putString("favorites", favTexts.joinToString("\n"))
             .apply()
+        // 同步裁剪内存列表，避免无限增长
+        clipboardItems.removeAll { item -> !item.isEmpty && capped.none { it.text == item.text } }
     }
 
     private fun showClipboardItemActions(
@@ -7039,10 +7047,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun updateClipboardFavorites() {
-        val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
-        // 持久化：收藏+锁定条目
-        val favItems = clipboardHistory.filter { clipboardFavorites[it] == true }
-        prefs.edit().putString("favorites", favItems.joinToString("\n")).apply()
+        // 原实现从已废弃的 clipboardHistory(恒为空)读取导致 favorites 被清空；
+        // 直接复用 saveClipboardHistoryFromClassMembers 统一持久化(历史+收藏)，避免覆盖正确数据。
+        saveClipboardHistoryFromClassMembers()
     }
 
 // endregion 剪贴板搜索
