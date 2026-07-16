@@ -854,9 +854,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // ======================== OpenCC 简繁转换（从 assets 加载）=======================
+    // ======================== OpenCC 简繁转换（从 assets 加载）========================
     private var SIMP_TO_TRAD: Map<Char, Char>? = null
     private var SIMP_TO_TRAD_PHRASES: Map<String, String>? = null
+    private var TRAD_TO_SIMP: Map<Char, Char>? = null
+    private var TRAD_TO_SIMP_PHRASES: Map<String, String>? = null
 
     /** 从 assets 加载 OpenCC 简繁映射表（懒加载） */
     private fun ensureOpenCCLoaded() {
@@ -868,19 +870,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val phraseObj = obj.getJSONObject("phrase_map")
             val charMap = mutableMapOf<Char, Char>()
             val phraseMap = mutableMapOf<String, String>()
+            val revCharMap = mutableMapOf<Char, Char>()
+            val revPhraseMap = mutableMapOf<String, String>()
             for (key in charObj.keys()) {
                 if (key.length == 1) {
                     charMap[key[0]] = charObj.getString(key)[0]
+                    revCharMap[charObj.getString(key)[0]] = key[0]
                 }
             }
             for (key in phraseObj.keys()) {
                 phraseMap[key] = phraseObj.getString(key)
+                revPhraseMap[phraseObj.getString(key)] = key
             }
             SIMP_TO_TRAD = charMap
             SIMP_TO_TRAD_PHRASES = phraseMap
+            TRAD_TO_SIMP = revCharMap
+            TRAD_TO_SIMP_PHRASES = revPhraseMap
         } catch (e: Exception) {
             SIMP_TO_TRAD = emptyMap()
             SIMP_TO_TRAD_PHRASES = emptyMap()
+            TRAD_TO_SIMP = emptyMap()
+            TRAD_TO_SIMP_PHRASES = emptyMap()
         }
     }
 
@@ -899,6 +909,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val trad = phraseMap[sub]
                 if (trad != null) {
                     sb.append(trad)
+                    i += len
+                    matched = true
+                    break
+                }
+            }
+            if (!matched) {
+                val ch = text[i]
+                sb.append(charMap[ch] ?: ch)
+                i++
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun toSimplified(text: String): String {
+        if (text.isEmpty()) return text
+        ensureOpenCCLoaded()
+        val charMap = TRAD_TO_SIMP ?: emptyMap()
+        val phraseMap = TRAD_TO_SIMP_PHRASES ?: emptyMap()
+        val sb = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            var matched = false
+            for (len in minOf(4, text.length - i) downTo 2) {
+                val sub = text.substring(i, i + len)
+                val simp = phraseMap[sub]
+                if (simp != null) {
+                    sb.append(simp)
                     i += len
                     matched = true
                     break
@@ -2049,7 +2087,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 在「未过滤的 Rime 真实全局序(lastAllCands)」里定位该词，得到真实全局索引；
         // 再按 pageSize 算出页码/页内索引翻页选中。
         // 注意：不能用 pageCount 逐页查找（选音后 pageCount 不可靠，如 746+p 报 pageCount=2 但实有 63+ 候选）。
-        val realGlobalIndex = lastAllCands.indexOf(clickedWord)
+        val realGlobalIndex = lastAllCands.indexOf(clickedWord).let { idx ->
+            // 正体模式下 clickedWord 是繁体，lastAllCands 是简体，先用繁体查，查不到再转简体回查
+            if (idx >= 0) idx else lastAllCands.indexOf(toSimplified(clickedWord))
+        }
         if (realGlobalIndex < 0) return
         val pageSize = maxOf(1, rimeEngine.candidates.size)
         val targetPage = realGlobalIndex / pageSize
@@ -3706,8 +3747,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
 
                     val sdf = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINA)
-                    val today = sdf.format(java.util.Date())
-                    val finalQuery = "$searchQuery $today"
+                    // val today = sdf.format(java.util.Date())
+                    // 搜索时附加日期会导致部分时间点查询搜不到内容，先注释掉日期，仅用原始查询
+                    val finalQuery = searchQuery // "$searchQuery $today"
 
                     Log.d("Cesia", "SearXNG query: $finalQuery")
                     withContext(Dispatchers.Main) { updateStatus("🔍 正在搜索：${finalQuery.take(20)}...") }
