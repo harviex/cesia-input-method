@@ -226,23 +226,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return floatArrayOf(h * 360f, s, l)
     }
 
-    private fun hslToColor(h: Float, s: Float, l: Float): Int {
-        val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
-        val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
-        val m = l - c / 2f
-        val (r, g, b) = when {
-            h < 60 -> Triple(c, x, 0f)
-            h < 120 -> Triple(x, c, 0f)
-            h < 180 -> Triple(0f, c, x)
-            h < 240 -> Triple(0f, x, c)
-            h < 300 -> Triple(x, 0f, c)
-            else -> Triple(c, 0f, x)
-        }
-        val ri = ((r + m) * 255).toInt().coerceIn(0, 255)
-        val gi = ((g + m) * 255).toInt().coerceIn(0, 255)
-        val bi = ((b + m) * 255).toInt().coerceIn(0, 255)
-        return 0xFF000000.toInt() or (ri shl 16) or (gi shl 8) or bi
-    }
+    private fun hslToColor(h: Float, s: Float, l: Float): Int = ColorUtils.hslToColor(h, s, l)
 
 // endregion 视图与UI
 
@@ -854,102 +838,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // ======================== OpenCC 简繁转换（从 assets 加载）========================
-    private var SIMP_TO_TRAD: Map<Char, Char>? = null
-    private var SIMP_TO_TRAD_PHRASES: Map<String, String>? = null
-    private var TRAD_TO_SIMP: Map<Char, Char>? = null
-    private var TRAD_TO_SIMP_PHRASES: Map<String, String>? = null
-
-    /** 从 assets 加载 OpenCC 简繁映射表（懒加载） */
+    // ======================== OpenCC 简繁转换（委托到 utils/OpenCCConverter）========================
+    /** 懒加载 OpenCC 映射表（委托到单例，只加载一次） */
     private fun ensureOpenCCLoaded() {
-        if (SIMP_TO_TRAD != null) return
-        try {
-            val json = assets.open("opencc_s2t.json").bufferedReader().use { it.readText() }
-            val obj = org.json.JSONObject(json)
-            val charObj = obj.getJSONObject("char_map")
-            val phraseObj = obj.getJSONObject("phrase_map")
-            val charMap = mutableMapOf<Char, Char>()
-            val phraseMap = mutableMapOf<String, String>()
-            val revCharMap = mutableMapOf<Char, Char>()
-            val revPhraseMap = mutableMapOf<String, String>()
-            for (key in charObj.keys()) {
-                if (key.length == 1) {
-                    charMap[key[0]] = charObj.getString(key)[0]
-                    revCharMap[charObj.getString(key)[0]] = key[0]
-                }
-            }
-            for (key in phraseObj.keys()) {
-                phraseMap[key] = phraseObj.getString(key)
-                revPhraseMap[phraseObj.getString(key)] = key
-            }
-            SIMP_TO_TRAD = charMap
-            SIMP_TO_TRAD_PHRASES = phraseMap
-            TRAD_TO_SIMP = revCharMap
-            TRAD_TO_SIMP_PHRASES = revPhraseMap
-        } catch (e: Exception) {
-            SIMP_TO_TRAD = emptyMap()
-            SIMP_TO_TRAD_PHRASES = emptyMap()
-            TRAD_TO_SIMP = emptyMap()
-            TRAD_TO_SIMP_PHRASES = emptyMap()
-        }
+        OpenCCConverter.load(assets)
     }
 
-    /** 简→繁转换：先匹配词组（最长4字），再逐字替换 */
-    private fun toTraditional(text: String): String {
-        if (text.isEmpty()) return text
-        ensureOpenCCLoaded()
-        val charMap = SIMP_TO_TRAD ?: emptyMap()
-        val phraseMap = SIMP_TO_TRAD_PHRASES ?: emptyMap()
-        val sb = StringBuilder(text.length * 2)
-        var i = 0
-        while (i < text.length) {
-            var matched = false
-            for (len in minOf(4, text.length - i) downTo 2) {
-                val sub = text.substring(i, i + len)
-                val trad = phraseMap[sub]
-                if (trad != null) {
-                    sb.append(trad)
-                    i += len
-                    matched = true
-                    break
-                }
-            }
-            if (!matched) {
-                val ch = text[i]
-                sb.append(charMap[ch] ?: ch)
-                i++
-            }
-        }
-        return sb.toString()
-    }
+    /** 简→繁转换（委托到 utils/OpenCCConverter） */
+    private fun toTraditional(text: String): String = OpenCCConverter.toTraditional(text)
 
-    private fun toSimplified(text: String): String {
-        if (text.isEmpty()) return text
-        ensureOpenCCLoaded()
-        val charMap = TRAD_TO_SIMP ?: emptyMap()
-        val phraseMap = TRAD_TO_SIMP_PHRASES ?: emptyMap()
-        val sb = StringBuilder(text.length)
-        var i = 0
-        while (i < text.length) {
-            var matched = false
-            for (len in minOf(4, text.length - i) downTo 2) {
-                val sub = text.substring(i, i + len)
-                val simp = phraseMap[sub]
-                if (simp != null) {
-                    sb.append(simp)
-                    i += len
-                    matched = true
-                    break
-                }
-            }
-            if (!matched) {
-                val ch = text[i]
-                sb.append(charMap[ch] ?: ch)
-                i++
-            }
-        }
-        return sb.toString()
-    }
+    /** 繁→简转换（委托到 utils/OpenCCConverter） */
+    private fun toSimplified(text: String): String = OpenCCConverter.toSimplified(text)
 
 
 // endregion 简繁切换
@@ -1451,35 +1350,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var currentKeyBg: Int = 0
 
     /** 生成与键盘按键同款的圆角灰底+描边背景 drawable */
-    private fun makeKeyBgDrawable(keyBgColor: Int): android.graphics.drawable.GradientDrawable {
-        val keyGrayVal = (keyBgColor and 0xFF)
-        val strokeGray = (keyGrayVal - 16).coerceIn(0, 255)
-        val strokeColor = 0xFF000000.toInt() or (strokeGray shl 16) or (strokeGray shl 8) or strokeGray
-        return android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            setColor(keyBgColor)
-            cornerRadius = 6f * resources.displayMetrics.density
-            setStroke((1 * resources.displayMetrics.density).toInt(), strokeColor)
-        }
-    }
+    private fun makeKeyBgDrawable(keyBgColor: Int): android.graphics.drawable.GradientDrawable =
+        ColorUtils.makeKeyBgDrawable(keyBgColor, resources.displayMetrics.density)
 
     /**
      * 随手机时间自动变化主题色：根据当前小时(0-23)计算色相。
      * 一天从早到晚：黎明暖橙(约40°)→上午明黄绿(约90°)→正午青蓝(蒂芙尼180°)→
      * 黄昏暖紫(约300°)→深夜冷蓝(约220°)，形成从早到晚的渐变循环。
      */
-    private fun timeBasedHue(): Float {
-        val cal = java.util.Calendar.getInstance()
-        val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
-        val m = cal.get(java.util.Calendar.MINUTE)
-        val t = (h * 60 + m) / 1440f  // 0.0(00:00) ~ 1.0(24:00)
-        // 24 小时映射到色相环：以蒂芙尼蓝(180°)为中午基准，向两端偏移
-        // 用三角让色相平滑往返：凌晨偏冷(220°)，正午蒂芙尼(180°)，傍晚暖(320°)
-        val hue = 180f + 140f * kotlin.math.sin((t - 0.5f) * 2 * Math.PI.toFloat())
-        var hh = hue % 360f
-        if (hh < 0) hh += 360f
-        return hh
-    }
+    private fun timeBasedHue(): Float = ColorUtils.timeBasedHue()
 
     /** 应用随手机时间主题：计算 hue → 更新 accentHue/themeAccent → 应用并保存 */
     private fun applyAutoTimeTheme() {
