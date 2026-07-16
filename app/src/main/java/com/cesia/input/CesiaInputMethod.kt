@@ -886,6 +886,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         isDarkTheme = themeMode == THEME_DARK
         setTheme(if (isDarkTheme) R.style.Theme_Cesia_Dark else R.style.Theme_Cesia)
         super.onCreate()
+        // 预加载 OpenCC 简繁映射：命令词检测(正体模式)与候选显示都依赖它，
+        // 提前加载避免在语音命令路径里首次调用才懒加载导致的竞态/空映射。
+        OpenCCConverter.load(assets)
     }
 
     /** 封测期：未捕获异常写入本地文件（不联网），便于真机崩溃后回收日志 */
@@ -8686,24 +8689,27 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      */
     private fun checkVoiceCommandWord(text: String): Pair<String, String>? {
         val trimmed = text.trimEnd()
-        // 使用动态命令词（与 VoiceEngine 一致）
+        // 正体模式：识别可能是繁体，命令词存简体 → 归一简体再匹配，剥离时保留原文繁体
+        val norm = OpenCCConverter.toSimplified(trimmed)
+        val strip: (String) -> String = { cmd ->
+            val tradCmd = OpenCCConverter.toTraditional(cmd)
+            val s = if (tradCmd.isNotEmpty() && trimmed.endsWith(tradCmd)) {
+                trimmed.dropLast(tradCmd.length)
+            } else {
+                trimmed.dropLast(cmd.length)
+            }
+            s.trimEnd()
+        }
         return when {
-            trimmed.endsWith(VoiceEngine.cmdExit) -> {
-                Pair(trimmed.dropLast(VoiceEngine.cmdExit.length).trimEnd(), "exit")
-            }
-            trimmed.endsWith(VoiceEngine.cmdSend) -> {
-                Pair(trimmed.dropLast(VoiceEngine.cmdSend.length).trimEnd(), "send")
-            }
-            trimmed.endsWith(VoiceEngine.cmdPolish) -> {
-                Pair(trimmed.dropLast(VoiceEngine.cmdPolish.length).trimEnd(), "ai")
-            }
-            trimmed.endsWith(VoiceEngine.cmdFinish) -> {
-                Pair(trimmed.dropLast(VoiceEngine.cmdFinish.length).trimEnd(), "finish")
-            }
-            trimmed.endsWith(VoiceEngine.cmdWriting) -> {
-                val beforeWriting = trimmed.dropLast(VoiceEngine.cmdWriting.length).trimEnd()
-                Pair(beforeWriting, "writing")
-            }
+            norm.endsWith(VoiceEngine.cmdExit) -> Pair(strip(VoiceEngine.cmdExit), "exit")
+            norm.endsWith(VoiceEngine.cmdSend) -> Pair(strip(VoiceEngine.cmdSend), "send")
+            norm.endsWith(VoiceEngine.cmdPolish) -> Pair(strip(VoiceEngine.cmdPolish), "ai")
+            norm.endsWith(VoiceEngine.cmdFinish) -> Pair(strip(VoiceEngine.cmdFinish), "finish")
+            norm.endsWith(VoiceEngine.cmdCommand) -> Pair(strip(VoiceEngine.cmdCommand), "cmd")
+            norm.endsWith(VoiceEngine.cmdWriting) -> Pair(strip(VoiceEngine.cmdWriting), "writing")
+            norm.endsWith(VoiceEngine.cmdUndo) -> Pair(strip(VoiceEngine.cmdUndo), "undo")
+            norm.endsWith(VoiceEngine.cmdClear) -> Pair(strip(VoiceEngine.cmdClear), "clear")
+            norm.endsWith(VoiceEngine.cmdRestore) -> Pair(strip(VoiceEngine.cmdRestore), "restore")
             else -> null
         }
     }

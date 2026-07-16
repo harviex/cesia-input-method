@@ -2,6 +2,7 @@ package com.cesia.input.voice
 
 import android.content.Context
 import android.util.Log
+import com.cesia.input.OpenCCConverter
 import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.model.ModelManager
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
@@ -1020,45 +1021,41 @@ class VoiceEngine(private val context: Context) {
 
     /**
      * 命令词检测
-     * 检查文本末尾是否包含 "aiover"、"ai over" 或 "over"
+     * 检查文本末尾是否包含命令词（支持正体：识别为繁体时，命令词存简体，
+     * 先归一简体再匹配；剥离时保留原文繁体，仅去掉命令词本身）。
      * 返回 Pair(命令词前的文本, 命令词类型) 或 null
-     * 命令词类型: "ai" 表示 aiover/ai over, "plain" 表示 over
      */
-    private fun checkCommandWord(text: String): Pair<String, String>? {
+    internal fun checkCommandWord(text: String): Pair<String, String>? {
         val trimmed = text.trimEnd()
-        // 按优先级检测：退出 > 发送 > 魔法 > 结束 > 指令 > 写作（写作优先级最低）
+        // 正体模式：识别结果可能是繁体(如"寫作")，命令词存简体("写作")，
+        // 归一为简体再匹配，避免繁体识别导致命令词失效。
+        val norm = OpenCCConverter.toSimplified(trimmed)
         return when {
-            trimmed.endsWith(cmdExit) -> {
-                Pair(trimmed.dropLast(cmdExit.length).trimEnd(), "exit")
-            }
-            trimmed.endsWith(cmdSend) -> {
-                Pair(trimmed.dropLast(cmdSend.length).trimEnd(), "send")
-            }
-            trimmed.endsWith(cmdPolish) -> {
-                Pair(trimmed.dropLast(cmdPolish.length).trimEnd(), "ai")
-            }
-            trimmed.endsWith(cmdFinish) -> {
-                Pair(trimmed.dropLast(cmdFinish.length).trimEnd(), "finish")
-            }
-            trimmed.endsWith(cmdCommand) -> {
-                val beforeCommand = trimmed.dropLast(cmdCommand.length).trimEnd()
-                Pair(beforeCommand, "cmd")
-            }
-            trimmed.endsWith(cmdWriting) -> {
-                val beforeWriting = trimmed.dropLast(cmdWriting.length).trimEnd()
-                Pair(beforeWriting, "writing")
-            }
-            trimmed.endsWith(cmdUndo) -> {
-                Pair(trimmed.dropLast(cmdUndo.length).trimEnd(), "undo")
-            }
-            trimmed.endsWith(cmdClear) -> {
-                Pair(trimmed.dropLast(cmdClear.length).trimEnd(), "clear")
-            }
-            trimmed.endsWith(cmdRestore) -> {
-                Pair(trimmed.dropLast(cmdRestore.length).trimEnd(), "restore")
-            }
+            norm.endsWith(cmdExit) -> Pair(stripCommandWord(trimmed, cmdExit), "exit")
+            norm.endsWith(cmdSend) -> Pair(stripCommandWord(trimmed, cmdSend), "send")
+            norm.endsWith(cmdPolish) -> Pair(stripCommandWord(trimmed, cmdPolish), "ai")
+            norm.endsWith(cmdFinish) -> Pair(stripCommandWord(trimmed, cmdFinish), "finish")
+            norm.endsWith(cmdCommand) -> Pair(stripCommandWord(trimmed, cmdCommand), "cmd")
+            norm.endsWith(cmdWriting) -> Pair(stripCommandWord(trimmed, cmdWriting), "writing")
+            norm.endsWith(cmdUndo) -> Pair(stripCommandWord(trimmed, cmdUndo), "undo")
+            norm.endsWith(cmdClear) -> Pair(stripCommandWord(trimmed, cmdClear), "clear")
+            norm.endsWith(cmdRestore) -> Pair(stripCommandWord(trimmed, cmdRestore), "restore")
             else -> null
         }
+    }
+
+    /**
+     * 从原文(可能繁体)末尾剥离命令词：优先按命令词的繁体形式剥离(保留原文繁体其余部分)，
+     * 兜底按简体词长剥离(简繁通常等长)。返回剥离后的文本。
+     */
+    private fun stripCommandWord(originalTrimmed: String, cmdSimplified: String): String {
+        val tradCmd = OpenCCConverter.toTraditional(cmdSimplified)
+        val stripped = if (tradCmd.isNotEmpty() && originalTrimmed.endsWith(tradCmd)) {
+            originalTrimmed.dropLast(tradCmd.length)
+        } else {
+            originalTrimmed.dropLast(cmdSimplified.length)
+        }
+        return stripped.trimEnd()
     }
 
     /**
