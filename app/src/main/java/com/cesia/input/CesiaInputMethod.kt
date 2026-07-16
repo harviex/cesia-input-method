@@ -335,7 +335,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 未过滤的 Rime 原始合并候选序（getAllCandidates，Rime 真实全局序）。
     // 用于点击时把「显示词」映射回 Rime 真实全局索引，再翻页选中（pageCount 在选音后不可靠，不能靠它翻页查找）。
     private var lastAllCands: List<String> = emptyList()
-
+    // 候选栏去重签名：输入状态未变时跳过整轮重建(避免每次按键无谓的 notifyDataSetChanged 重排)
+    private var lastCandSig: Int = 0
     // === 按钮提示计数（最多2次） ===
     private val buttonHintCount = mutableMapOf<String, Int>()
 
@@ -2074,6 +2075,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val pinyins = rimeEngine.getAllCandidatePinyins()
             allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
         }
+
+        // 去重：输入状态( composing/拼音/选音前缀/繁体/面板/联想/候选集 )未变则跳过整轮重建，
+        // 避免每次按键无谓的 adapter 重排与 notifyDataSetChanged（影响跟手速度）。
+        val sig = ((composing.hashCode() * 31 + pinyin.hashCode()) * 31 + allCands.hashCode()) xor
+            ((t9SpellPrefix.hashCode() * 31 + isTraditional.hashCode() * 31
+                + isPanelExpanded.hashCode() * 31 + isAssociationMode.hashCode() * 31
+                + associationCandidates.hashCode()))
+        if (sig == lastCandSig) return
+        lastCandSig = sig
 
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
@@ -5972,11 +5982,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 按已选字母前缀(拼音首字母)过滤候选词列表，返回过滤后的子集（候选拼音首字母以 prefix 开头）。
      *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
+    // 拼音首字母分词正则（常量，只编译一次，避免 filterCandsBySpellPrefix 每次按键重复编译）
+    private val SPELL_SPLIT_REGEX = Regex("[\\s'·]")
+
     private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
         if (prefix.isEmpty()) return cands
         val filtered = cands.mapIndexedNotNull { i, cand ->
             val py = pinyins.getOrElse(i) { "" }
-            val initials = py.split(Regex("[\\s'·]")).filter { it.isNotEmpty() }
+            val initials = py.split(SPELL_SPLIT_REGEX).filter { it.isNotEmpty() }
                 .joinToString("") { it.first().toString() }
             if (initials.startsWith(prefix)) cand else null
         }
