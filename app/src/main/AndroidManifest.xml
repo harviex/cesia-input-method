@@ -43,13 +43,6 @@
             </intent-filter>
         </activity>
 
-        <!-- 个性化设置页面 -->
-        <activity
-            android:name=".PersonalizationActivity"
-            android:label="个性化设置"
-            android:exported="false" />
-
-        <!-- 历史记录页面 -->
         <activity android:name=".HistoryActivity" android:label="润色历史记录" />
 
         <!-- 本地文库文件选择器（透明辅助 Activity） -->

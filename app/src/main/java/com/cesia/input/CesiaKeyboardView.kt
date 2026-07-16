@@ -1,5 +1,6 @@
 package com.cesia.input
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -195,6 +196,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     /** 取消 KeyboardView 内部的长按 runnable（通过反射） */
+    @SuppressLint("SoonBlockedPrivateApi") // 必须反射 mHandler 才能取消 KeyboardView 内置长按，无公开替代 API
     private fun cancelKeyboardViewLongPress() {
         try {
             // KeyboardView 内部用 Handler 延迟触发长按，取消它
@@ -669,6 +671,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     /** Apply keyTextColor to KeyboardView's internal mPaint and mKeyTextColor via reflection */
+    @SuppressLint("SoonBlockedPrivateApi") // 必须反射 mPaint 才能统一键标签文字色，无公开替代 API
     private fun applyKeyTextPaintColor() {
         try {
             // AOSP KeyboardView 只用 mPaint 绘制 key label（没有 mKeyTextPaint 字段）
@@ -692,6 +695,7 @@ class CesiaKeyboardView @JvmOverloads constructor(
     }
 
     /** 强制重绘 KeyboardView 内部缓存 buffer（解决反射修改 paint 颜色后不生效的问题） */
+    @SuppressLint("SoonBlockedPrivateApi") // 必须反射 mBuffer 才能触发重绘，无公开替代 API
     private fun forceBufferRedraw() {
         try {
             val bufferField = android.inputmethodservice.KeyboardView::class.java.getDeclaredField("mBuffer")

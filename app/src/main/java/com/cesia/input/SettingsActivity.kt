@@ -2772,7 +2772,9 @@ class SettingsActivity : AppCompatActivity() {
         drawable.setColor(0xFFFFFFFF.toInt()) // 白色背景
         drawable.setStroke(dpToPx(1), accent) // 1dp 边框，主题色
         drawable.cornerRadius = dpToPx(8).toFloat() // 8dp 圆角
-        drawable.setPadding(dpToPx(12), dpToPx(8), dpToPx(32), dpToPx(8))
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            drawable.setPadding(dpToPx(12), dpToPx(8), dpToPx(32), dpToPx(8)) // setPadding 仅 API 29+
+        }
         return drawable
     }
 

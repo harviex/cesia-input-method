@@ -3,6 +3,7 @@ package com.cesia.input.audio
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.annotation.SuppressLint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.ByteArrayOutputStream
@@ -54,6 +55,7 @@ class AudioRecorder(
             bufferSize
         }
 
+        @SuppressLint("MissingPermission") // RECORD_AUDIO 已在 Manifest 声明，且调用前已在语音入口动态校验权限
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,

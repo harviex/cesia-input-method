@@ -1,6 +1,7 @@
 package com.cesia.input
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -228,7 +229,9 @@ class ScreenReaderService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-        clearCache()
+        if (Build.VERSION.SDK_INT >= 33) {
+            clearCache() // clearCache() 仅 API 33+ 可用
+        }
         Log.i(TAG, "无障碍屏幕读取服务已销毁")
     }
 }
