@@ -748,12 +748,9 @@ class SettingsActivity : AppCompatActivity() {
         btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
 
         // 云端模型选择 - 点击 TextView 打开选择对话框
-        // 注意：模型列表是异步拉取的，必须等加载完成后再打开对话框，否则显示的是旧列表/空列表
         tvCloudModel?.setOnClickListener {
-            Toast.makeText(this, "正在加载模型列表…", Toast.LENGTH_SHORT).show()
-            loadModelsForCurrentUrl {
-                showModelSelectorDialog(cloudModelList ?: emptyList())
-            }
+            loadModelsForCurrentUrl()
+            showModelSelectorDialog(cloudModelList ?: emptyList())
         }
 
         // 版本号点击检查更新
@@ -2150,7 +2147,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private var cloudModelList: List<CloudModel>? = null
 
-    private fun loadOpenRouterFreeModels(onReady: (() -> Unit)? = null) {
+    private fun loadOpenRouterFreeModels() {
         val url = "https://harviex.github.io/openrouter-free-dashboard/data/models.json"
         val client = okhttp3.OkHttpClient.Builder()
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -2192,7 +2189,6 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     cloudModelList = list
                     refreshCloudModelText()
-                    onReady?.invoke()
                 } catch (e: Exception) {
                     runOnUiThread {
                         tvCloudModel?.text = "⚠️ 加载失败"
@@ -2203,18 +2199,18 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /** 根据当前 API URL 自动拉取模型列表：OpenRouter 走远程，Ollama 走本地 /api/tags */
-    private fun loadModelsForCurrentUrl(onReady: (() -> Unit)? = null) {
+    private fun loadModelsForCurrentUrl() {
         val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
         val isOr = apiUrl.contains("openrouter.ai") || apiUrl.contains("api.cesia.cc")
         if (isOr) {
-            loadOpenRouterFreeModels(onReady)
+            loadOpenRouterFreeModels()
         } else {
-            loadOllamaModels(apiUrl, onReady)
+            loadOllamaModels(apiUrl)
         }
     }
 
     /** 从 Ollama 的 /api/tags 拉取本地模型列表 */
-    private fun loadOllamaModels(apiUrl: String, onReady: (() -> Unit)? = null) {
+    private fun loadOllamaModels(apiUrl: String) {
         // 提取 host:port（支持 http://host:port 或 http://ip:port）
         val regex = Regex("""https?://([^/]+)""")
         val host = regex.find(apiUrl)?.groupValues?.get(1) ?: run {
@@ -2251,7 +2247,6 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     cloudModelList = list
                     refreshCloudModelText()
-                    onReady?.invoke()
                 } catch (e: Exception) {
                     runOnUiThread { tvCloudModel?.text = "⚠️ Ollama 解析失败" }
                 }
