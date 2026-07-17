@@ -387,22 +387,40 @@
                 android:insetBottom="0dp"
                 android:visibility="gone" />
 
-            <!-- 语音按键：麦克风矢量图标 -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_mic"
+            <!-- 语音按键：麦克风矢量图标（FrameLayout 包住，右上角显示“中”副字符） -->
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="28dp"
-                android:layout_weight="1"
-                android:drawableTop="@drawable/ic_mic"
-                android:drawableTint="#FFFFFF"
-                android:text=""
-                android:textSize="0sp"
-                android:backgroundTint="#81D8D0"
-                app:cornerRadius="10dp"
-                android:elevation="0dp"
-                android:stateListAnimator="@null"
-                android:insetTop="0dp"
-                android:insetBottom="0dp" />
+                android:layout_weight="1">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_mic"
+                    android:layout_width="match_parent"
+                    android:layout_height="28dp"
+                    android:drawableTop="@drawable/ic_mic"
+                    android:drawableTint="#FFFFFF"
+                    android:text=""
+                    android:textSize="0sp"
+                    android:backgroundTint="#81D8D0"
+                    app:cornerRadius="10dp"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+                <TextView
+                    android:id="@+id/tv_mic_zh"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="1dp"
+                    android:layout_marginEnd="3dp"
+                    android:text="中"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <!-- 清空按钮 -->

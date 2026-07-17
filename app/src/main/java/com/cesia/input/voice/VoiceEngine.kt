@@ -96,6 +96,9 @@ class VoiceEngine(private val context: Context) {
         ZIPFORMER("Zipformer")
     }
 
+    // 语音识别模式：中英混（默认，原行为）/ 纯中文（zipformer-zh-2025）
+    enum class VoiceMode { MIXED, CHINESE }
+
     data class RecognitionResult(
         val text: String,
         val isFinal: Boolean,
@@ -106,6 +109,15 @@ class VoiceEngine(private val context: Context) {
     private val modelManager = ModelManager(context)
     private val sherpaEngine = SherpaOnnxEngine()
     private val recorder = VoiceRecorder()
+    private val prefs = context.getSharedPreferences("cesia_voice", Context.MODE_PRIVATE)
+
+    // 语音识别模式（中英混 / 纯中文），持久化；默认中英混，不改动原有行为
+    var voiceMode: VoiceMode
+        get() = VoiceMode.valueOf(prefs.getString("voice_mode", VoiceMode.MIXED.name) ?: VoiceMode.MIXED.name)
+        set(value) {
+            prefs.edit().putString("voice_mode", value.name).apply()
+            Log.i(TAG, "voiceMode -> ${value.name}")
+        }
 
     private var currentBackend = Backend.LOCAL_SHERPA
     private var currentModelType = ModelType.ZIPFORMER
@@ -150,6 +162,16 @@ class VoiceEngine(private val context: Context) {
      * 兼容旧路径 local_models/ 下的 .onnx 单文件
      */
     private fun findModelDir(): File? {
+        // 纯中文模式：优先返回 zh-2025 目录（仅当文件完整），否则回退到中英混，绝不破坏原有模型
+        if (voiceMode == VoiceMode.CHINESE) {
+            val zhDir = File(context.filesDir, "local_models/zipformer-zh-2025")
+            if (isZipformerModel(zhDir)) {
+                Log.i(TAG, "findModelDir: 纯中文目录 ${zhDir.absolutePath}")
+                return zhDir
+            }
+            Log.w(TAG, "findModelDir: 纯中文模式但 zh 模型不完整，回退中英混")
+        }
+
         // 1. Zipformer 多文件目录
         val zipformerDir = File(context.filesDir, "local_models/zipformer")
         if (zipformerDir.exists() && zipformerDir.isDirectory) {
@@ -201,6 +223,21 @@ class VoiceEngine(private val context: Context) {
                File(modelDir, "decoder.onnx").exists() &&
                File(modelDir, "joiner.onnx").exists() &&
                File(modelDir, "tokens.txt").exists()
+    }
+
+    /** 纯中文模型是否已下载且完整（独立目录 local_models/zipformer-zh-2025/） */
+    fun hasChineseModel(): Boolean {
+        val zhDir = File(context.filesDir, "local_models/zipformer-zh-2025")
+        return isZipformerModel(zhDir)
+    }
+
+    /** 切换中英混 / 纯中文 模式；返回切换后的模式。仅在 hasChineseModel() 为真时切到中文有效。 */
+    fun switchVoiceMode(): VoiceMode {
+        voiceMode = if (voiceMode == VoiceMode.MIXED) VoiceMode.CHINESE else VoiceMode.MIXED
+        // 切换后清掉识别器缓存，使下次 getOrCreateRecognizer 按新目录重建
+        cachedOnlineRecognizer = null
+        cachedModelPath = null
+        return voiceMode
     }
 
     // ==================== 本地模型加载 ====================

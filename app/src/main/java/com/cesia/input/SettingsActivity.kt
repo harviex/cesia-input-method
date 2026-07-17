@@ -1286,8 +1286,10 @@ class SettingsActivity : AppCompatActivity() {
     // 卸载语音文字输入套件（语音模型 + 雾凇词库）
     private fun uninstallVoiceSuite() {
         Thread {
-            // 删除语音模型
+            // 删除语音模型（中英双语）
             downloadManager.deleteModel("sherpa-zipformer")
+            // 删除纯中文模型（独立目录）
+            downloadManager.deleteModel("zipformer-zh-2025")
             // 删除雾凇词库
             val rimeDir = dictManager.getRimeDir()
             if (rimeDir.exists()) rimeDir.deleteRecursively()
@@ -1412,6 +1414,26 @@ class SettingsActivity : AppCompatActivity() {
                                     rimeEngine.redeploy()
                                     Toast.makeText(this, "词库已部署！请重启输入法后生效", Toast.LENGTH_LONG).show()
                                 } catch (_: Exception) {}
+                                // 阶段三：下载纯中文模型（独立目录，不影响中英双语套件）
+                                runOnUiThread { setBothVoiceProgress(98, "正在下载纯中文模型") }
+                                try {
+                                    val dm = ModelDownloadManager(this@SettingsActivity)
+                                    val zhResult = kotlinx.coroutines.runBlocking {
+                                        dm.downloadArchive("zipformer-zh-2025") { _, percent, _, _ ->
+                                            runOnUiThread {
+                                                val overall = 98 + (percent * 0.02).toInt()
+                                                setBothVoiceProgress(overall, "下载纯中文模型")
+                                            }
+                                        }
+                                    }
+                                    if (zhResult.isSuccess) {
+                                        appendLog("✅ 纯中文模型下载完成（双击语音键可切换）")
+                                    } else {
+                                        appendLog("⚠️ 纯中文模型下载失败（中英混仍可用）: ${zhResult.exceptionOrNull()?.message}")
+                                    }
+                                } catch (ze: Exception) {
+                                    appendLog("⚠️ 纯中文模型下载异常（中英混仍可用）: ${ze.message}")
+                                }
                             } else {
                                 appendLog("❌ 词库下载失败: $dictMsg")
                                 resetBothVoice("安装语音文字输入套件")

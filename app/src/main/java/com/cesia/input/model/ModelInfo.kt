@@ -11,7 +11,8 @@ data class ModelInfo(
     val fileName: String,         // 本地文件名或目录名
     val sizeBytes: Long,
     val sha256: String? = null,
-    val type: ModelType
+    val type: ModelType,
+    val isArchive: Boolean = false,   // true = .tar.bz2 整包下载后解压
 ) {
     enum class ModelType { VOICE, AI, TTS }
 }
@@ -48,6 +49,14 @@ object ModelRegistry {
         "tokens.txt"
     )
 
+    // === Zipformer 纯中文模型文件列表（zh-int8-2025-06-30，文件名已带 int8）===
+    val ZIPFORMER_ZH_FILES = listOf(
+        "encoder.int8.onnx",
+        "decoder.int8.onnx",
+        "joiner.int8.onnx",
+        "tokens.txt"
+    )
+
     val ALL_MODELS = listOf(
         // === 语音识别模型 (Sherpa-onnx Zipformer 中英双语) ===
         ModelInfo(
@@ -58,6 +67,19 @@ object ModelRegistry {
             fileName = "zipformer",
             sizeBytes = 206L * MB,
             type = ModelInfo.ModelType.VOICE
+        ),
+
+        // === 语音识别模型 (Sherpa-onnx Zipformer 纯中文 2025 int8) ===
+        // 双击语音键切换；独立目录 local_models/zipformer-zh-2025/，不影响中英双语模型
+        ModelInfo(
+            id = "zipformer-zh-2025",
+            name = "Zipformer 纯中文 2025",
+            description = "纯中文高精度, 流式 int8 (~160MB), 双击语音键切换",
+            downloadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
+            fileName = "zipformer-zh-2025",
+            sizeBytes = 160L * MB,
+            type = ModelInfo.ModelType.VOICE,
+            isArchive = true
         ),
 
         // === AI 模型 (MNN 格式，本地推理) ===
@@ -93,6 +115,16 @@ object ModelRegistry {
             "encoder-epoch-99-avg-1.onnx" -> "encoder.onnx"
             "decoder-epoch-99-avg-1.onnx" -> "decoder.onnx"
             "joiner-epoch-99-avg-1.onnx" -> "joiner.onnx"
+            else -> downloadedFile
+        }
+    }
+
+    // 纯中文模型（zh-int8-2025-06-30）：文件名已带 int8，重命名为标准名
+    fun getZipformerZhLocalName(downloadedFile: String): String {
+        return when (downloadedFile) {
+            "encoder.int8.onnx" -> "encoder.onnx"
+            "decoder.int8.onnx" -> "decoder.onnx"
+            "joiner.int8.onnx" -> "joiner.onnx"
             else -> downloadedFile
         }
     }

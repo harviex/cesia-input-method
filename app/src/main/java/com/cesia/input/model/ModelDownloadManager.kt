@@ -270,6 +270,126 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
+    /**
+     * 下载整包 .tar.bz2 模型并解压到 local_models/<fileName>/
+     * 用于纯中文 zipformer-zh-2025-int8：解压后把 encoder.int8.onnx 等重命名为标准名。
+     * 不改动已有的 downloadZipformer（中英双语）逻辑。
+     */
+    suspend fun downloadArchive(
+        modelId: String,
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val info = ModelRegistry.getById(modelId)
+                ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
+            if (!info.isArchive) return@withContext Result.failure(Exception("模型 $modelId 非整包归档"))
+
+            val destDir = File(modelsDir, info.fileName)
+            destDir.deleteRecursively()
+            destDir.mkdirs()
+
+            val tmpArchive = File(modelsDir, "${info.fileName}.tar.bz2")
+
+            // 下载归档（带重试，支持 github/hf-mirror 两个源）
+            val urls = listOf(
+                info.downloadUrl,
+                info.downloadUrl.replace("github.com", "hf-mirror.com")
+            ).distinct()
+            val ok = downloadFileWithRetry(urls, tmpArchive, onProgress)
+            if (!ok) return@withContext Result.failure(Exception("归档下载失败: ${info.fileName}"))
+
+            // 解压
+            val extractDir = File(modelsDir, "${info.fileName}_extract")
+            extractDir.deleteRecursively()
+            extractDir.mkdirs()
+            val proc = Runtime.getRuntime().exec(
+                arrayOf("tar", "-xjf", tmpArchive.absolutePath, "-C", extractDir.absolutePath)
+            )
+            // 兼容 minSdk 24：用轮询 waitFor 代替 waitFor(timeout)
+            var extractOk = false
+            val deadline = System.currentTimeMillis() + 120_000L
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    proc.exitValue() // 未结束会抛 IllegalThreadStateException
+                    extractOk = proc.exitValue() == 0
+                    break
+                } catch (_: IllegalThreadStateException) {
+                    Thread.sleep(200)
+                }
+            }
+            if (!extractOk) {
+                try { proc.destroy() } catch (_: Exception) {}
+                extractDir.deleteRecursively()
+                tmpArchive.delete()
+                return@withContext Result.failure(Exception("归档解压失败"))
+            }
+            tmpArchive.delete()
+
+            // 递归平铺 + int8 重命名到 destDir
+            extractDir.walkTopDown().filter { it.isFile }.forEach { f ->
+                val renamed = ModelRegistry.getZipformerZhLocalName(f.name)
+                val target = File(destDir, renamed)
+                try { f.copyTo(target, overwrite = true) } catch (_: Exception) {}
+            }
+            extractDir.deleteRecursively()
+
+            // 校验完整性（与 isZipformerModel 同标准）
+            val complete = File(destDir, "encoder.onnx").exists() &&
+                    File(destDir, "decoder.onnx").exists() &&
+                    File(destDir, "joiner.onnx").exists() &&
+                    File(destDir, "tokens.txt").exists()
+            if (!complete) {
+                destDir.deleteRecursively()
+                return@withContext Result.failure(Exception("解压后文件不完整"))
+            }
+
+            modelManager.markInstalled(modelId, ModelInfo.ModelType.VOICE)
+            Log.i(TAG, "Archive model extracted: ${destDir.absolutePath}")
+            Result.success(destDir)
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadArchive failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /** 通用单文件下载（多 URL 重试），复用 onProgress 上报 */
+    private suspend fun downloadFileWithRetry(
+        urls: List<String>,
+        destFile: File,
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)?
+    ): Boolean {
+        for (url in urls) {
+            try {
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) continue
+                val body = response.body ?: continue
+                val total = response.body?.contentLength() ?: 0L
+                var downloaded = 0L
+                val temp = File(destFile.parent, "${destFile.name}.tmp")
+                body.byteStream().use { input ->
+                    FileOutputStream(temp).use { output ->
+                        val buf = ByteArray(BUFFER_SIZE)
+                        var n: Int
+                        while (input.read(buf).also { n = it } != -1) {
+                            if (!coroutineContext.isActive) { temp.delete(); return false }
+                            output.write(buf, 0, n)
+                            downloaded += n
+                            val pct = if (total > 0) (downloaded.toDouble() / total * 100) else 0.0
+                            onProgress?.invoke(destFile.name, pct, downloaded, total)
+                        }
+                    }
+                }
+                if (destFile.exists()) destFile.delete()
+                temp.renameTo(destFile)
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "downloadFileWithRetry failed ($url): ${e.message}")
+            }
+        }
+        return false
+    }
+
     // ==================== MNN AI 模型下载 ====================
 
     /**

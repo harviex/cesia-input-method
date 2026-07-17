@@ -89,6 +89,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
+    private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（仅纯中文模式显示）
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: ImageButton // 智能修改按钮（魔法书/笔）
@@ -191,6 +192,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 语音键长按检测（参考智能修改按钮模式）
     private var micLongPressTriggered = false
     private var micHandler = Handler(Looper.getMainLooper())
+    private var lastMicTapTime = 0L          // 双击检测：上一次松开时间
+    private var micDoubleTapPending = false  // 双击窗口内等待第二次点击
     private var micLongPressRunnable: Runnable? = null
 
     // 候选词栏
@@ -940,6 +943,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnCloud = view.findViewById(R.id.btn_cloud)
         micButton = view.findViewById(R.id.btn_mic)
         micButtonContainer = view.findViewById(R.id.mic_button_container)
+        tvMicZh = view.findViewById(R.id.tv_mic_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
         btnSettings = view.findViewById(R.id.btn_settings)
@@ -1382,6 +1386,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun applyThemeColors() {
         // ① 背景灰度
         applyKeyboardTheme()
+        updateMicZhLabel()   // 刷新语音键“中”副字符（随模式显示/隐藏）
 
         // ② 主题色 —— 所有高亮元素
         val accent = themeAccent
@@ -2298,8 +2303,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 android.view.MotionEvent.ACTION_UP -> {
                     cancelMicLongPressDetection()
                     if (!micLongPressTriggered) {
-                        // 直接走点击逻辑，不再 performClick（避免发光动画干扰点击命中，需按两下）
-                        micOnClickListener()
+                        // 双击检测（350ms 窗口）：未录音时双击切换中英混/纯中文模型
+                        val now = System.currentTimeMillis()
+                        if (now - lastMicTapTime <= 350) {
+                            micDoubleTapPending = false
+                            lastMicTapTime = 0L
+                            handleMicDoubleTap()
+                        } else {
+                            lastMicTapTime = now
+                            micDoubleTapPending = true
+                            micHandler.postDelayed({
+                                if (micDoubleTapPending) {
+                                    micDoubleTapPending = false
+                                    // 超时未第二次点击 → 按单次点击处理
+                                    micOnClickListener()
+                                }
+                            }, 350)
+                        }
                     }
                     true
                 }
@@ -2569,7 +2589,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         if (!isRecording && !isWaitingForChoice) {
-            maybeShowButtonHint("voice", "正在收听...")
+            maybeShowButtonHint("voice", "正在收听...（双击语音键可切换纯中文/中英混模型）")
             try {
                 val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
                 val hasVoiceModel = modelManager.hasVoiceModel()
@@ -2639,6 +2659,39 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
 // endregion 语音键处理
+
+    // 语音键双击：未录音时切换中英混 / 纯中文 识别模型（不影响中英混模型本身）
+    private fun handleMicDoubleTap() {
+        if (isRecording || isWaitingForChoice) {
+            updateStatus("⚠️ 录音中，无法切换模型")
+            return
+        }
+        if (!voiceEngine.hasChineseModel()) {
+            updateStatus("⚠️ 纯中文模型未下载，请到设置下载「语音文字输入套件增强版」")
+            return
+        }
+        val mode = voiceEngine.switchVoiceMode()
+        updateMicZhLabel()
+        if (mode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE) {
+            updateStatus("🔤 已切换到纯中文识别模型（双击切回中英混）")
+        } else {
+            updateStatus("🔡 已切回中英混识别模型")
+        }
+    }
+
+    // 语音键右上角“中”副字符：仅纯中文模式显示，字号随主题文字档，颜色固定白
+    private fun updateMicZhLabel() {
+        if (!::tvMicZh.isInitialized) return
+        val isZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
+                && voiceEngine.hasChineseModel()
+        tvMicZh.visibility = if (isZh) View.VISIBLE else View.GONE
+        if (isZh) {
+            tvMicZh.text = "中"
+            tvMicZh.setTextColor(0xFFFFFFFF.toInt())
+            tvMicZh.textSize = (10 + textThemeSize * 2).toFloat()
+            tvMicZh.requestLayout()
+        }
+    }
 
 // region 智能写作（星星按钮：短按语音写作，长按设置弹窗）
     // ======================== 智能写作（星星按钮） ========================
