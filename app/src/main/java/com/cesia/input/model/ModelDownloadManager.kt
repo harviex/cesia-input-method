@@ -285,6 +285,8 @@ class ModelDownloadManager(private val context: Context) {
         try {
             val info = ModelRegistry.getById(modelId) ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
             val destDir = File(modelsDir, info.fileName)
+            // 先清空旧目录（修复之前可能解压出嵌套子目录/未重命名的残留）
+            if (destDir.exists()) destDir.deleteRecursively()
             destDir.mkdirs()
             val archiveFile = File(modelsDir, "${info.fileName}.tar.bz2")
 
@@ -328,22 +330,30 @@ class ModelDownloadManager(private val context: Context) {
             }
             archiveFile.delete()
 
-            // 3. 将 int8 权重重命名为标准名（如 encoder-epoch-99-avg-1.int8.onnx -> encoder.onnx）
+            // 3. 解压后整理：文件可能在嵌套同名子目录内；
+            //    重命名 int8 权重为标准名（encoder.onnx / joiner.onnx），decoder.onnx/tokens.txt 保持
+            //    支持两种命名：带 epoch（encoder-epoch-99-avg-1.int8.onnx）与不带（encoder.int8.onnx）
             val renameMap = mapOf(
                 "encoder-epoch-99-avg-1.int8.onnx" to "encoder.onnx",
+                "encoder.int8.onnx" to "encoder.onnx",
                 "decoder-epoch-99-avg-1.int8.onnx" to "decoder.onnx",
-                "joiner-epoch-99-avg-1.int8.onnx" to "joiner.onnx"
+                "decoder.int8.onnx" to "decoder.onnx",
+                "joiner-epoch-99-avg-1.int8.onnx" to "joiner.onnx",
+                "joiner.int8.onnx" to "joiner.onnx"
             )
-            destDir.listFiles()?.forEach { f ->
-                renameMap[f.name]?.let { newName ->
-                    val target = File(destDir, newName)
-                    if (!target.exists()) f.renameTo(target)
-                }
-                // 包内可能嵌套一层同名目录，把其内容上提
-                if (f.isDirectory) {
-                    f.listFiles()?.forEach { inner -> inner.renameTo(File(destDir, inner.name)) }
-                    if (f.listFiles().isNullOrEmpty()) f.delete()
-                }
+            // 递归收集所有文件，重命名后提到 destDir 根，删掉空子目录
+            val allFiles = destDir.walkTopDown().filter { it.isFile }.toList()
+            for (f in allFiles) {
+                val newName = renameMap[f.name]
+                val targetName = newName ?: f.name
+                val target = File(destDir, targetName)
+                if (!target.exists()) f.renameTo(target)
+                else if (target != f) f.delete() // 根已存在同名，删掉深层的
+            }
+            // 清理残留空子目录（含当初 tar 解出的同名外层目录）
+            destDir.listFiles()?.filter { it.isDirectory }?.forEach { sub ->
+                sub.listFiles()?.forEach { if (it.isFile) it.delete() }
+                if (sub.listFiles().isNullOrEmpty()) sub.delete()
             }
 
             modelManager.markInstalled(modelId, ModelInfo.ModelType.VOICE)
