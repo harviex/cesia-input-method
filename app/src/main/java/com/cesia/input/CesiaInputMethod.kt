@@ -2143,11 +2143,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 更新展开面板
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            val allCandsPanel = rimeEngine.getAllCandidates()
-            // 与候选栏一致：按已选字母前缀(拼音首字母)全局过滤下拉菜单
-            val filteredPanel = if (t9SpellPrefix.isNotEmpty()) {
-                filterCandsBySpellPrefix(allCandsPanel, rimeEngine.getAllCandidatePinyins(), t9SpellPrefix.toString())
-            } else allCandsPanel
+            // 展开面板直接复用已获取的 allCands（候选栏已按选音前缀过滤过），避免再调一次 getAllCandidates
+            val filteredPanel = allCands
             val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
@@ -3544,7 +3541,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val searchQuery = if (clipboardText.isNotEmpty()) {
                         clipboardText.take(80)
                     } else {
-                        command.replace(Regex("(续写|扩写|改写|润色|翻译|写作|修改|帮我写|帮我改|帮我润色)"), "").trim()
+                        command.replace(COMMAND_STRIP_REGEX, "").trim()
                     }
 
                     val sdf = java.text.SimpleDateFormat("yyyy年MM月dd日", java.util.Locale.CHINA)
@@ -5984,6 +5981,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
     // 拼音首字母分词正则（常量，只编译一次，避免 filterCandsBySpellPrefix 每次按键重复编译）
     private val SPELL_SPLIT_REGEX = Regex("[\\s'·]")
+    // 语音命令词剥离正则（常量，避免每次语音结果重复编译）
+    private val COMMAND_STRIP_REGEX = Regex("(续写|扩写|改写|润色|翻译|写作|修改|帮我写|帮我改|帮我润色)")
+    // 剪贴板分词正则（常量，避免每条剪贴板项渲染时重复编译）
+    private val CLIPBOARD_SPLIT_REGEX = Regex("""[\s,，。；;:：！!？?、]+""")
 
     private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
         if (prefix.isEmpty()) return cands
@@ -6692,7 +6693,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         updateClipboardFavorites(); onUpdate()
                     }
                     3 -> { // 分词 — 用空格分词后逐段插入
-                        val words = item.text.split(Regex("""[\s,，。；;:：！!？?、]+"""))
+                        val words = item.text.split(CLIPBOARD_SPLIT_REGEX)
                             .filter { it.isNotEmpty() }
                         if (words.size > 1) {
                             currentInputConnection?.commitText(words.joinToString(" "), 1)
