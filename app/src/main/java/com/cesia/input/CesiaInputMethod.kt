@@ -55,7 +55,6 @@ import com.cesia.input.engine.rime.RimeEngine
 import com.cesia.input.model.ModelManager
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
-import com.cesia.input.stats.PolishHistoryManager
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
@@ -496,8 +495,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 智能修改历史（魔法书）
     private var magicHistoryManager: MagicHistoryManager? = null
     private var currentMagicPrompt: String? = null
-    // 语音润色历史（独立模块，默认关闭）
-    private var polishHistoryManager: PolishHistoryManager? = null
 
     // 发送消息历史
     private val sentMessages = mutableListOf<String>()
@@ -1074,7 +1071,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化引擎
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
-        polishHistoryManager = PolishHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
         rimeEngine = RimeEngine(this)
@@ -5192,9 +5188,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-        statsManager.addRecord(originalText, polishedText, duration)
-        // 语音润色历史（独立模块，按模式记录；默认关闭）
-        polishHistoryManager?.addRecord(originalText, polishedText, aiUsed)
+        // 语音润色历史：仅当历史记录模式开启（非 off）时写入；默认不记录
+        val historyMode = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
+            .getString("history_mode", "off") ?: "off"
+        if (historyMode != "off") {
+            statsManager.addRecord(originalText, polishedText, duration)
+        }
         // 锁定模式下润色完成后自动重新开始录音
         if (isVoiceLocked) {
             startRecordingLocked()
