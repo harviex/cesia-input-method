@@ -124,7 +124,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
         autoTimeTheme = prefs.getBoolean("auto_time_theme", false)
         t9FenCiLock = prefs.getBoolean("t9_fenci_lock", false)
-        keyboardView.t9FenCiLock = t9FenCiLock
     }
 
     /**
@@ -934,6 +933,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val view = inflater.inflate(R.layout.input_view, null)
 
         keyboardView = view.findViewById(R.id.keyboard_view)
+        // 同步持久化的全拼/简拼锁定态到键盘视图（keyboardView 此刻已初始化）
+        keyboardView.t9FenCiLock = t9FenCiLock
         btnTraditional = view.findViewById(R.id.btn_traditional)
         btnCloud = view.findViewById(R.id.btn_cloud)
         micButton = view.findViewById(R.id.btn_mic)
