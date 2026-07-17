@@ -11,7 +11,8 @@ data class ModelInfo(
     val fileName: String,         // 本地文件名或目录名
     val sizeBytes: Long,
     val sha256: String? = null,
-    val type: ModelType
+    val type: ModelType,
+    val isArchive: Boolean = false,   // true = .tar.bz2 整包下载后解压
 ) {
     enum class ModelType { VOICE, AI, TTS }
 }
@@ -40,11 +41,11 @@ object ModelRegistry {
     // 向后兼容：默认使用完整列表
     val MNN_MODEL_FILES = MNN_MODEL_FILES_QWEN35
 
-    // === Zipformer 语音模型文件列表 ===
+    // === Zipformer 语音模型文件列表（int8 量化版，体积更小、手机更快）===
     val ZIPFORMER_FILES = listOf(
-        "encoder-epoch-99-avg-1.onnx",
-        "decoder-epoch-99-avg-1.onnx",
-        "joiner-epoch-99-avg-1.onnx",
+        "encoder-epoch-99-avg-1.int8.onnx",
+        "decoder-epoch-99-avg-1.int8.onnx",
+        "joiner-epoch-99-avg-1.int8.onnx",
         "tokens.txt"
     )
 
@@ -53,11 +54,23 @@ object ModelRegistry {
         ModelInfo(
             id = "sherpa-zipformer",
             name = "Zipformer 中英双语",
-            description = "中英双语, 流式识别, 完全离线 (~206MB)",
+            description = "中英双语, 流式识别, 完全离线 (int8 ~190MB)",
             downloadUrl = "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
             fileName = "zipformer",
-            sizeBytes = 206L * MB,
+            sizeBytes = 190L * MB,
             type = ModelInfo.ModelType.VOICE
+        ),
+
+        // === 语音识别模型 (Sherpa-onnx Zipformer 纯中文 2025 int8) ===
+        ModelInfo(
+            id = "zipformer-zh-2025",
+            name = "Zipformer 纯中文 2025",
+            description = "纯中文高精度, 流式 int8 (~160MB), 双击语音键切换",
+            downloadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
+            fileName = "zipformer-zh-2025",
+            sizeBytes = 160L * MB,
+            type = ModelInfo.ModelType.VOICE,
+            isArchive = true
         ),
 
         // === AI 模型 (MNN 格式，本地推理) ===
@@ -90,9 +103,9 @@ object ModelRegistry {
 
     fun getZipformerLocalName(downloadedFile: String): String {
         return when (downloadedFile) {
-            "encoder-epoch-99-avg-1.onnx" -> "encoder.onnx"
-            "decoder-epoch-99-avg-1.onnx" -> "decoder.onnx"
-            "joiner-epoch-99-avg-1.onnx" -> "joiner.onnx"
+            "encoder-epoch-99-avg-1.int8.onnx" -> "encoder.onnx"
+            "decoder-epoch-99-avg-1.int8.onnx" -> "decoder.onnx"
+            "joiner-epoch-99-avg-1.int8.onnx" -> "joiner.onnx"
             else -> downloadedFile
         }
     }

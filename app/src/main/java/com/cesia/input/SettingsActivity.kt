@@ -1286,8 +1286,10 @@ class SettingsActivity : AppCompatActivity() {
     // 卸载语音文字输入套件（语音模型 + 雾凇词库）
     private fun uninstallVoiceSuite() {
         Thread {
-            // 删除语音模型
+            // 删除中英双语模型
             downloadManager.deleteModel("sherpa-zipformer")
+            // 删除纯中文模型
+            downloadManager.deleteModel("zipformer-zh-2025")
             // 删除雾凇词库
             val rimeDir = dictManager.getRimeDir()
             if (rimeDir.exists()) rimeDir.deleteRecursively()
@@ -1295,7 +1297,7 @@ class SettingsActivity : AppCompatActivity() {
             runOnUiThread {
                 refreshVoiceInstallState()
                 Toast.makeText(this, "语音文字输入套件已卸载", Toast.LENGTH_SHORT).show()
-                appendLog("🗑 已卸载语音文字输入套件（语音模型+雾凇词库）")
+                appendLog("🗑 已卸载语音文字输入套件（中英双语 + 纯中文模型 + 雾凇词库）")
             }
         }.start()
     }
@@ -1350,13 +1352,14 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun doDownloadVoiceModel() {
         val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
+        val zhInfo = ModelRegistry.getById("zipformer-zh-2025")
         btnInstallVoice?.isEnabled = false
         setBothVoiceProgress(0, "准备下载...")
         getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
             .putBoolean("voice_downloading", true).commit()
-        appendLog("⬇ 开始下载语音文字输入套件（语音模型 + 雾凇词库）")
+        appendLog("⬇ 开始下载语音文字输入套件（中英双语 + 纯中文 双模型 + 雾凇词库）")
 
-        // 阶段一：下载语音模型（0%~50%）
+        // 阶段一：下载中英双语模型（0%~40%）
         Thread {
             try {
                 val dm = ModelDownloadManager(this@SettingsActivity)
@@ -1366,8 +1369,8 @@ class SettingsActivity : AppCompatActivity() {
                             val pctStr = String.format("%.1f%%", percent)
                             val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
                             val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                            val overall = (percent * 0.5).toInt()
-                            setBothVoiceProgress(overall, "下载语音模型")
+                            val overall = (percent * 0.4).toInt()
+                            setBothVoiceProgress(overall, "下载中英双语模型")
                         }
                     }
                 }
@@ -1376,15 +1379,28 @@ class SettingsActivity : AppCompatActivity() {
                         btnInstallVoice?.isEnabled = true
                         getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                             .putBoolean("voice_downloading", false).commit()
-                        appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
+                        appendLog("❌ 中英双语模型下载失败: ${result.exceptionOrNull()?.message}")
                         resetBothVoice("安装语音文字输入套件")
                     }
                     return@Thread
                 }
-                // 阶段二：下载雾凇词库（50%~100%）
-                runOnUiThread {
-                    setBothVoiceProgress(50, "正在下载雾凇词库")
-                }
+                // 阶段二：下载纯中文模型（40%~50%）
+                val zhOk = if (zhInfo != null) {
+                    runOnUiThread { setBothVoiceProgress(40, "正在下载纯中文模型") }
+                    val zhResult = kotlinx.coroutines.runBlocking {
+                        dm.downloadArchive("zipformer-zh-2025") { fileName, percent, _, _ ->
+                            runOnUiThread { setBothVoiceProgress(40 + (percent * 0.1).toInt(), "下载纯中文模型") }
+                        }
+                    }
+                    if (!zhResult.isSuccess) {
+                        runOnUiThread {
+                            appendLog("⚠️ 纯中文模型下载失败（中英双语仍可用）: ${zhResult.exceptionOrNull()?.message}")
+                        }
+                        false
+                    } else true
+                } else false
+                // 阶段三：下载雾凇词库（50%~100%）
+                runOnUiThread { setBothVoiceProgress(50, "正在下载雾凇词库") }
                 var dictOk = false
                 var dictMsg = ""
                 dictManager.downloadFullDict(
@@ -1402,7 +1418,7 @@ class SettingsActivity : AppCompatActivity() {
                             getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                                 .putBoolean("voice_downloading", false).commit()
                             if (dictOk) {
-                                appendLog("✅ 语音文字输入套件安装完成")
+                                appendLog("✅ 语音文字输入套件安装完成（中英${if (zhOk) "+纯中文" else "，纯中文失败"}）")
                                 Toast.makeText(this, "语音文字输入套件安装完成", Toast.LENGTH_SHORT).show()
                                 refreshVoiceInstallState()
                                 refreshDictInfo()

@@ -185,12 +185,12 @@ class ModelDownloadManager(private val context: Context) {
                         }
                     } catch (_: Exception) { }
                 }
-                // HEAD 失败时用估算值
+                // HEAD 失败时用估算值（int8 量化版体积）
                 if (fileSize == 0L) {
                     fileSize = when (file) {
-                        "encoder-epoch-99-avg-1.onnx" -> 60L * 1024 * 1024
-                        "decoder-epoch-99-avg-1.onnx" -> 15L * 1024 * 1024
-                        "joiner-epoch-99-avg-1.onnx" -> 5L * 1024 * 1024
+                        "encoder-epoch-99-avg-1.int8.onnx" -> 174L * 1024 * 1024
+                        "decoder-epoch-99-avg-1.int8.onnx" -> 13L * 1024 * 1024
+                        "joiner-epoch-99-avg-1.int8.onnx" -> 3L * 1024 * 1024
                         "tokens.txt" -> 500L * 1024
                         else -> 1024L
                     }
@@ -266,6 +266,91 @@ class ModelDownloadManager(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "Zipformer download failed", e)
+            Result.failure(e)
+        }
+    }
+
+    // ==================== 整包 .tar.bz2 下载 + 解压 ====================
+
+    /**
+     * 下载 .tar.bz2 整包并解压到 modelsDir/<localDir>
+     * 用于纯中文 zipformer 2025（GitHub release 整包分发）
+     * 解压后将 int8 权重文件重命名为标准名（encoder.onnx / decoder.onnx / joiner.onnx），
+     * 以复用现有 isZipformerModel() 校验逻辑。
+     */
+    suspend fun downloadArchive(
+        modelId: String,
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val info = ModelRegistry.getById(modelId) ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
+            val destDir = File(modelsDir, info.fileName)
+            destDir.mkdirs()
+            val archiveFile = File(modelsDir, "${info.fileName}.tar.bz2")
+
+            // 1. 下载整包
+            val request = Request.Builder().url(info.downloadUrl).build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("下载失败 HTTP ${response.code}"))
+            }
+            val body = response.body ?: return@withContext Result.failure(Exception("空响应"))
+            val totalBytes = response.body?.contentLength() ?: info.sizeBytes
+            var downloaded = 0L
+            val temp = File(modelsDir, "${info.fileName}.tar.bz2.tmp")
+            body.byteStream().use { input ->
+                FileOutputStream(temp).use { output ->
+                    val buf = ByteArray(BUFFER_SIZE)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        if (!coroutineContext.isActive) { temp.delete(); return@withContext Result.failure(Exception("下载已取消")) }
+                        output.write(buf, 0, read)
+                        downloaded += read
+                        val pct = if (totalBytes > 0) (downloaded.toDouble() / totalBytes * 100).coerceAtMost(100.0) else 0.0
+                        onProgress?.invoke("${info.fileName}.tar.bz2", pct, downloaded, totalBytes)
+                    }
+                }
+            }
+            if (archiveFile.exists()) archiveFile.delete()
+            if (!temp.renameTo(archiveFile)) { temp.delete(); return@withContext Result.failure(Exception("归档重命名失败")) }
+
+            // 2. 解压（依赖系统 tar，Android 自带 /system/bin/tar）
+            val tarBin = if (File("/system/bin/tar").exists()) "/system/bin/tar"
+                         else if (File("/bin/tar").exists()) "/bin/tar" else "tar"
+            val proc = ProcessBuilder(tarBin, "xjf", archiveFile.absolutePath, "-C", destDir.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            val exit = proc.waitFor()
+            val out = proc.inputStream.bufferedReader().readText()
+            if (exit != 0) {
+                Log.e(TAG, "tar 解压失败 (exit=$exit): $out")
+                return@withContext Result.failure(Exception("解压失败: $out".take(200)))
+            }
+            archiveFile.delete()
+
+            // 3. 将 int8 权重重命名为标准名（如 encoder-epoch-99-avg-1.int8.onnx -> encoder.onnx）
+            val renameMap = mapOf(
+                "encoder-epoch-99-avg-1.int8.onnx" to "encoder.onnx",
+                "decoder-epoch-99-avg-1.int8.onnx" to "decoder.onnx",
+                "joiner-epoch-99-avg-1.int8.onnx" to "joiner.onnx"
+            )
+            destDir.listFiles()?.forEach { f ->
+                renameMap[f.name]?.let { newName ->
+                    val target = File(destDir, newName)
+                    if (!target.exists()) f.renameTo(target)
+                }
+                // 包内可能嵌套一层同名目录，把其内容上提
+                if (f.isDirectory) {
+                    f.listFiles()?.forEach { inner -> inner.renameTo(File(destDir, inner.name)) }
+                    if (f.listFiles().isNullOrEmpty()) f.delete()
+                }
+            }
+
+            modelManager.markInstalled(modelId, ModelInfo.ModelType.VOICE)
+            Log.i(TAG, "Archive model extracted: ${destDir.absolutePath}")
+            Result.success(destDir)
+        } catch (e: Exception) {
+            Log.e(TAG, "Archive download failed", e)
             Result.failure(e)
         }
     }

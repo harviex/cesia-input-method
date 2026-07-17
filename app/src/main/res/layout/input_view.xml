@@ -403,6 +403,18 @@
                 android:stateListAnimator="@null"
                 android:insetTop="0dp"
                 android:insetBottom="0dp" />
+
+            <!-- 纯中文模式标记：白色“中”（仅中文精识别模式显示） -->
+            <TextView
+                android:id="@+id/tv_mic_zh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="中"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="11sp"
+                android:layout_marginStart="4dp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- 清空按钮 -->

@@ -89,6 +89,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
+    private lateinit var tvMicZh: android.widget.TextView  // 纯中文模式标记（白色“中”）
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: ImageButton // 智能修改按钮（魔法书/笔）
@@ -192,6 +193,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var micLongPressTriggered = false
     private var micHandler = Handler(Looper.getMainLooper())
     private var micLongPressRunnable: Runnable? = null
+    // 语音键双击检测（切换中英混 ↔ 纯中文识别模式）
+    private var micLastClickTime = 0L
+    private val MIC_DOUBLE_CLICK_MS = 350L
 
     // 候选词栏
     private lateinit var candidateBar: LinearLayout
@@ -942,6 +946,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         micButtonContainer = view.findViewById(R.id.mic_button_container)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
+        tvMicZh = view.findViewById(R.id.tv_mic_zh)
         btnSettings = view.findViewById(R.id.btn_settings)
         btnDelete = view.findViewById(R.id.btn_delete)
         btnClipboard = view.findViewById(R.id.btn_magic_book)
@@ -1416,6 +1421,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // AI× 按键边框随主题色变化
         btnMicNoAi?.strokeColor = android.content.res.ColorStateList.valueOf(accent)
         btnMicNoAi?.strokeWidth = (1.5f * resources.displayMetrics.density).toInt()
+        // 纯中文模式标记“中”：字号随主题文字档变化（颜色固定白，由 updateMicZhLabel 控制）
+        updateMicZhLabel()
         // 状态栏圆点：随主题色实时重绘（拖主题杆时直接变，无需重启）
         redrawStatusDot()
         // 键盘副字符色（T9 数字等）
@@ -2298,8 +2305,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 android.view.MotionEvent.ACTION_UP -> {
                     cancelMicLongPressDetection()
                     if (!micLongPressTriggered) {
-                        // 直接走点击逻辑，不再 performClick（避免发光动画干扰点击命中，需按两下）
-                        micOnClickListener()
+                        val now = System.currentTimeMillis()
+                        val isDouble = (now - micLastClickTime) <= MIC_DOUBLE_CLICK_MS
+                        if (isDouble) {
+                            micLastClickTime = 0L
+                            // 双击：切换中英混 ↔ 纯中文识别（仅未录音时生效）
+                            if (!isRecording) {
+                                switchVoiceRecognitionMode()
+                            } else {
+                                updateStatus("录音中无法切换识别模式，请先停止录音")
+                            }
+                        } else {
+                            micLastClickTime = now
+                            // 单击：延迟 350ms 执行开始录音（留出双击判定窗口）
+                            micHandler.postDelayed({
+                                if (micLastClickTime != 0L && !isRecording && !isVoiceLocked) {
+                                    micLastClickTime = 0L
+                                    micOnClickListener()
+                                }
+                            }, MIC_DOUBLE_CLICK_MS)
+                        }
                     }
                     true
                 }
@@ -2569,7 +2594,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         if (!isRecording && !isWaitingForChoice) {
-            maybeShowButtonHint("voice", "正在收听...")
+            maybeShowButtonHint("voice", "正在收听... 双击语音键切换中文精准识别，长按锁定语音识别")
+            updateStatus("🎤 正在收听... 双击语音键切换中文精准识别，长按锁定语音识别")
             try {
                 val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
                 val hasVoiceModel = modelManager.hasVoiceModel()
@@ -4518,6 +4544,41 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // 立即显示 AI+ / AI× 按钮
         showAiChoiceButtons()
+    }
+
+    /**
+     * 双击语音键：在中英混流 ↔ 纯中文精识别之间切换
+     */
+    private fun switchVoiceRecognitionMode() {
+        if (!voiceEngine.hasChineseModel()) {
+            updateStatus("纯中文模型未下载，请到设置→语音文字套件下载")
+            return
+        }
+        val newMode = voiceEngine.switchVoiceMode()
+        // 更新麦克风右侧“中”标记
+        updateMicZhLabel()
+        if (newMode == VoiceEngine.VoiceMode.CHINESE) {
+            updateStatus("已切换到纯中文精准识别（双击切回中英混流）")
+        } else {
+            updateStatus("已切回中英混流识别（双击切换纯中文）")
+        }
+        Log.i("Cesia", "语音识别模式切换: ${newMode.name}")
+    }
+
+    /** 根据当前语音模式更新麦克风右侧“中”标记（仅纯中文模式显示，白色固定） */
+    private fun updateMicZhLabel() {
+        if (!::tvMicZh.isInitialized) return
+        val show = voiceEngine.voiceMode == VoiceEngine.VoiceMode.CHINESE && voiceEngine.hasChineseModel()
+        tvMicZh.visibility = if (show) android.view.View.VISIBLE else android.view.View.GONE
+        // 字号随主题文字档变化（与键盘副字符一致）；颜色固定白
+        val sizeSp = when (textThemeSize) {
+            0 -> 9f
+            2 -> 13f
+            3 -> 16f
+            else -> 11f
+        }
+        tvMicZh.textSize = sizeSp
+        tvMicZh.setTextColor(0xFFFFFFFF.toInt())
     }
 
     /**
