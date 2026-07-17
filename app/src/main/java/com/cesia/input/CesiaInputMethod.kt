@@ -95,6 +95,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMagic: ImageButton // 智能写作按钮（星星/五角星）
     private lateinit var btnSend: ImageButton
     private lateinit var statusDot: View
+    private var statusDotState: String = "idle"
     private lateinit var statusText: TextView
     private lateinit var voiceWave: View
     private lateinit var btnTheme: TextView
@@ -947,6 +948,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMagic = view.findViewById(R.id.btn_magic)
         btnSend = view.findViewById(R.id.btn_send)
         statusDot = view.findViewById(R.id.v_status_dot)
+        statusDotState = "idle"
         statusText = view.findViewById(R.id.tv_status)
         voiceWave = view.findViewById(R.id.v_voice_wave)
         btnTheme = view.findViewById(R.id.btn_theme)
@@ -1414,6 +1416,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // AI× 按键边框随主题色变化
         btnMicNoAi?.strokeColor = android.content.res.ColorStateList.valueOf(accent)
         btnMicNoAi?.strokeWidth = (1.5f * resources.displayMetrics.density).toInt()
+        // 状态栏圆点：随主题色实时重绘（拖主题杆时直接变，无需重启）
+        redrawStatusDot()
         // 键盘副字符色（T9 数字等）
         if (::keyboardView.isInitialized) {
             // 副字符颜色跟随主题色
@@ -1870,14 +1874,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun expandCandidatePanel() {
         isPanelExpanded = true
         candidatePanel.visibility = View.VISIBLE
-        btnCandidateExpand.setImageResource(android.R.drawable.arrow_up_float)
+        btnCandidateExpand.setImageResource(R.drawable.triangle_gray_up)
         updateCandidateBar()
     }
 
     private fun collapseCandidatePanel() {
         isPanelExpanded = false
         candidatePanel.visibility = View.GONE
-        btnCandidateExpand.setImageResource(android.R.drawable.arrow_down_float)
+        btnCandidateExpand.setImageResource(R.drawable.triangle_gray_down)
     }
 
     /** 通过全局索引选择候选词（自动翻页选中） */
@@ -2512,7 +2516,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 sendDownUpEnter()
             }
-            updateStatus("📤 已发送（长按显示剪贴板）")
+            updateStatus("已发送（长按显示剪贴板）")
         }
         // 发送键长按：剪贴板管理器
         btnSend.setOnTouchListener { v, event ->
@@ -4726,7 +4730,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "send" -> {
                                     // 发送（中等级）：确认文本（含前缀）+ 发送，然后——若处于锁定态则恢复监听继续识别
-                                    updateStatus("📤 已发送（长按显示剪贴板）")
+                                    updateStatus("已发送（长按显示剪贴板）")
                                     val editorInfo = currentInputEditorInfo
                                     val canSend = editorInfo != null &&
                                         (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
@@ -8549,9 +8553,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     // ======================== UI 辅助 ========================
 
     private fun setStatusDot(state: String) {
+        statusDotState = state
+        redrawStatusDot()
+    }
+
+    /** 按当前 statusDotState 重绘圆点（颜色随主题色实时变化，无需重启） */
+    private fun redrawStatusDot() {
         if (!::statusDot.isInitialized) return
         try {
-            val color = when (state) {
+            val color = when (statusDotState) {
                 "recording" -> themeAccent
                 "processing" -> 0xFFFF9800.toInt() // orange
                 "error" -> 0xFFF44336.toInt()    // red
