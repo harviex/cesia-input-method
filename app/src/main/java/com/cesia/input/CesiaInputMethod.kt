@@ -2071,6 +2071,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBar.visibility = if (show) View.VISIBLE else View.INVISIBLE
     }
 
+    /**
+     * 清除候选栏内容（词列表 + 状态文字）但整条栏保持可见（不收起），用于：
+     * 词上屏(空格/标点/回车)、单击无联想、联想耗尽、退格删词等场景。
+     * 同时结束语音保持模式(candidateBarKeep)，使“退格才清”的语音保持在此类提交后失效。
+     */
+    private fun clearCandidateContent() {
+        candidateBarKeep = false
+        candidateAdapter?.updateData(emptyList())
+        rvCandidates?.scrollToPosition(0)
+        if (isPanelExpanded) collapseCandidatePanel()
+        candidateBar.visibility = View.VISIBLE
+        updateStatus(statusIdleText)
+    }
+
     private fun updateCandidateBar() {
         // 语音识别期间不更新候选栏（避免覆盖流式识别状态）
         if (isRecording) return
@@ -2106,12 +2120,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 associationPrefix = ""
                 associationCandidates = emptyList()
             }
-            // 语音保持模式：即使无输入也不隐藏候选栏，直到退格
+            // 没有输入时：语音保持模式(candidateBarKeep)下整栏保持可见；否则清除内容但保持可见（不收起）
             if (!candidateBarKeep) {
-                candidateBar.visibility = View.GONE
-                if (isPanelExpanded) collapseCandidatePanel()
+                clearCandidateContent()
             }
-            updateStatus(statusIdleText)
             return
         }
 
@@ -2302,11 +2314,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnDelete.setOnClickListener {
             maybeShowButtonHint("clear", "清空")
-            // 退格键：解除语音保持模式，隐藏候选栏
-            if (candidateBarKeep) {
-                candidateBarKeep = false
-                candidateBar.visibility = View.INVISIBLE
-            }
+            // 清空键：清除候选栏内容（保持可见），并结束语音保持模式
+            clearCandidateContent()
             if (rimeEngine.isComposing) {
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
@@ -7543,7 +7552,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         }
                     }
                 }
-                if (keyboardMode != KeyboardMode.NUMBER) updateCandidateBar()
+                if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
             }
 
             // ======================== 退格键 ========================
@@ -7554,6 +7563,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     deleteSelectionOrChar()
                     return
                 }
+                // 退格：结束语音保持模式（语音②“退格才清”），并准备清除候选栏内容
+                candidateBarKeep = false
                 if (keyboardMode == KeyboardMode.NUMBER) {
                     // 数字键盘退格（逐键选音：优先撤销已选字母；撤销字母不会删除原数字，仅缩短前缀）
                     if (!t9ShiftTemp && (t9SpellPrefix.isNotEmpty() || t9DigitQueue.isNotEmpty())) {
@@ -7580,7 +7591,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         deleteSelectionOrChar()
                     }
                     if (wasComposing && !rimeEngine.isComposing) {
-                        resetToIdle()
+                        clearCandidateContent()
                     } else {
                         updateCandidateBar()
                     }
@@ -7612,7 +7623,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                             }
                             rimeEngine.clear()
-                            updateCandidateBar()
+                            clearCandidateContent()
                         }
                     } else {
                         // 英文模式：先上屏英文（去掉分词符 '），再换行
@@ -7621,7 +7632,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             ic?.commitText(enText, 1)
                         }
                         rimeEngine.clear()
-                        updateCandidateBar()
+                        clearCandidateContent()
                         ic?.commitText("\n", 1)
                     }
                 } else {
@@ -7752,7 +7763,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         rimeEngine.clear()
         pendingEnglish = ""
         if (isPanelExpanded) collapseCandidatePanel()
-        updateCandidateBar()
+        clearCandidateContent()
     }
 
     /**
