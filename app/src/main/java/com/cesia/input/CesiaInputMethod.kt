@@ -55,6 +55,7 @@ import com.cesia.input.engine.rime.RimeEngine
 import com.cesia.input.model.ModelManager
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
+import com.cesia.input.stats.PolishHistoryManager
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
@@ -494,6 +495,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 智能修改历史（魔法书）
     private var magicHistoryManager: MagicHistoryManager? = null
     private var currentMagicPrompt: String? = null
+    // 语音润色历史（独立模块，默认关闭）
+    private var polishHistoryManager: PolishHistoryManager? = null
 
     // 发送消息历史
     private val sentMessages = mutableListOf<String>()
@@ -1070,6 +1073,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化引擎
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
+        polishHistoryManager = PolishHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
 
         rimeEngine = RimeEngine(this)
@@ -5145,7 +5149,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         typelessEngine?.polishTextAsync(enhancedText) { finalText ->
             Log.d("Cesia", "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'")
             isProcessingResult = false
-            replaceTextWithPolish(text, finalText)
+            replaceTextWithPolish(text, finalText, aiUsed = true)
         } ?: run {
             Log.w("Cesia", "polishRecognizedText: typelessEngine 为 null，无法云端润色")
             isProcessingResult = false
@@ -5158,7 +5162,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      * 替换光标处的原文为润色结果
      * 删除前面的原文，插入润色后的文本
      */
-    private fun replaceTextWithPolish(originalText: String, polishedText: String) {
+    private fun replaceTextWithPolish(originalText: String, polishedText: String, aiUsed: Boolean = false) {
         try {
             val ic = currentInputConnection ?: return
             // 删除原文（光标前面的 originalText.length 个字符）
@@ -5178,6 +5182,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
         statsManager.addRecord(originalText, polishedText, duration)
+        // 语音润色历史（独立模块，按模式记录；默认关闭）
+        polishHistoryManager?.addRecord(originalText, polishedText, aiUsed)
         // 锁定模式下润色完成后自动重新开始录音
         if (isVoiceLocked) {
             startRecordingLocked()
@@ -5227,7 +5233,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     val finalText = result ?: text
-                    replaceTextWithPolish(text, finalText)
+                    replaceTextWithPolish(text, finalText, aiUsed = true)
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "本地润色失败", e)

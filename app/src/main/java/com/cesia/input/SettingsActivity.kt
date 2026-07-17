@@ -1914,8 +1914,60 @@ class SettingsActivity : AppCompatActivity() {
     // ======================== 历史记录 & 新闻源 ========================
 
     private fun showHistory() {
-        val intent = Intent(this, HistoryActivity::class.java)
-        startActivity(intent)
+        // 首次/每次点击：弹出“如何使用历史记录”选择菜单（默认不记录）
+        val historyManager = com.cesia.input.stats.PolishHistoryManager(this)
+        val currentMode = historyManager.getMode()
+
+        // AI 分析选项启用条件：已装千问(MNN)模型 或 云端 API 已配置
+        val aiAvailable = modelManager.hasAiModel() ||
+                prefs.getBoolean("api_url_configured", false)
+
+        val modes = arrayOf(
+            com.cesia.input.stats.PolishHistoryManager.MODE_LOCAL,
+            com.cesia.input.stats.PolishHistoryManager.MODE_AI,
+            com.cesia.input.stats.PolishHistoryManager.MODE_OFF
+        )
+        val labels = arrayOf("仅本地开启历史记录功能", "允许 AI 分析历史记录（需 AI 测试通过）", "关闭历史记录功能（所有记录将清空）")
+        val checkedIndex = when (currentMode) {
+            com.cesia.input.stats.PolishHistoryManager.MODE_LOCAL -> 0
+            com.cesia.input.stats.PolishHistoryManager.MODE_AI -> 1
+            else -> 2
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("输入历史记录")
+            .setSingleChoiceItems(labels, checkedIndex) { _, which ->
+                // 禁用项（AI 未就绪）不可选
+                if (which == 1 && !aiAvailable) return@setSingleChoiceItems
+            }
+            .setPositiveButton("确定") { d, _ ->
+                val lv = (d as AlertDialog).listView
+                val which = lv.checkedItemPosition
+                if (which < 0) return@setPositiveButton
+                val mode = modes[which]
+                if (mode == com.cesia.input.stats.PolishHistoryManager.MODE_AI && !aiAvailable) {
+                    Toast.makeText(this, "AI 模型未就绪，无法选择此项", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                historyManager.setMode(mode)
+                if (mode == com.cesia.input.stats.PolishHistoryManager.MODE_OFF) {
+                    Toast.makeText(this, "历史记录已关闭，记录已清空", Toast.LENGTH_SHORT).show()
+                } else {
+                    startActivity(Intent(this, PolishHistoryActivity::class.java))
+                }
+            }
+            .setNegativeButton("取消", null)
+            .create()
+
+        dialog.show()
+        // 禁用 AI 选项（未就绪时灰显）
+        if (!aiAvailable) {
+            val lv = dialog.listView
+            val item = lv.getChildAt(1)
+            item?.isEnabled = false
+            (item as? TextView)?.isEnabled = false
+            (item as? TextView)?.alpha = 0.4f
+        }
     }
 
     private fun showNewsSourcePicker() {
