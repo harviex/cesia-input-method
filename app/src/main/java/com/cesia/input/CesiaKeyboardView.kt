@@ -242,6 +242,13 @@ class CesiaKeyboardView @JvmOverloads constructor(
             invalidateAllKeys()
         }
 
+    // T9 1键全拼/简拼是否处于锁定状态（双击锁定，防误触）；锁定后在键左上角绘制小锁图标
+    var t9FenCiLock: Boolean = false
+        set(value) {
+            field = value
+            invalidateAllKeys()
+        }
+
     // 副字符画笔（灰色）
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.DEFAULT
@@ -431,6 +438,14 @@ class CesiaKeyboardView @JvmOverloads constructor(
                         val cx = key.x + key.width / 2f
                         val cy = key.y + key.height / 2f + centerPaint.textSize * 0.35f
                         canvas.drawText(t9FenCiLabel, cx, cy, centerPaint)
+                        // 锁定状态：左上角绘制小锁图标（🔒）
+                        if (t9FenCiLock) {
+                            val lockPaint = Paint(t9MainPaint).apply {
+                                textSize = t9MainSpSize * 0.55f
+                                color = themeAccent
+                            }
+                            canvas.drawText("🔒", key.x + key.width * 0.12f, key.y + key.height * 0.30f, lockPaint)
+                        }
                         continue
                     }
                     val t9Func = t9FuncLabels[code]

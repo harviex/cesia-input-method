@@ -123,6 +123,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         textThemeSize = prefs.getInt("theme_text_size", 1)
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
         autoTimeTheme = prefs.getBoolean("auto_time_theme", false)
+        t9FenCiLock = prefs.getBoolean("t9_fenci_lock", false)
+        keyboardView.t9FenCiLock = t9FenCiLock
     }
 
     /**
@@ -304,6 +306,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 // region 状态变量
     // ======================== 状态 ========================
     private var isRecording = false
+    // 语音输入后候选栏保持可见（不自动隐藏），直到按退格键才隐藏
+    private var candidateBarKeep = false
     private var keyboardMode = KeyboardMode.NUMBER  // 默认 T9 数字键盘
     private var defaultKeyboardMode = KeyboardMode.NUMBER  // 用户长按切换键设定的默认键盘（打开输入法即用）
     private var prevKeyboardMode = KeyboardMode.NUMBER  // 进入符号键盘前的键盘模式（用于返回）
@@ -366,6 +370,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
     private var t9FenCiOn = true                  // 分词开关：默认开=简拼（数字间加分词符）；关=全拼（数字直连）
+    private var t9FenCiLock = false               // 全拼/简拼按钮双击锁定（防误触），持久化，默认不锁
+    private var t9FenCiLastClick = 0L             // 1键上次单击时间戳（双击检测）
+    private var t9FenCiPendingSingle: Runnable? = null  // 单击待执行的切换任务（延迟以等待可能的双击）
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
     private var pendingEnglish = ""               // 英文模式下已直接上屏的连续英文字母缓冲（按数字时连同数字一起上屏）
 
@@ -413,6 +420,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicBookLongPressTriggered = false
     private var magicBookHandler = Handler(Looper.getMainLooper())
     private var magicBookRunnable: Runnable? = null
+    // 全拼/简拼按钮双击检测定时器
+    private val fenciHandler = Handler(Looper.getMainLooper())
     // 智能修改按钮（魔法书/笔）长按发光状态
     private var magicBookGlowing = false
 
@@ -2054,8 +2063,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 候选栏显隐：隐藏用 INVISIBLE（保留 36dp 占位，避免 GONE 导致键盘重排版闪烁） */
+    /** 候选栏显隐：隐藏用 INVISIBLE（保留 36dp 占位，避免 GONE 导致键盘重排版闪烁）。
+     *  语音输入保持模式(candidateBarKeep)下不隐藏，直到退格键清除该标志。 */
     private fun setCandidateBarVisible(show: Boolean) {
+        if (!show && candidateBarKeep) return
         candidateBar.visibility = if (show) View.VISIBLE else View.INVISIBLE
     }
 
@@ -2094,8 +2105,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 associationPrefix = ""
                 associationCandidates = emptyList()
             }
-            candidateBar.visibility = View.GONE
-            if (isPanelExpanded) collapseCandidatePanel()
+            // 语音保持模式：即使无输入也不隐藏候选栏，直到退格
+            if (!candidateBarKeep) {
+                candidateBar.visibility = View.GONE
+                if (isPanelExpanded) collapseCandidatePanel()
+            }
             updateStatus(statusIdleText)
             return
         }
@@ -2287,6 +2301,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnDelete.setOnClickListener {
             maybeShowButtonHint("clear", "清空")
+            // 退格键：解除语音保持模式，隐藏候选栏
+            if (candidateBarKeep) {
+                candidateBarKeep = false
+                candidateBar.visibility = View.INVISIBLE
+            }
             if (rimeEngine.isComposing) {
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
@@ -4381,7 +4400,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         setStatusDot("recording")
         startVoiceWave()
         keyboardView.visibility = View.GONE
-        candidateBar.visibility = View.GONE
+        // 语音输入期间保持候选栏可见（显示识别状态），输入完也不隐藏，直到退格
+        candidateBar.visibility = View.VISIBLE
+        candidateBarKeep = true
 
         // 设置同传回调
         mgr.onStatusUpdate = { status ->
@@ -4459,7 +4480,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         setStatusDot("recording")
         startVoiceWave()
         keyboardView.visibility = View.GONE
-        candidateBar.visibility = View.GONE
+        // 语音输入期间保持候选栏可见（显示识别状态），输入完也不隐藏，直到退格
+        candidateBar.visibility = View.VISIBLE
+        candidateBarKeep = true
         voiceStartTime = System.currentTimeMillis()
 
         when (voiceChoice) {
@@ -4491,7 +4514,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 锁定模式不显示绿色圆点，避免按钮偏移
         // startVoiceWave() 已禁用
         keyboardView.visibility = View.GONE
-        candidateBar.visibility = View.GONE
+        // 语音输入期间保持候选栏可见，输入完也不隐藏，直到退格
+        candidateBar.visibility = View.VISIBLE
+        candidateBarKeep = true
         voiceStartTime = System.currentTimeMillis()
         updateStatus("🎤 正在收听 (锁定模式)...")
         startWhisperRecordingAsync()
@@ -4511,7 +4536,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isContinuingSession = true
         setStatusDot("recording")
         keyboardView.visibility = View.GONE
-        candidateBar.visibility = View.GONE
+        // 语音输入期间保持候选栏可见，输入完也不隐藏，直到退格
+        candidateBar.visibility = View.VISIBLE
+        candidateBarKeep = true
         voiceStartTime = System.currentTimeMillis()
         // 重新启动本地流式识别循环（resetStream 由 VoiceEngine 内部处理）
         startWhisperRecordingAsync()
@@ -5890,8 +5917,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } else {
                 when (primaryCode) {
                     49 -> {
-                        // 1键：分词开关（默认开=简拼，点一下关=全拼，自由切换）
-                        toggleT9FenCi()
+                        // 1键：全拼/简拼切换 + 双击锁定（防误触）
+                        onFenciKeyClick()
                     }
                     65292 -> {
                         currentInputConnection?.commitText("，", 1)
@@ -5949,6 +5976,36 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         updateSpellBar()
         updateCandidateBar()
+    }
+
+    /** 1 键：单击=切换全拼/简拼（并提示）；双击=锁定/解锁当前模式（防误触，持久化） */
+    private fun onFenciKeyClick() {
+        val now = System.currentTimeMillis()
+        val isDouble = now - t9FenCiLastClick < 350
+        t9FenCiLastClick = now
+        if (isDouble) {
+            // 双击：锁定/解锁。取消待执行的单击切换，改为切换锁状态
+            t9FenCiPendingSingle?.let { fenciHandler.removeCallbacks(it) }
+            t9FenCiPendingSingle = null
+            t9FenCiLock = !t9FenCiLock
+            keyboardView.t9FenCiLock = t9FenCiLock
+            getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+                .putBoolean("t9_fenci_lock", t9FenCiLock).apply()
+            updateStatus(if (t9FenCiLock) "已锁定（${if (t9FenCiOn) "简拼" else "全拼"}）·双击解锁" else "已解锁·双击锁定")
+            keyboardView.invalidateAllKeys()
+            return
+        }
+        // 单击：延迟 350ms 执行切换，给双击留出判定窗口
+        val pending = Runnable { doFenciToggle() }
+        t9FenCiPendingSingle = pending
+        fenciHandler.postDelayed(pending, 350)
+    }
+
+    /** 真正执行全拼/简拼切换（单击触发） */
+    private fun doFenciToggle() {
+        t9FenCiPendingSingle = null
+        toggleT9FenCi()
+        updateStatus("双击锁定/解锁，单击切换")
     }
 
     /** 1 键：分词开关切换（默认开=简拼，点一下关=全拼，自由切换） */
