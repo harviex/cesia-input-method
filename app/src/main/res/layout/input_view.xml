@@ -204,12 +204,14 @@
         <!-- 展开/收起候选词面板按钮（候选词>4时显示） -->
         <ImageButton
             android:id="@+id/btn_candidate_expand"
-            android:layout_width="28dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:src="@android:drawable/arrow_down_float"
-            android:background="?android:attr/selectableItemBackground"
+            android:background="@drawable/candidate_expand_bg"
             android:scaleType="centerInside"
-            android:padding="2dp"
+            android:padding="6dp"
+            android:elevation="0dp"
+            android:stateListAnimator="@null"
             android:visibility="gone"
             android:contentDescription="展开候选词" />
     </LinearLayout>
@@ -376,6 +378,8 @@
                 android:textColor="#81D8D0"
                 android:textStyle="bold"
                 android:backgroundTint="#FFFFFF"
+                app:strokeWidth="1.5dp"
+                app:strokeColor="#81D8D0"
                 app:cornerRadius="10dp"
                 android:elevation="0dp"
                 android:stateListAnimator="@null"

@@ -1411,6 +1411,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnMicAi?.backgroundTintList = accentStateList
         btnMicAi?.setTextColor(0xFFFFFFFF.toInt())
         btnMicNoAi?.setTextColor(accent)
+        // AI× 按键边框随主题色变化
+        btnMicNoAi?.strokeColor = android.content.res.ColorStateList.valueOf(accent)
+        btnMicNoAi?.strokeWidth = (1.5f * resources.displayMetrics.density).toInt()
         // 键盘副字符色（T9 数字等）
         if (::keyboardView.isInitialized) {
             // 副字符颜色跟随主题色
@@ -1854,6 +1857,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // GridView 点击选候选词
         gvCandidates.setOnItemClickListener { _, _, position, _ ->
             selectCandidateByGlobalIndex(position)
+            // 选中后候选面板滚动回顶部（高频词），避免停在当前滚动位置
+            gvCandidates.post { gvCandidates.setSelection(0) }
         }
 
         // 收起按钮
@@ -2507,6 +2512,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 sendDownUpEnter()
             }
+            updateStatus("📤 已发送（长按显示剪贴板）")
         }
         // 发送键长按：剪贴板管理器
         btnSend.setOnTouchListener { v, event ->
@@ -4720,7 +4726,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 }
                                 "send" -> {
                                     // 发送（中等级）：确认文本（含前缀）+ 发送，然后——若处于锁定态则恢复监听继续识别
-                                    updateStatus("📤 已发送")
+                                    updateStatus("📤 已发送（长按显示剪贴板）")
                                     val editorInfo = currentInputEditorInfo
                                     val canSend = editorInfo != null &&
                                         (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
@@ -8549,7 +8555,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 "recording" -> themeAccent
                 "processing" -> 0xFFFF9800.toInt() // orange
                 "error" -> 0xFFF44336.toInt()    // red
-                else -> 0xFF999999.toInt()       // gray idle
+                else -> themeAccent               // 空闲：主题色圆点
             }
             val drawable = android.graphics.drawable.GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
