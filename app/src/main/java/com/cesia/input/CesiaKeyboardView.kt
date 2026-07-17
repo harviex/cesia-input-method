@@ -235,8 +235,8 @@ class CesiaKeyboardView @JvmOverloads constructor(
             // 49 不再固定 "Tab"，改由 t9FenCiLabel 动态显示「简拼/全拼」
         )
 
-    // T9 1键分词开关动态文字（默认「简拼」，切全拼显示「全拼」），样式参考全选键
-    var t9FenCiLabel: String = "简拼"
+    // T9 1键分词开关动态文字（默认「全拼」，切简拼显示「简拼」），样式参考全选键
+    var t9FenCiLabel: String = "全拼"
         set(value) {
             field = value
             invalidateAllKeys()

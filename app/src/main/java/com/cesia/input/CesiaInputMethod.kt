@@ -368,7 +368,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
     private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
-    private var t9FenCiOn = true                  // 分词开关：默认开=简拼（数字间加分词符）；关=全拼（数字直连）
+    private var t9FenCiOn = false                 // 分词开关：默认关=全拼（数字直连）；开=简拼（数字间加分词符）
     private var t9FenCiLock = false               // 全拼/简拼按钮双击锁定（防误触），持久化，默认不锁
     private var t9FenCiLastClick = 0L             // 1键上次单击时间戳（双击检测）
     private var t9FenCiPendingSingle: Runnable? = null  // 单击待执行的切换任务（延迟以等待可能的双击）
@@ -5682,7 +5682,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             t9SpellPrefix.clear()
             t9FenCiMerged = emptyList()
             t9ComposedSoFar.clear()
-            keyboardView.t9FenCiLabel = "简拼"  // 复位（仅 T9 模式绘制，全键盘不显示）
+            keyboardView.t9FenCiLabel = "全拼"  // 复位（仅 T9 模式绘制，全键盘不显示）
             candidateBar.visibility = View.GONE
             updateStatus(statusIdleText)
         } else {
@@ -5994,6 +5994,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 .putBoolean("t9_fenci_lock", t9FenCiLock).apply()
             updateStatus(if (t9FenCiLock) "已锁定（${if (t9FenCiOn) "简拼" else "全拼"}）·双击解锁" else "已解锁·双击锁定")
             keyboardView.invalidateAllKeys()
+            return
+        }
+        // 锁定状态下：单击不切换全拼/简拼（防误触），仅提示
+        if (t9FenCiLock) {
+            updateStatus("已锁定·双击解锁")
             return
         }
         // 单击：延迟 350ms 执行切换，给双击留出判定窗口
