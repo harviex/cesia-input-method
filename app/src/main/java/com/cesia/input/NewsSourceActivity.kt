@@ -89,12 +89,11 @@ class NewsSourceActivity : AppCompatActivity() {
                     }
                 }
             } else {
-                // 取消选中：清除选择
-                RssFetchManager.clearSelectedSource(this@NewsSourceActivity)
-                selectedUrl = ""
-                adapter.selectedUrl = ""
-                adapter.notifyDataSetChanged()
-                Toast.makeText(this, "已取消：${source.name}", Toast.LENGTH_SHORT).show()
+                // 单选模式：不允许取消到“无源”，忽略取消操作（保持当前选中）
+                if (selectedUrl == source.url) {
+                    adapter.notifyDataSetChanged()
+                    Toast.makeText(this, "需至少保留一个新闻源", Toast.LENGTH_SHORT).show()
+                }
             }
         }
         rv.layoutManager = LinearLayoutManager(this)
