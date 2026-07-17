@@ -387,8 +387,9 @@
                 android:insetBottom="0dp"
                 android:visibility="gone" />
 
-            <!-- 语音按键：麦克风矢量图标（FrameLayout 包住，右上角显示“中”副字符） -->
+            <!-- 语音按键：麦克风矢量图标（包裹 FrameLayout 以承载右上角“中”标记） -->
             <FrameLayout
+                android:id="@+id/mic_wrapper"
                 android:layout_width="0dp"
                 android:layout_height="28dp"
                 android:layout_weight="1">
@@ -396,7 +397,7 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_mic"
                     android:layout_width="match_parent"
-                    android:layout_height="28dp"
+                    android:layout_height="match_parent"
                     android:drawableTop="@drawable/ic_mic"
                     android:drawableTint="#FFFFFF"
                     android:text=""
@@ -408,17 +409,18 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp" />
 
+                <!-- 纯中文模式标记：白色“中”（显示在语音键右上角，仅中文精识别模式显示） -->
                 <TextView
                     android:id="@+id/tv_mic_zh"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="top|end"
-                    android:layout_marginTop="1dp"
-                    android:layout_marginEnd="3dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginEnd="4dp"
                     android:text="中"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
                     android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="11sp"
                     android:visibility="gone" />
             </FrameLayout>
         </LinearLayout>

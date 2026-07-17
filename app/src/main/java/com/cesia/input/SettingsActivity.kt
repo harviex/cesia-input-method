@@ -1915,22 +1915,21 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showHistory() {
         // 首次/每次点击：弹出“如何使用历史记录”选择菜单（默认不记录）
-        val historyManager = com.cesia.input.stats.PolishHistoryManager(this)
-        val currentMode = historyManager.getMode()
+        val historyPrefs = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
+        val currentMode = historyPrefs.getString("history_mode", "off") ?: "off"
 
-        // AI 分析选项启用条件：已装千问(MNN)模型 或 云端 API 已配置
+        // AI 选项分析条件：已装千问(MNN)模型 或 云端 API 已配置
         val aiAvailable = modelManager.hasAiModel() ||
                 prefs.getBoolean("api_url_configured", false)
 
-        val modes = arrayOf(
-            com.cesia.input.stats.PolishHistoryManager.MODE_LOCAL,
-            com.cesia.input.stats.PolishHistoryManager.MODE_AI,
-            com.cesia.input.stats.PolishHistoryManager.MODE_OFF
-        )
+        val MODE_LOCAL = "local"
+        val MODE_AI = "ai"
+        val MODE_OFF = "off"
+        val modes = arrayOf(MODE_LOCAL, MODE_AI, MODE_OFF)
         val labels = arrayOf("仅本地开启历史记录功能", "允许 AI 分析历史记录（需 AI 测试通过）", "关闭历史记录功能（所有记录将清空）")
         val checkedIndex = when (currentMode) {
-            com.cesia.input.stats.PolishHistoryManager.MODE_LOCAL -> 0
-            com.cesia.input.stats.PolishHistoryManager.MODE_AI -> 1
+            MODE_LOCAL -> 0
+            MODE_AI -> 1
             else -> 2
         }
 
@@ -1945,15 +1944,18 @@ class SettingsActivity : AppCompatActivity() {
                 val which = lv.checkedItemPosition
                 if (which < 0) return@setPositiveButton
                 val mode = modes[which]
-                if (mode == com.cesia.input.stats.PolishHistoryManager.MODE_AI && !aiAvailable) {
+                if (mode == MODE_AI && !aiAvailable) {
                     Toast.makeText(this, "AI 模型未就绪，无法选择此项", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                historyManager.setMode(mode)
-                if (mode == com.cesia.input.stats.PolishHistoryManager.MODE_OFF) {
+                historyPrefs.edit().putString("history_mode", mode).apply()
+                if (mode == MODE_OFF) {
+                    // 关闭即清空所有润色记录
+                    com.cesia.input.stats.PolishStatsManager(this).clearRecords()
                     Toast.makeText(this, "历史记录已关闭，记录已清空", Toast.LENGTH_SHORT).show()
                 } else {
-                    startActivity(Intent(this, PolishHistoryActivity::class.java))
+                    // 复用现有润色历史页面
+                    startActivity(Intent(this, HistoryActivity::class.java))
                 }
             }
             .setNegativeButton("取消", null)

@@ -44,7 +44,6 @@
         </activity>
 
         <activity android:name=".HistoryActivity" android:label="润色历史记录" />
-        <activity android:name=".PolishHistoryActivity" android:label="语音润色历史" />
 
         <!-- 本地文库文件选择器（透明辅助 Activity） -->
         <activity
