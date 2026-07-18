@@ -5,12 +5,15 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- 标题栏：标题 + 关闭按钮 -->
+    <!-- 标题栏（主题色 banner + 关闭 X），风格与新闻源管理统一 -->
     <LinearLayout
+        android:id="@+id/banner_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:background="#81D8D0"
+        android:paddingHorizontal="16dp"
         android:layout_marginBottom="12dp">
 
         <TextView
@@ -21,7 +24,7 @@
             android:text="选择云端 AI 模型"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:textColor="#333333"
+            android:textColor="#FFFFFF"
             android:gravity="center" />
 
         <TextView
@@ -31,7 +34,7 @@
             android:gravity="center"
             android:text="⨯"
             android:textSize="20sp"
-            android:textColor="#999999"
+            android:textColor="#FFFFFF"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="关闭" />
 

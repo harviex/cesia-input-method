@@ -822,6 +822,12 @@ class SettingsActivity : AppCompatActivity() {
         val etCustom = dialogView.findViewById<EditText>(R.id.et_custom)
         val btnSave = dialogView.findViewById<Button>(R.id.btn_save)
         val btnApplyFree = dialogView.findViewById<Button>(R.id.btn_apply_free)
+        val bannerBar = dialogView.findViewById<LinearLayout>(R.id.banner_bar)
+
+        // banner 主题色
+        val themeAccent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())
+        bannerBar?.setBackgroundColor(themeAccent)
 
         tvTitle.text = title
         etCustom.hint = "自定义：输入后点“保存并使用”"
@@ -888,6 +894,8 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+
+        dialogView.findViewById<TextView>(R.id.btn_close).setOnClickListener { dialog.dismiss() }
 
         dialog.show()
     }
@@ -2211,12 +2219,67 @@ class SettingsActivity : AppCompatActivity() {
             items.add("卸载手机AI模型" to { uninstallAiModel() })
         }
 
-        val labels = items.map { it.first }.toTypedArray()
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("版本 v${BuildConfig.VERSION_NAME}")
-            .setItems(labels) { _, which -> items[which].second.invoke() }
-            .setNegativeButton("取消", null)
-            .show()
+        // 自定义 view：主题色 banner + 标题 + X 关闭，下列表项
+        val ctx = this
+        val root = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())
+
+        val banner = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setBackgroundColor(accent)
+            setPadding((16 * resources.displayMetrics.density).toInt(), 0, (16 * resources.displayMetrics.density).toInt(), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, (48 * resources.displayMetrics.density).toInt())
+        }
+        val titleTv = TextView(ctx).apply {
+            text = "版本 v${BuildConfig.VERSION_NAME}"
+            textSize = 16f
+            setTextColor(0xFFFFFFFF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeTv = TextView(ctx).apply {
+            text = "⨯"
+            textSize = 20f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = android.view.Gravity.CENTER
+            val sz = (48 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(sz, sz)
+        }
+        closeTv.isClickable = true
+        closeTv.isFocusable = true
+        val out = android.util.TypedValue()
+        if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, out, true)) {
+            closeTv.setBackgroundResource(out.resourceId)
+        }
+        banner.addView(titleTv)
+        banner.addView(closeTv)
+
+        val listView = ListView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = (8 * resources.displayMetrics.density).toInt()
+                bottomMargin = (8 * resources.displayMetrics.density).toInt()
+            }
+            setPadding((8 * resources.displayMetrics.density).toInt(), 0, (8 * resources.displayMetrics.density).toInt(), 0)
+        }
+        val labels = items.map { it.first }
+        listView.adapter = ArrayAdapter(ctx, android.R.layout.simple_list_item_1, labels)
+
+        root.addView(banner)
+        root.addView(listView)
+
+        val dialog = AlertDialog.Builder(ctx).setView(root).setCancelable(true).create()
+        closeTv.setOnClickListener { dialog.dismiss() }
+        listView.setOnItemClickListener { _, _, position, _ ->
+            dialog.dismiss()
+            items[position].second.invoke()
+        }
+        dialog.show()
     }
 
     private fun checkForUpdates() {
@@ -2621,6 +2684,10 @@ class SettingsActivity : AppCompatActivity() {
         val btnClose = dialogView.findViewById<TextView>(R.id.btn_model_dialog_close)
         val etCustomModel = dialogView.findViewById<EditText>(R.id.et_custom_model)
         val btnSaveCustom = dialogView.findViewById<Button>(R.id.btn_save_custom_model)
+        val bannerBar = dialogView.findViewById<LinearLayout>(R.id.banner_bar)
+        val themeAccent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())
+        bannerBar?.setBackgroundColor(themeAccent)
 
         // 合并自定义模型（pref: id 以 || 分隔，id 即名称）
         val customIds = getCustomModels()

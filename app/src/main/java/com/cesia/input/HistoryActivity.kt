@@ -29,15 +29,53 @@ class HistoryActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        // 顶部栏：返回 / 大纲 / 清空（3按钮，风格与设置页历史记录按钮一致：白底+主题色文字+主题色描边）
-        val topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(32, 32, 32, 16)
-            weightSum = 2.7f  // 三按钮各 weight=1 → 实际占 2.7/3≈90%，整体缩小约 1/5
-        }
-
         val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt("theme_accent", 0xFF81D8D0.toInt())  // 边框/文字随主题色变化
+
+        // 顶部 banner（主题色，随主题色变化）：标题 + 右侧 X 关闭
+        val banner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setBackgroundColor(accent)
+            setPadding((16 * resources.displayMetrics.density).toInt(), 0,
+                (16 * resources.displayMetrics.density).toInt(), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (48 * resources.displayMetrics.density).toInt()
+            )
+        }
+        val bannerTitle = TextView(this).apply {
+            text = "历史记录管理"
+            textSize = 16f
+            setTextColor(0xFFFFFFFF.toInt())
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val btnBannerClose = TextView(this).apply {
+            text = "⨯"
+            textSize = 20f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = android.view.Gravity.CENTER
+            val sz = (48 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(sz, sz)
+            isClickable = true
+            isFocusable = true
+            val out = android.util.TypedValue()
+            if (theme.resolveAttribute(android.R.attr.selectableItemBackground, out, true)) {
+                setBackgroundResource(out.resourceId)
+            }
+            setOnClickListener { finish() }
+        }
+        banner.addView(bannerTitle)
+        banner.addView(btnBannerClose)
+        root.addView(banner)
+
+        // 按钮行：大纲 / 清空（无返回按钮）
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(32, 16, 32, 16)
+            weightSum = 1.8f  // 两按钮各 weight=1 → 实际占 1.8/2≈90%，整体缩小约 1/5
+        }
 
         fun styledButton(text: String): Button {
             val btn = Button(this)
@@ -58,15 +96,12 @@ class HistoryActivity : AppCompatActivity() {
             val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
                 val gap = (12 * resources.displayMetrics.density).toInt()
                 leftMargin = if (topBar.childCount > 0) gap else 0
-                rightMargin = gap  // 末尾也留间隙，整体视觉均衡
+                rightMargin = gap
             }
             btn.layoutParams = lp
             return btn
         }
 
-        val btnBack = styledButton("返回").apply {
-            setOnClickListener { finish() }
-        }
         val btnOutline = styledButton("大纲").apply {
             setOnClickListener { showGrammarGuideDialog() }
         }
@@ -98,7 +133,6 @@ class HistoryActivity : AppCompatActivity() {
             }
         }
 
-        topBar.addView(btnBack)
         topBar.addView(btnOutline)
         topBar.addView(btnClearAll)
         root.addView(topBar)
@@ -118,7 +152,7 @@ class HistoryActivity : AppCompatActivity() {
         root.addView(recyclerView)
 
         setContentView(root)
-        setTitle("润色历史记录")
+        setTitle("历史记录管理")
 
         refreshData()
     }
