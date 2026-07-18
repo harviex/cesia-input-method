@@ -1704,6 +1704,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
         // 立刻应用当前主题色到弹窗内所有硬编码的蒂芙尼蓝元素
         applyAccentToViewTree(view, themeAccent)
+        // banner 主题色
+        view.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
         val popup = PopupWindow(
             view,
             (resources.displayMetrics.widthPixels * 0.85f).toInt(),
@@ -1714,6 +1716,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.isOutsideTouchable = true
         themePopup = popup
+        view.findViewById<android.widget.TextView>(R.id.btn_theme_close)?.setOnClickListener {
+            popup.dismiss()
+        }
 
         val seekHue = view.findViewById<android.widget.SeekBar>(R.id.seek_hue)
         val seekGray = view.findViewById<android.widget.SeekBar>(R.id.seek_gray)

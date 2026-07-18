@@ -73,8 +73,8 @@ class HistoryActivity : AppCompatActivity() {
         // 按钮行：大纲 / 清空（无返回按钮）
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(32, 16, 32, 16)
-            weightSum = 1.8f  // 两按钮各 weight=1 → 实际占 1.8/2≈90%，整体缩小约 1/5
+            setPadding(16, 16, 16, 16)
+            weightSum = 2.0f  // 两按钮各 weight=1 → 占满整行，缩短内边距防溢出
         }
 
         fun styledButton(text: String): Button {
@@ -94,9 +94,8 @@ class HistoryActivity : AppCompatActivity() {
             btn.setPadding(px, px, px, px)
             val h = (34 * resources.displayMetrics.density).toInt()
             val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
-                val gap = (12 * resources.displayMetrics.density).toInt()
-                leftMargin = if (topBar.childCount > 0) gap else 0
-                rightMargin = gap
+                // 仅按钮之间留间隙，末尾不留（避免最右按钮超出屏幕）
+                leftMargin = if (topBar.childCount > 0) (12 * resources.displayMetrics.density).toInt() else 0
             }
             btn.layoutParams = lp
             return btn
