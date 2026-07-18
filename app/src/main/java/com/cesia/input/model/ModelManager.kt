@@ -161,6 +161,13 @@ class ModelManager(private val context: Context) {
         return models.filter { !isModelInstalled(it.id) }
     }
 
+    /** 仅清除手机AI模型文件与记录（不影响语音模型） */
+    fun clearAiModel() {
+        getInstalledAiModelFile()?.delete()
+        installedAiModelId = null
+        Log.i(TAG, "已清除手机AI模型文件")
+    }
+
     /**
      * 清除所有已下载的模型文件
      */

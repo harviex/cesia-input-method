@@ -15,8 +15,8 @@ java {
 // 默认版本：基于 git commit 数量自动递增（每次提交版本号自增，保证覆盖安装）
 def gitCountRaw = "git rev-list --count HEAD".execute([], project.rootDir).text.trim()
 def gitCount = gitCountRaw.isInteger() ? gitCountRaw.toInteger() : 1
-// 默认版本：固定版本号（单一来源，避免与旧线已占用的 git count tag 冲突，保证覆盖安装）
-def DEFAULT_VERSION = "1.2.822"
+// 默认版本：固定版本号 1.2.823（与 GitHub Release v1.2.823 对齐，单一来源）
+def DEFAULT_VERSION = "1.2.823"
 def apkVerRaw = project.findProperty("apkVersion") ?: System.getenv("APK_VERSION") ?: DEFAULT_VERSION
 def apkVer = apkVerRaw?.trim()
 

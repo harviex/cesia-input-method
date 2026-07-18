@@ -32,3 +32,8 @@ ai-engine/src/main/cpp/mnn/libs/
 .idea/
 *.iml
 local.properties
+
+# 构建产物/下载缓存
+ci_dl/
+*.apk
+artifacts/

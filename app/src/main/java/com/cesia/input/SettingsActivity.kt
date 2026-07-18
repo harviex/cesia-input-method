@@ -19,6 +19,8 @@ import android.view.ViewGroup
 import android.view.LayoutInflater
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 import android.animation.Animator
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
@@ -70,10 +72,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvApiKey: TextView
     private lateinit var tvTavilyKey: TextView
     private var tvCloudModel: TextView? = null
-    private lateinit var etPolishPrompt: TextInputEditText
+    private var etPolishPrompt: TextInputEditText? = null
     private lateinit var etTestText: TextInputEditText
     private lateinit var tilTestText: com.google.android.material.textfield.TextInputLayout
-    private lateinit var btnTestApi: MaterialButton
+    private var btnTestApi: MaterialButton? = null
     private var btnTestLocalAi: MaterialButton? = null
     private lateinit var tvLog: TextView
     private var isLogExpanded = true
@@ -117,15 +119,13 @@ class SettingsActivity : AppCompatActivity() {
     // === 历史记录 + 新闻源管理 ===
     private lateinit var btnHistory: Button
     private var btnNewsSources: Button? = null
+    private lateinit var etNewsQuery: EditText
 
     // === 标题可编辑 ===
     private var etSettingsTitle: TextInputEditText? = null
     private var tilSettingsTitle: TextInputLayout? = null
 
-    // === 测试区重置按钮 ===
-    private var btnResetPrompt: MaterialButton? = null
-
-    // 语音与 AI 本地化设置 helper
+    // === 标题可编辑 ===
     private lateinit var aiSettingsHelper: VoiceAISettingsHelper
 
     // 词库信息（已并入运行日志开头）
@@ -145,7 +145,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_API_URL = "api_url"
         const val DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
         const val PREF_MODEL_ID = "model_id"
-        const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
+        const val DEFAULT_MODEL_ID = ""  // 默认空：需用户在设置页选择模型来源与模型
         const val PERMISSION_REQUEST_CODE = 1001
         const val TYPE_HEADER = 0
         const val TYPE_SOURCE = 1
@@ -159,7 +159,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_MODE = "run_mode"
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_SETTINGS_TITLE = "settings_title"
-        const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"* \"进行分点陈列。"
+        const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"— \"进行分点陈列。"
         const val DEFAULT_TEST_TEXT = "嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。"
     }
 
@@ -268,17 +268,11 @@ class SettingsActivity : AppCompatActivity() {
         etPolishPrompt = findViewById(R.id.et_polish_prompt)
         etTestText = findViewById(R.id.et_test_text)
         tilTestText = findViewById(R.id.til_test_text)
-        btnTestApi = findViewById(R.id.btn_test_api)
-        btnTestLocalAi = findViewById(R.id.btn_test_local_ai)
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
+        etNewsQuery = findViewById(R.id.et_news_query)
 
-        // 语音与 AI 本地化视图
-        try {
-            btnInstallVoice = findViewById(R.id.btn_install_voice)
-            btnInstallAi = findViewById(R.id.btn_install_ai)
-        } catch (_: Exception) {}
-
+        // 语音与 AI 本地化视图（安装按钮已移除，改由版本菜单/启动自动下载驱动）
         // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
         try {
             etCmdWriting = findViewById(R.id.et_cmd_writing)      // 智能写作
@@ -320,11 +314,6 @@ class SettingsActivity : AppCompatActivity() {
         try {
             etSettingsTitle = findViewById(R.id.et_settings_title)
             tilSettingsTitle = findViewById(R.id.til_settings_title)
-        } catch (_: Exception) {}
-
-        // 测试区重置 prompt 按钮
-        try {
-            btnResetPrompt = findViewById(R.id.btn_reset_prompt)
         } catch (_: Exception) {}
 
         // 版本号容器和圆点
@@ -530,7 +519,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedTavily = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
         tvTavilyKey.text = if (savedTavily.isEmpty()) "点击选择或输入" else if (savedTavily.length > 20) maskSecret(savedTavily) else savedTavily
 
-        etPolishPrompt.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
+        etPolishPrompt?.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
         // 加载测试文本（首次写入默认，之后用用户保存的值）
         val savedTestText = prefs.getString(PREF_TEST_TEXT, null)
@@ -595,19 +584,8 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // API URL / Key / Tavily - 点击打开下拉菜单（含自定义输入 + 历史记忆 + 删除）
-        tvApiUrl.setOnClickListener {
-            showCustomValueDialog(
-                title = "AI API URL",
-                presets = listOf(
-                    "https://openrouter.ai/api/v1/chat/completions" to "openrouter.ai"
-                ),
-                historyKey = "api_url_history",
-                prefKey = PREF_API_URL,
-                valueView = tvApiUrl,
-                isSecret = false
-            )
-        }
+        // 模型来源（下拉：手机AI模型 / Ollama本地模型 / OpenRouter.ai）
+        tvApiUrl.setOnClickListener { showModelSourcePicker() }
         tvApiKey.setOnClickListener {
             showCustomValueDialog(
                 title = "AI API Key",
@@ -627,12 +605,13 @@ class SettingsActivity : AppCompatActivity() {
                 prefKey = PREF_BRAVE_KEY,
                 valueView = tvTavilyKey,
                 isSecret = true,
-                freeUrl = "https://www.tavily.com/"
+                freeUrl = "https://www.tavily.com/",
+                onSaved = { runNewsSearch() }
             )
         }
 
         // 润色 Prompt - 焦点离开时自动保存
-        etPolishPrompt.setOnFocusChangeListener { _, hasFocus ->
+        etPolishPrompt?.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) savePolishPrompt()
         }
         etTestText.setOnFocusChangeListener { _, hasFocus ->
@@ -740,24 +719,21 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         // 测试按钮
-        btnTestApi.setOnClickListener { testApiConnection() }
+        btnTestApi?.setOnClickListener { testApiConnection() }
         btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
 
         // 词库管理 - 只有下载/重新下载按钮
-        // 测试区重置 prompt 按钮
-        btnResetPrompt?.setOnClickListener { resetPolishPrompt() }
-
         // 云端模型选择 - 点击 TextView 打开选择对话框
         tvCloudModel?.setOnClickListener {
             loadModelsForCurrentUrl()
             showModelSelectorDialog(cloudModelList ?: emptyList())
         }
 
-        // 版本号点击检查更新
-        tvVersion?.setOnClickListener { checkForUpdates() }
-        // 版本号容器（有更新时显示）也可点击检查更新
-        findViewById<LinearLayout>(R.id.ll_version_container)?.setOnClickListener { checkForUpdates() }
-        findViewById<TextView>(R.id.tv_version_with_dot)?.setOnClickListener { checkForUpdates() }
+        // 版本号点击 → 弹出菜单（下载新版本 / 安装或卸载语音套件 / 卸载手机AI模型）
+        tvVersion?.setOnClickListener { showVersionMenu() }
+        // 版本号容器（有更新时显示）也可点击
+        findViewById<LinearLayout>(R.id.ll_version_container)?.setOnClickListener { showVersionMenu() }
+        findViewById<TextView>(R.id.tv_version_with_dot)?.setOnClickListener { showVersionMenu() }
 
         // 运行日志点击展开/折叠
         tvLog.setOnClickListener {
@@ -772,7 +748,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 历史记录 + 新闻源管理
         btnHistory?.setOnClickListener { showHistory() }
         btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
 
@@ -794,7 +769,8 @@ class SettingsActivity : AppCompatActivity() {
         prefKey: String,
         valueView: TextView,
         isSecret: Boolean,
-        freeUrl: String = ""
+        freeUrl: String = "",
+        onSaved: (() -> Unit)? = null
     ) {
         // 真实当前值（直接读 prefs，不使用 TextView 上的脱敏/友好名显示）
         val realCurrent = prefs.getString(prefKey, "") ?: ""
@@ -865,14 +841,14 @@ class SettingsActivity : AppCompatActivity() {
         lvValues.setOnItemClickListener { _, _, position, _ ->
             val value = allItems[position]
             val ok = applyValueWithCheck(prefKey, historyKey, value, valueView, isSecret, title)
-            if (ok) dialog.dismiss()
+            if (ok) { dialog.dismiss(); onSaved?.invoke() }
         }
 
         btnSave.setOnClickListener {
             val value = etCustom.text?.toString()?.trim() ?: ""
             if (value.isNotEmpty()) {
                 val ok = applyValueWithCheck(prefKey, historyKey, value, valueView, isSecret, title)
-                if (ok) dialog.dismiss()
+                if (ok) { dialog.dismiss(); onSaved?.invoke() }
             } else {
                 Toast.makeText(this, "请输入内容", Toast.LENGTH_SHORT).show()
             }
@@ -1020,8 +996,13 @@ class SettingsActivity : AppCompatActivity() {
         return if (s.length <= 20) s else "${s.take(15)}****${s.takeLast(5)}"
     }
 
+    private fun getActivePolishPrompt(): String {
+        val saved = prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT) ?: DEFAULT_POLISH_PROMPT
+        return saved.replace("*", "—")
+    }
+
     private fun savePolishPrompt() {
-        val prompt = etPolishPrompt.text?.toString()?.trim() ?: ""
+        val prompt = etPolishPrompt?.text?.toString()?.trim() ?: ""
         val old = prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT) ?: DEFAULT_POLISH_PROMPT
         if (prompt == old) return // 无变动不保存、不记日志
         prefs.edit().putString(PREF_POLISH_PROMPT, prompt).apply()
@@ -1046,7 +1027,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun resetPolishPrompt() {
-        etPolishPrompt.setText(DEFAULT_POLISH_PROMPT)
+        etPolishPrompt?.setText(DEFAULT_POLISH_PROMPT)
         prefs.edit().putString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT).apply()
         etTestText.setText(DEFAULT_TEST_TEXT)
         prefs.edit().putString(PREF_TEST_TEXT, DEFAULT_TEST_TEXT).apply()
@@ -1270,7 +1251,8 @@ class SettingsActivity : AppCompatActivity() {
 
     // 长按弹出卸载菜单
     private fun showUninstallMenu(isVoice: Boolean) {
-        val popup = android.widget.PopupMenu(this, if (isVoice) btnInstallVoice else btnInstallAi)
+        val anchor = (if (isVoice) btnInstallVoice else btnInstallAi) ?: tvVersion ?: return
+        val popup = android.widget.PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, if (isVoice) "卸载语音文字输入套件" else "卸载本地AI模型")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -1660,7 +1642,7 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
 
-        btnTestApi.isEnabled = false
+        btnTestApi?.isEnabled = false
         // 互斥：开始云端润色 → 本地按钮变灰不可点，直到润色完成恢复
         btnTestLocalAi?.isEnabled = false
         btnTestLocalAi?.alpha = 0.4f
@@ -1675,7 +1657,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 val request = if (isOr) {
                     // OpenRouter 格式：使用用户自定义 prompt
-                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: DEFAULT_POLISH_PROMPT
+                    val customPrompt = getActivePolishPrompt()
                     val messages = JSONArray().apply {
                         put(JSONObject().apply {
                             put("role", "system")
@@ -1703,7 +1685,7 @@ class SettingsActivity : AppCompatActivity() {
                         .build()
                 } else if (isOpenAi) {
                     // OpenAI 兼容端点（Ollama /v1/chat/completions、vLLM、LM Studio 等）
-                    val customPrompt = etPolishPrompt.text?.toString()?.trim() ?: DEFAULT_POLISH_PROMPT
+                    val customPrompt = getActivePolishPrompt()
                     val messages = JSONArray().apply {
                         put(JSONObject().apply {
                             put("role", "system")
@@ -1782,7 +1764,7 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(false, "API 错误 $respCode")
                         appendLog("API 失败 ($respCode): ${body.take(200)}")
                     }
-                    btnTestApi.isEnabled = true
+                    btnTestApi?.isEnabled = true
                     stopButtonFlash(btnTestApi, "云端AI润色")
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
@@ -1791,7 +1773,7 @@ class SettingsActivity : AppCompatActivity() {
                 runOnUiThread {
                     showTestResult(false, "网络错误: ${e.message ?: "未知"}")
                     appendLog("API 测试异常: ${e.message}")
-                    btnTestApi.isEnabled = true
+                    btnTestApi?.isEnabled = true
                     stopButtonFlash(btnTestApi, "云端AI润色")
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
@@ -2038,6 +2020,84 @@ class SettingsActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    /**
+     * 智能写作来源：用已填的 Tavily Key 自动搜索新闻框中的查询词（“今天的中国新闻”）。
+     * 失败 → 文本框提示“API KEY无效”；成功 → 文本框显示搜索结果。
+     */
+    private fun runNewsSearch() {
+        val query = etNewsQuery.text?.toString()?.trim()
+            .takeIf { !it.isNullOrEmpty() } ?: "今天的中国新闻"
+        val key = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
+        if (key.isEmpty()) {
+            etNewsQuery.setText("请先填写 Tavily API KEY")
+            return
+        }
+        etNewsQuery.setText("正在搜索：$query ...")
+        appendLog("🔍 智能写作来源新闻搜索: $query")
+        Thread {
+            try {
+                val jsonBody = org.json.JSONObject().apply {
+                    put("query", query)
+                    put("max_results", 5)
+                    put("include_answer", true)
+                    put("search_depth", "basic")
+                    put("topic", "news")
+                    put("days", 1)
+                }.toString()
+                val body = jsonBody.toRequestBody("application/json".toMediaType())
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(8, TimeUnit.SECONDS)
+                    .readTimeout(12, TimeUnit.SECONDS)
+                    .build()
+                val request = Request.Builder()
+                    .url("https://api.tavily.com/search")
+                    .addHeader("Authorization", "Bearer $key")
+                    .post(body)
+                    .build()
+                val response = client.newCall(request).execute()
+                runOnUiThread {
+                    if (response.code == 200) {
+                        val json = response.body?.string() ?: ""
+                        val parsed = parseNewsResult(json)
+                        if (parsed.isNotEmpty()) {
+                            appendLog("✅ 新闻搜索成功")
+                            etNewsQuery.setText(parsed)
+                        } else {
+                            etNewsQuery.setText("搜索结果为空，请检查 API KEY 或网络")
+                        }
+                    } else {
+                        etNewsQuery.setText("API KEY无效（HTTP ${response.code}）")
+                        appendLog("❌ 新闻搜索失败 HTTP ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    etNewsQuery.setText("搜索失败：${e.message ?: "未知错误"}")
+                    appendLog("❌ 新闻搜索异常: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    private fun parseNewsResult(json: String): String {
+        return try {
+            val obj = org.json.JSONObject(json)
+            val answer = obj.optString("answer", "").trim()
+            val results = obj.optJSONArray("results")
+            val sb = StringBuilder()
+            if (answer.isNotEmpty()) sb.append(answer).append("\n\n")
+            if (results != null) {
+                for (i in 0 until results.length()) {
+                    val r = results.getJSONObject(i)
+                    val title = r.optString("title", "")
+                    val content = r.optString("content", "")
+                    sb.append("• $title\n$content\n\n")
+                }
+            }
+            sb.toString().trim()
+        } catch (_: Exception) { "" }
+    }
+
     // ======================== 日志工具 ========================
 
     private fun appendLog(msg: String) {
@@ -2059,6 +2119,36 @@ class SettingsActivity : AppCompatActivity() {
             upToDateCheckCount = 0 // 新的一天，重置"已是最新版"提示计数
             checkForUpdates()
         }
+    }
+
+    /**
+     * 版本号点击弹出的菜单：
+     * - 下载最新版本输入法（始终显示）
+     * - 安装/卸载语音文字套件（按当前是否已装动态显示文案）
+     * - 卸载手机AI模型（仅已装时显示）
+     */
+    private fun showVersionMenu() {
+        val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
+                && dictManager.hasDownloadedDict()
+        val aiInstalled = modelManager.hasAiModel()
+
+        val items = mutableListOf<Pair<String, () -> Unit>>()
+        items.add("下载最新版本输入法" to { checkForUpdates() })
+        if (voiceInstalled) {
+            items.add("卸载语音文字套件" to { uninstallVoiceSuite() })
+        } else {
+            items.add("安装语音文字输入套件" to { downloadVoiceModel() })
+        }
+        if (aiInstalled) {
+            items.add("卸载手机AI模型" to { uninstallAiModel() })
+        }
+
+        val labels = items.map { it.first }.toTypedArray()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("版本 v${BuildConfig.VERSION_NAME}")
+            .setItems(labels) { _, which -> items[which].second.invoke() }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun checkForUpdates() {
@@ -2336,6 +2426,61 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /** 根据当前 API URL 自动拉取模型列表：OpenRouter 走远程，Ollama 走本地 /api/tags */
+    // 模型来源联动：选来源 → 自动弹模型 → 选模型后自动弹 Key
+    private var autoOpenKeyAfterModel = false
+    private val SRC_PHONE_AI = "phone_ai"
+    private val SRC_OLlama = "ollama_local"
+    private val SRC_OPENROUTER = "openrouter_ai"
+    private val OLLAMA_URL = "http://192.168.123.33:11434/v1/chat/completions"
+
+    private fun showModelSourcePicker() {
+        val sources = arrayOf(
+            "手机AI模型（本地1.2G，无需联网Key）",
+            "Ollama本地模型（192.168.123.33）",
+            "OpenRouter.ai（云端）"
+        )
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("选择模型来源")
+            .setItems(sources) { _, which ->
+                when (which) {
+                    0 -> selectModelSource(SRC_PHONE_AI)
+                    1 -> selectModelSource(SRC_OLlama)
+                    2 -> selectModelSource(SRC_OPENROUTER)
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun selectModelSource(src: String) {
+        prefs.edit().putBoolean("api_url_configured", true).apply()
+        when (src) {
+            SRC_PHONE_AI -> {
+                tvApiUrl.text = "手机AI模型"
+                prefs.edit().putString(PREF_API_URL, "phone_ai_local").apply()
+                appendLog("模型来源：手机AI模型（自动下载并测试）")
+                // 手机AI：唯一模型，无需 Key，直接下载并自动测试
+                downloadAiModel()
+            }
+            SRC_OLlama -> {
+                tvApiUrl.text = "ollama本地模型"
+                prefs.edit().putString(PREF_API_URL, OLLAMA_URL).apply()
+                appendLog("模型来源：Ollama本地模型($OLLAMA_URL)")
+                autoOpenKeyAfterModel = true
+                loadModelsForCurrentUrl()
+                tvCloudModel?.performClick()
+            }
+            SRC_OPENROUTER -> {
+                tvApiUrl.text = "openrouter.ai"
+                prefs.edit().putString(PREF_API_URL, DEFAULT_API_URL).apply()
+                appendLog("模型来源：OpenRouter.ai")
+                autoOpenKeyAfterModel = true
+                loadModelsForCurrentUrl()
+                tvCloudModel?.performClick()
+            }
+        }
+    }
+
     private fun loadModelsForCurrentUrl() {
         val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
         val isOr = apiUrl.contains("openrouter.ai") || apiUrl.contains("api.cesia.cc")
@@ -2437,6 +2582,11 @@ class SettingsActivity : AppCompatActivity() {
                 saveApiModelMapping(curApi, model.id)
                 appendLog("模型已保存: ${model.id}")
                 dialog.dismiss()
+                // 模型来源联动：选模型后自动弹 Key
+                if (autoOpenKeyAfterModel) {
+                    autoOpenKeyAfterModel = false
+                    tvApiKey?.performClick()
+                }
             },
             onDeleteClick = { model ->
                 removeCustomModel(model.id)
@@ -2859,12 +3009,10 @@ class SettingsActivity : AppCompatActivity() {
             } catch (_: Exception) {}
         }
         // 下载按钮：跟随主题色（backgroundTint 用 accent 而非硬编码 tiffany）
-        if (view.id == R.id.btn_install_voice || view.id == R.id.btn_install_ai) {
+        if (view is com.google.android.material.button.MaterialButton) {
             try {
-                if (view is com.google.android.material.button.MaterialButton) {
-                    if (view.background !is android.graphics.drawable.LayerDrawable) {
-                        view.backgroundTintList = android.content.res.ColorStateList.valueOf(accent)
-                    }
+                if (view.background !is android.graphics.drawable.LayerDrawable) {
+                    view.backgroundTintList = android.content.res.ColorStateList.valueOf(accent)
                 }
             } catch (_: Exception) {}
         }

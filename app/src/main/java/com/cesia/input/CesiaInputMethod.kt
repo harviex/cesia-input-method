@@ -59,6 +59,8 @@ import com.cesia.input.stats.MagicHistoryManager
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
+import com.cesia.input.engine.PinyinDictManager
+import com.cesia.input.model.ModelDownloadManager
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
 
@@ -244,6 +246,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var rimeEngine: RimeEngine
     private lateinit var voiceEngine: VoiceEngine
     private lateinit var modelManager: ModelManager
+    private lateinit var downloadManager: ModelDownloadManager
+    private lateinit var dictManager: PinyinDictManager
     private lateinit var aiEngine: AIEngine
     private var simulTranslateManager: SimulTranslateManager? = null
 
@@ -856,7 +860,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         const val PREF_OPENROUTER_KEY = "openrouter_api_key"
         const val PREF_POLISH_PROMPT = "polish_prompt"
         const val DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-        const val DEFAULT_MODEL_ID = "minimax/minimax-m2.5:free"
+        const val DEFAULT_MODEL_ID = ""  // 默认空：需用户在设置页选择模型来源与模型
         const val KEYCODE_SWITCH_SYMBOL = -100
         const val KEYCODE_SWITCH_LANG = -101
         const val KEYCODE_SWITCH_NUMBER = -102
@@ -1082,6 +1086,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 初始化语音引擎和模型管理器
         modelManager = ModelManager(this)
+        downloadManager = ModelDownloadManager(this)
+        dictManager = PinyinDictManager(this)
         voiceEngine = VoiceEngine(this)
         aiEngine = AIEngine(this)
 
@@ -1310,7 +1316,94 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         applyAccentToViewTree(view, themeAccent)
         applyThemeColors()
 
+        // 启动输入法后自动检测并下载语音文字套件（三件套），不挑网络、后台进行
+        ensureVoiceSuite()
+
         return view
+    }
+
+    /**
+     * 启动输入法后自动检测语音文字套件（三件套）是否已安装：
+     * 中英双语模型 + 纯中文模型 + 雾凇词库。任一缺失即后台自动下载（不挑网络）。
+     * 进度复用状态栏（updateStatus），关键节点写入运行日志。
+     */
+    private fun ensureVoiceSuite() {
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            try {
+                val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
+                val dictInstalled = dictManager.hasDownloadedDict()
+                val zhInstalled = java.io.File(filesDir, "local_models/zipformer-zh-2025/encoder.onnx").exists()
+                if (voiceInstalled && dictInstalled && zhInstalled) {
+                    Log.i("Cesia", "语音文字套件已完整，跳过自动下载")
+                    return@launch
+                }
+                withContext(Dispatchers.Main) {
+                    updateStatus("开始下载语音文字输入套件（Zipformer中英双语 / Zipformer纯中文2025 / 雾凇词库）")
+                }
+                appendSuiteLog("开始下载语音文字输入套件（Zipformer中英双语 / Zipformer纯中文2025 / 雾凇词库）")
+
+                // 1) 中英双语模型
+                if (!voiceInstalled) {
+                    withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer中英双语模型...") }
+                    downloadManager.downloadZipformer { _: String, percent: Double, _: Long, _: Long ->
+                        if (percent.toInt() % 10 == 0) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                updateStatus("下载中：中英双语模型 ${percent.toInt()}%")
+                            }
+                        }
+                    }
+                }
+                // 2) 纯中文模型
+                if (!zhInstalled) {
+                    withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer纯中文2025模型...") }
+                    downloadManager.downloadArchive("zipformer-zh-2025") { _: String, percent: Double, _: Long, _: Long ->
+                        if (percent.toInt() % 10 == 0) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                updateStatus("下载中：纯中文模型 ${percent.toInt()}%")
+                            }
+                        }
+                    }
+                }
+                // 3) 雾凇词库
+                if (!dictInstalled) {
+                    withContext(Dispatchers.Main) { updateStatus("下载中：雾凇词库...") }
+                    val deferred = CompletableDeferred<Boolean>()
+                    dictManager.downloadFullDict(
+                        onProgress = { percent: Int, _: Long, _: Long, _: String ->
+                            CoroutineScope(Dispatchers.Main).launch {
+                                updateStatus("下载中：雾凇词库 $percent%")
+                            }
+                        },
+                        onComplete = { ok: Boolean, _: String ->
+                            deferred.complete(ok)
+                        }
+                    )
+                    deferred.await()
+                }
+                withContext(Dispatchers.Main) {
+                    updateStatus("语音文字输入套件已下载完成，可以正常使用")
+                }
+                appendSuiteLog("语音文字输入套件已下载完成，可以正常使用")
+            } catch (e: Exception) {
+                Log.e("Cesia", "ensureVoiceSuite 失败: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    updateStatus("语音套件下载失败：${e.message ?: "未知错误"}（可到设置页重试）")
+                }
+                appendSuiteLog("❌ 语音套件自动下载失败: ${e.message}")
+            }
+        }
+    }
+
+    /** 写入设置页运行日志（与 SettingsActivity 共享 cesia_settings 中的 run_log） */
+    private fun appendSuiteLog(msg: String) {
+        try {
+            val sp = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                .format(System.currentTimeMillis())
+            val line = "[$ts] $msg\n"
+            val existing = sp.getString("run_log", "") ?: ""
+            sp.edit().putString("run_log", line + existing).apply()
+        } catch (_: Exception) {}
     }
 
 // endregion 生命周期
@@ -1412,8 +1505,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 云/本地切换按钮
         if (::btnCloud.isInitialized) {
             val cloudActive = cloudMode == CloudMode.CLOUD || cloudMode == CloudMode.LOCAL_LOCKED
+            val hasAi = modelManager.hasAiModel()
             // 云模式或本地锁定 → 高亮主题色；本地模式 → 灰色
-            btnCloud.setTextColor(if (cloudActive) accent else 0xFF888888.toInt())
+            // 未安装手机AI模型时，本地模式不可用：按钮灰度 + 禁用
+            if (!hasAi) {
+                btnCloud.setTextColor(0xFF888888.toInt())
+                btnCloud.isEnabled = false
+                btnCloud.alpha = 0.4f
+            } else {
+                btnCloud.setTextColor(if (cloudActive) accent else 0xFF888888.toInt())
+                btnCloud.isEnabled = true
+                btnCloud.alpha = 1f
+            }
         }
 
         // 语音键底色
