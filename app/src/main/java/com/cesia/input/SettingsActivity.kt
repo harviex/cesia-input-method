@@ -120,6 +120,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnHistory: Button
     private var btnNewsSources: Button? = null
     private lateinit var etNewsQuery: EditText
+    private lateinit var tvTestStatus: TextView
 
     // === 标题可编辑 ===
     private var etSettingsTitle: TextInputEditText? = null
@@ -271,6 +272,7 @@ class SettingsActivity : AppCompatActivity() {
         tvLog = findViewById(R.id.tv_log)
         tvVersion = findViewById(R.id.tv_version)
         etNewsQuery = findViewById(R.id.et_news_query)
+        tvTestStatus = findViewById(R.id.tv_test_status)
 
         // 语音与 AI 本地化视图（安装按钮已移除，改由版本菜单/启动自动下载驱动）
         // 语音命令词设置 (新顺序：智能写作、智能修改、智能润色、结束语音识别、立即发送、退出语音模式)
@@ -1225,6 +1227,28 @@ class SettingsActivity : AppCompatActivity() {
         btn.text = restoreText
     }
 
+    // 润色测试状态：文字闪烁提示“正在测试…”，完成后停止
+    private var testStatusAnim: android.view.animation.AlphaAnimation? = null
+    private fun startTestStatusFlash() {
+        runOnUiThread {
+            tvTestStatus.text = "正在测试…"
+            tvTestStatus.visibility = View.VISIBLE
+            testStatusAnim = android.view.animation.AlphaAnimation(1.0f, 0.2f).apply {
+                duration = 600
+                repeatCount = android.view.animation.Animation.INFINITE
+                repeatMode = android.view.animation.Animation.REVERSE
+            }
+            tvTestStatus.startAnimation(testStatusAnim)
+        }
+    }
+    private fun stopTestStatusFlash() {
+        runOnUiThread {
+            testStatusAnim?.let { tvTestStatus.clearAnimation() }
+            testStatusAnim = null
+            tvTestStatus.visibility = View.GONE
+        }
+    }
+
     // 初始/重置态：跟随主题色底 + 白字
     private fun resetButtonBg(button: android.widget.Button?, text: String) {
         val btn = button ?: return
@@ -1669,8 +1693,7 @@ class SettingsActivity : AppCompatActivity() {
         btnTestLocalAi?.isEnabled = false
         btnTestLocalAi?.alpha = 0.4f
         appendLog("🔄 正在润色...")
-        // 文字闪烁提示（不发网络请求前先开始闪烁）
-        startButtonFlash(btnTestApi, "润色中...")
+        startTestStatusFlash()
         Thread {
             try {
                 val apiUrl = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
@@ -1790,6 +1813,7 @@ class SettingsActivity : AppCompatActivity() {
                     stopButtonFlash(btnTestApi, "云端AI润色")
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
+                    stopTestStatusFlash()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -1799,6 +1823,7 @@ class SettingsActivity : AppCompatActivity() {
                     stopButtonFlash(btnTestApi, "云端AI润色")
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
+                    stopTestStatusFlash()
                 }
             }
         }.start()
@@ -2047,15 +2072,17 @@ class SettingsActivity : AppCompatActivity() {
      * 失败 → 文本框提示“API KEY无效”；成功 → 文本框显示搜索结果。
      */
     private fun runNewsSearch() {
-        val query = etNewsQuery.text?.toString()?.trim()
+        val rawQuery = etNewsQuery.text?.toString()?.trim()
             .takeIf { !it.isNullOrEmpty() } ?: "今天的中国新闻"
+        // 偏置中文结果：要求 Tavily 用中文返回摘要
+        val query = "$rawQuery（请使用中文回答，返回中文新闻摘要）"
         val key = prefs.getString(PREF_BRAVE_KEY, "") ?: ""
         if (key.isEmpty()) {
             etNewsQuery.setText("请先填写 Tavily API KEY")
             return
         }
-        etNewsQuery.setText("正在搜索：$query ...")
-        appendLog("🔍 智能写作来源新闻搜索: $query")
+        etNewsQuery.setText("正在搜索：$rawQuery ...")
+        appendLog("🔍 智能写作来源新闻搜索: $rawQuery")
         Thread {
             try {
                 val jsonBody = org.json.JSONObject().apply {

@@ -391,12 +391,12 @@
                 android:id="@+id/til_polish_prompt"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:visibility="gone"
-                android:hint="AI 润色 Prompt"
+                android:hint="AI 润色 Prompt（* 已替换为 —，此区域默认隐藏）"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
                 app:boxStrokeColor="#81D8D0"
                 app:hintTextColor="#81D8D0"
-                android:layout_marginBottom="12dp">
+                android:layout_marginBottom="6dp"
+                android:visibility="gone">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/et_polish_prompt"
@@ -410,7 +410,40 @@
                     android:text="" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- ═══════════ 智能写作源（模型设置下方、语音命令词上方）══════════ -->
+            <!-- ═══════════ 测试要润色的文本 ═══════════ -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_test_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="测试要润色的文本（API Key 确定后自动润色测试）"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
+                android:layout_marginBottom="6dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_test_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="4"
+                    android:gravity="top"
+                    android:textSize="12sp"
+                    android:text="嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 润色测试状态：测试时文字闪烁提示“正在测试” -->
+            <TextView
+                android:id="@+id/tv_test_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#81D8D0"
+                android:gravity="center"
+                android:visibility="gone"
+                android:layout_marginBottom="6dp" />
+
+            <!-- ═══════════ 智能写作源（测试文本下方、语音命令词上方）══════════ -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -511,29 +544,6 @@
                 android:layout_height="1dp"
                 android:background="#E0E0E0"
                 android:layout_marginBottom="16dp" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/til_test_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="测试要润色的文本（API Key 确定后自动润色测试）"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#81D8D0"
-                app:hintTextColor="#81D8D0"
-                android:layout_marginBottom="6dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/et_test_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="textMultiLine"
-                    android:minLines="4"
-                    android:maxLines="10"
-                    android:scrollbars="vertical"
-                    android:gravity="top"
-                    android:textSize="12sp"
-                    android:text="嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。" />
-            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- ═══════════ 分隔 ═══════════ -->
             <View

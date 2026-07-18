@@ -137,8 +137,48 @@ class GrammarGuideManager(private val context: Context) {
     }
 
     /**
-     * 构建大纲生成 prompt
+     * 本地大纲：不依赖 AI，直接根据历史记录生成可读的中文纲要。
+     * 用于无 AI / 无 Key 场景，保证大纲始终有内容。
      */
+    fun buildLocalOutline(records: List<PolishRecord>): String {
+        if (records.isEmpty()) return ""
+        val recent = records.take(MAX_RECORDS_FOR_GUIDE)
+        val sb = StringBuilder()
+        sb.appendLine("📊 基于 ${records.size} 条历史记录（最近 ${recent.size} 条）自动生成：")
+        sb.appendLine()
+
+        // 1. 平均长度
+        val avgIn = recent.map { it.inputText.length }.average().toInt()
+        val avgOut = recent.map { it.outputText.length }.average().toInt()
+        sb.appendLine("• 文本长度：原文平均 ${avgIn} 字，润色后平均 ${avgOut} 字")
+        // 2. 标点习惯（统计常见标点出现频率）
+        val punct = mapOf("，" to 0, "。" to 0, "、" to 0, "！" to 0, "？" to 0, "；" to 0)
+        val merged = recent.joinToString("") { it.outputText }
+        val punctCount = punct.mapValues { (k, _) -> merged.count { c -> c.toString() == k } }
+        val topPunct = punctCount.filter { it.value > 0 }.maxByOrNull { it.value }
+        if (topPunct != null) {
+            sb.appendLine("• 标点习惯：常用「${topPunct.key}」(${topPunct.value} 次)")
+        }
+        // 3. 高频词（2字以上中文词出现≥2次）
+        val words = Regex("[\\u4e00-\\u9fa5]{2,}").findAll(merged)
+            .map { it.value }.toList()
+            .groupingBy { it }.eachCount()
+            .filter { it.value >= 2 }.toList().sortedByDescending { it.second }.take(5)
+        if (words.isNotEmpty()) {
+            sb.appendLine("• 高频词：${words.joinToString("、") { "${it.first}(${it.second})" }}")
+        }
+        // 4. 示例：最近 2 条 原文→润色
+        sb.appendLine()
+        sb.appendLine("📝 最近示例：")
+        recent.take(2).forEachIndexed { i, r ->
+            sb.appendLine("  ${i + 1}. 原文：${r.inputText.take(40)}${if (r.inputText.length > 40) "…" else ""}")
+            sb.appendLine("     润色：${r.outputText.take(40)}${if (r.outputText.length > 40) "…" else ""}")
+        }
+        sb.appendLine()
+        sb.appendLine("（提示：配置 AI Key 后可在云端生成更精准的个人语法纲要）")
+        return sb.toString().trim().take(MAX_GUIDE_LENGTH)
+    }
+
     private fun buildGuidePrompt(inputText: String): String {
         return "以下是用户的最近润色记录（原文→润色后），请分析并生成一份简洁的【用户个人语法纲要】。\n" +
                 "包括：\n" +

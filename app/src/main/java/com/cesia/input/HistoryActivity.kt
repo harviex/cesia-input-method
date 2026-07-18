@@ -29,30 +29,47 @@ class HistoryActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        // 顶部栏
+        // 顶部栏：返回 / 大纲 / 清空 / 关闭（4按钮，风格与设置页历史记录按钮一致：白底+主题色文字+主题色描边）
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(32, 32, 32, 16)
         }
 
-        val btnBack = Button(this).apply {
-            text = "← 返回"
+        val accent = 0xFF81D8D0.toInt()  // 主题色 Tiffany，与设置页历史记录按钮一致
+
+        fun styledButton(text: String): Button {
+            val btn = Button(this)
+            btn.text = text
+            btn.textSize = 13f
+            btn.maxLines = 1
+            btn.ellipsize = android.text.TextUtils.TruncateAt.END
+            val d = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFFFFFFF.toInt())
+                setStroke((1 * resources.displayMetrics.density).toInt(), accent)
+                cornerRadius = 10 * resources.displayMetrics.density
+            }
+            btn.background = d
+            btn.setTextColor(accent)
+            val px = (8 * resources.displayMetrics.density).toInt()
+            btn.setPadding(px, px, px, px)
+            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (topBar.childCount > 0) leftMargin = (4 * resources.displayMetrics.density).toInt()
+            }
+            btn.layoutParams = lp
+            return btn
+        }
+
+        val btnBack = styledButton("← 返回").apply {
             setOnClickListener { finish() }
         }
-
-        val btnClear = Button(this).apply {
-            text = "📖 大纲"
-            setOnClickListener {
-                showGrammarGuideDialog()
-            }
+        val btnOutline = styledButton("📖 大纲").apply {
+            setOnClickListener { showGrammarGuideDialog() }
         }
-
-        val btnClearAll = Button(this).apply {
-            text = "🗑️ 清空"
+        val btnClearAll = styledButton("🗑️ 清空").apply {
             setOnClickListener {
                 AlertDialog.Builder(this@HistoryActivity)
                     .setTitle("清空历史记录")
-                    .setMessage("确定要清空所有润色历史记录吗？")
+                    .setMessage("确定要清空所有润色历史记录吗？此操作不可恢复。")
                     .setPositiveButton("清空") { _, _ ->
                         statsManager.clearRecords()
                         refreshData()
@@ -61,10 +78,21 @@ class HistoryActivity : AppCompatActivity() {
                     .show()
             }
         }
+        val btnClose = styledButton("✕ 关闭").apply {
+            setOnClickListener {
+                AlertDialog.Builder(this@HistoryActivity)
+                    .setTitle("关闭历史记录")
+                    .setMessage("确定要关闭历史记录页面吗？")
+                    .setPositiveButton("关闭") { _, _ -> finish() }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+        }
 
         topBar.addView(btnBack)
-        topBar.addView(btnClear)
+        topBar.addView(btnOutline)
         topBar.addView(btnClearAll)
+        topBar.addView(btnClose)
         root.addView(topBar)
 
         tvEmpty = TextView(this).apply {
@@ -180,11 +208,20 @@ class HistoryActivity : AppCompatActivity() {
 
     private fun showGrammarGuideDialog() {
         val guideMgr = com.cesia.input.stats.GrammarGuideManager(this)
-        val content = guideMgr.content
+        // AI 大纲为空时，用本地大纲兜底（直接基于历史记录生成，无需 AI）
+        val content = if (guideMgr.content.isNotEmpty()) {
+            guideMgr.content
+        } else {
+            val local = guideMgr.buildLocalOutline(statsManager.getRecords())
+            if (local.isNotEmpty()) {
+                guideMgr.saveGuide(local)  // 缓存，避免重复生成
+                local
+            } else ""
+        }
         val message = if (content.isNotEmpty()) {
             "版本 ${guideMgr.version} | 基于最近润色记录自动生成\n\n$content"
         } else {
-            "暂无语法大纲\n\n请先使用几次润色功能，系统每5条记录会自动生成个人语法纲要。"
+            "暂无语法大纲\n\n请先使用几次润色功能，系统会自动生成个人语法纲要。"
         }
         AlertDialog.Builder(this)
             .setTitle("📖 个人语法纲要")
