@@ -4478,9 +4478,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         setStatusDot("recording")
         startVoiceWave()
         keyboardView.visibility = View.GONE
-        // 语音输入期间保持候选栏可见（显示识别状态），输入完也不隐藏，直到退格
-        candidateBar.visibility = View.VISIBLE
-        candidateBarKeep = true
+        // 语音输入期间隐藏候选栏（不再常驻），避免状态栏下方出现无关的候选词栏目
+        candidateBar.visibility = View.GONE
+        candidateBarKeep = false
 
         // 设置同传回调
         mgr.onStatusUpdate = { status ->
@@ -4558,9 +4558,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         setStatusDot("recording")
         startVoiceWave()
         keyboardView.visibility = View.GONE
-        // 语音输入期间保持候选栏可见（显示识别状态），输入完也不隐藏，直到退格
-        candidateBar.visibility = View.VISIBLE
-        candidateBarKeep = true
+        // 语音输入期间隐藏候选栏（不再常驻），避免状态栏下方出现无关的候选词栏目
+        candidateBar.visibility = View.GONE
+        candidateBarKeep = false
         voiceStartTime = System.currentTimeMillis()
 
         when (voiceChoice) {
@@ -4592,9 +4592,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 锁定模式不显示绿色圆点，避免按钮偏移
         // startVoiceWave() 已禁用
         keyboardView.visibility = View.GONE
-        // 语音输入期间保持候选栏可见，输入完也不隐藏，直到退格
-        candidateBar.visibility = View.VISIBLE
-        candidateBarKeep = true
+        // 语音输入期间隐藏候选栏（不再常驻），避免状态栏下方出现无关的候选词栏目
+        candidateBar.visibility = View.GONE
+        candidateBarKeep = false
         voiceStartTime = System.currentTimeMillis()
         updateStatus("🎤 正在收听 (锁定模式)...")
         startWhisperRecordingAsync()
@@ -4614,9 +4614,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isContinuingSession = true
         setStatusDot("recording")
         keyboardView.visibility = View.GONE
-        // 语音输入期间保持候选栏可见，输入完也不隐藏，直到退格
-        candidateBar.visibility = View.VISIBLE
-        candidateBarKeep = true
+        // 语音输入期间隐藏候选栏（不再常驻），避免状态栏下方出现无关的候选词栏目
+        candidateBar.visibility = View.GONE
+        candidateBarKeep = false
         voiceStartTime = System.currentTimeMillis()
         // 重新启动本地流式识别循环（resetStream 由 VoiceEngine 内部处理）
         startWhisperRecordingAsync()
