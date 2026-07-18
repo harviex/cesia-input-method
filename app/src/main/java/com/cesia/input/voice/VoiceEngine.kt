@@ -237,6 +237,9 @@ class VoiceEngine(private val context: Context) {
         // 切换后清掉识别器缓存，使下次 getOrCreateRecognizer 按新目录重建
         cachedOnlineRecognizer = null
         cachedModelPath = null
+        // 关键：同时清掉预热标记，否则 warmupRecognizer 会提前 return，
+        // 导致下次点击语音键时在线重建识别器（~1.4s 卡顿）。
+        hasWarmedUp = false
         return voiceMode
     }
 

@@ -1319,8 +1319,16 @@ class SettingsActivity : AppCompatActivity() {
     private fun refreshVoiceInstallState() {
         val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
         val dictInstalled = dictManager.hasDownloadedDict()
+        val zhInstalled = java.io.File(filesDir, "local_models/zipformer-zh-2025/encoder.onnx").exists()
+        btnInstallVoice?.setOnClickListener { downloadVoiceModel() }
         if (voiceInstalled && dictInstalled) {
-            installedButtonBg(btnInstallVoice, "语音文字输入套件已安装")
+            if (zhInstalled) {
+                installedButtonBg(btnInstallVoice, "语音文字套件已安装")
+            } else {
+                // 中英混已装，但纯中文未下：提示可单独补下
+                installedButtonBg(btnInstallVoice, "语音套件已安装")
+                btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
+            }
         } else {
             resetButtonBg(btnInstallVoice, "安装语音文字输入套件")
         }
@@ -1428,11 +1436,24 @@ class SettingsActivity : AppCompatActivity() {
                                     }
                                     if (zhResult.isSuccess) {
                                         appendLog("✅ 纯中文模型下载完成（双击语音键可切换）")
+                                        runOnUiThread { appendLog("🎉 语音套件 + 纯中文模型已全部安装完成") }
                                     } else {
-                                        appendLog("⚠️ 纯中文模型下载失败（中英混仍可用）: ${zhResult.exceptionOrNull()?.message}")
+                                        val msg = zhResult.exceptionOrNull()?.message ?: "未知错误"
+                                        appendLog("⚠️ 纯中文模型下载失败（中英混仍可用）: $msg")
+                                        runOnUiThread {
+                                            Toast.makeText(this, "纯中文模型下载失败，可单独重试", Toast.LENGTH_LONG).show()
+                                            // 主按钮提示可重试纯中文模型
+                                            btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
+                                            btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
+                                        }
                                     }
                                 } catch (ze: Exception) {
                                     appendLog("⚠️ 纯中文模型下载异常（中英混仍可用）: ${ze.message}")
+                                    runOnUiThread {
+                                        Toast.makeText(this, "纯中文模型下载异常，可单独重试", Toast.LENGTH_LONG).show()
+                                        btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
+                                        btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
+                                    }
                                 }
                             } else {
                                 appendLog("❌ 词库下载失败: $dictMsg")
@@ -1448,6 +1469,46 @@ class SettingsActivity : AppCompatActivity() {
                     btnInstallVoice?.isEnabled = true
                     resetBothVoice("安装语音文字输入套件")
                     appendLog("❌ 套件下载异常: ${e.message}")
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * 单独下载纯中文模型（双击语音键切换用，独立目录，不影响已装的中英双语套件）
+     * 用于阶段三失败后的重试入口
+     */
+    private fun downloadChineseModelOnly() {
+        val dm = ModelDownloadManager(this)
+        btnInstallVoice?.isEnabled = false
+        btnInstallVoice?.text = "正在下载纯中文模型..."
+        appendLog("⬇ 单独下载纯中文模型（双击语音键切换用）")
+        Thread {
+            try {
+                val result = kotlinx.coroutines.runBlocking {
+                    dm.downloadArchive("zipformer-zh-2025") { _, percent, _, _ ->
+                        runOnUiThread { setBothVoiceProgress(98 + (percent * 0.02).toInt(), "下载纯中文模型") }
+                    }
+                }
+                runOnUiThread {
+                    btnInstallVoice?.isEnabled = true
+                    if (result.isSuccess) {
+                        appendLog("✅ 纯中文模型下载完成（双击语音键可切换）")
+                        Toast.makeText(this, "纯中文模型已安装", Toast.LENGTH_SHORT).show()
+                        refreshVoiceInstallState()
+                    } else {
+                        appendLog("⚠️ 纯中文模型下载失败: ${result.exceptionOrNull()?.message}")
+                        Toast.makeText(this, "纯中文模型下载失败，可再次点击重试", Toast.LENGTH_LONG).show()
+                        btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
+                        btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    btnInstallVoice?.isEnabled = true
+                    appendLog("⚠️ 纯中文模型下载异常: ${e.message}")
+                    btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
+                    btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
                 }
             }
         }.start()

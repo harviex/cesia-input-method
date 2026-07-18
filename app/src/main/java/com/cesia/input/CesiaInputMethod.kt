@@ -34,6 +34,7 @@ import android.view.animation.ScaleAnimation
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.ArrayAdapter
+import android.widget.FrameLayout
 import android.widget.GridView
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -90,6 +91,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（仅纯中文模式显示）
+    private lateinit var micWrapper: FrameLayout     // 包裹麦克风键，承载“中”标记；分列时需隐藏以恢复原始双按钮布局
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
     private lateinit var btnClipboard: ImageButton // 智能修改按钮（魔法书/笔）
@@ -943,6 +945,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnCloud = view.findViewById(R.id.btn_cloud)
         micButton = view.findViewById(R.id.btn_mic)
         micButtonContainer = view.findViewById(R.id.mic_button_container)
+        micWrapper = view.findViewById(R.id.mic_wrapper)
         tvMicZh = view.findViewById(R.id.tv_mic_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
@@ -2672,6 +2675,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val mode = voiceEngine.switchVoiceMode()
         updateMicZhLabel()
+        // 切换后立即在后台预热新模型的识别器，使下次点击语音键无需在线重建（消除切换后首次识别的卡顿）
+        voiceEngine.warmupRecognizer()
         if (mode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE) {
             updateStatus("🔤 已切换到纯中文识别模型（双击切回中英混）")
         } else {
@@ -4751,6 +4756,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 避免“识别数字转阿拉伯数字失效又恢复汉字数字上屏”。
                             val textConv = voiceEngine.convertChineseDigitsToArabic(text)
                             val keptConv = voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
+                            // 去掉命令词本身：本地流式路径 onCommandWordDetected 传入的 text 仍含命令词
+                            //（如“写作今天天气好”），与 Google 路径 checkCommandWord 返回已剥离文本保持一致，
+                            // 避免“写作/润色/结束”等命令词被上屏或带入处理。
+                            val textNoCmd = voiceEngine.checkCommandWord(textConv)?.first ?: textConv
 
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
                             // 直接由下方分支用 setComposingText 整体替换 composing 区域。
@@ -4758,8 +4767,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 // 把“已保留内容 + 本轮说的（去命令词）”拼成整体，作为要上屏/处理的真相源，
                                 // 这样“结束/退出/发送/润色/命令/写作”执行时不会把命令词本身带上屏。
                                 val combined = when {
-                                    keptConv.isNotEmpty() && textConv.isNotEmpty() -> "$keptConv $textConv"
-                                    textConv.isNotEmpty() -> textConv
+                                    keptConv.isNotEmpty() && textNoCmd.isNotEmpty() -> "$keptConv $textNoCmd"
+                                    textNoCmd.isNotEmpty() -> textNoCmd
                                     else -> keptConv
                                 }
                                 // 先 setComposingText(combined) 把组合区整体替换成“去掉命令词后的原文”，
@@ -4802,9 +4811,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 "ai" -> {
                                     // 润色（中等级）：对删除命令词后的完整文本（含前缀）润色，完成后——锁定态恢复监听
                                     val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
-                                        "$keptConv $textConv".trim()
+                                        "$keptConv $textNoCmd".trim()
                                     } else {
-                                        textConv
+                                        textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 没有需要润色的文字")
@@ -4826,9 +4835,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 "cmd" -> {
                                     // 命令模式（中等级）：执行指令（含前缀），完成后——锁定态恢复监听
                                     val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
-                                        "$keptConv $textConv".trim()
+                                        "$keptConv $textNoCmd".trim()
                                     } else {
-                                        textConv
+                                        textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入指令")
@@ -4842,17 +4851,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     }
                                 }
                                 "finish" -> {
-                                    // 结束（中等级）：把组合态文本（含前缀）提交上屏，然后——锁定态恢复监听继续识别
+                                    // 结束（中等级）：把组合态文本（含前缀，已去命令词）提交上屏，并【始终】退出语音模式。
+                                    // 注意：即使此前说过撤销/清空/恢复（会置 isVoiceLocked=true），
+                                    // “结束”按其命令词本意应结束输入，不能因为之前的状态而变成继续录音。
                                     ic.finishComposingText()
                                     updateStatus(" 已上屏")
-                                    finishCommandResumeIfLocked()
+                                    isVoiceLocked = false
+                                    resetToIdle()
                                 }
                                 "writing" -> {
                                     // 写作（中等级）：执行写作指令（含前缀），完成后——锁定态恢复监听
                                     val fullText = if (isContinuingSession && keptConv.isNotEmpty()) {
-                                        "$keptConv $textConv".trim()
+                                        "$keptConv $textNoCmd".trim()
                                     } else {
-                                        textConv
+                                        textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
                                         updateStatus("⚠️ 请输入写作内容")
@@ -5651,6 +5663,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             micButton.animate().scaleX(0.5f).scaleY(0.5f).alpha(0f).setDuration(200).withEndAction {
                 micButton.visibility = View.GONE
+                // 隐藏包裹层（含“中”标记），恢复原始双按钮布局：[AI+][AI×] 各占 1/2
+                micWrapper.visibility = View.GONE
                 voiceWave.visibility = View.VISIBLE
                 startVoiceWave()
                 btnMicAi.visibility = View.VISIBLE
@@ -5673,6 +5687,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             btnMicNoAi.animate().translationX(80f).alpha(0f).setDuration(200).withEndAction {
                 btnMicNoAi.visibility = View.GONE
                 micButton.visibility = View.VISIBLE
+                micWrapper.visibility = View.VISIBLE
                 micButton.scaleX = 0.5f
                 micButton.scaleY = 0.5f
                 micButton.alpha = 0f
