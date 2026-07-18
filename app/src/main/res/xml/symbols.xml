@@ -7,7 +7,7 @@
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="10%p"
     android:keyHeight="48dp"
-    android:horizontalGap="0dp"
+    android:horizontalGap="4dp"
     android:verticalGap="4dp">
 
     <!-- ===== 第1行：最常用标点（10键） ===== -->

@@ -569,13 +569,9 @@ class VoiceEngine(private val context: Context) {
                 }
 
                 // 增量提取：currentResult 是完整文本，lastResult 是上次完整文本
-                // 增量 = currentResult 去掉 lastResult 前缀后的部分
-                val delta = if (lastResult.isNotEmpty() && currentResult.length > lastResult.length && currentResult.startsWith(lastResult)) {
-                    currentResult.substring(lastResult.length).trim()
-                } else {
-                    // lastResult 为空（刚 reset）或结果回退，取完整文本
-                    currentResult
-                }
+                // 关键：仅在 currentResult 干净地扩展 lastResult 时取尾部；
+                // 若模型输出回退/重复（中英混模型常见），跳过本帧而非整段重发，避免重复上屏。
+                val delta = computeStreamingDelta(lastResult, currentResult)
 
                 // 如果有待触发的命令词，且用户继续说了新内容，取消触发
                 if (pendingCommand != null && delta.isNotEmpty()) {
@@ -588,7 +584,7 @@ class VoiceEngine(private val context: Context) {
                     }
                 }
 
-                // 更新 lastResult 为当前完整文本（去重后）
+                // 更新 lastResult 为当前完整文本
                 lastResult = currentResult
 
                 // 命令词检测：检查当前完整文本末尾是否包含命令词
@@ -611,8 +607,13 @@ class VoiceEngine(private val context: Context) {
                 }
 
                 if (delta.isNotEmpty()) {
-                    Log.d(TAG, "recordStreaming: delta='$delta', full='$currentResult', samples=$totalSamples")
-                    onSegmentResult(delta, false)
+                    // 折叠增量内即时重复（如"你好你好"→"你好"、"的的的"→"的"），
+                    // 恢复 ~v800 被移除的 dedupText 约束意图，但只作用于增量避免漏字。
+                    val deduped = dedupRepetition(delta)
+                    if (deduped.isNotEmpty()) {
+                        Log.d(TAG, "recordStreaming: delta='$deduped', full='$currentResult', samples=$totalSamples")
+                        onSegmentResult(deduped, false)
+                    }
                 }
 
                 // 检查端点（说话结束）
@@ -998,6 +999,33 @@ class VoiceEngine(private val context: Context) {
      * - "第 第一" / "第第一" → "第一"（折叠重复的序数前缀）
      * 注意：只处理序数前缀，语段之间的空格（如 "第一 第二"）必须保留，撤销分段依赖它。
      */
+    // 流式增量提取：仅在 currentResult 干净扩展 lastResult 时取尾部；
+    // 模型输出回退/重复时返回空（跳过本帧），避免重复上屏已提交文本。
+    private fun computeStreamingDelta(last: String, cur: String): String {
+        if (cur.isEmpty()) return ""
+        if (last.isEmpty()) return cur
+        // 干净扩展：cur 以 last 为前缀 → 取尾部
+        if (cur.startsWith(last)) return cur.substring(last.length).trim()
+        // 模型重复后修正：cur 以 last 结尾（整段重复）→ 去掉末尾的 last 副本
+        if (cur.endsWith(last) && cur.length > last.length) return cur.removeSuffix(last).trim()
+        // last 是 cur 的子串 → 取最后出现之后的部分
+        val idx = cur.lastIndexOf(last)
+        if (idx >= 0) return cur.substring(idx + last.length).trim()
+        // 无法安全增量 → 跳过（不重复上屏）
+        return ""
+    }
+
+    // 折叠即时重复：3+ 相同字符 → 1；整串为某子串的 2+ 次重复 → 该子串（仅当子串不超原长一半，避免误删正常长句）。
+    private fun dedupRepetition(s: String): String {
+        var r = s.replace(Regex("(.)\\1{2,}"), "$1")   // 3+ 同字符 → 1
+        val m = Regex("^(.+?)\\1+$").find(r)
+        if (m != null) {
+            val unit = m.groupValues[1]
+            if (unit.length <= r.length / 2) r = unit
+        }
+        return r
+    }
+
     private fun cleanupOrdinalSpacing(text: String): String {
         var s = text
         // 折叠重复序数前缀："第 第" / "第第" → "第"（初 同理）
