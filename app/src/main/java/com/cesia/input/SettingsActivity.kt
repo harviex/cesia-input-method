@@ -584,8 +584,23 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 模型来源（下拉：手机AI模型 / Ollama本地模型 / OpenRouter.ai）
-        tvApiUrl.setOnClickListener { showModelSourcePicker() }
+        // AI模型源（旧下拉：手机AI模型 / Ollama本地模型 / OpenRouter.ai）
+        tvApiUrl.setOnClickListener {
+            showCustomValueDialog(
+                title = "AI模型源",
+                presets = listOf(
+                    SRC_PHONE_AI to "手机AI模型（本地1.2G，无需联网Key）",
+                    SRC_OLlama to "Ollama本地模型（192.168.123.33）",
+                    SRC_OPENROUTER to "OpenRouter.ai（云端）"
+                ),
+                historyKey = "model_source_history",
+                prefKey = "model_source",
+                valueView = tvApiUrl,
+                isSecret = false,
+                freeUrl = "",
+                onSaved = { selectModelSource(prefs.getString("model_source", "") ?: "") }
+            )
+        }
         tvApiKey.setOnClickListener {
             showCustomValueDialog(
                 title = "AI API Key",
@@ -594,7 +609,8 @@ class SettingsActivity : AppCompatActivity() {
                 prefKey = PREF_OPENROUTER_KEY,
                 valueView = tvApiKey,
                 isSecret = true,
-                freeUrl = "https://openrouter.ai/"
+                freeUrl = "https://openrouter.ai/",
+                onSaved = { testApiConnection() }
             )
         }
         tvTavilyKey.setOnClickListener {
@@ -748,7 +764,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        btnHistory?.setOnClickListener { showHistory() }
+        // 历史记录：点击直接开启本地历史记录并打开历史记录页（无菜单）
+        btnHistory?.setOnClickListener {
+            val historyPrefs = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
+            historyPrefs.edit().putString("history_mode", "local").apply()
+            appendLog("已开启本地历史记录")
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
         btnNewsSources?.setOnClickListener { showNewsSourcePicker() }
 
         // 语音与 AI 本地化

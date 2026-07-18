@@ -297,108 +297,6 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ═══════════ 智能写作来源（移到语音命令词上方）══════════ -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="智能写作来源"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#333333"
-                android:layout_marginBottom="4dp" />
-
-            <!-- Tavily API Key（移至此栏目，放在按钮上方） -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Tavily API Key（互联网搜索）"
-                android:textSize="12sp"
-                android:textColor="#81D8D0"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tv_tavily_key"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:layout_marginBottom="6dp"
-                android:paddingStart="12dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
-                android:gravity="center_vertical"
-                android:background="@drawable/spinner_bg_white"
-                android:textSize="13sp"
-                android:textColor="#333333"
-                android:text="点击选择或输入"
-                android:drawableEnd="@drawable/ic_expand_more"
-                android:drawablePadding="8dp" />
-
-            <!-- 新闻搜索框：填入 Key 后自动搜索“今天的中国新闻” -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/til_news_query"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="新闻搜索（填入 Tavily Key 后自动搜索）"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
-                app:boxStrokeColor="#81D8D0"
-                app:hintTextColor="#81D8D0"
-                android:layout_marginBottom="6dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/et_news_query"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="textMultiLine"
-                    android:minLines="3"
-                    android:gravity="top"
-                    android:textSize="12sp"
-                    android:text="今天的中国新闻" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- 新闻源管理（左） + 启用历史记录（右） -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:orientation="horizontal"
-                android:layout_marginBottom="16dp">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_news_sources"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    android:text="新闻源管理"
-                    android:textSize="13sp"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:textColor="#FFFFFF"
-                    app:backgroundTint="#81D8D0"
-                    app:cornerRadius="10dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_history"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:text="启用历史记录"
-                    android:textSize="13sp"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:textColor="#81D8D0"
-                    app:backgroundTint="#FFFFFF"
-                    app:strokeColor="#81D8D0"
-                    app:strokeWidth="1dp"
-                    app:cornerRadius="10dp" />
-            </LinearLayout>
-
-            <!-- ═══════════ 分隔 ═══════════ -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
-                android:layout_marginBottom="16dp" />
-
             <!-- ═══════════ 模型设置（原云端功能设置，三阶段联动）══════════ -->
             <TextView
                 android:layout_width="wrap_content"
@@ -409,11 +307,11 @@
                 android:textColor="#333333"
                 android:layout_marginBottom="8dp" />
 
-            <!-- 模型来源（下拉：手机AI / Ollama / OpenRouter） -->
+            <!-- AI模型源（下拉：手机AI / Ollama / OpenRouter） -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="模型来源"
+                android:text="AI模型源"
                 android:textSize="12sp"
                 android:textColor="#81D8D0"
                 android:layout_marginBottom="4dp" />
@@ -511,6 +409,108 @@
                     android:fontFamily="monospace"
                     android:text="" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- ═══════════ 智能写作源（模型设置下方、语音命令词上方）══════════ -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="智能写作源"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#333333"
+                android:layout_marginBottom="4dp" />
+
+            <!-- Tavily API Key（移至此栏目，放在按钮上方） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tavily API Key（互联网搜索）"
+                android:textSize="12sp"
+                android:textColor="#81D8D0"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tv_tavily_key"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginBottom="6dp"
+                android:paddingStart="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:gravity="center_vertical"
+                android:background="@drawable/spinner_bg_white"
+                android:textSize="13sp"
+                android:textColor="#333333"
+                android:text="点击选择或输入"
+                android:drawableEnd="@drawable/ic_expand_more"
+                android:drawablePadding="8dp" />
+
+            <!-- 新闻搜索框：填入 Key 后自动搜索“今天的中国新闻” -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_news_query"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="新闻搜索（填入 Tavily Key 后自动搜索）"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                app:boxStrokeColor="#81D8D0"
+                app:hintTextColor="#81D8D0"
+                android:layout_marginBottom="6dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_news_query"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="3"
+                    android:gravity="top"
+                    android:textSize="12sp"
+                    android:text="今天的中国新闻" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 新闻源管理（左） + 历史记录（右） -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_news_sources"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="新闻源管理"
+                    android:textSize="13sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="#FFFFFF"
+                    app:backgroundTint="#81D8D0"
+                    app:cornerRadius="10dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_history"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="历史记录"
+                    android:textSize="13sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="#81D8D0"
+                    app:backgroundTint="#FFFFFF"
+                    app:strokeColor="#81D8D0"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="10dp" />
+            </LinearLayout>
+
+            <!-- ═══════════ 分隔 ═══════════ -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="16dp" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/til_test_text"
