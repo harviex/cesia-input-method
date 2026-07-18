@@ -24,7 +24,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="主题"
+            android:text=" 主题"
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
@@ -41,13 +41,23 @@
             android:contentDescription="关闭" />
     </LinearLayout>
 
-    <!-- 原标题行：仅保留“恢复默认” -->
+    <!-- 主题色每分钟渐变（与“恢复默认”同行） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="end|center_vertical"
-        android:layout_marginBottom="12dp">
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp">
+
+        <android.widget.CheckBox
+            android:id="@+id/check_auto_time_theme"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="主题色每分钟渐变"
+            android:textSize="13sp"
+            android:textColor="#333333" />
 
         <TextView
             android:id="@+id/btn_reset_theme"
@@ -62,8 +72,6 @@
             android:paddingEnd="12dp"
             android:background="?android:attr/selectableItemBackground" />
     </LinearLayout>
-
-    <!-- 色相调节 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -92,17 +100,6 @@
             android:layout_height="36dp"
             android:layout_marginStart="12dp" />
     </LinearLayout>
-
-    <!-- 主题色每分钟渐变（共用上方切换条旁的颜色框 tv_hue_preview） -->
-    <android.widget.CheckBox
-        android:id="@+id/check_auto_time_theme"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="主题色每分钟渐变"
-        android:textSize="13sp"
-        android:textColor="#333333"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp" />
 
     <!-- 背景灰度调节 -->
     <TextView

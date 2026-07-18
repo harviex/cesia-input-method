@@ -73,8 +73,8 @@ class HistoryActivity : AppCompatActivity() {
         // 按钮行：大纲 / 清空（无返回按钮）
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(16, 16, 16, 16)
-            weightSum = 2.0f  // 两按钮各 weight=1 → 占满整行，缩短内边距防溢出
+            setPadding(32, 24, 32, 16)  // 顶部 24dp 与 banner 拉开间距
+            weightSum = 1.2f  // 两按钮各 weight=1 → 实际占 1.2/2=60%，整体缩短约 2/5
         }
 
         fun styledButton(text: String): Button {

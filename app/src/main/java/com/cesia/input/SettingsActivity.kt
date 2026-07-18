@@ -523,14 +523,9 @@ class SettingsActivity : AppCompatActivity() {
 
         etPolishPrompt?.setText(prefs.getString(PREF_POLISH_PROMPT, DEFAULT_POLISH_PROMPT))
 
-        // 加载测试文本（首次写入默认，之后用用户保存的值）
-        val savedTestText = prefs.getString(PREF_TEST_TEXT, null)
-        if (savedTestText == null) {
-            etTestText.setText(DEFAULT_TEST_TEXT)
-            prefs.edit().putString(PREF_TEST_TEXT, DEFAULT_TEST_TEXT).apply()
-        } else {
-            etTestText.setText(savedTestText)
-        }
+        // 测试文本：每次启动都强制回填默认初始样本（不持久化用户输入的润色结果，
+        // 保证重装/重新进入始终回到初始状态，测试时在框内直接显示润色结果）
+        etTestText.setText(DEFAULT_TEST_TEXT)
 
         // 加载语音命令词（新键名，兼容旧键名）
         val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -633,11 +628,7 @@ class SettingsActivity : AppCompatActivity() {
             if (!hasFocus) savePolishPrompt()
         }
         etTestText.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                val t = etTestText.text?.toString() ?: ""
-                prefs.edit().putString(PREF_TEST_TEXT, t).apply()
-                appendLog("测试文本已保存")
-            }
+            // 测试文本不持久化：离开焦点不保存，保持每次启动回到初始样本
         }
 
         // 语音命令词 - 焦点离开时自动保存（含校验）
@@ -1802,7 +1793,8 @@ class SettingsActivity : AppCompatActivity() {
                                 respJson.optString("polished_text", "")
                             }
                             if (polished.isNotEmpty() && polished != inputText) {
-                                // 注意：测试框始终保留初始文本，不把润色结果写回文本框，仅闪烁提示
+                                // 测试时把润色结果显示到文本框，便于验证 API 是否工作
+                                etTestText.setText(polished)
                                 showTestResult(true, "润色成功")
                                 appendLog("润色成功: $polished")
                             } else {
@@ -1920,7 +1912,8 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(false, "推理超时（60s）")
                         appendLog("推理超时（${inferTime}ms），请尝试更短的文本或更小的模型")
                     } else if (result.isNotEmpty() && result != inputText) {
-                        // 测试框始终保留初始文本，不把润色结果写回；仅闪烁提示
+                        // 测试时把润色结果显示到文本框，便于验证本地 AI 是否工作
+                        etTestText.setText(result)
                         showTestResult(true, "本地 AI 润色成功 (${inferTime}ms)")
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
                     } else {
