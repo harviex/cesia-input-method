@@ -443,6 +443,14 @@
                 android:visibility="gone"
                 android:layout_marginBottom="6dp" />
 
+            <!-- ═══════════ 分隔 ═══════════ -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
             <!-- ═══════════ 智能写作源（测试文本下方、语音命令词上方）══════════ -->
             <TextView
                 android:layout_width="wrap_content"
@@ -543,13 +551,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="#E0E0E0"
-                android:layout_marginBottom="16dp" />
-
-            <!-- ═══════════ 分隔 ═══════════ -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
                 android:layout_marginBottom="12dp" />
 
             <!-- ═══════════ 语音命令词 ═══════════ -->
@@ -771,6 +773,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
                 android:layout_marginBottom="12dp" />
 
             <!-- ═══════════ 个性化设置 ═══════════ -->
@@ -839,6 +842,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
                 android:layout_marginBottom="12dp" />
 
             <!-- 运行日志区域：点击展开/折叠，无滚动条限制 -->

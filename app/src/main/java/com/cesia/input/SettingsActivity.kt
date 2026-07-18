@@ -2134,17 +2134,36 @@ class SettingsActivity : AppCompatActivity() {
             val answer = obj.optString("answer", "").trim()
             val results = obj.optJSONArray("results")
             val sb = StringBuilder()
-            if (answer.isNotEmpty()) sb.append(answer).append("\n\n")
+            // 优先中文摘要（answer 跟随查询语言，已偏置中文）
+            if (answer.isNotEmpty()) sb.append("【摘要】$answer\n\n")
             if (results != null) {
+                var added = 0
                 for (i in 0 until results.length()) {
                     val r = results.getJSONObject(i)
-                    val title = r.optString("title", "")
-                    val content = r.optString("content", "")
-                    sb.append("• $title\n$content\n\n")
+                    val title = r.optString("title", "").trim()
+                    val content = r.optString("content", "").trim()
+                    // 只保留正文以中文为主的新闻，过滤英文正文，保证框内全中文
+                    if (content.isNotEmpty() && isMostlyChinese(content)) {
+                        sb.append("• $title\n$content\n\n")
+                        added++
+                    }
+                    if (added >= 5) break
                 }
+                if (added == 0 && answer.isEmpty()) {
+                    return "未找到中文新闻源，请尝试更换关键词（如“国内科技新闻”）"
+                }
+            } else if (answer.isEmpty()) {
+                return "搜索结果为空，请检查 API KEY 或网络"
             }
             sb.toString().trim()
         } catch (_: Exception) { "" }
+    }
+
+    // 判断文本是否以中文为主（中文字符占比 > 50%）
+    private fun isMostlyChinese(text: String): Boolean {
+        if (text.isEmpty()) return false
+        val cn = text.count { c -> c.code in 0x4E00..0x9FFF }
+        return cn * 2 > text.length
     }
 
     // ======================== 日志工具 ========================

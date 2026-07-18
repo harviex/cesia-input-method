@@ -50,9 +50,10 @@ class HistoryActivity : AppCompatActivity() {
             }
             btn.background = d
             btn.setTextColor(accent)
-            val px = (8 * resources.displayMetrics.density).toInt()
+            val px = (6 * resources.displayMetrics.density).toInt()
             btn.setPadding(px, px, px, px)
-            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            val h = (34 * resources.displayMetrics.density).toInt()
+            val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
                 if (topBar.childCount > 0) leftMargin = (4 * resources.displayMetrics.density).toInt()
             }
             btn.layoutParams = lp
@@ -67,23 +68,27 @@ class HistoryActivity : AppCompatActivity() {
         }
         val btnClearAll = styledButton("🗑️ 清空").apply {
             setOnClickListener {
+                // 清空菜单：两项选择
+                val items = arrayOf("只清空历史记录（保留历史记录功能）", "清空历史记录并关闭历史记录功能")
                 AlertDialog.Builder(this@HistoryActivity)
                     .setTitle("清空历史记录")
-                    .setMessage("确定要清空所有润色历史记录吗？此操作不可恢复。")
-                    .setPositiveButton("清空") { _, _ ->
-                        statsManager.clearRecords()
-                        refreshData()
+                    .setItems(items) { _, which ->
+                        when (which) {
+                            0 -> {
+                                statsManager.clearRecords()
+                                refreshData()
+                                Toast.makeText(this@HistoryActivity, "已清空历史记录", Toast.LENGTH_SHORT).show()
+                            }
+                            1 -> {
+                                statsManager.clearRecords()
+                                getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
+                                    .edit().putString("history_mode", "off").apply()
+                                refreshData()
+                                Toast.makeText(this@HistoryActivity, "已清空并关闭历史记录功能", Toast.LENGTH_SHORT).show()
+                                finish()
+                            }
+                        }
                     }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-        }
-        val btnClose = styledButton("✕ 关闭").apply {
-            setOnClickListener {
-                AlertDialog.Builder(this@HistoryActivity)
-                    .setTitle("关闭历史记录")
-                    .setMessage("确定要关闭历史记录页面吗？")
-                    .setPositiveButton("关闭") { _, _ -> finish() }
                     .setNegativeButton("取消", null)
                     .show()
             }
@@ -92,7 +97,6 @@ class HistoryActivity : AppCompatActivity() {
         topBar.addView(btnBack)
         topBar.addView(btnOutline)
         topBar.addView(btnClearAll)
-        topBar.addView(btnClose)
         root.addView(topBar)
 
         tvEmpty = TextView(this).apply {

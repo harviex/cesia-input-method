@@ -72,11 +72,16 @@ class GrammarGuideManager(private val context: Context) {
         // 取最近 N 条记录
         val recentRecords = records.take(MAX_RECORDS_FOR_GUIDE)
 
-        // 构建输入文本：每条记录的 inputText 和 outputText
+        // 构建输入文本：每条记录展示 语音原文↔最终发出文字（供 AI 借鉴用户表达习惯）
         val sb = StringBuilder()
         for ((i, record) in recentRecords.withIndex()) {
-            sb.appendLine("【${i + 1}】原文：${record.inputText}")
-            sb.appendLine("    润色：${record.outputText}")
+            if (record.voiceRawText.isNotEmpty() && record.voiceRawText != record.outputText) {
+                sb.appendLine("【${i + 1}】语音输入：${record.voiceRawText}")
+                sb.appendLine("    最终发出：${record.outputText}")
+            } else {
+                sb.appendLine("【${i + 1}】原文：${record.inputText}")
+                sb.appendLine("    润色：${record.outputText}")
+            }
             sb.appendLine()
         }
 
@@ -167,12 +172,17 @@ class GrammarGuideManager(private val context: Context) {
         if (words.isNotEmpty()) {
             sb.appendLine("• 高频词：${words.joinToString("、") { "${it.first}(${it.second})" }}")
         }
-        // 4. 示例：最近 2 条 原文→润色
+        // 4. 示例：最近 2 条 语音原文↔最终发出文字 对比
         sb.appendLine()
-        sb.appendLine("📝 最近示例：")
-        recent.take(2).forEachIndexed { i, r ->
-            sb.appendLine("  ${i + 1}. 原文：${r.inputText.take(40)}${if (r.inputText.length > 40) "…" else ""}")
-            sb.appendLine("     润色：${r.outputText.take(40)}${if (r.outputText.length > 40) "…" else ""}")
+        sb.appendLine("📝 最近示例（语音原文 → 最终发出文字）：")
+        recent.take(3).forEachIndexed { i, r ->
+            if (r.voiceRawText.isNotEmpty() && r.voiceRawText != r.outputText) {
+                sb.appendLine("  ${i + 1}. 语音输入：${r.voiceRawText.take(40)}${if (r.voiceRawText.length > 40) "…" else ""}")
+                sb.appendLine("     最终发出：${r.outputText.take(40)}${if (r.outputText.length > 40) "…" else ""}")
+            } else {
+                sb.appendLine("  ${i + 1}. 原文：${r.inputText.take(40)}${if (r.inputText.length > 40) "…" else ""}")
+                sb.appendLine("     润色：${r.outputText.take(40)}${if (r.outputText.length > 40) "…" else ""}")
+            }
         }
         sb.appendLine()
         sb.appendLine("（提示：配置 AI Key 后可在云端生成更精准的个人语法纲要）")
@@ -180,17 +190,17 @@ class GrammarGuideManager(private val context: Context) {
     }
 
     private fun buildGuidePrompt(inputText: String): String {
-        return "以下是用户的最近润色记录（原文→润色后），请分析并生成一份简洁的【用户个人语法纲要】。\n" +
+        return "以下是用户的使用记录，包含「语音输入 → 最终发出文字」的对比（用户允许历史记录用于优化 AI 润色）。请据此分析并生成一份简洁的【用户个人语法/表达纲要】，供后续 AI 润色借鉴。\n" +
                 "包括：\n" +
-                "1. 常用句式和表达习惯\n" +
-                "2. 词汇偏好（喜欢用哪些词）\n" +
+                "1. 常用句式和表达习惯（从语音口语化到最终书面语的转化规律）\n" +
+                "2. 词汇偏好（喜欢用哪些词、常把哪些口语词改成什么）\n" +
                 "3. 语气风格（正式/口语/幽默/简洁等）\n" +
                 "4. 标点使用习惯\n" +
                 "5. 其他语言特点\n" +
                 "\n" +
                 "要求：简洁精炼，不超过${MAX_GUIDE_LENGTH}字，用要点列表形式。\n" +
                 "\n" +
-                "润色记录：\n" +
+                "使用记录：\n" +
                 inputText
     }
 }

@@ -11,7 +11,9 @@ data class PolishRecord(
     val outputText: String,
     val inputChars: Int,
     val outputChars: Int,
-    val voiceDurationMs: Long = 0  // 语音输入时长（毫秒）
+    val voiceDurationMs: Long = 0,  // 语音输入时长（毫秒）
+    val voiceRawText: String = "",  // 语音识别原文（与最终发出文字对比用）；非语音场景为空
+    val type: String = "polish"     // 记录类型：voice=语音(含原文对比) / keyboard=键盘发出 / polish=润色
 )
 
 class PolishStatsManager(context: Context) {
@@ -59,7 +61,13 @@ class PolishStatsManager(context: Context) {
             return (totalVoiceChars / minutes).toInt()
         }
 
-    fun addRecord(inputText: String, outputText: String, voiceDurationMs: Long = 0) {
+    fun addRecord(
+        inputText: String,
+        outputText: String,
+        voiceDurationMs: Long = 0,
+        voiceRawText: String = "",
+        type: String = "polish"
+    ) {
         totalInputChars += inputText.length
         totalOutputChars += outputText.length
         totalPolishCount++
@@ -74,7 +82,9 @@ class PolishStatsManager(context: Context) {
             outputText = outputText,
             inputChars = inputText.length,
             outputChars = outputText.length,
-            voiceDurationMs = voiceDurationMs
+            voiceDurationMs = voiceDurationMs,
+            voiceRawText = voiceRawText,
+            type = type
         ))
         val trimmed = records.take(100)
         saveRecords(trimmed)
@@ -92,7 +102,9 @@ class PolishStatsManager(context: Context) {
                 outputText = obj.getString("output"),
                 inputChars = obj.getInt("inputChars"),
                 outputChars = obj.getInt("outputChars"),
-                voiceDurationMs = obj.optLong("voiceDurationMs", 0)
+                voiceDurationMs = obj.optLong("voiceDurationMs", 0),
+                voiceRawText = obj.optString("voiceRawText", ""),
+                type = obj.optString("type", "polish")
             ))
         }
         return list
@@ -126,6 +138,8 @@ class PolishStatsManager(context: Context) {
                 put("inputChars", r.inputChars)
                 put("outputChars", r.outputChars)
                 put("voiceDurationMs", r.voiceDurationMs)
+                put("voiceRawText", r.voiceRawText)
+                put("type", r.type)
             })
         }
         recordsPrefs.edit().putString("records", arr.toString()).apply()

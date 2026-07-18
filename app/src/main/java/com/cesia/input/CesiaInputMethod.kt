@@ -1130,7 +1130,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             engine.onPolishComplete = { inputText, outputText, _ ->
                 val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-                statsManager.addRecord(inputText, outputText, duration)
+                // 仅当历史记录模式开启时写入（与语音路径一致）
+                val historyMode = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
+                    .getString("history_mode", "off") ?: "off"
+                if (historyMode != "off") {
+                    statsManager.addRecord(
+                        inputText = inputText,
+                        outputText = outputText,
+                        voiceDurationMs = duration,
+                        voiceRawText = inputText,
+                        type = "voice"
+                    )
+                }
                 // 每5条记录自动更新语法大纲
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     try {
@@ -4093,7 +4104,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    /** 构建语法指南 */
+    /** 构建语法指南（注入 AI 润色，供借鉴） */
     private fun buildGrammarGuide(): String {
         return try {
             val guideMgr = com.cesia.input.stats.GrammarGuideManager(this)
@@ -4101,7 +4112,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (guideContent.isNotEmpty()) {
                 guideContent
             } else {
-                ""
+                // AI 未生成时，回退本地大纲（基于全部历史记录），保证 AI 润色有借鉴素材
+                val local = guideMgr.buildLocalOutline(statsManager.getRecords())
+                if (local.isNotEmpty()) local else ""
             }
         } catch (e: Exception) {
             ""
@@ -5292,11 +5305,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
-        // 语音润色历史：仅当历史记录模式开启（非 off）时写入；默认不记录
+        // 语音历史：仅当历史记录模式开启（非 off）时写入；记录语音原文↔最终发出文字对比
         val historyMode = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
             .getString("history_mode", "off") ?: "off"
         if (historyMode != "off") {
-            statsManager.addRecord(originalText, polishedText, duration)
+            statsManager.addRecord(
+                inputText = originalText,
+                outputText = polishedText,
+                voiceDurationMs = duration,
+                voiceRawText = originalText,
+                type = "voice"
+            )
         }
         // 锁定模式下润色完成后自动重新开始录音
         if (isVoiceLocked) {
