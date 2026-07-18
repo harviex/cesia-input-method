@@ -161,7 +161,7 @@ class SettingsActivity : AppCompatActivity() {
         const val PREF_THEME_MODE = "theme_mode"
         const val PREF_SETTINGS_TITLE = "settings_title"
         const val DEFAULT_POLISH_PROMPT = "你是一个文本润色与输入排版高手。请将输入的口语文字处理为通顺的书面文字，并严格执行以下规则：\n严禁删减核心信息，严禁随意扩写。仅修正错别字、口语和语序，加入标点。只输出润色排版后的纯文本。禁止解释，禁止添加任何前缀（如\"润色后：\"）或后缀。如果用户输入的内容包含多个观点、步骤或长篇大论，请自动通过\"换行分段\"或使用\"— \"进行分点陈列。"
-        const val DEFAULT_TEST_TEXT = "嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。"
+        const val DEFAULT_TEST_TEXT = ""  // 初始为空，仅显示 hint，不预填润色后文本
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

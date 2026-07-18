@@ -109,14 +109,6 @@
                     android:progress="0" />
             </LinearLayout>
 
-            <!-- ═══════════ 分隔 ═══════════ -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
-                android:layout_marginTop="12dp"
-                android:layout_marginBottom="12dp" />
-
             <!-- ═══════════ 统计卡片 ═══════════ -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -305,6 +297,14 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- ═══════════ 分隔 ═══════════ -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
             <!-- ═══════════ 模型设置（原云端功能设置，三阶段联动）══════════ -->
             <TextView
                 android:layout_width="wrap_content"
@@ -437,7 +437,7 @@
                     android:minLines="4"
                     android:gravity="top"
                     android:textSize="12sp"
-                    android:text="嗯那个键盘最下面5个按钮是亮点哦纸飞机短按发送文本长按打开剪贴板垃圾桶短按清空前面长按清空后面星星和笔分别是写作和修改短按发送命令长按打开菜单语音输入长按锁定只要结尾说命令词就有惊喜哦。" />
+                    android:text="" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- 润色测试状态：测试时文字闪烁提示“正在测试” -->

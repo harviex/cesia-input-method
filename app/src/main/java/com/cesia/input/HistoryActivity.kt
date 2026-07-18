@@ -29,10 +29,11 @@ class HistoryActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        // 顶部栏：返回 / 大纲 / 清空 / 关闭（4按钮，风格与设置页历史记录按钮一致：白底+主题色文字+主题色描边）
+        // 顶部栏：返回 / 大纲 / 清空（3按钮，风格与设置页历史记录按钮一致：白底+主题色文字+主题色描边）
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(32, 32, 32, 16)
+            weightSum = 2.7f  // 三按钮各 weight=1 → 实际占 2.7/3≈90%，整体缩小约 1/5
         }
 
         val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -55,7 +56,9 @@ class HistoryActivity : AppCompatActivity() {
             btn.setPadding(px, px, px, px)
             val h = (34 * resources.displayMetrics.density).toInt()
             val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
-                if (topBar.childCount > 0) leftMargin = (8 * resources.displayMetrics.density).toInt()
+                val gap = (12 * resources.displayMetrics.density).toInt()
+                leftMargin = if (topBar.childCount > 0) gap else 0
+                rightMargin = gap  // 末尾也留间隙，整体视觉均衡
             }
             btn.layoutParams = lp
             return btn
