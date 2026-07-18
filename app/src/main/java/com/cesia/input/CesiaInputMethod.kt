@@ -2336,6 +2336,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val btnClose = menuView.findViewById<ImageButton>(R.id.btn_menu_close)
         val llItems = menuView.findViewById<LinearLayout>(R.id.ll_menu_items)
         tvTitle.text = "候选：$word"
+        // 菜单文字随主题文字大小档位缩放
+        val menuSp = when (textThemeSize) {
+            0 -> 12f
+            2 -> 16f
+            3 -> 18f
+            else -> 14f
+        }
+        tvTitle.textSize = menuSp
 
         val popup = PopupWindow(menuView,
             (200 * resources.displayMetrics.density).toInt(),
@@ -2363,7 +2371,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         for (item in items) {
             val row = TextView(ctx).apply {
                 text = item
-                textSize = 14f
+                textSize = menuSp
                 setTextColor(0xFF333333.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding((16 * resources.displayMetrics.density).toInt(), 0, (16 * resources.displayMetrics.density).toInt(), 0)

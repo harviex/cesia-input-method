@@ -109,6 +109,14 @@
                     android:progress="0" />
             </LinearLayout>
 
+            <!-- ═══════════ 分隔 ═══════════ -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
             <!-- ═══════════ 统计卡片 ═══════════ -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -513,7 +521,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="44dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="12dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_news_sources"
@@ -766,7 +774,7 @@
                 android:textSize="10sp"
                 android:textColor="#999999"
                 android:padding="4dp"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="4dp" />
 
             <!-- ═══════════ 分隔 ═══════════ -->
             <View

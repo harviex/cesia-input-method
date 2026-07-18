@@ -35,7 +35,8 @@ class HistoryActivity : AppCompatActivity() {
             setPadding(32, 32, 32, 16)
         }
 
-        val accent = 0xFF81D8D0.toInt()  // 主题色 Tiffany，与设置页历史记录按钮一致
+        val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_accent", 0xFF81D8D0.toInt())  // 边框/文字随主题色变化
 
         fun styledButton(text: String): Button {
             val btn = Button(this)
@@ -54,19 +55,19 @@ class HistoryActivity : AppCompatActivity() {
             btn.setPadding(px, px, px, px)
             val h = (34 * resources.displayMetrics.density).toInt()
             val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
-                if (topBar.childCount > 0) leftMargin = (4 * resources.displayMetrics.density).toInt()
+                if (topBar.childCount > 0) leftMargin = (8 * resources.displayMetrics.density).toInt()
             }
             btn.layoutParams = lp
             return btn
         }
 
-        val btnBack = styledButton("← 返回").apply {
+        val btnBack = styledButton("返回").apply {
             setOnClickListener { finish() }
         }
-        val btnOutline = styledButton("📖 大纲").apply {
+        val btnOutline = styledButton("大纲").apply {
             setOnClickListener { showGrammarGuideDialog() }
         }
-        val btnClearAll = styledButton("🗑️ 清空").apply {
+        val btnClearAll = styledButton("清空").apply {
             setOnClickListener {
                 // 清空菜单：两项选择
                 val items = arrayOf("只清空历史记录（保留历史记录功能）", "清空历史记录并关闭历史记录功能")

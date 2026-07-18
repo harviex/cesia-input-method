@@ -149,14 +149,14 @@ class NewsSourceActivity : AppCompatActivity() {
             val tvCategory: TextView = view.findViewById(R.id.tv_category)
             val tvName: TextView = view.findViewById(R.id.tv_source_name)
             val tvUrl: TextView = view.findViewById(R.id.tv_source_url)
-            val cb: CheckBox = view.findViewById(R.id.cb_source)
+            val cb: CompoundButton = view.findViewById(R.id.cb_source)
         }
 
         override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_news_source, parent, false)
-            // CheckBox 按钮着色
-            val cb = view.findViewById<CheckBox>(R.id.cb_source)
+            // 选择按钮着色（RadioButton / CheckBox 通用）
+            val cb = view.findViewById<CompoundButton>(R.id.cb_source)
             cb.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
             // 分类标题文字色
             val tvCat = view.findViewById<TextView>(R.id.tv_category)
