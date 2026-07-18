@@ -20,7 +20,7 @@ class RimeEngine(private val context: Context) : InputEngine {
         /** 候选词最多返回前 3000 个（词组+单字按权重自然混排；翻页上限防卡顿） */
         private const val MAX_CANDIDATE_COUNT = 3000
         /** getAllCandidates 最多翻页步数（pageSize=5 → 80页最多扫400候选，防翻遍数千页卡死） */
-        private const val MAX_PAGE_WALK = 80
+        private const val MAX_PAGE_WALK = 50
     }
 
     private var session: RimeSession? = null

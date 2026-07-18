@@ -383,6 +383,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9FenCiLastClick = 0L             // 1键上次单击时间戳（双击检测）
     private var t9FenCiPendingSingle: Runnable? = null  // 单击待执行的切换任务（延迟以等待可能的双击）
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
+    // 上次喂给 Rime 会话的 feed 串（增量喂判断依据）：新 feed 以其为前缀→只增量喂新增部分，
+    // 否则（退格/切简拼全拼/提交后队列变化）整串重放。避免每键重放“整个数字队列”导致长码 O(n²) 卡顿。
+    private var lastT9Feed: String? = null
     private var pendingEnglish = ""               // 英文模式下已直接上屏的连续英文字母缓冲（按数字时连同数字一起上屏）
 
     // = 号计算器（复刻 Rime 原生 =expr 求值）：calcExpr 非空即处于计算模式，缓存 = 开头的算式
@@ -6171,40 +6174,71 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun processT9Input() {
+        val t0 = System.currentTimeMillis()
         t9ComposedSoFar.clear()  // 新组合开始，清空已上屏累积
         // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
         if (t9DigitQueue.isNotEmpty()) {
             if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
-                // 如 23 未锁 → 仍枚举全部组合(出 400 混合候选)；锁 b、f → bf 直接出 bf 开头词
                 val digits = t9DigitQueue.toString().map { it.digitToInt() }
-                if (t9SpellPrefix.isEmpty()) {
-                    // 未锁定时：不做全组合枚举(避免 77777=4^5 爆炸卡顿)，
-                    // 只取每位数字首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选。
-                    // 用户点选候选音锁定字母后，再走下方的精确组合(已锁定固定，剩余少不卡)。
+                val feed = if (t9SpellPrefix.isEmpty()) {
+                    // 未锁定时：每数字取首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选
                     val firstLetters = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' }.firstOrNull() ?: ' ' }
-                    val feed = firstLetters.joinToString("")
-                    rimeEngine.clear(); rimeEngine.createSession()
-                    for (ch in feed) rimeEngine.processKey(ch.toString())
-                    t9FenCiMerged = rimeEngine.getAllCandidates()
+                    firstLetters.joinToString("")
                 } else {
                     // 已锁定时：用锁定字母+剩余首位拼简拼码(如 bf)，精确出该范围候选
-                    val feed = buildT9SpellFeed()
-                    rimeEngine.clear(); rimeEngine.createSession()
-                    for (ch in feed) rimeEngine.processKey(ch.toString())
-                    t9FenCiMerged = rimeEngine.getAllCandidates()
+                    buildT9SpellFeed()
                 }
+                val tFeed = System.currentTimeMillis()
+                feedRimeIncrementally(feed)
+                val tGet = System.currentTimeMillis()
+                t9FenCiMerged = rimeEngine.getAllCandidates()
+                val tEnd = System.currentTimeMillis()
+                Log.i("CesiaPerf", "processT9Input 简拼 qlen=${t9DigitQueue.length} feed=$feed | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             } else {
                 // 全拼：数字直连，如 83 → 83（走全拼，出"特"等单字）
-                rimeEngine.clear()
-                rimeEngine.createSession()
-                for (d in t9DigitQueue) {
-                    rimeEngine.processKey(d.toString())
-                }
+                val tFeed = System.currentTimeMillis()
+                feedRimeIncrementally(t9DigitQueue.toString())
+                val tGet = System.currentTimeMillis()
+                // 全拼分支也取候选用于状态栏/后续
+                rimeEngine.getAllCandidates()
+                val tEnd = System.currentTimeMillis()
+                Log.i("CesiaPerf", "processT9Input 全拼 qlen=${t9DigitQueue.length} | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             }
+        } else {
+            // 队列空：确保 Rime 会话清空，下次从头喂
+            rimeEngine.clear(); rimeEngine.createSession()
+            lastT9Feed = null
         }
+        val tUpd = System.currentTimeMillis()
         updateSpellBar()
         updateCandidateBar()
+        val tEnd = System.currentTimeMillis()
+        Log.i("CesiaPerf", "processT9Input 后续update=${tEnd-tUpd}ms | qlen=${t9DigitQueue.length}")
+    }
+
+    /**
+     * 增量喂 Rime：若新 feed 以上次喂入的 lastT9Feed 为前缀（即仅追加、未退格/切模式/提交），
+     * 则只把新增部分 processKey 进去；否则清空会话整串重放。
+     * 关键修复：不再每键 clear+重放“整个数字队列”，长码（如连续拼接多词组）下每键开销从 O(队列长) 降到 O(1)，
+     * 累计从 O(n²) 降到 O(n)，根治“连续输入中文超 4 字后卡顿甚至卡死”。
+     */
+    private fun feedRimeIncrementally(feed: String) {
+        val prev = lastT9Feed
+        if (prev != null && feed.length > prev.length && feed.startsWith(prev)) {
+            // 增量：仅喂新增的尾部字符
+            for (i in prev.length until feed.length) {
+                rimeEngine.processKey(feed[i].toString())
+            }
+            lastT9Feed = feed
+        } else {
+            // 重放：清空会话，从头喂完整 feed
+            rimeEngine.clear(); rimeEngine.createSession()
+            for (ch in feed) {
+                rimeEngine.processKey(ch.toString())
+            }
+            lastT9Feed = feed
+        }
     }
 
     /** 1 键：单击=切换全拼/简拼（并提示）；双击=锁定/解锁当前模式（防误触，持久化） */

@@ -234,9 +234,8 @@ class VoiceEngine(private val context: Context) {
     /** 切换中英混 / 纯中文 模式；返回切换后的模式。仅在 hasChineseModel() 为真时切到中文有效。 */
     fun switchVoiceMode(): VoiceMode {
         voiceMode = if (voiceMode == VoiceMode.MIXED) VoiceMode.CHINESE else VoiceMode.MIXED
-        // 切换后清掉识别器缓存，使下次 getOrCreateRecognizer 按新目录重建
-        cachedOnlineRecognizer = null
-        cachedModelPath = null
+        // 切换后释放旧识别器的 native 内存（必须 release，否则 C++ 堆泄漏），再清缓存使下次重建
+        releaseCachedRecognizer()
         // 关键：同时清掉预热标记，否则 warmupRecognizer 会提前 return，
         // 导致下次点击语音键时在线重建识别器（~1.4s 卡顿）。
         hasWarmedUp = false
@@ -273,6 +272,23 @@ class VoiceEngine(private val context: Context) {
 
     fun isLocalModelLoaded(): Boolean = recognizerLoaded
 
+    /** 释放已缓存的 OnlineRecognizer 的 native 内存（sherpa-onnx 模型权重+推理 buffer 在 C++ 堆，
+     *  仅置空 Java 引用不会释放，必须反射调用 release()），避免切换/重建模型时 native 内存泄漏
+     *  （实测泄漏导致 IME 进程 native 堆涨到 1.79GB，拖垮整个输入法卡顿/ANR）。 */
+    private fun releaseCachedRecognizer() {
+        val rec = cachedOnlineRecognizer ?: run { cachedModelPath = null; return }
+        try {
+            val releaseMethod = rec.javaClass.getDeclaredMethod("release")
+            releaseMethod.isAccessible = true
+            releaseMethod.invoke(rec)
+            Log.i(TAG, "releaseCachedRecognizer: 已释放旧 OnlineRecognizer (native 内存回收)")
+        } catch (e: Exception) {
+            Log.w(TAG, "releaseCachedRecognizer 失败: ${e.message}")
+        }
+        cachedOnlineRecognizer = null
+        cachedModelPath = null
+    }
+
     /** 后台预热：预创建 OnlineRecognizer，避免首次点击语音键的 1.4s 延迟 */
     fun warmupRecognizer() {
         if (hasWarmedUp) return
@@ -282,6 +298,8 @@ class VoiceEngine(private val context: Context) {
             val modelPath = modelDir.absolutePath
             // 如果已缓存同路径，跳过
             if (cachedModelPath == modelPath && cachedOnlineRecognizer != null) return@launch
+            // 路径不同但有旧实例：先释放旧 native 模型，避免泄漏
+            if (cachedOnlineRecognizer != null) releaseCachedRecognizer()
 
             try {
                 val modelType = if (isZipformerModel(modelDir)) {
@@ -315,6 +333,8 @@ class VoiceEngine(private val context: Context) {
             Log.i(TAG, "使用缓存的 OnlineRecognizer")
             return cachedOnlineRecognizer
         }
+        // 路径不同但有旧实例：先释放旧 native 模型，避免泄漏
+        if (cachedOnlineRecognizer != null) releaseCachedRecognizer()
         // 否则创建新的
         val modelType = if (isZipformerModel(modelDir)) {
             SherpaOnnxEngine.ModelType.ZIPFORMER
