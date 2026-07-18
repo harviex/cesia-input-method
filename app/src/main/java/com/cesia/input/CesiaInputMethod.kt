@@ -4817,6 +4817,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                 var lastStreamingText = ""
                 var segmentCount = 0
+                // streamedAll：截至当前已识别的完整累积文本（VoiceEngine 已传全量），直接整体显示
+                var streamedAll = ""
                 // 兜底预热（若 updateVoiceBackend 还没触发）
                 voiceEngine.warmupRecognizer()
                 voiceEngine.recordInSegments(
@@ -4825,39 +4827,38 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     onSegmentResult = { text, isFinal ->
                         segmentCount++
                         Log.i("Cesia", "onSegmentResult #$segmentCount: text='${text.take(50)}', isFinal=$isFinal")
-                        // 续识别态：把新识别片段拼到【下划线真相源 voiceKeptText】之后显示，
-                        // 注意：这里只“读取”voiceKeptText 做拼接展示，绝不重写它（防止新一轮覆盖保住的内容）。
-                        val base = voiceKeptText.trimEnd()
-                        val display = if (base.isNotEmpty()) "$base $text" else text
-                        if (text.isNotEmpty() && text != lastStreamingText) {
-                            lastStreamingText = text
-                            recognizedText = display
-                            withContext(Dispatchers.Main) {
-                                // 检测到识别文本，隐藏语音命令提示
-                                if (statusLines.isNotEmpty() && statusLines.last().startsWith("💡")) {
-                                    statusLines.removeAt(statusLines.size - 1)
+                        if (text.isNotEmpty()) {
+                            // text 已是截至当前的完整累积文本，直接整体显示（边说边累计、不隐藏）
+                            streamedAll = text
+                            if (text != lastStreamingText) {
+                                lastStreamingText = text
+                                recognizedText = text
+                                withContext(Dispatchers.Main) {
+                                    // 检测到识别文本，隐藏语音命令提示
+                                    if (statusLines.isNotEmpty() && statusLines.last().startsWith("💡")) {
+                                        statusLines.removeAt(statusLines.size - 1)
+                                    }
+                                    // 流式显示：直接在光标位置显示已累计的全部识别文本（组合态）
+                                    val ic = currentInputConnection ?: return@withContext
+                                    ic.setComposingText(text, 1)
+                                    updateStatus("🎤 $text")
                                 }
-                                // 流式显示：直接在光标位置显示识别文本（组合态）
-                                val ic = currentInputConnection ?: return@withContext
-                                ic.setComposingText(display, 1)
-                                updateStatus("🎤 $display")
                             }
                         }
                         if (isFinal) {
                             withContext(Dispatchers.Main) {
                                 if (isContinuingSession) {
-                                    // 续识别态：把本轮新内容正式并入真相源 voiceKeptText（空格分隔追加），
+                                    // 续识别态：把本轮完整内容并入真相源 voiceKeptText（空格分隔追加前缀），
                                     // 然后保持组合态继续监听后续命令/内容。
-                                    if (text.isNotEmpty()) {
-                                        voiceKeptText = if (voiceKeptText.isNotEmpty()) "${voiceKeptText.trimEnd()} $text" else text
-                                    }
+                                    voiceKeptText = if (voiceKeptText.isNotEmpty()) "${voiceKeptText.trimEnd()} $streamedAll" else streamedAll
                                     Log.i("Cesia", "onSegmentResult: 续识别态 isFinal，voiceKeptText='${voiceKeptText.take(50)}'")
                                     resumeRecordingKeepText()
-                                } else if (text.isNotEmpty()) {
-                                    // 最终结果：确认组合文本
+                                } else if (streamedAll.isNotEmpty()) {
+                                    // 最终结果：确认组合文本（已是全部已识别内容）
+                                    voiceKeptText = streamedAll
                                     val ic = currentInputConnection ?: return@withContext
                                     ic.finishComposingText()
-                                    handleCloudVoiceResult(display)
+                                    handleCloudVoiceResult(streamedAll)
                                 } else {
                                     Log.w("Cesia", "onSegmentResult: isFinal but text is empty!")
                                     handleCloudVoiceResult("")

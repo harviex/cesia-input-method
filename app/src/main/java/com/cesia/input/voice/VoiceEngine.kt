@@ -609,14 +609,14 @@ class VoiceEngine(private val context: Context) {
                     // 继续录音，等待超时或新内容取消
                 }
 
-                if (delta.isNotEmpty()) {
-                    // 折叠增量内即时重复（如"你好你好"→"你好"、"的的的"→"的"），
-                    // 恢复 ~v800 被移除的 dedupText 约束意图，但只作用于增量避免漏字。
-                    val deduped = dedupRepetition(delta)
-                    if (deduped.isNotEmpty()) {
-                        Log.d(TAG, "recordStreaming: delta='$deduped', full='$currentResult', samples=$totalSamples")
-                        onSegmentResult(deduped, false)
-                    }
+                // 传“截至当前的完整累积文本”（已确认段落 accumulatedText + 当前句 currentResult），
+                // 而非增量 delta：上层整体显示即“边说边累计、不隐藏、不重复、无多余空格”，
+                // 兼容中英混等输出较碎的模型（参考 ~v800 全量显示意图）。
+                val fullNow = (if (accumulatedText.isEmpty()) currentResult else "$accumulatedText $currentResult").trim()
+                val cleaned = dedupRepetition(fullNow)
+                if (cleaned.isNotEmpty()) {
+                    Log.d(TAG, "recordStreaming: full='$cleaned', samples=$totalSamples")
+                    onSegmentResult(cleaned, false)
                 }
 
                 // 检查端点（说话结束）

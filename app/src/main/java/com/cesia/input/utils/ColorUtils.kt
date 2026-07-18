@@ -32,9 +32,19 @@ object ColorUtils {
      * density 用于按屏幕密度缩放圆角与描边。
      */
     fun makeKeyBgDrawable(keyBgColor: Int, density: Float): GradientDrawable {
-        val keyGrayVal = (keyBgColor and 0xFF)
-        val strokeGray = (keyGrayVal - 16).coerceIn(0, 255)
-        val strokeColor = 0xFF000000.toInt() or (strokeGray shl 16) or (strokeGray shl 8) or strokeGray
+        // 判断是否灰度色（R==G==B）：键盘/底栏常态为灰底，边取极淡灰(keyBg-16)，
+        // 亮色主题下几乎不可见，即“像键盘按钮那种边框效果”；
+        // 若是彩色高亮（如主题色发光态），则用固定浅灰描边，避免 Tiffany 蓝边框。
+        val r = (keyBgColor shr 16) and 0xFF
+        val g = (keyBgColor shr 8) and 0xFF
+        val b = keyBgColor and 0xFF
+        val isGray = (r == g && g == b)
+        val strokeColor = if (isGray) {
+            val strokeGray = (r - 16).coerceIn(0, 255)
+            0xFF000000.toInt() or (strokeGray shl 16) or (strokeGray shl 8) or strokeGray
+        } else {
+            0xFFCCCCCC.toInt()
+        }
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(keyBgColor)

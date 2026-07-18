@@ -70,32 +70,29 @@ class HistoryActivity : AppCompatActivity() {
         banner.addView(btnBannerClose)
         root.addView(banner)
 
-        // 按钮行：大纲 / 清空（无返回按钮）
+        // 按钮行：大纲 / 清空，完全照抄设置页“历史记录管理”按钮样式
+        // （白底 + #81D8D0 描边/文字 + 圆角10dp + 13sp + 高44dp + 各占一半宽、有文字）
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(32, 24, 32, 16)  // 顶部 24dp 与 banner 拉开间距
-            weightSum = 1.2f  // 两按钮各 weight=1 → 实际占 1.2/2=60%，整体缩短约 2/5
+            setPadding(32, 24, 32, 16)  // 顶部 24dp 与 banner 拉开间距；左右 32dp 留白
         }
 
-        fun styledButton(text: String): Button {
-            val btn = Button(this)
+        fun styledButton(text: String): com.google.android.material.button.MaterialButton {
+            val btn = com.google.android.material.button.MaterialButton(this)
             btn.text = text
             btn.textSize = 13f
             btn.maxLines = 1
             btn.ellipsize = android.text.TextUtils.TruncateAt.END
-            val d = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFFFFFFFF.toInt())
-                setStroke((1 * resources.displayMetrics.density).toInt(), accent)
-                cornerRadius = 10 * resources.displayMetrics.density
-            }
-            btn.background = d
+            // 颜色随主题色变化（accent 取自 cesia_settings.theme_accent）
             btn.setTextColor(accent)
-            val px = (6 * resources.displayMetrics.density).toInt()
-            btn.setPadding(px, px, px, px)
-            val h = (34 * resources.displayMetrics.density).toInt()
+            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            btn.strokeColor = android.content.res.ColorStateList.valueOf(accent)
+            btn.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+            btn.cornerRadius = (10 * resources.displayMetrics.density).toInt()
+            val h = (44 * resources.displayMetrics.density).toInt()
             val lp = LinearLayout.LayoutParams(0, h, 1f).apply {
-                // 仅按钮之间留间隙，末尾不留（避免最右按钮超出屏幕）
-                leftMargin = if (topBar.childCount > 0) (12 * resources.displayMetrics.density).toInt() else 0
+                // 两按钮之间留 24dp 间隙（拉开距离），末尾不留（避免最右按钮超出屏幕）
+                leftMargin = if (topBar.childCount > 0) (24 * resources.displayMetrics.density).toInt() else 0
             }
             btn.layoutParams = lp
             return btn
