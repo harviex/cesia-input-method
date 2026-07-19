@@ -6008,6 +6008,51 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         updateShiftIndicator()
     }
 
+    /** 连续按键达上限(25)提示：用 PopupWindow（IME 环境不能用 AlertDialog），居中显示 2 秒后自动消失 */
+    private fun showT9KeyLimitPopup() {
+        val ctx = this
+        val tv = android.widget.TextView(ctx).apply {
+            text = "已达到连续输入上限（25 键）\n退格删除后可继续输入"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 14f
+            gravity = android.view.Gravity.CENTER
+            setPadding(40, 28, 40, 28)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xE6000000.toInt())
+                cornerRadius = 16f
+            }
+        }
+        val w = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        val popup = PopupWindow(tv, w, w, false).apply {
+            isOutsideTouchable = true
+            isFocusable = false
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        }
+        val root = keyboardView ?: return
+        tv.setOnClickListener { popup.dismiss() }
+        try {
+            popup.showAtLocation(root, android.view.Gravity.CENTER, 0, 0)
+            tv.postDelayed({ if (popup.isShowing) popup.dismiss() }, 2000)
+        } catch (_: Exception) { }
+    }
+
+    /** 退格轻量重放：clear+重喂当前队列，同步 Rime composingText（修 Bug2 状态栏残留 1 字），
+     *  但只更新状态栏、不刷新候选栏 RecyclerView，避免连续退格主线程堆积卡顿 */
+    private fun replayT9Quiet() {
+        if (t9DigitQueue.isEmpty() && t9SpellPrefix.isEmpty()) {
+            rimeEngine.clear()
+            resetT9State()
+            return
+        }
+        rimeEngine.clear(); rimeEngine.createSession()
+        val feed = if (t9FenCiOn) buildT9SpellFeed() else t9DigitQueue.toString()
+        for (ch in feed) rimeEngine.processKey(ch.toString())
+        lastT9Feed = feed
+        // 仅同步状态栏（基于数字队列，不刷新候选栏）
+        updateStatus(t9SpellPrefix.toString() + t9DigitQueue.substring(t9SpellPrefix.length))
+    }
+
     private fun updateShiftIndicator() {
         // 同步 shift 状态到 KeyboardView（三个键盘完全独立）
         when (keyboardMode) {
@@ -6147,14 +6192,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 主字符模式：T9拼音输入
             val t9Digit = mainToSub[primaryCode]
             if (t9Digit != null) {
-                // 连续按键数上限：到达 25 提示上限、阻止继续累积（退格删键后可继续）
+                // 连续按键数上限：到达 25 弹出提示（PopupWindow，IME 环境不能用 AlertDialog），阻止继续累积（退格删键后可继续）
                 if (t9DigitQueue.length >= MAX_T9_KEYS) {
-                    android.widget.Toast.makeText(this, "连击按键数量到达上限", android.widget.Toast.LENGTH_SHORT).show()
+                    showT9KeyLimitPopup()
                     return
                 }
                 t9DigitQueue.append(t9Digit)  // 逐键选音：数字进队列，字母通过覆盖层锁定
                 processT9Input()
             } else {
+                // 符号上屏前：先把当前 T9 待选首词上屏（若有），并清空 T9 状态栏，避免符号上屏后旧内容残留
+                if (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty()) {
+                    val cand = rimeEngine.getAllCandidates().firstOrNull()
+                    if (!cand.isNullOrEmpty()) commitCandidateText(cand)
+                    resetT9State()
+                }
                 when (primaryCode) {
                     49 -> {
                         // 1键：全拼/简拼切换 + 双击锁定（防误触）
@@ -7841,12 +7892,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         } else {
                             t9DigitQueue.deleteCharAt(t9DigitQueue.length - 1)
                         }
-                        if (t9DigitQueue.isEmpty() && t9SpellPrefix.isEmpty()) {
-                            rimeEngine.clear()
-                            resetT9State()
-                        } else {
-                            processT9Input()
-                        }
+                        // 退格：轻量重放（clear+重喂当前队列，同步 Rime composingText 修 Bug2 残留 1 字），
+                        // 但跳过候选栏 RecyclerView 刷新，避免连续退格时主线程堆积卡顿
+                        replayT9Quiet()
                     } else {
                         deleteSelectionOrChar()
                     }
