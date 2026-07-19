@@ -5893,20 +5893,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
         if (mode == KeyboardMode.NUMBER) {
-            // 进入 T9：清 T9 状态，确保从符号/全键盘切回时干净（避免旧数字残留接续到状态栏）
+            // 进入 T9：只操作 T9 相关状态
             isAsciiMode = false
             rimeEngine.setAsciiMode(false)
             t9ShiftTemp = false  // 每次进入 T9 重置临时 shift
             // t9ShiftLocked 保留（T9 锁定状态不因切换而改变）
-            t9DigitQueue.clear()
-            t9SpellPrefix.clear()
-            t9FenCiMerged = emptyList()
-            t9ComposedSoFar.clear()
-            t9InputBuffer.clear()
             // 恢复 1 键分词开关文字（保留用户切全拼前的状态）
             keyboardView.t9FenCiLabel = if (t9FenCiOn) "简拼" else "全拼"
-            candidateBar.visibility = View.GONE
-            updateStatus(statusIdleText)
         } else if (mode == KeyboardMode.QWERTY) {
             // 进入全键盘：恢复 QWERTY shift 状态
             isAsciiMode = qwertyShiftLocked || qwertyShiftTemp
@@ -5931,11 +5924,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             isAsciiMode = false
             rimeEngine.setAsciiMode(false)
             rimeEngine.clear()
-            // 清理 T9 状态（数字队列/简拼前缀/合并候选/已组词），避免符号上屏后残留接续到 T9（状态栏残留+卡顿）
-            t9DigitQueue.clear()
-            t9SpellPrefix.clear()
-            t9FenCiMerged = emptyList()
-            t9ComposedSoFar.clear()
             t9InputBuffer.clear()
             // symbolShiftLocked 保留
             candidateBar.visibility = View.GONE
@@ -6003,6 +5991,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         t9DigitQueue.clear(); t9SpellPrefix.clear()
         t9FenCiMerged = emptyList()   // 清空简拼合并候选，避免上屏/退格后残留
         rimeEngine.clear()
+        lastT9Feed = null             // 重置增量喂标记：上屏/清状态后下次输入从头喂
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
         updateCandidateBar()
@@ -6061,8 +6050,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val feed = if (t9FenCiOn) buildT9SpellFeed() else t9DigitQueue.toString()
         for (ch in feed) rimeEngine.processKey(ch.toString())
         lastT9Feed = feed
-        // 仅同步状态栏（基于数字队列，不刷新候选栏）
+        // 同步状态栏 + 候选栏（退格后候选词随数字队列变化而刷新，修复状态栏退但候选栏不变）
         updateStatus(t9SpellPrefix.toString() + t9DigitQueue.substring(t9SpellPrefix.length))
+        updateCandidateBar()
     }
 
     private fun updateShiftIndicator() {
@@ -6212,15 +6202,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 t9DigitQueue.append(t9Digit)  // 逐键选音：数字进队列，字母通过覆盖层锁定
                 processT9Input()
             } else {
-                // 符号上屏前：先提交当前 T9 待选首词（若有），再无条件清空 T9 状态栏（无论队列空否），避免符号上屏后旧内容残留
-                if (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty()) {
-                    val cand = rimeEngine.getAllCandidates().firstOrNull()
-                    if (!cand.isNullOrEmpty()) commitCandidateText(cand)
-                }
-                resetT9State()  // 无条件清状态栏（修：队列已空时也要清）
                 when (primaryCode) {
                     49 -> {
-                        // 1键：全拼/简拼切换 + 双击锁定（防误触）
                         onFenciKeyClick()
                     }
                     65292 -> {
@@ -6579,8 +6562,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
                 val symbol = popup[0].toString()
+                // 长按符号上屏（，。！？等）：参照空格/点选上屏——先把当前 T9 首候选上屏，再上屏符号，最后清状态栏+候选栏
+                if (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty()) {
+                    val cands = rimeEngine.candidates
+                    if (cands.isNotEmpty()) {
+                        val sel = rimeEngine.selectCandidate(0)
+                        if (sel.isNotEmpty()) commitCandidateText(sel)
+                    }
+                }
                 currentInputConnection?.commitText(symbol, 1)
-                resetT9State()  // 长按符号上屏后清空 T9 状态栏+候选栏（防旧数字残留接续）
+                resetT9State()
                 keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                 longPressTriggered = true
                 longPressConsumed = false
@@ -8071,9 +8062,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     if (isAsciiMode) {
                         // 保持英文模式，不清空任何状态
                     } else {
-                        // 标点上屏后清空候选栏和状态栏
+                        // 标点上屏后清空候选栏和状态栏（全键盘 + T9 统一逻辑）
                         rimeEngine.clear()
-                        if (keyboardMode == KeyboardMode.NUMBER) t9InputBuffer.clear()
+                        if (keyboardMode == KeyboardMode.NUMBER) {
+                            // T9 模式：彻底清空数字队列/前缀，状态栏退回已就绪
+                            t9DigitQueue.clear(); t9SpellPrefix.clear()
+                            t9InputBuffer.clear()
+                            lastT9Feed = null  // 重置增量喂标记，下次输入从头喂（防首个音被吃）
+                            updateStatus(statusIdleText)
+                        }
                     }
                 }
                 updateCandidateBar()
