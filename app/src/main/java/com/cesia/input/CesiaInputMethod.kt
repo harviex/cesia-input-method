@@ -377,6 +377,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9ComposedSoFar = StringBuilder()
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
     private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
+    // 连续按键数上限（单击数字键计数，非中文字数）：到达后提示上限、不再累积新键。
+    // 配合 schema max_code_length=8，Rime 只解码末 ≤8 位，25 键内不卡（含退格）。
+    private val MAX_T9_KEYS = 25
     private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
     private var t9FenCiOn = false                 // 分词开关：默认关=全拼（数字直连）；开=简拼（数字间加分词符）
     private var t9FenCiLock = false               // 全拼/简拼按钮双击锁定（防误触），持久化，默认不锁
@@ -6144,6 +6147,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 主字符模式：T9拼音输入
             val t9Digit = mainToSub[primaryCode]
             if (t9Digit != null) {
+                // 连续按键数上限：到达 25 提示上限、阻止继续累积（退格删键后可继续）
+                if (t9DigitQueue.length >= MAX_T9_KEYS) {
+                    android.widget.Toast.makeText(this, "连击按键数量到达上限", android.widget.Toast.LENGTH_SHORT).show()
+                    return
+                }
                 t9DigitQueue.append(t9Digit)  // 逐键选音：数字进队列，字母通过覆盖层锁定
                 processT9Input()
             } else {
@@ -6229,6 +6237,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 增量：仅喂新增的尾部字符
             for (i in prev.length until feed.length) {
                 rimeEngine.processKey(feed[i].toString())
+            }
+            lastT9Feed = feed
+        } else if (prev != null && feed.length < prev.length && prev.startsWith(feed)) {
+            // 退格：feed 是上次的严格前缀 → 用 BackSpace 增量回退 Rime 组合（避免整串重喂，退格卡顿根因）
+            val removed = prev.length - feed.length
+            repeat(removed) {
+                if (!rimeEngine.processKey("BackSpace")) return@repeat
             }
             lastT9Feed = feed
         } else {

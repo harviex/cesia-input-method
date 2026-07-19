@@ -19,8 +19,8 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MAX_ENTRIES_PER_BUCKET = 300
         /** 候选词最多返回前 3000 个（词组+单字按权重自然混排；翻页上限防卡顿） */
         private const val MAX_CANDIDATE_COUNT = 3000
-        /** getAllCandidates 最多翻页步数（pageSize=5 → 80页最多扫400候选，防翻遍数千页卡死） */
-        private const val MAX_PAGE_WALK = 50
+        /** getAllCandidates 最多翻页步数（pageSize=5 → 20页最多扫100候选，足够候选栏/面板显示，避免长码枚举卡顿） */
+        private const val MAX_PAGE_WALK = 20
     }
 
     private var session: RimeSession? = null

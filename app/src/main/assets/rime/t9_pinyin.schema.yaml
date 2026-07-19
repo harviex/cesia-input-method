@@ -58,7 +58,7 @@ speller:
   # 限制 speller 接受的最大码长：超长数字码(15+位)会让 script_translator 在双向 derive + completion
   # 下组合数指数爆炸（实测 qlen17 飙到 600ms、qlen20 达 2.9s 卡死）。对齐三星“连打不超过 ~10 字”的限制，
   # 超出部分由上层的逐音节 commit 处理（见 CesiaInputMethod.processT9Input），speller 不再 decode 超长码。
-  max_code_length: 12
+  max_code_length: 6   # 限制 Rime 会话内码长(≤6位≈≤2-3字)，进一步压平长码 decode 尖刺，超长码由上层逐键增量喂处理
   algebra:
     # ===== 超级简拼（取首字母出词）=====
     - erase/^hm$/
