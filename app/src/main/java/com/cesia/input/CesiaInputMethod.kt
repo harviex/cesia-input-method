@@ -2048,6 +2048,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 commitCandidateText(selectedDisplay)
             }
+            lastT9Feed = null  // 联想选词上屏后重置增量喂标记，防止下个新拼音首键被吞
 
             if (newAssociations.isNotEmpty()) {
                 // 继续联想模式
@@ -2118,6 +2119,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         while (curPage < targetPage) { rimeEngine.nextPage(); curPage++ }
         val selectedWord = rimeEngine.selectCandidate(idxInPage)
         if (selectedWord.isNotEmpty()) {
+            lastT9Feed = null  // 选词上屏后重置增量喂标记，防止下次新拼音首键被误判为退格而吞字
             // 去重：逐字组词时最后一步会返回整串(六牛柳)，而前面(六/牛)已上屏，
             // 此处把前面已上屏的前缀去掉，只上屏新增的尾巴(柳)，避免重复。
             val toCommit = stripDuplicatePrefix(selectedWord)
@@ -8674,9 +8676,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 cloudMode = CloudMode.LOCAL
                 updateStatus("🏠 已切换到本地润色模式")
             } else {
-                // 本字灰度：提示下载手机AI并直接触发下载（键盘状态栏显示进度，与设置页同步）
-                updateStatus("⚠️ 手机AI模型未下载，正在开始下载...")
-                promptDownloadPhoneAi()
+                // 本字灰度：已下载则直接点亮，未下载则触发下载（键盘状态栏显示进度）
+                if (modelManager.hasAiModel()) {
+                    markLocalAiReadyInIme()
+                } else {
+                    updateStatus("⚠️ 手机AI模型未下载，正在开始下载...")
+                    promptDownloadPhoneAi()
+                }
             }
         }
         updateCloudButtonState()
@@ -8701,8 +8707,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                 }
                 if (result.isSuccess) {
-                    updateStatus("✅ 手机AI模型下载完成，正在自动测试...")
-                    runLocalAiSelfTestInIme()
+                    updateStatus("✅ 手机AI模型下载完成，本字已点亮（可到设置页测试）")
+                    markLocalAiReadyInIme()
                 } else {
                     updateStatus("❌ 手机AI模型下载失败：${result.exceptionOrNull()?.message}")
                     DownloadProgressBus.emit("手机AI模型", 0.0, failed = true)
@@ -8714,33 +8720,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }.start()
     }
 
-    /** 手机AI模型下载完成后在键盘内自动自测，通过则点亮本字 */
-    private fun runLocalAiSelfTestInIme() {
-        val testText = "你好世界"
-        Thread {
-            try {
-                val modelFile = modelManager.getInstalledAiModelFile() ?: return@Thread
-                val configPath = if (modelFile.isDirectory) File(modelFile, "config.json").absolutePath else modelFile.absolutePath
-                val loaded = kotlinx.coroutines.runBlocking { aiEngine.loadLocalModel(configPath) }
-                if (!loaded) {
-                    Handler(Looper.getMainLooper()).post { updateStatus("⚠️ 手机AI模型加载失败，请到设置页重新下载") }
-                    return@Thread
-                }
-                val result = kotlinx.coroutines.runBlocking { withTimeoutOrNull(300000L) { aiEngine.polish(testText, "润色") } }
-                kotlinx.coroutines.runBlocking { aiEngine.release() }
-                Handler(Looper.getMainLooper()).post {
-                    if (result != null && result.isNotEmpty() && result != testText) {
-                        getSharedPreferences("cesia_model_status", MODE_PRIVATE).edit().putBoolean("local_ai_ready", true).apply()
-                        updateStatus("✅ 手机AI模型测试通过，本字已点亮")
-                    } else {
-                        updateStatus("⚠️ 手机AI模型自测未通过，请到设置页重新下载")
-                    }
-                    updateCloudButtonState()
-                }
-            } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post { updateStatus("⚠️ 手机AI模型自测异常：${e.message}") }
-            }
-        }.start()
+    /** 手机AI模型已就绪：标记点亮本字（真正的推理自测在设置页做，避免 IME 内加载大模型导致卡死） */
+    private fun markLocalAiReadyInIme() {
+        getSharedPreferences("cesia_model_status", MODE_PRIVATE).edit().putBoolean("local_ai_ready", true).apply()
+        cloudMode = CloudMode.LOCAL
+        updateStatus("✅ 手机AI模型已就绪，本字已点亮")
+        updateCloudButtonState()
     }
 
     /**

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 标题栏（主题色 banner + 关闭 X），风格与模型下拉统一 -->
+    <LinearLayout
+        android:id="@+id/banner_bar"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#81D8D0"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/tv_ollama_dialog_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Ollama 服务地址"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/btn_ollama_dialog_close"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="20sp"
+            android:textColor="#FFFFFF"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="关闭" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="填写运行 Ollama 的电脑局域网地址（含 /v1/chat/completions）"
+        android:textSize="12sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/et_ollama_url"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:hint="http://192.168.x.x:11434/v1/chat/completions"
+        android:textSize="13sp"
+        android:inputType="textUri"
+        android:layout_marginBottom="12dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_ollama_cancel"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="取消" />
+
+        <Button
+            android:id="@+id/btn_ollama_ok"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:text="确定" />
+    </LinearLayout>
+
+</LinearLayout>

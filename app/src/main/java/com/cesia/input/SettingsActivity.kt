@@ -754,10 +754,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // 词库管理 - 只有下载/重新下载按钮
         // 云端模型选择 - 点击 TextView 打开选择对话框
-        tvCloudModel?.setOnClickListener {
-            loadModelsForCurrentUrl()
-            showModelSelectorDialog(cloudModelList ?: emptyList())
-        }
+        tvCloudModel?.setOnClickListener { openModelSelector() }
 
         // 版本号点击 → 弹出菜单（下载新版本 / 安装或卸载语音套件 / 卸载手机AI模型）
         tvVersion?.setOnClickListener { showVersionMenu() }
@@ -791,7 +788,7 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallVoice?.setOnClickListener { downloadVoiceModel() }
         btnInstallAi?.setOnClickListener { downloadAiModel() }
         btnInstallVoice?.setOnLongClickListener { showUninstallMenu(true); true }
-        btnInstallAi?.setOnLongClickListener { showUninstallMenu(false); true }
+        // 手机AI模型的长按卸载入口已移除（卸载请到版本号菜单）。重新下载是卸载后的事。
     }
 
     // ======================== API URL/Key 下拉自定义 ========================
@@ -1403,12 +1400,15 @@ class SettingsActivity : AppCompatActivity() {
         modelStatusPrefs().edit().putBoolean("cloud_ready", v).apply()
         refreshModelSourceSymbol()
     }
-    /** 下拉项旁显示通过符号（✓/○）：本地下载自测通过 / 云端测试通过 */
+    /** 下拉项旁显示通过符号（✓/○）：本地下载自测通过 / 云端已填凭据且测试通过 */
     private fun refreshModelSourceSymbol() {
         val src = prefs.getString("model_source", "") ?: ""
+        val openrouterKey = prefs.getString(PREF_OPENROUTER_KEY, "") ?: ""
+        val ollamaUrl = prefs.getString("ollama_url", "") ?: ""
         val sym = when (src) {
             SRC_PHONE_AI -> if (isLocalAiReady()) "✓" else "○"
-            SRC_OLlama, SRC_OPENROUTER -> if (isCloudReady()) "✓" else "○"
+            SRC_OPENROUTER -> if (isCloudReady() && openrouterKey.isNotEmpty()) "✓" else "○"
+            SRC_OLlama -> if (isCloudReady() && ollamaUrl.isNotEmpty()) "✓" else "○"
             else -> ""
         }
         tvApiUrl?.text = when (src) {
@@ -1592,21 +1592,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun downloadAiModel() {
-        // 已安装时再次点击 → 先弹确认框，取消不下载，确定才重新下载
-        val installed = modelManager.hasAiModel()
-        Log.i("Cesia", "downloadAiModel: hasAiModel=$installed")
-        if (installed) {
-            try {
-                androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setTitle("重新下载AI模型")
-                    .setMessage("本地AI模型已安装，确定要重新下载吗？")
-                    .setNegativeButton("取消") { _, _ -> }
-                    .setPositiveButton("确定") { _, _ -> doDownloadAiModel() }
-                    .show()
-            } catch (e: Exception) {
-                Log.e("Cesia", "downloadAiModel dialog failed: ${e.message}", e)
-                doDownloadAiModel()
-            }
+        // 已安装时点击 → 直接跑自测点亮，不重新下载（重新下载是卸载后的事）
+        if (modelManager.hasAiModel()) {
+            testLocalAiConnection()
             return
         }
         doDownloadAiModel()
@@ -1890,11 +1878,11 @@ class SettingsActivity : AppCompatActivity() {
     // ======================== 本地 AI 测试 ========================
 
     private fun testLocalAiConnection() {
-        val inputText = etTestText.text?.toString()?.trim() ?: ""
-        if (inputText.isEmpty()) {
-            Toast.makeText(this, "请先在文本框中输入要润色的文字", Toast.LENGTH_SHORT).show()
-            return
+        // 文本框为空时填入默认测试文本，确保选中手机AI模型后能自动跑润色测试
+        if (etTestText.text?.toString()?.trim().isNullOrEmpty()) {
+            etTestText.setText("今天天气真好，我们一起去公园散步吧。")
         }
+        val inputText = etTestText.text?.toString()?.trim() ?: ""
 
         btnTestLocalAi?.isEnabled = false
         // 互斥：开始本地润色 → 云端按钮变灰不可点，直到润色完成恢复
@@ -1902,6 +1890,7 @@ class SettingsActivity : AppCompatActivity() {
         btnTestApi?.alpha = 0.4f
         startButtonFlash(btnTestLocalAi, "加载中")
         appendLog("🔄 正在加载模型并润色...")
+        startTestStatusFlash()
 
         Thread {
             try {
@@ -1913,6 +1902,7 @@ class SettingsActivity : AppCompatActivity() {
                         showTestResult(false, "未安装 AI 模型")
                         appendLog("本地 AI 失败: 模型未安装")
                         stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                        stopTestStatusFlash()
                         // 润色完成 → 恢复对方按钮状态
                         updateTestButtonStates()
                     }
@@ -1946,6 +1936,7 @@ class SettingsActivity : AppCompatActivity() {
                             appendLog("MNN log: $mnnLog")
                         }
                         stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                        stopTestStatusFlash()
                         // 润色完成 → 恢复对方按钮状态
                         updateTestButtonStates()
                     }
@@ -1981,6 +1972,7 @@ class SettingsActivity : AppCompatActivity() {
                         appendLog("润色结果为空 (${inferTime}ms)")
                     }
                     stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                    stopTestStatusFlash()
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
                 }
@@ -1990,6 +1982,7 @@ class SettingsActivity : AppCompatActivity() {
                     showTestResult(false, "异常: ${e.message ?: "未知"}")
                     appendLog("本地 AI 异常: ${e.message}")
                     stopButtonFlash(btnTestLocalAi, "本地AI润色")
+                    stopTestStatusFlash()
                     // 润色完成 → 恢复对方按钮状态
                     updateTestButtonStates()
                 }
@@ -2022,8 +2015,34 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * 检查是否有被中断的下载（Activity 进入后台导致 Thread 被 kill）
+     * 远程模型列表拉取失败时的兜底：读取内置的 openrouter_models.json（assets）
      */
+    private fun loadBuiltinOpenRouterModels() {
+        try {
+            val jsonStr = assets.open("openrouter_models.json").bufferedReader().use { it.readText() }
+            val json = org.json.JSONObject(jsonStr)
+            val models = json.getJSONArray("models")
+            val list = mutableListOf<CloudModel>()
+            for (i in 0 until models.length()) {
+                val m = models.getJSONObject(i)
+                list.add(
+                    CloudModel(
+                        id = m.optString("id", ""),
+                        name = m.optString("name", m.optString("id", "")).replace(Regex("\\s*\\(free\\)"), ""),
+                        provider = m.optString("provider", ""),
+                        contextLength = m.optLong("context_length", 0),
+                        hasTools = m.optBoolean("has_tools", false),
+                        hasVision = m.optBoolean("has_vision", false)
+                    )
+                )
+            }
+            cloudModelList = list
+            refreshCloudModelText()
+        } catch (e: Exception) {
+            runOnUiThread { tvCloudModel?.text = "⚠️ 内置模型列表读取失败" }
+        }
+    }
+
     private fun checkInterruptedDownloads() {
         val prefs = getSharedPreferences("cesia_download", Context.MODE_PRIVATE)
         if (prefs.getBoolean("voice_downloading", false)) {
@@ -2568,15 +2587,21 @@ class SettingsActivity : AppCompatActivity() {
         val request = okhttp3.Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                // 远程拉取失败（如国内访问 github.io 超时）→ 用内置模型列表兜底
+                loadBuiltinOpenRouterModels()
                 runOnUiThread {
-                    tvCloudModel?.text = "⚠️ 无法加载模型列表：${e.message}"
+                    tvCloudModel?.text = "⚠️ 远程列表加载失败，已用内置列表"
+                    updateModelSelectorContent()
                 }
             }
 
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 if (!response.isSuccessful) {
+                    // HTTP 错误 → 用内置列表兜底
+                    loadBuiltinOpenRouterModels()
                     runOnUiThread {
-                        tvCloudModel?.text = "⚠️ 加载失败：HTTP ${response.code}"
+                        tvCloudModel?.text = "⚠️ 加载失败：HTTP ${response.code}，已用内置列表"
+                        updateModelSelectorContent()
                     }
                     return
                 }
@@ -2636,6 +2661,36 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Ollama 地址可配置（不再写死 IP，避免局域网 IP 变化后连不上） */
+    private fun promptOllamaAddress() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ollama_address, null)
+        val et = dialogView.findViewById<android.widget.EditText>(R.id.et_ollama_url)
+        et.setText(prefs.getString("ollama_url", OLLAMA_URL))
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        dialogView.findViewById<android.view.View>(R.id.btn_ollama_dialog_close)
+            .setOnClickListener { dialog.dismiss() }
+        dialogView.findViewById<android.view.View>(R.id.btn_ollama_cancel)
+            .setOnClickListener { dialog.dismiss() }
+        dialogView.findViewById<android.view.View>(R.id.btn_ollama_ok)
+            .setOnClickListener {
+                val addr = et.text.toString().trim()
+                if (addr.isNotEmpty()) {
+                    prefs.edit().putString("ollama_url", addr).apply()
+                    prefs.edit().putString(PREF_API_URL, addr).apply()
+                    tvApiUrl.text = "ollama本地模型"
+                    appendLog("模型来源：Ollama本地模型($addr)")
+                    autoOpenKeyAfterModel = true
+                    dialog.dismiss()
+                    loadModelsForCurrentUrl()
+                    tvCloudModel?.performClick()
+                }
+            }
+        dialog.show()
+    }
+
     private fun selectModelSource(src: String) {
         prefs.edit().putBoolean("api_url_configured", true).apply()
         when (src) {
@@ -2647,12 +2702,7 @@ class SettingsActivity : AppCompatActivity() {
                 downloadAiModel()
             }
             SRC_OLlama -> {
-                tvApiUrl.text = "ollama本地模型"
-                prefs.edit().putString(PREF_API_URL, OLLAMA_URL).apply()
-                appendLog("模型来源：Ollama本地模型($OLLAMA_URL)")
-                autoOpenKeyAfterModel = true
-                loadModelsForCurrentUrl()
-                tvCloudModel?.performClick()
+                promptOllamaAddress()
             }
             SRC_OPENROUTER -> {
                 tvApiUrl.text = "openrouter.ai"
@@ -2693,11 +2743,15 @@ class SettingsActivity : AppCompatActivity() {
             override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
                 runOnUiThread {
                     tvCloudModel?.text = "⚠️ Ollama 连接失败：${e.message}"
+                    updateModelSelectorContent()
                 }
             }
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                 if (!response.isSuccessful) {
-                    runOnUiThread { tvCloudModel?.text = "⚠️ Ollama HTTP ${response.code}" }
+                    runOnUiThread {
+                        tvCloudModel?.text = "⚠️ Ollama HTTP ${response.code}"
+                        updateModelSelectorContent()
+                    }
                     return
                 }
                 val body = response.body?.string() ?: return
@@ -2714,7 +2768,10 @@ class SettingsActivity : AppCompatActivity() {
                     cloudModelList = list
                     refreshCloudModelText()
                 } catch (e: Exception) {
-                    runOnUiThread { tvCloudModel?.text = "⚠️ Ollama 解析失败" }
+                    runOnUiThread {
+                        tvCloudModel?.text = "⚠️ Ollama 解析失败"
+                        updateModelSelectorContent()
+                    }
                 }
             }
         })
@@ -2728,9 +2785,51 @@ class SettingsActivity : AppCompatActivity() {
             ?: getCustomModels().find { it == savedModelId }
             ?: savedModelId
         runOnUiThread { tvCloudModel?.text = name }
+        updateModelSelectorContent()
     }
 
-    private fun showModelSelectorDialog(models: List<CloudModel>) {
+    /** 点击模型菜单：先清空旧列表并展示“正在读取”，异步加载完成后再刷新 */
+    private fun openModelSelector() {
+        cloudModelList = null
+        tvCloudModel?.text = "⏳ 读取中..."
+        showModelSelectorDialog(emptyList(), loading = true)
+        loadModelsForCurrentUrl()
+    }
+
+    /** 刷新模型选择对话框内容（加载完成或失败时调用） */
+    private fun updateModelSelectorContent() {
+        val list = cloudModelList
+        val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        runOnUiThread {
+            if (list.isNullOrEmpty()) {
+                modelSelectorAdapter?.updateModels(mutableListOf(
+                    CloudModel("__loading__", "⏳ 暂无可读模型，请检查网络或地址", "提示", 0, false, false)))
+                modelSelectorRv?.let { resizeModelList(it, 1) }
+                modelSelectorTitle?.text = "⏳ 正在读取模型列表..."
+            } else {
+                modelSelectorAdapter?.updateModels(list)
+                modelSelectorRv?.let { resizeModelList(it, list.size) }
+                val cur = list.find { it.id == savedModelId }
+                modelSelectorTitle?.text = if (cur != null) "当前: ${cur.name}" else "模型列表（${list.size} 个）"
+            }
+        }
+    }
+
+    /** 根据 item 数自适应列表高度（封顶 400dp，至少 1 项） */
+    private fun resizeModelList(rv: androidx.recyclerview.widget.RecyclerView, count: Int) {
+        val itemH = (56 * resources.displayMetrics.density).toInt()
+        val desired = maxOf(count, 1) * itemH
+        val maxH = (400 * resources.displayMetrics.density).toInt()
+        rv.layoutParams.height = minOf(desired, maxH)
+        rv.requestLayout()
+    }
+
+    private var modelSelectorAdapter: ModelSelectorAdapter? = null
+    private var modelSelectorDialog: AlertDialog? = null
+    private var modelSelectorRv: androidx.recyclerview.widget.RecyclerView? = null
+    private var modelSelectorTitle: android.widget.TextView? = null
+
+    private fun showModelSelectorDialog(models: List<CloudModel>, loading: Boolean = false) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_model_selector, null)
         val rvModels = dialogView.findViewById<RecyclerView>(R.id.rv_model_list)
         val tvTitle = dialogView.findViewById<TextView>(R.id.tv_model_dialog_title)
@@ -2751,8 +2850,12 @@ class SettingsActivity : AppCompatActivity() {
         // Set current model in title
         val savedModelId = prefs.getString(PREF_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
         val currentModel = allModels.find { it.id == savedModelId }
-        currentModel?.let {
-            tvTitle.text = "当前: ${it.name}"
+        if (loading) {
+            tvTitle.text = "⏳ 正在读取模型列表..."
+        } else {
+            currentModel?.let {
+                tvTitle.text = "当前: ${it.name}"
+            }
         }
 
         val dialog = AlertDialog.Builder(this)
@@ -2763,17 +2866,19 @@ class SettingsActivity : AppCompatActivity() {
         rvModels.layoutManager = LinearLayoutManager(this)
         val adapter = ModelSelectorAdapter(allModels, savedModelId,
             onModelClick = { model ->
-                tvCloudModel?.text = model.name
-                prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
-                // 记录 当前API -> 该模型 的联动关系
-                val curApi = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
-                saveApiModelMapping(curApi, model.id)
-                appendLog("模型已保存: ${model.id}")
-                dialog.dismiss()
-                // 模型来源联动：选模型后自动弹 Key
-                if (autoOpenKeyAfterModel) {
-                    autoOpenKeyAfterModel = false
-                    tvApiKey?.performClick()
+                if (model.id != "__loading__") {
+                    tvCloudModel?.text = model.name
+                    prefs.edit().putString(PREF_MODEL_ID, model.id).apply()
+                    // 记录 当前API -> 该模型 的联动关系
+                    val curApi = prefs.getString(PREF_API_URL, DEFAULT_API_URL) ?: DEFAULT_API_URL
+                    saveApiModelMapping(curApi, model.id)
+                    appendLog("模型已保存: ${model.id}")
+                    dialog.dismiss()
+                    // 模型来源联动：选模型后自动弹 Key
+                    if (autoOpenKeyAfterModel) {
+                        autoOpenKeyAfterModel = false
+                        tvApiKey?.performClick()
+                    }
                 }
             },
             onDeleteClick = { model ->
@@ -2787,14 +2892,14 @@ class SettingsActivity : AppCompatActivity() {
             }
         )
         rvModels.adapter = adapter
+        modelSelectorAdapter = adapter
+        modelSelectorDialog = dialog
+        modelSelectorRv = rvModels
+        modelSelectorTitle = tvTitle
 
-        // 自适应高度：按 item 数估算，封顶 400dp，避免长模型名/长列表溢出
+        // 自适应高度：按 item 数估算，封顶 400dp，至少 1 项高度避免空白
         rvModels.post {
-            val itemH = (56 * resources.displayMetrics.density).toInt()
-            val desired = allModels.size * itemH
-            val maxH = (400 * resources.displayMetrics.density).toInt()
-            rvModels.layoutParams.height = minOf(desired, maxH)
-            rvModels.requestLayout()
+            resizeModelList(rvModels, allModels.size)
         }
 
         btnSaveCustom.setOnClickListener {
@@ -2909,6 +3014,12 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         override fun getItemCount() = models.size
+
+        fun updateModels(newList: List<CloudModel>) {
+            models.clear()
+            models.addAll(newList)
+            notifyDataSetChanged()
+        }
     }
 
     // ======================== 新闻源选择器的 RecyclerView Adapter ========================

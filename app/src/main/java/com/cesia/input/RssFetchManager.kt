@@ -38,51 +38,32 @@ object RssFetchManager {
     data class RssSource(val name: String, val url: String, val category: String)
 
     val PRESET_SOURCES: List<RssSource> = listOf(
-        // 科技（精选 4 个，避免过多）
+        // 科技
         RssSource("爱范儿", "https://www.ifanr.com/feed", "科技"),
         RssSource("IT之家", "https://www.ithome.com/rss/", "科技"),
         RssSource("少数派", "https://sspai.com/feed", "科技"),
-        RssSource("虎嗅", "https://www.huxiu.com/feed", "科技"),
+        RssSource("36氪", "https://36kr.com/feed", "科技"),
+        RssSource("钛媒体", "https://www.tmtpost.com/rss.xml", "科技"),
 
-        // AI（仅保留国内可访问）
+        // AI
         RssSource("量子位", "https://www.qbitai.com/feed", "AI"),
-        RssSource("机器之心", "https://www.jiqizhixin.com/rss/news", "AI"),
-        RssSource("InfoQ 中文", "https://www.infoq.cn/rss", "AI"),
 
         // 财经
         RssSource("华尔街见闻", "https://dedicated.wallstreetcn.com/rss.xml", "财经"),
-        RssSource("财新网", "https://feedx.net/rss/caixin.xml", "财经"),
-        RssSource("雪球热榜", "https://xueqiu.com/statuses/hot.json", "财经"),
+        RssSource("界面股市", "https://feedx.net/rss/jiemian.xml", "财经"),
 
-        // 新闻/综合（国内主流）
+        // 新闻/综合（国内主流媒体）
         RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
-        RssSource("新华社", "https://feedx.net/rss/xinhua.xml", "新闻"),
-        RssSource("央视新闻", "https://feedx.net/rss/cctv.xml", "新闻"),
         RssSource("澎湃新闻", "https://feedx.net/rss/thepaper.xml", "新闻"),
         RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "新闻"),
-        RssSource("阮一峰的网络日志", "https://www.ruanyifeng.com/blog/atom.xml", "新闻"),
-
-        // 国际（国内可访问的中文源）
-        RssSource("环球时报", "https://feedx.net/rss/huanqiu.xml", "国际"),
-        RssSource("多维新闻", "https://feedx.net/rss/duowei.xml", "国际"),
-
-        // 生活/文化
-        RssSource("宝玉", "https://baoyu.io/feed.xml", "生活"),
-        RssSource("果壳网", "https://www.guokr.com/rss", "生活"),
-        RssSource("简书热门", "https://www.jianshu.com/feed", "生活"),
-        RssSource("知乎日报", "https://daily.zhihu.com/rss", "生活"),
-
-        // 汽车/出行
-        RssSource("电动邦", "https://www.dyb.com/rss.xml", "汽车"),
-        RssSource("太平洋汽车", "https://www.pcauto.com.cn/rss/", "汽车"),
+        RssSource("中国日报", "http://www.chinadaily.com.cn/rss/china_rss.xml", "新闻"),
+        RssSource("人民网观点", "http://www.people.com.cn/rss/politics.xml", "新闻"),
 
         // 游戏/娱乐
-        RssSource("游民星空", "https://www.gamersky.com/rss/", "游戏"),
         RssSource("机核网", "https://www.gcores.com/rss", "游戏"),
 
         // 编程/开发
-        RssSource("掘金", "https://juejin.cn/rss", "开发"),
-        RssSource("GitHub Trending", "https://github-trending.vercel.app/rss", "开发")
+        RssSource("掘金", "https://juejin.cn/rss", "开发")
     )
 
     // ===== 数据类 =====
