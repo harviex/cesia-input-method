@@ -29,6 +29,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
@@ -82,6 +83,16 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvVersion: TextView
     private lateinit var statsManager: PolishStatsManager
     private lateinit var dictManager: PinyinDictManager
+
+    // 用户词组库导出/导入（SAF 文件选择器）
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri ?: return@registerForActivityResult
+        exportUserPhrases(uri)
+    }
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        importUserPhrases(uri)
+    }
 
     // === 语音与 AI 本地化 ===
     private lateinit var localModeManager: LocalModeManager
@@ -789,6 +800,60 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallAi?.setOnClickListener { downloadAiModel() }
         btnInstallVoice?.setOnLongClickListener { showUninstallMenu(true); true }
         // 手机AI模型的长按卸载入口已移除（卸载请到版本号菜单）。重新下载是卸载后的事。
+
+        // 用户词组库：导出/导入（接龙组词备份）
+        findViewById<Button>(R.id.btn_export_phrases)?.setOnClickListener {
+            val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            exportLauncher.launch("CesiaUserPhrases_$time.json")
+        }
+        findViewById<Button>(R.id.btn_import_phrases)?.setOnClickListener {
+            importLauncher.launch(arrayOf("application/json"))
+        }
+    }
+
+    // ======================== 用户词组库导出/导入 ========================
+    private fun exportUserPhrases(uri: Uri) {
+        try {
+            val json = getSharedPreferences("cesia_dict", MODE_PRIVATE).getString("user_phrases_json", "") ?: ""
+            if (json.isEmpty()) {
+                Toast.makeText(this, "词库为空，无可导出", Toast.LENGTH_SHORT).show()
+                appendLog("导出词库：为空")
+                return
+            }
+            contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(json.toByteArray(Charsets.UTF_8))
+            }
+            Toast.makeText(this, "词库已导出", Toast.LENGTH_SHORT).show()
+            appendLog("导出词库成功: $uri")
+        } catch (e: Exception) {
+            Toast.makeText(this, "导出失败：${e.message}", Toast.LENGTH_SHORT).show()
+            appendLog("导出词库失败: ${e.message}")
+        }
+    }
+
+    private fun importUserPhrases(uri: Uri) {
+        try {
+            val json = contentResolver.openInputStream(uri)?.use { iss ->
+                iss.bufferedReader().readText()
+            } ?: ""
+            if (json.isEmpty()) {
+                Toast.makeText(this, "文件为空", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val obj = JSONObject(json)
+            val merge = JSONObject(getSharedPreferences("cesia_dict", MODE_PRIVATE).getString("user_phrases_json", "") ?: "")
+            val it = obj.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                merge.put(k, obj.getString(k))
+            }
+            getSharedPreferences("cesia_dict", MODE_PRIVATE).edit().putString("user_phrases_json", merge.toString()).apply()
+            Toast.makeText(this, "词库已导入（合并 ${obj.length()} 条）", Toast.LENGTH_SHORT).show()
+            appendLog("导入词库成功: ${obj.length()} 条")
+        } catch (e: Exception) {
+            Toast.makeText(this, "导入失败：${e.message}", Toast.LENGTH_SHORT).show()
+            appendLog("导入词库失败: ${e.message}")
+        }
     }
 
     // ======================== API URL/Key 下拉自定义 ========================

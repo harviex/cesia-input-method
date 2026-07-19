@@ -845,6 +845,54 @@
                     android:hint="长按智能修改按钮显示菜单标题" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- ═══════════ 用户词组库（接龙组词导出/导入）══════════ -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="用户词组库"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#333333"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="接龙组词自动保存，可导出备份或导入恢复"
+                android:textSize="12sp"
+                android:textColor="#81D8D0"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <Button
+                    android:id="@+id/btn_export_phrases"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="导出词库"
+                    android:textSize="13sp"
+                    style="?attr/materialButtonOutlinedStyle"
+                    app:strokeColor="#81D8D0" />
+
+                <Button
+                    android:id="@+id/btn_import_phrases"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="导入词库"
+                    android:textSize="13sp"
+                    style="?attr/materialButtonOutlinedStyle"
+                    app:strokeColor="#81D8D0" />
+            </LinearLayout>
+
             <!-- ═══════════ 分隔 ═══════════ -->
             <View
                 android:layout_width="match_parent"
