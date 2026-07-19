@@ -13,6 +13,8 @@ import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import com.cesia.input.CesiaKeyboardView
+import com.cesia.input.model.ModelInfo
+import com.cesia.input.model.ModelRegistry
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -1362,22 +1364,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 1) 中英双语模型
                 if (!voiceInstalled) {
                     withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer中英双语模型...") }
+                    var lastPct1 = -1.0
                     downloadManager.downloadZipformer { _: String, percent: Double, _: Long, _: Long ->
-                        if (percent.toInt() % 10 == 0) {
-                            CoroutineScope(Dispatchers.Main).launch {
-                                updateStatus("下载中：中英双语模型 ${percent.toInt()}%")
-                            }
+                        if (kotlin.math.abs(percent - lastPct1) >= 0.3) {
+                            lastPct1 = percent
+                            val txt = "下载中：中英双语模型 ${String.format("%.1f", percent)}%"
+                            updateStatus(txt)
+                            DownloadProgressBus.emit("中英双语模型", percent)
                         }
                     }
                 }
                 // 2) 纯中文模型
                 if (!zhInstalled) {
                     withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer纯中文2025模型...") }
+                    var lastPct2 = -1.0
                     downloadManager.downloadArchive("zipformer-zh-2025") { _: String, percent: Double, _: Long, _: Long ->
-                        if (percent.toInt() % 10 == 0) {
-                            CoroutineScope(Dispatchers.Main).launch {
-                                updateStatus("下载中：纯中文模型 ${percent.toInt()}%")
-                            }
+                        if (kotlin.math.abs(percent - lastPct2) >= 0.3) {
+                            lastPct2 = percent
+                            val txt = "下载中：纯中文模型 ${String.format("%.1f", percent)}%"
+                            updateStatus(txt)
+                            DownloadProgressBus.emit("纯中文模型", percent)
                         }
                     }
                 }
@@ -1387,9 +1393,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     val deferred = CompletableDeferred<Boolean>()
                     dictManager.downloadFullDict(
                         onProgress = { percent: Int, _: Long, _: Long, _: String ->
-                            CoroutineScope(Dispatchers.Main).launch {
-                                updateStatus("下载中：雾凇词库 $percent%")
-                            }
+                            val pct = percent.toDouble()
+                            val txt = "下载中：雾凇词库 ${String.format("%.1f", pct)}%"
+                            updateStatus(txt)
+                            DownloadProgressBus.emit("雾凇词库", pct)
                         },
                         onComplete = { ok: Boolean, _: String ->
                             deferred.complete(ok)
@@ -8557,17 +8564,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /**
-     * 检查本地润色是否可用（MNN）
+     * 检查本地润色是否可用：手机AI模型下载完成且自动自测通过（local_ai_ready）
      */
     private fun isLocalPolishAvailable(): Boolean {
-        return modelManager.hasAiModel()
+        return getSharedPreferences("cesia_model_status", MODE_PRIVATE)
+            .getBoolean("local_ai_ready", false)
     }
 
     /**
-     * 检查云端润色是否可用（API Key）
+     * 检查云端润色是否可用：任一云端来源（Ollama/OpenRouter）测试通过过（cloud_ready）
      */
     private fun isCloudPolishAvailable(): Boolean {
-        return !getOpenRouterApiKey().isNullOrEmpty()
+        return getSharedPreferences("cesia_model_status", MODE_PRIVATE)
+            .getBoolean("cloud_ready", false)
     }
 
     /**
@@ -8586,64 +8595,33 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             btn.alpha = if (recognitionAvailable) 1.0f else 0.4f
         }
 
-        // 云按钮
+        // 云按钮（本地/云端切换：本字=本地模式，云字=云端模式）
         btnCloud?.let { btn ->
+            val localReady = isLocalPolishAvailable()
+            val cloudReady = isCloudPolishAvailable()
+            // 默认本字（本地模式）；本字高亮=local_ai_ready，云字高亮=cloud_ready
+            val isLocal = (cloudMode == CloudMode.LOCAL || cloudMode == CloudMode.LOCAL_LOCKED)
             when {
                 !recognitionAvailable -> {
-                    // 识别不可用 → 灰色
-                    btn.isEnabled = false
-                    btn.alpha = 0.4f
-                    btn.text = "云"
+                    btn.isEnabled = false; btn.alpha = 0.4f
+                    btn.text = if (isLocal) "本" else "云"
                     btn.setTextColor(0xFF888888.toInt())
                 }
                 !polishAvailable -> {
-                    // 润色不可用 → 灰色
-                    btn.isEnabled = false
-                    btn.alpha = 0.4f
-                    btn.text = "云"
+                    btn.isEnabled = false; btn.alpha = 0.4f
+                    btn.text = if (isLocal) "本" else "云"
                     btn.setTextColor(0xFF888888.toInt())
                 }
-                usingGoogle -> {
-                    // Google 识别 → 强制云端模式，云字高亮
-                    cloudMode = CloudMode.CLOUD
-                    btn.isEnabled = false
-                    btn.alpha = 1.0f
-                    btn.text = "云"
-                    btn.setTextColor(themeAccent) // 青色高亮
-                }
-                !localPolish && cloudPolish -> {
-                    // 只有云端润色 → 强制云端
-                    cloudMode = CloudMode.CLOUD
-                    btn.isEnabled = false
-                    btn.alpha = 1.0f
-                    btn.text = "云"
-                    btn.setTextColor(themeAccent)
-                }
-                localPolish && !cloudPolish -> {
-                    // 只有本地润色 → 强制本地
-                    cloudMode = CloudMode.LOCAL
-                    btn.isEnabled = false
-                    btn.alpha = 1.0f
-                    btn.text = "本"
-                    btn.setTextColor(0xFF888888.toInt())
-                }
-                localPolish && cloudPolish -> {
-                    // 都有 → 可切换，根据当前模式显示
+                else -> {
+                    // 本字 / 云字 都可点，但灰度取决于对应模型是否 ready
                     btn.isEnabled = true
                     btn.alpha = 1.0f
-                    when (cloudMode) {
-                        CloudMode.LOCAL -> {
-                            btn.text = "本"
-                            btn.setTextColor(0xFF888888.toInt())
-                        }
-                        CloudMode.CLOUD -> {
-                            btn.text = "云"
-                            btn.setTextColor(themeAccent)
-                        }
-                        CloudMode.LOCAL_LOCKED -> {
-                            btn.text = "本"
-                            btn.setTextColor(themeAccent)
-                        }
+                    if (isLocal) {
+                        btn.text = "本"
+                        btn.setTextColor(if (localReady) themeAccent else 0xFF888888.toInt())
+                    } else {
+                        btn.text = "云"
+                        btn.setTextColor(if (cloudReady) themeAccent else 0xFF888888.toInt())
                     }
                 }
             }
@@ -8679,23 +8657,90 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      */
     private fun onCloudButtonClick() {
         if (!btnCloud.isEnabled) return
-
-        when (cloudMode) {
-            CloudMode.LOCAL -> {
+        val localReady = isLocalPolishAvailable()
+        val cloudReady = isCloudPolishAvailable()
+        val isLocal = (cloudMode == CloudMode.LOCAL || cloudMode == CloudMode.LOCAL_LOCKED)
+        if (isLocal) {
+            // 本字 → 切云字
+            if (cloudReady) {
                 cloudMode = CloudMode.CLOUD
                 updateStatus("☁️ 已切换到云端润色模式")
+            } else {
+                updateStatus("⚠️ 云端模型未通过测试，请到设置页测试 Ollama / OpenRouter")
             }
-            CloudMode.CLOUD -> {
+        } else {
+            // 云字 → 切本字
+            if (localReady) {
                 cloudMode = CloudMode.LOCAL
                 updateStatus("🏠 已切换到本地润色模式")
-            }
-            CloudMode.LOCAL_LOCKED -> {
-                // 锁定模式下点击解锁
-                cloudMode = CloudMode.LOCAL
-                updateStatus("🔓 已解锁本地模式")
+            } else {
+                // 本字灰度：提示下载手机AI并直接触发下载（键盘状态栏显示进度，与设置页同步）
+                updateStatus("⚠️ 手机AI模型未下载，正在开始下载...")
+                promptDownloadPhoneAi()
             }
         }
         updateCloudButtonState()
+    }
+
+    /** 本字灰度时点击：直接触发手机AI模型下载（键盘状态栏显示进度，与设置页同步） */
+    private fun promptDownloadPhoneAi() {
+        val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
+            ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: run {
+                updateStatus("⚠️ 无可用手机AI模型定义")
+                return
+            }
+        DownloadProgressBus.emit("手机AI模型", 0.0)
+        Thread {
+            try {
+                val dm = ModelDownloadManager(this@CesiaInputMethod)
+                val result = kotlinx.coroutines.runBlocking {
+                    dm.downloadAiModel(modelInfo) { _: String, percent: Double, _: Long, _: Long ->
+                        val txt = "下载中：手机AI模型 ${String.format("%.1f", percent)}%"
+                        updateStatus(txt)
+                        DownloadProgressBus.emit("手机AI模型", percent)
+                    }
+                }
+                if (result.isSuccess) {
+                    updateStatus("✅ 手机AI模型下载完成，正在自动测试...")
+                    runLocalAiSelfTestInIme()
+                } else {
+                    updateStatus("❌ 手机AI模型下载失败：${result.exceptionOrNull()?.message}")
+                    DownloadProgressBus.emit("手机AI模型", 0.0, failed = true)
+                }
+            } catch (e: Exception) {
+                updateStatus("❌ 手机AI模型下载异常：${e.message}")
+                DownloadProgressBus.emit("手机AI模型", 0.0, failed = true)
+            }
+        }.start()
+    }
+
+    /** 手机AI模型下载完成后在键盘内自动自测，通过则点亮本字 */
+    private fun runLocalAiSelfTestInIme() {
+        val testText = "你好世界"
+        Thread {
+            try {
+                val modelFile = modelManager.getInstalledAiModelFile() ?: return@Thread
+                val configPath = if (modelFile.isDirectory) File(modelFile, "config.json").absolutePath else modelFile.absolutePath
+                val loaded = kotlinx.coroutines.runBlocking { aiEngine.loadLocalModel(configPath) }
+                if (!loaded) {
+                    Handler(Looper.getMainLooper()).post { updateStatus("⚠️ 手机AI模型加载失败，请到设置页重新下载") }
+                    return@Thread
+                }
+                val result = kotlinx.coroutines.runBlocking { withTimeoutOrNull(300000L) { aiEngine.polish(testText, "润色") } }
+                kotlinx.coroutines.runBlocking { aiEngine.release() }
+                Handler(Looper.getMainLooper()).post {
+                    if (result != null && result.isNotEmpty() && result != testText) {
+                        getSharedPreferences("cesia_model_status", MODE_PRIVATE).edit().putBoolean("local_ai_ready", true).apply()
+                        updateStatus("✅ 手机AI模型测试通过，本字已点亮")
+                    } else {
+                        updateStatus("⚠️ 手机AI模型自测未通过，请到设置页重新下载")
+                    }
+                    updateCloudButtonState()
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post { updateStatus("⚠️ 手机AI模型自测异常：${e.message}") }
+            }
+        }.start()
     }
 
     /**

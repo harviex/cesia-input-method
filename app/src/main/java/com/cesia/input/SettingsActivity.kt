@@ -223,6 +223,8 @@ class SettingsActivity : AppCompatActivity() {
         refreshAiInstallState()
         // 根据已选供应方/已装模型刷新测试按钮可用状态
         updateTestButtonStates()
+        // 设置页版本号进度条订阅下载总线，与键盘状态栏同步显示下载进度
+        initDownloadProgressSync()
         // 初始化 VoiceEngine 命令词
         try {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
@@ -339,6 +341,24 @@ class SettingsActivity : AppCompatActivity() {
     private var viewOnboardingBanner: View? = null
     private var versionCheckHandler: Handler? = null
     private var pulseAnimator: Animator? = null
+
+    // 设置页版本号进度条订阅下载总线：键盘状态栏触发的下载（语音/词库/手机AI）也同步显示在这里
+    private fun initDownloadProgressSync() {
+        DownloadProgressBus.subscribe { p ->
+            runOnUiThread {
+                if (p.task.isNotEmpty()) {
+                    llVersionContainer?.visibility = View.VISIBLE
+                    pbVersionDownload?.visibility = View.VISIBLE
+                    pbVersionDownload?.progressTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                    pbVersionDownload?.progress = p.percent.toInt()
+                    tvVersion?.text = "⏳ 下载${p.task} ${String.format("%.1f", p.percent)}%"
+                }
+                if (p.done || p.failed) {
+                    pbVersionDownload?.visibility = View.GONE
+                }
+            }
+        }
+    }
 
     private fun showVersion() {
         val displayVersion = try {
@@ -729,7 +749,8 @@ class SettingsActivity : AppCompatActivity() {
 
         // 测试按钮
         btnTestApi?.setOnClickListener { testApiConnection() }
-        btnTestLocalAi?.setOnClickListener { testLocalAiConnection() }
+        // 本地AI测试已在下载完成后自动执行，手动按钮已移除（保留引用以兼容布局）
+        btnTestLocalAi?.visibility = View.GONE
 
         // 词库管理 - 只有下载/重新下载按钮
         // 云端模型选择 - 点击 TextView 打开选择对话框
@@ -1367,6 +1388,35 @@ class SettingsActivity : AppCompatActivity() {
             resetButtonBg(btnInstallAi, "选装本地AI模型(1.2G)")
         }
         updateTestButtonStates()
+        refreshModelSourceSymbol()
+    }
+
+    // ======================== 模型可用性标记（与键盘状态栏本/云字联动） ========================
+    private fun modelStatusPrefs() = getSharedPreferences("cesia_model_status", Context.MODE_PRIVATE)
+    private fun isLocalAiReady() = modelStatusPrefs().getBoolean("local_ai_ready", false)
+    private fun isCloudReady() = modelStatusPrefs().getBoolean("cloud_ready", false)
+    private fun markLocalAiReady(v: Boolean) {
+        modelStatusPrefs().edit().putBoolean("local_ai_ready", v).apply()
+        refreshModelSourceSymbol()
+    }
+    private fun markCloudReady(v: Boolean) {
+        modelStatusPrefs().edit().putBoolean("cloud_ready", v).apply()
+        refreshModelSourceSymbol()
+    }
+    /** 下拉项旁显示通过符号（✓/○）：本地下载自测通过 / 云端测试通过 */
+    private fun refreshModelSourceSymbol() {
+        val src = prefs.getString("model_source", "") ?: ""
+        val sym = when (src) {
+            SRC_PHONE_AI -> if (isLocalAiReady()) "✓" else "○"
+            SRC_OLlama, SRC_OPENROUTER -> if (isCloudReady()) "✓" else "○"
+            else -> ""
+        }
+        tvApiUrl?.text = when (src) {
+            SRC_PHONE_AI -> "手机AI模型 $sym"
+            SRC_OLlama -> "Ollama本地模型 $sym"
+            SRC_OPENROUTER -> "OpenRouter.ai $sym"
+            else -> "（未选择模型来源）"
+        }
     }
 
     private fun downloadVoiceModel() {
@@ -1577,10 +1627,13 @@ class SettingsActivity : AppCompatActivity() {
                 val result = kotlinx.coroutines.runBlocking {
                     dm.downloadAiModel(modelInfo) { name, percent, downloadedBytes, totalBytes ->
                         runOnUiThread {
-                            val pctStr = String.format("%.1f%%", percent)
-                            val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
-                            val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                            setBothAiProgress(percent.toInt(), "下载AI模型")
+                            // 复用版本号进度条显示手机AI模型下载进度，并与键盘状态栏同步
+                            llVersionContainer?.visibility = View.VISIBLE
+                            pbVersionDownload?.visibility = View.VISIBLE
+                            pbVersionDownload?.progressTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                            pbVersionDownload?.progress = percent.toInt()
+                            tvVersion?.text = "⏳ 下载手机AI模型 ${String.format("%.1f", percent)}%"
+                            DownloadProgressBus.emit("手机AI模型", percent)
                         }
                     }
                 }
@@ -1588,10 +1641,13 @@ class SettingsActivity : AppCompatActivity() {
                     btnInstallAi?.isEnabled = true
                     getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                         .putBoolean("ai_downloading", false).commit()
+                    pbVersionDownload?.visibility = View.GONE
                     if (result.isSuccess) {
                         appendLog("✅ AI 模型下载完成: ${result.getOrNull()?.absolutePath}")
-                        Toast.makeText(this, "AI 模型下载完成", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "AI 模型下载完成，正在自动测试...", Toast.LENGTH_SHORT).show()
                         refreshAiInstallState()
+                        // 下载完成自动跑自测（无需手动按钮）
+                        testLocalAiConnection()
                     } else {
                         appendLog("❌ AI 模型下载失败: ${result.exceptionOrNull()?.message}")
                         resetBothAi("选装本地AI模型(1.2G)")
@@ -1797,6 +1853,8 @@ class SettingsActivity : AppCompatActivity() {
                                 etTestText.setText(polished)
                                 showTestResult(true, "润色成功")
                                 appendLog("润色成功: $polished")
+                                // 云端测试通过 → 标记云端可用（键盘云字点亮）
+                                markCloudReady(true)
                             } else {
                                 showTestResult(true, "API 返回但内容无变化")
                                 appendLog("API 返回无变化: ${body.take(200)}")
@@ -1916,6 +1974,8 @@ class SettingsActivity : AppCompatActivity() {
                         etTestText.setText(result)
                         showTestResult(true, "本地 AI 润色成功 (${inferTime}ms)")
                         appendLog("润色成功 (${inferTime}ms): ${result.take(50)}...")
+                        // 下载后自动自测通过 → 标记本地AI可用（键盘本字点亮）
+                        markLocalAiReady(true)
                     } else {
                         showTestResult(true, "润色结果为空")
                         appendLog("润色结果为空 (${inferTime}ms)")
@@ -1949,8 +2009,8 @@ class SettingsActivity : AppCompatActivity() {
             com.cesia.input.model.ModelManager(this).getInstalledAiModelFile()
         } catch (_: Exception) { null }
         val aiInstalled = aiModelFile != null && aiModelFile.exists()
-        btnTestLocalAi?.isEnabled = aiInstalled
-        btnTestLocalAi?.alpha = if (aiInstalled) 1f else 0.4f
+        // 本地AI测试改为下载后自动自测，手动按钮隐藏
+        btnTestLocalAi?.visibility = View.GONE
     }
 
     override fun onResume() {
