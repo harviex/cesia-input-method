@@ -2122,6 +2122,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
             return
         }
+        // 单键枚举候选（t9SingleKeyCands）：显示列表来自「逐字母枚举合并」，与 Rime 当前 t9 模糊态会话
+        // 的候选顺序/集合不对齐（如输入3显示「的」、Rime会话第0是「饿」）。若在此走下方 Rime 翻页选中，
+        // 会选到会话第0而非显示第0，导致显示与上屏不一致。故单键直接按显示词上屏，不翻页。
+        if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length == 1) {
+            commitCandidateText(clickedWord)
+            resetT9State()
+            return
+        }
         // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中。
         // 入口判断用 lastDisplayedCands(用户实际点击的显示列表)而非 t9FenCiMerged，
         // 避免用户词组注入/简繁转换后显示列表与原始列表不一致导致 contains 失败、接龙被绕过。
@@ -3470,21 +3478,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // ===== 长按：进入编辑模式 =====
         gridView.setOnItemLongClickListener { _, _, position, _ ->
-            if (editingPosition != position) {
-                editingPosition = position
-                hasFocusedEdit = false
+            if (position < items.size) {
+                val record = items[position]
+                mgr.togglePin(record.id)
+                rebuildItems()
                 notifyChanged()
-                // 延迟 requestFocus，等.getView执行完后再聚焦
-                gridView.post {
-                    val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
-                    val et = child?.findViewById<android.widget.EditText>(R.id.et_magic_edit)
-                    et?.requestFocus()
-                    // 弹出软键盘
-                    et?.postDelayed({
-                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
-                        imm?.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-                    }, 100)
-                }
+                updateStatus("⤒ 已置顶：${record.instruction.take(20)}")
             }
             true
         }
@@ -7139,7 +7138,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.elevation = 8f
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            popup.setFocusable(false)
+            popup.setFocusable(false)   // IME 弹窗内保持 false，避免焦点冲突导致 popup dismiss；搜索输入由 Cesia 手写 onKey 分支处理
             clipboardPopup = popup
 
             // 单击：插入文本（非空条目）
@@ -7154,11 +7153,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
                 val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
                 if (item.isEmpty) return@setOnItemLongClickListener true
-                showClipboardItemActions(item, clipboardItems) {
-                    // 删除后直接保存到 SharedPreferences，不要重新加载（否则被删除的条目会重新出现）
-                    saveClipboardHistoryFromClassMembers()
-                    applyClipboardFilter()
-                }
+                // 长按 = 置顶（与智能写作/智能修改统一）：切换置顶并移到列表最前
+                clipboardItems.remove(item)
+                val toggled = item.copy(isPinned = !item.isPinned)
+                if (toggled.isPinned) clipboardItems.add(0, toggled) else clipboardItems.add(toggled)
+                updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                updateStatus("⤒ 已置顶：${item.text.take(20)}")
                 true
             }
 
@@ -7361,86 +7361,86 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             actions.add("🗑️ 删除条目")
             actions.add("📤 分享文本")
         }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(item.text.take(30) + if (item.text.length > 30) "…" else "")
-            .setItems(actions.toTypedArray()) { _, which ->
-                when (which) {
-                    0 -> currentInputConnection?.commitText(item.text, 1) // 插入
-                    1 -> { // 置顶
+        // IME 环境不能用 AlertDialog（非 Activity context 会闪退），改用 PopupMenu（与置顶/删除按钮同源，IME 安全）
+        val anchor = clipboardPopupView ?: return
+        val menu = android.widget.PopupMenu(this, anchor)
+        actions.forEachIndexed { i, label -> menu.menu.add(0, i, i, label) }
+        menu.setOnMenuItemClickListener { mi ->
+            when (mi.itemId) {
+                0 -> currentInputConnection?.commitText(item.text, 1) // 插入
+                1 -> { // 置顶
+                    allItems.remove(item)
+                    val toggled = item.copy(isPinned = !item.isPinned)
+                    if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
+                    updateClipboardFavorites(); onUpdate()
+                }
+                2 -> { // 锁定
+                    val key = item.text
+                    if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
+                    else clipboardFavorites[key] = true
+                    updateClipboardFavorites(); onUpdate()
+                }
+                3 -> { // 分词 — 用空格分词后逐段插入
+                    val words = item.text.split(CLIPBOARD_SPLIT_REGEX)
+                        .filter { it.isNotEmpty() }
+                    if (words.size > 1) {
+                        currentInputConnection?.commitText(words.joinToString(" "), 1)
+                    } else {
+                        updateStatus("✂️ 已单段插入")
+                        currentInputConnection?.commitText(item.text, 1)
+                    }
+                }
+                4 -> { // 编辑
+                    showClipboardEditDialog(item.text) { newText ->
                         allItems.remove(item)
-                        val toggled = item.copy(isPinned = !item.isPinned)
-                        if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
+                        allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
                         updateClipboardFavorites(); onUpdate()
                     }
-                    2 -> { // 锁定
-                        val key = item.text
-                        if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
-                        else clipboardFavorites[key] = true
+                }
+                5 -> { // 搜索
+                    try {
+                        Intent(Intent.ACTION_WEB_SEARCH).apply {
+                            putExtra("query", item.text)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(this)
+                        }
+                    } catch (_: Exception) {
+                        updateStatus("❌ 无法启动搜索")
+                    }
+                }
+                6 -> { // 删除
+                    if (clipboardFavorites[item.text] == false) {
+                        allItems.remove(item)
                         updateClipboardFavorites(); onUpdate()
-                    }
-                    3 -> { // 分词 — 用空格分词后逐段插入
-                        val words = item.text.split(CLIPBOARD_SPLIT_REGEX)
-                            .filter { it.isNotEmpty() }
-                        if (words.size > 1) {
-                            currentInputConnection?.commitText(words.joinToString(" "), 1)
-                        } else {
-                            updateStatus("✂️ 已单段插入")
-                            currentInputConnection?.commitText(item.text, 1)
-                        }
-                    }
-                    4 -> { // 编辑
-                        showClipboardEditDialog(item.text) { newText ->
-                            allItems.remove(item)
-                            allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
-                            updateClipboardFavorites(); onUpdate()
-                        }
-                    }
-                    5 -> { // 搜索
                         try {
-                            Intent(Intent.ACTION_WEB_SEARCH).apply {
-                                putExtra("query", item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(this)
-                            }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动搜索")
-                        }
-                    }
-                    6 -> { // 删除
-                        if (clipboardFavorites[item.text] == false) {
-                            allItems.remove(item)
-                            updateClipboardFavorites(); onUpdate()
-                            // 同时清除系统剪贴板中匹配的内容
-                            try {
-                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                if (clipboardMgr?.hasPrimaryClip() == true) {
-                                    val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                    if (clipText == item.text) {
-                                        clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                    }
+                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            if (clipboardMgr?.hasPrimaryClip() == true) {
+                                val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                if (clipText == item.text) {
+                                    clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
                                 }
-                            } catch (_: Exception) {}
-                        } else {
-                            updateStatus("⚠️ 已锁定，无法删除")
-                        }
-                    }
-                    7 -> { // 分享
-                        try {
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, item.text)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(Intent.createChooser(this, "分享"))
                             }
-                        } catch (_: Exception) {
-                            updateStatus("❌ 无法启动分享")
+                        } catch (_: Exception) {}
+                    } else {
+                        updateStatus("⚠️ 已锁定，无法删除")
+                    }
+                }
+                7 -> { // 分享
+                    try {
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, item.text)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(Intent.createChooser(this, "分享"))
                         }
+                    } catch (_: Exception) {
+                        updateStatus("❌ 无法启动分享")
                     }
                 }
             }
-            .setNegativeButton("取消", null)
-            .create()
-        dialog.show()
+            true
+        }
+        menu.show()
     }
 
     private fun showClipboardEditDialog(original: String, onSave: (String) -> Unit) {
@@ -7529,19 +7529,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val v = cv ?: inflater.inflate(R.layout.item_clipboard_grid, parent, false)
             val item = items[p]
             val tv = v.findViewById<TextView>(R.id.tv_clipboard_text)
-            val tvPin = v.findViewById<TextView>(R.id.tv_clipboard_pin)
             if (item.isEmpty) {
                 tv.text = item.text
                 tv.setTextColor(0xFF999999.toInt())
                 tv.textSize = 13f
-                tvPin.visibility = View.GONE
             } else {
-                tv.text = if (item.text.length > 80) item.text.take(80) + "…" else item.text
-                tv.setTextColor(0xFF333333.toInt())
+                // 置顶标记统一为前缀 ⤒ + 主题色加粗（与智能修改/智能写作一致）
+                val display = if (item.isPinned) "⤒ ${item.text}" else item.text
+                tv.text = if (display.length > 82) display.take(82) + "…" else display
+                tv.setTextColor(if (item.isPinned) accentColor else 0xFF333333.toInt())
+                tv.setTypeface(null, if (item.isPinned) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                 tv.textSize = 13f
-                tvPin.visibility = if (item.isPinned) View.VISIBLE else View.GONE
-                tvPin.setTypeface(null, if (item.isPinned) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-                tvPin.setTextColor(accentColor)
             }
             return v
         }
@@ -8111,13 +8109,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             updateShiftIndicator()
                         }
                     } else if (t9DigitQueue.isNotEmpty()) {
-                        // T9模式：空格 = 选择首候选上屏
+                        // T9模式：空格 = 选择首候选上屏（与点击候选一致，尊重用户词组置顶/重排顺序）
                         val cands = rimeEngine.candidates
                         if (cands.isNotEmpty()) {
-                            val selected = rimeEngine.selectCandidate(0)
-                            if (selected.isNotEmpty()) {
-                                commitCandidateText(selected)
-                            }
+                            selectCandidateByGlobalIndex(0)
                         } else {
                             ic?.commitText(" ", 1)
                         }
@@ -8151,19 +8146,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             updateCandidateBar()
                         }
                     } else {
-                        val cands = rimeEngine.candidates
-                        if (cands.isNotEmpty()) {
-                            val selected = rimeEngine.selectCandidate(0)
-                            if (selected.isNotEmpty()) {
-                                commitCandidateText(selected)
-                            } else {
-                                ic?.commitText(" ", 1)
-                            }
-                        } else if (composing) {
-                            commitAndClear(); ic?.commitText(" ", 1)
-                        } else {
-                            ic?.commitText(" ", 1)
-                        }
+                        // T9模式：空格 = 选择首候选上屏（与点击候选完全一致，
+                        // 尊重单键枚举/选音过滤/用户词组置顶/CandidatePrefs.reorder，避免显示与上屏不一致）
+                        selectCandidateByGlobalIndex(0)
                     }
                 }
                 if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()

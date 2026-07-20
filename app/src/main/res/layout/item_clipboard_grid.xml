@@ -3,8 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="8dp"
-    android:background="#FAFAFA">
+    android:padding="4dp">
 
     <TextView
         android:id="@+id/tv_clipboard_text"
@@ -12,18 +11,14 @@
         android:layout_height="wrap_content"
         android:textSize="13sp"
         android:textColor="#333333"
-        android:maxLines="3"
+        android:maxLines="2"
         android:ellipsize="end"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:background="@drawable/magic_item_bg"
         android:lineSpacingExtra="2dp" />
-
-    <TextView
-        android:id="@+id/tv_clipboard_pin"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="⤒"
-        android:textSize="10sp"
-        android:textColor="#666666"
-        android:layout_gravity="end"
-        android:visibility="gone" />
 
 </LinearLayout>
