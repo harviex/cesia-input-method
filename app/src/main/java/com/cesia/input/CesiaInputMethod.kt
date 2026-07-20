@@ -2122,8 +2122,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
             return
         }
-        // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中
-        if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.contains(clickedWord)) {
+        // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中。
+        // 入口判断用 lastDisplayedCands(用户实际点击的显示列表)而非 t9FenCiMerged，
+        // 避免用户词组注入/简繁转换后显示列表与原始列表不一致导致 contains 失败、接龙被绕过。
+        if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && lastDisplayedCands.contains(clickedWord)) {
             val toCommit = stripDuplicatePrefix(clickedWord)
             t9ComposedSoFar.append(clickedWord)
             // 接龙选词后清空选音前缀（接龙只靠 t9ConsumedLen 消费剩余数字，不能带旧 t9SpellPrefix 走 buildT9SpellFeed 锁定字母分支）
@@ -2339,15 +2341,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；单键单字用枚举候选；全键盘始终走自身 pinyin 候选
+        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；单键单字用枚举候选(跟随选音)；全键盘始终走自身 pinyin 候选
         val rimeAllCands = when {
             keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty() -> t9FenCiMerged
-            keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
+            keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
         var allCands = rimeAllCands
         // 注入用户自建词组：当前待匹配数字串是某用户词数字串的前缀时，插到候选最前（接龙组词记忆）
-        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && userPhrases.isNotEmpty()) {
+        // 单键(length==1)只出单字，不注入用户词组，避免高频词组挤掉单字
+        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length != 1 && userPhrases.isNotEmpty()) {
             val curDigits = if (t9DigitQueue.length > t9ConsumedLen) t9DigitQueue.substring(t9ConsumedLen) else ""
             if (curDigits.isNotEmpty()) {
                 val injected = userPhrases.filter { (_, dig) -> dig.startsWith(curDigits) }.map { it.key }
@@ -2448,22 +2451,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 候选懒加载：候选栏横向滚到右端阈值时，拉取下一批 50 候选（candPageWalk+10页）追加到列表与点击反查源。
-     *  不设置数量上限，纯靠滚动懒加载（每批 50 字词），滚到底继续加载更多。 */
+    /** 候选懒加载：候选栏横向滚到右端阈值时，从 Rime 会话拉取下一批候选（每批约20字词）追加到列表与点击反查源。
+     *  不设置数量上限，纯靠滚动懒加载（每批 20 字词），滚到底继续加载更多。 */
     private fun loadMoreCandidates() {
         if (keyboardMode != KeyboardMode.NUMBER) return
         if (candTotalLoaded <= 0) return
-        candPageWalk += 10
+        // 从 Rime 会话增量翻页（每批 +4页=20候选）
+        candPageWalk += 4
         val fresh = rimeEngine.getAllCandidates(candPageWalk)
         val more = fresh.drop(candTotalLoaded)
-        if (more.isEmpty()) { candPageWalk -= 10; return }
+        if (more.isEmpty()) { candPageWalk -= 4; return }
         candTotalLoaded = fresh.size
-        // 追加到点击反查源（纯 Rime 候选，不含用户词）与显示列表（lastDisplayedCands 含用户词，去重保留）
         lastAllCands = (lastAllCands + more).distinct()
         val merged = (lastDisplayedCands + more).distinct()
         lastDisplayedCands = merged
         candidateAdapter?.updateData(merged)
-        // 展开面板同步刷新（纵向懒加载）：面板用累积的 lastDisplayedCands
         if (isPanelExpanded) {
             val displayPanel = if (isTraditional) merged.map { toTraditional(it) } else merged
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
@@ -6444,8 +6446,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val d = t9DigitQueue[0].digitToInt()
                 t9SingleKeyCands = enumSingleKeyCands(d)
                 t9FenCiMerged = emptyList()
-                lastT9Feed = t9DigitQueue.toString()
-            } else if (t9FenCiOn) {
+                // 单键选音(t9SpellPrefix)只对单键有效；进入多键时由下面 else 分支统一处理，这里不写 lastT9Feed
+                // 关键：单键枚举不碰 Rime 会话状态，避免污染多键路径(问题2：双数字首屏空白)
+            } else {
+                if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
                 // 接龙态(t9ConsumedLen>0)下只取「未消费后缀」算简拼码，否则候选仍是整串、接龙失败
                 val digits = t9DigitQueue.substring(t9ConsumedLen).map { it.digitToInt() }
@@ -6464,17 +6468,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 简拼 qlen=${t9DigitQueue.length} feed=$feed | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             } else {
-                // 全拼：只喂「未消费后缀」(接龙组词)，如 3254228426 选大家后剩 28426
-                val remaining = t9DigitQueue.substring(t9ConsumedLen)
-                val tFeed = System.currentTimeMillis()
-                feedRimeIncrementally(remaining)
-                val tGet = System.currentTimeMillis()
-                // 全拼分支也取候选用于状态栏/后续（用 candPageWalk 控懒加载页数）
+                // 全拼：数字直连（如 23 → Rime 按 t9 schema 字母映射出 ce 等拼音候选）。
+                // 用整串重喂（clear+createSession+逐数字 processKey），不依赖增量 feedRimeIncrementally，
+                // 避免单键枚举/简拼残留的会话态与 lastT9Feed 错位导致数字未被正确 compositing（表现为候选栏只剩 a3）。
+                rimeEngine.clear(); rimeEngine.createSession()
+                for (d in t9DigitQueue.substring(t9ConsumedLen)) {
+                    rimeEngine.processKey(d.toString())
+                }
                 rimeEngine.getAllCandidates(candPageWalk)
-                val tEnd = System.currentTimeMillis()
-                Log.i("CesiaPerf", "processT9Input 全拼 qlen=${t9DigitQueue.length} consumed=$t9ConsumedLen remain=$remaining | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             }
-        } else {
+        }   // 关闭多键(else)分支
+        } else {   // 队列空：确保 Rime 会话清空，下次从头喂
             // 队列空：确保 Rime 会话清空，下次从头喂
             rimeEngine.clear(); rimeEngine.createSession()
             lastT9Feed = null
@@ -6591,6 +6595,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     // 单键单字：枚举该数字键所有字母(a/b/c)，复用当前会话逐个 clear+喂取单字(length==1)合并去重
     // 覆盖该键全部开头单字，而非只首字母一个；且只出单字不出词组。
     // 已选音锁定某字母(t9SpellPrefix 单字母)时只取该字母单字，候选随选音变化。
+    // 重要：枚举结束后把 Rime 会话恢复成「单键应有的首字母状态」并同步 lastT9Feed，
+    // 避免污染后续多键路径(问题2：双数字首屏空白)。
     private fun enumSingleKeyCands(digit: Int): List<String> {
         val letters = (t9Map[digit] ?: "").filter { it != ' ' }
         if (letters.isEmpty()) return emptyList()
@@ -6608,10 +6614,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 out.addAll(rimeEngine.getAllCandidates(candPageWalk).filter { it.length == 1 })
             }
         }
+        // 恢复会话到单键首字母状态（首字母 a），并同步 lastT9Feed="<digit>"，
+        // 保证后续按第2个数字时 feedRimeIncrementally 能正确增量喂入、首屏正常出候选
+        rimeEngine.clear()
+        rimeEngine.processKey(letters.first().toString())
+        lastT9Feed = t9DigitQueue.toString()
         return out.toList()
     }
 
-    /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
+     /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
     private fun buildT9SpellFeed(): String {
         if (t9DigitQueue.isEmpty()) return ""
         val sb = StringBuilder(t9SpellPrefix)
@@ -8160,7 +8171,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (keyboardMode == KeyboardMode.NUMBER) {
                     // 数字键盘退格（逐键选音：优先撤销已选字母；撤销字母不会删除原数字，仅缩短前缀）
                     if (!t9ShiftTemp && (t9SpellPrefix.isNotEmpty() || t9DigitQueue.isNotEmpty())) {
-                        if (t9SpellPrefix.isNotEmpty()) {
+                        if (t9DigitQueue.length == 1 && t9SpellPrefix.isNotEmpty()) {
+                            // 单键已选音：选音即定型，退格直接整删（数字+选音一起清），回到空状态
+                            t9DigitQueue.clear()
+                            t9SpellPrefix.clear()
+                        } else if (t9SpellPrefix.isNotEmpty()) {
                             t9SpellPrefix.deleteCharAt(t9SpellPrefix.length - 1)
                         } else {
                             t9DigitQueue.deleteCharAt(t9DigitQueue.length - 1)
