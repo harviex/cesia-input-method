@@ -19,8 +19,8 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MAX_ENTRIES_PER_BUCKET = 300
         /** 候选词最多返回前 3000 个（词组+单字按权重自然混排；翻页上限防卡顿） */
         private const val MAX_CANDIDATE_COUNT = 3000
-        /** getAllCandidates 最多翻页步数（pageSize=5 → 100页最多扫500候选，对齐 max_homophones:500，保证多同音字音节如 yu 的单字也能进入候选池，不被词组挤掉） */
-        private const val MAX_PAGE_WALK = 100
+        /** getAllCandidates 默认/上限翻页步数（pageSize=5 → 50页=250候选上限）。Cesia 侧用 candPageWalk 从 10 页(50候选)起按需懒加载，避免一次拉满拖慢打字 */
+        private const val MAX_PAGE_WALK = 50
     }
 
     private var session: RimeSession? = null
@@ -202,7 +202,7 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     /** 获取所有页的候选词（合并）：线性取前 MAX_CANDIDATE_COUNT 个（含词组与单字，按需自然混排） */
     @Synchronized
-    fun getAllCandidates(): List<String> {
+    fun getAllCandidates(pageWalk: Int = MAX_PAGE_WALK): List<String> {
         val s = session ?: return emptyList()
         if (s.pageCount <= 1) return s.candidates.take(MAX_CANDIDATE_COUNT)
         val all = mutableListOf<String>()
@@ -212,7 +212,7 @@ class RimeEngine(private val context: Context) : InputEngine {
         // 从第0页开始往后收集，但最多收集 MAX_CANDIDATE_COUNT 个（避免翻遍数千页导致卡顿）
         all.addAll(s.candidates)
         var pagesWalked = 0
-        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < MAX_PAGE_WALK) {
+        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < pageWalk) {
             if (!s.nextPage()) break
             all.addAll(s.candidates)
             pagesWalked++
@@ -226,7 +226,7 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     /** 与 getAllCandidates 对应的拼音列表（按相同页遍历顺序） */
     @Synchronized
-    fun getAllCandidatePinyins(): List<String> {
+    fun getAllCandidatePinyins(pageWalk: Int = MAX_PAGE_WALK): List<String> {
         val s = session ?: return emptyList()
         if (s.pageCount <= 1) return s.candidatePinyins.take(MAX_CANDIDATE_COUNT)
         val all = mutableListOf<String>()
@@ -234,7 +234,7 @@ class RimeEngine(private val context: Context) : InputEngine {
         while (s.currentPage > 0) s.prevPage()
         all.addAll(s.candidatePinyins)
         var pagesWalked = 0
-        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < MAX_PAGE_WALK) {
+        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < pageWalk) {
             if (!s.nextPage()) break
             all.addAll(s.candidatePinyins)
             pagesWalked++

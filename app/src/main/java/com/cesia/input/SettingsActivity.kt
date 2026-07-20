@@ -239,6 +239,18 @@ class SettingsActivity : AppCompatActivity() {
         // 初始化 VoiceEngine 命令词
         try {
             val cmdPrefs = getSharedPreferences("cesia_commands", MODE_PRIVATE)
+            // 清理历史上误设为 "ok" 的命令词（恢复中文默认），避免识别 ok 后内容被清空
+            val defaults = mapOf(
+                "cmd_exit" to "退出", "cmd_polish" to "润色", "cmd_finish" to "结束",
+                "cmd_send" to "发送", "cmd_command" to "修改",
+                "cmd_undo" to "撤销", "cmd_clear" to "清空", "cmd_restore" to "恢复", "cmd_writing" to "写作"
+            )
+            val edit = cmdPrefs.edit()
+            for ((k, def) in defaults) {
+                val v = cmdPrefs.getString(k, def) ?: def
+                if (v.equals("ok", ignoreCase = true)) edit.putString(k, def)
+            }
+            edit.apply()
             com.cesia.input.voice.VoiceEngine.updateCommandWords(
                 cmdPrefs.getString("cmd_exit", "退出") ?: "退出",
                 cmdPrefs.getString("cmd_polish", "润色") ?: "润色",

@@ -384,6 +384,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9ConsumedLen = 0
     // 用户自建词组库：词 → 全拼数字串（如 "大家不好"→"3254228426"），接龙上屏时写入，下次匹配注入候选
     private val userPhrases = LinkedHashMap<String, String>()
+    // 候选懒加载：candPageWalk=已扫页数(10页=50候选)，滚到底+10页(50)；上限 MAX_PAGE_WALK(50页=250)
+    private var candPageWalk = 10
+    private var candTotalLoaded = 0
+    private var lastPagerInputSig = ""
     // 连续按键数上限（单击数字键计数，非中文字数）：到达后提示上限、不再累积新键。
     // 配合 schema max_code_length=8，Rime 只解码末 ≤8 位，25 键内不卡（含退格）。
     private val MAX_T9_KEYS = 25
@@ -1014,6 +1018,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rvCandidates?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
         )
+        // 候选懒加载：横向滚到右端附近(距底3个)时，拉下一批 50 候选
+        rvCandidates?.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dx <= 0) return  // 只向右滚时触发
+                val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+                val total = rv.adapter?.itemCount ?: 0
+                if (lm.findLastVisibleItemPosition() >= total - 3) {
+                    loadMoreCandidates()
+                }
+            }
+        })
 
         // T9 字母区已移除（不再显示英文字母和分隔线）
 
@@ -2003,6 +2018,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         gvCandidates.adapter = panelAdapter
 
+        // 候选面板纵向懒加载：滚到底部附近时拉下一批 50 候选
+        gvCandidates.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
+            override fun onScroll(view: android.widget.AbsListView?, firstVisible: Int, visible: Int, total: Int) {
+                if (total <= 0) return
+                if (firstVisible + visible >= total - 3) {
+                    loadMoreCandidates()
+                }
+            }
+            override fun onScrollStateChanged(view: android.widget.AbsListView?, state: Int) {}
+        })
+
         // GridView 点击选候选词
         gvCandidates.setOnItemClickListener { _, _, position, _ ->
             selectCandidateByGlobalIndex(position)
@@ -2094,10 +2120,29 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
             return
         }
-        // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中，直接上屏字符串
+        // 简拼模式（仅 T9）：候选来自合并列表(分词符串+字母组合)，不在主 Rime 会话中
         if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.contains(clickedWord)) {
             val toCommit = stripDuplicatePrefix(clickedWord)
             t9ComposedSoFar.append(clickedWord)
+            // 接龙选词后清空选音前缀（接龙只靠 t9ConsumedLen 消费剩余数字，不能带旧 t9SpellPrefix 走 buildT9SpellFeed 锁定字母分支）
+            t9SpellPrefix.clear()
+            // 简拼接龙：消费长度 = 词字数（简拼每位数字对应一个音节首字母），与全拼接龙对称
+            if (t9ConsumedLen > 0 || t9DigitQueue.length > clickedWord.length) {
+                t9ConsumedLen += clickedWord.length
+                val remaining = t9DigitQueue.length - t9ConsumedLen
+                if (remaining <= 0) {
+                    commitCandidateText(t9ComposedSoFar.toString())
+                    addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
+                    t9ComposedSoFar.clear(); t9ConsumedLen = 0
+                    rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                    lastT9Feed = null
+                    updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
+                    return
+                }
+                feedRemaining()
+                return
+            }
+            // 非接龙：立即上屏（保留原行为）
             when {
                 smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
                 magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
@@ -2283,11 +2328,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun updateCandidateBar() {
         // 语音识别期间不更新候选栏（避免覆盖流式识别状态）
         if (isRecording) return
-        
+        // 候选懒加载：输入状态(数字队列/选音前缀/简拼开关/接龙消费)变化时，重置分页，首屏重新拉 50 候选
+        val inputSig = "$t9DigitQueue|$t9SpellPrefix|$t9FenCiOn|$t9ConsumedLen"
+        if (inputSig != lastPagerInputSig) {
+            candPageWalk = 10
+            candTotalLoaded = 0
+            lastPagerInputSig = inputSig
+        }
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
         // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；全键盘始终走自身 pinyin 候选
-        val rimeAllCands = if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates()
+        val rimeAllCands = if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates(candPageWalk)
         var allCands = rimeAllCands
         // 注入用户自建词组：当前待匹配数字串是某用户词数字串的前缀时，插到候选最前（接龙组词记忆）
         if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && userPhrases.isNotEmpty()) {
@@ -2301,10 +2352,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         // 快照未过滤的原始 Rime 候选列表（供点击反查真实全局索引）；用户词组不纳入，避免位置错位
         lastAllCands = rimeAllCands
+        // 懒加载：记录首屏已拉取的 Rime 候选数（纯 Rime，不含用户词组注入），供滚动到底 drop 取新增
+        candTotalLoaded = rimeAllCands.size
 
         // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
         if (t9SpellPrefix.isNotEmpty() && !t9FenCiOn) {
-            val pinyins = rimeEngine.getAllCandidatePinyins()
+            val pinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
             allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
         }
 
@@ -2382,6 +2435,31 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 展开面板直接复用已获取的 allCands（候选栏已按选音前缀过滤过），避免再调一次 getAllCandidates
             val filteredPanel = allCands
             val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
+            val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
+            panelAdapter?.clear()
+            panelAdapter?.addAll(reorderedPanel)
+            panelAdapter?.notifyDataSetChanged()
+        }
+    }
+
+    /** 候选懒加载：候选栏横向滚到右端阈值时，拉取下一批 50 候选（candPageWalk+10页）追加到列表与点击反查源 */
+    private fun loadMoreCandidates() {
+        if (keyboardMode != KeyboardMode.NUMBER) return
+        if (candPageWalk >= 50) return   // 上限 50 页(=250候选)，与 RimeEngine.MAX_PAGE_WALK 对齐
+        if (candTotalLoaded <= 0) return
+        candPageWalk += 10
+        val fresh = rimeEngine.getAllCandidates(candPageWalk)
+        val more = fresh.drop(candTotalLoaded)
+        if (more.isEmpty()) { candPageWalk -= 10; return }
+        candTotalLoaded = fresh.size
+        // 追加到点击反查源（纯 Rime 候选，不含用户词）与显示列表（lastDisplayedCands 含用户词，去重保留）
+        lastAllCands = (lastAllCands + more).distinct()
+        val merged = (lastDisplayedCands + more).distinct()
+        lastDisplayedCands = merged
+        candidateAdapter?.updateData(merged)
+        // 展开面板同步刷新（纵向懒加载）：面板用累积的 lastDisplayedCands
+        if (isPanelExpanded) {
+            val displayPanel = if (isTraditional) merged.map { toTraditional(it) } else merged
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
             panelAdapter?.clear()
             panelAdapter?.addAll(reorderedPanel)
@@ -4975,7 +5053,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 最终结果：确认组合文本（已是全部已识别内容）
                                     voiceKeptText = streamedAll
                                     val ic = currentInputConnection ?: return@withContext
+                                    Log.i("Cesia", "onSegmentResult final: setComposing='${streamedAll.take(50)}' beforeFinish")
                                     ic.finishComposingText()
+                                    Log.i("Cesia", "onSegmentResult final: afterFinish, calling handleCloudVoiceResult")
                                     handleCloudVoiceResult(streamedAll)
                                 } else {
                                     Log.w("Cesia", "onSegmentResult: isFinal but text is empty!")
@@ -5003,7 +5083,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 命令词语上屏：统一把中文数字转阿拉伯数字（与本地 sherpa/Google 路径一致），
                             // 避免“识别数字转阿拉伯数字失效又恢复汉字数字上屏”。
                             val textConv = voiceEngine.convertChineseDigitsToArabic(text)
-                            val keptConv = voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
+                            // 已保留内容：优先用输入框已上屏文本（含此前已 commit 的 ok 等），
+                            // 不再依赖 voiceKeptText（它已被 addSentMessage 后的 resetToIdle 清空，
+                            // 否则“ok 后说命令词”会丢失前面的 ok）。
+                            val beforeText = ic.getTextBeforeCursor(200, 0)?.toString()?.trim() ?: ""
+                            val keptConv = if (beforeText.isNotEmpty()) beforeText
+                                else voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
                             // 去掉命令词本身：本地流式路径 onCommandWordDetected 传入的 text 仍含命令词
                             //（如“写作今天天气好”），与 Google 路径 checkCommandWord 返回已剥离文本保持一致，
                             // 避免“写作/润色/结束”等命令词被上屏或带入处理。
@@ -5843,6 +5928,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun addSentMessage(text: String) {
+        Log.i("Cesia", "addSentMessage: text='${text.take(40)}', voiceKeptText='${voiceKeptText.take(40)}', isRecording=$isRecording")
         if (text.isBlank()) return
         sentMessages.add(text)
         if (sentMessages.size > maxSentMessages) {
@@ -6348,7 +6434,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (t9DigitQueue.isNotEmpty()) {
             if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
-                val digits = t9DigitQueue.toString().map { it.digitToInt() }
+                // 接龙态(t9ConsumedLen>0)下只取「未消费后缀」算简拼码，否则候选仍是整串、接龙失败
+                val digits = t9DigitQueue.substring(t9ConsumedLen).map { it.digitToInt() }
                 val feed = if (t9SpellPrefix.isEmpty()) {
                     // 未锁定时：每数字取首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选
                     val firstLetters = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' }.firstOrNull() ?: ' ' }
@@ -6360,7 +6447,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tFeed = System.currentTimeMillis()
                 feedRimeIncrementally(feed)
                 val tGet = System.currentTimeMillis()
-                t9FenCiMerged = rimeEngine.getAllCandidates()
+                t9FenCiMerged = rimeEngine.getAllCandidates(candPageWalk)
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 简拼 qlen=${t9DigitQueue.length} feed=$feed | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             } else {
@@ -6369,8 +6456,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tFeed = System.currentTimeMillis()
                 feedRimeIncrementally(remaining)
                 val tGet = System.currentTimeMillis()
-                // 全拼分支也取候选用于状态栏/后续
-                rimeEngine.getAllCandidates()
+                // 全拼分支也取候选用于状态栏/后续（用 candPageWalk 控懒加载页数）
+                rimeEngine.getAllCandidates(candPageWalk)
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 全拼 qlen=${t9DigitQueue.length} consumed=$t9ConsumedLen remain=$remaining | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             }
@@ -6432,12 +6519,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 接龙组词：用「未消费后缀」重新喂 Rime，刷新候选栏为剩余部分候选 */
     private fun feedRemaining() {
-        val remaining = t9DigitQueue.substring(t9ConsumedLen)
+        // 清空 Rime 会话，让 processT9Input 按 t9FenCiOn 重新走全拼/简拼剩余分支
+        // （简拼需 substring(t9ConsumedLen) 算剩余首字母 feed，不能直喂数字串）
         rimeEngine.clear(); rimeEngine.createSession()
         lastT9Feed = null
-        feedRimeIncrementally(remaining)
-        updateSpellBar()
-        updateCandidateBar()
+        processT9Input()
     }
 
     /** 1 键：单击=切换全拼/简拼（并提示）；双击=锁定/解锁当前模式（防误触，持久化） */
