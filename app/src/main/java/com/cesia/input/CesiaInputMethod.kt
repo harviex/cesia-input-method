@@ -6463,14 +6463,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 简拼 qlen=${t9DigitQueue.length} feed=$feed | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             } else {
-                // 全拼：数字直连（如 23 → Rime 按 t9 schema 字母映射出 ce 等拼音候选）。
-                // 用整串重喂（clear+createSession+逐数字 processKey），不依赖增量 feedRimeIncrementally，
-                // 避免单键枚举/简拼残留的会话态与 lastT9Feed 错位导致数字未被正确 compositing（表现为候选栏只剩 a3）。
-                rimeEngine.clear(); rimeEngine.createSession()
-                for (d in t9DigitQueue.substring(t9ConsumedLen)) {
-                    rimeEngine.processKey(d.toString())
-                }
+                // 全拼：数字直连增量喂（feedRimeIncrementally），O(1) 不卡。
+                // 单键枚举已把会话恢复成「数字 digit 的 t9 模糊态」并同步 lastT9Feed=数字串，
+                // 故增量时只喂新增数字，长码不再整串重放；会话态与数字串一致 → 23 出 ce（非 a3）。
+                // 接龙态只取未消费后缀喂入（t9ConsumedLen）。
+                val remaining = t9DigitQueue.substring(t9ConsumedLen)
+                val tFeed = System.currentTimeMillis()
+                feedRimeIncrementally(remaining)
+                val tGet = System.currentTimeMillis()
                 rimeEngine.getAllCandidates(candPageWalk)
+                val tEnd = System.currentTimeMillis()
+                Log.i("CesiaPerf", "processT9Input 全拼 qlen=${t9DigitQueue.length} | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             }
         }   // 关闭多键(else)分支
         } else {   // 队列空：确保 Rime 会话清空，下次从头喂
@@ -6494,11 +6497,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun feedRimeIncrementally(feed: String) {
         val prev = lastT9Feed
         if (prev != null && feed.length > prev.length && feed.startsWith(prev)) {
-            // 增量：仅喂新增的尾部字符
+            // 增量：仅喂新增的尾部字符。逐字符检查 processKey 返回值——
+            // Rime 对超长码会偶尔拒收/重置会话，若某字符喂入失败立即放弃增量、整串重放，
+            // 此时 feed 仅比 prev 多1位，重放开销极小，避免「会话态与 lastT9Feed 漂移」
+            // 累积到长码（qlen17/20）才爆发整串重放导致卡顿。
+            var ok = true
             for (i in prev.length until feed.length) {
-                rimeEngine.processKey(feed[i].toString())
+                if (!rimeEngine.processKey(feed[i].toString())) { ok = false; break }
             }
-            lastT9Feed = feed
+            if (ok) {
+                lastT9Feed = feed
+            } else {
+                rimeEngine.clear(); rimeEngine.createSession()
+                for (ch in feed) {
+                    rimeEngine.processKey(ch.toString())
+                }
+                lastT9Feed = feed
+            }
         } else if (prev != null && feed.length < prev.length && prev.startsWith(feed)) {
             // 退格：feed 是上次的严格前缀 → 用 BackSpace 增量回退 Rime 组合（避免整串重喂，退格卡顿根因）
             val removed = prev.length - feed.length
@@ -6609,10 +6624,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 out.addAll(rimeEngine.getAllCandidates(candPageWalk).filter { it.length == 1 })
             }
         }
-        // 恢复会话到单键首字母状态（首字母 a），并同步 lastT9Feed="<digit>"，
-        // 保证后续按第2个数字时 feedRimeIncrementally 能正确增量喂入、首屏正常出候选
+        // 恢复会话到「单键数字 digit 的 t9 模糊态」：喂数字字符（而非字母），
+        // 保持与全拼增量 feedRimeIncrementally 的 lastT9Feed(数字串)一致，
+        // 后续按第2个数字走全拼增量时，会话态=“2”的模糊拼音、增量喂“3”得“23”整体态（出 ce 而非 a3）。
         rimeEngine.clear()
-        rimeEngine.processKey(letters.first().toString())
+        rimeEngine.processKey(digit.toString())
         lastT9Feed = t9DigitQueue.toString()
         return out.toList()
     }
@@ -8180,9 +8196,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             t9ConsumedLen = 0
                             t9ComposedSoFar.clear()
                         }
-                        // 退格：轻量重放（clear+重喂当前队列，同步 Rime composingText 修 Bug2 残留 1 字），
-                        // 但跳过候选栏 RecyclerView 刷新，避免连续退格时主线程堆积卡顿
-                        replayT9Quiet()
+                        // 退格：重算候选（processT9Input 增量喂+刷新候选栏，简拼退格也同步 t9FenCiMerged）
+                        processT9Input()
                     } else {
                         deleteSelectionOrChar()
                     }
