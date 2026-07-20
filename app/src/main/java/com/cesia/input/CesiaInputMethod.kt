@@ -5091,15 +5091,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             // 命令词语上屏：统一把中文数字转阿拉伯数字（与本地 sherpa/Google 路径一致），
                             // 避免“识别数字转阿拉伯数字失效又恢复汉字数字上屏”。
                             val textConv = voiceEngine.convertChineseDigitsToArabic(text)
-                            // 已保留内容：优先用输入框已上屏文本（含此前已 commit 的 ok 等），
-                            // 不再依赖 voiceKeptText（它已被 addSentMessage 后的 resetToIdle 清空，
-                            // 否则“ok 后说命令词”会丢失前面的 ok）。
-                            val beforeText = ic.getTextBeforeCursor(200, 0)?.toString()?.trim() ?: ""
-                            val keptConv = if (beforeText.isNotEmpty()) beforeText
-                                else voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
+                            val keptConv = voiceEngine.convertChineseDigitsToArabic(voiceKeptText)
                             // 去掉命令词本身：本地流式路径 onCommandWordDetected 传入的 text 仍含命令词
                             //（如“写作今天天气好”），与 Google 路径 checkCommandWord 返回已剥离文本保持一致，
-                            // 避免“写作/润色/结束”等命令词被上屏或带入处理。
+                            // 避免“写作/润色/结束/退出”等命令词被上屏或带入处理。
                             val textNoCmd = voiceEngine.checkCommandWord(textConv)?.first ?: textConv
 
                             // 低等级命令（撤销/清空）不结束下划线：不 finish、不删命令词，
@@ -5267,7 +5262,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         keptConv.isNotEmpty() && textConv.isNotEmpty() -> "$keptConv $textConv"
                                         textConv.isNotEmpty() -> textConv
                                         else -> keptConv
-                                    }.trimEnd()
+                                    }
                                     if (combined.isNotEmpty()) voiceUndoBackup = combined
                                     ic.setComposingText("", 1)
                                     voiceKeptText = ""
