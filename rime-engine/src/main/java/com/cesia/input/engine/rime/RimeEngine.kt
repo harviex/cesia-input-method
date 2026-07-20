@@ -19,8 +19,9 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MAX_ENTRIES_PER_BUCKET = 300
         /** 候选词最多返回前 3000 个（词组+单字按权重自然混排；翻页上限防卡顿） */
         private const val MAX_CANDIDATE_COUNT = 3000
-        /** getAllCandidates 默认/上限翻页步数（pageSize=5 → 50页=250候选上限）。Cesia 侧用 candPageWalk 从 10 页(50候选)起按需懒加载，避免一次拉满拖慢打字 */
-        private const val MAX_PAGE_WALK = 50
+        /** getAllCandidates 翻页步数上限。Cesia 侧用 candPageWalk 从 10 页(50候选)起按需懒加载，不限制总数量（纯滚动加载）。
+         *  这里给一个足够大的步数上限，配合 MAX_CANDIDATE_COUNT(3000) 让懒加载能一直滚到词库尽头。 */
+        private const val MAX_PAGE_WALK = 600
     }
 
     private var session: RimeSession? = null

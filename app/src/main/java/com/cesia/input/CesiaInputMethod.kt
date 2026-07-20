@@ -397,6 +397,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9FenCiLastClick = 0L             // 1键上次单击时间戳（双击检测）
     private var t9FenCiPendingSingle: Runnable? = null  // 单击待执行的切换任务（延迟以等待可能的双击）
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
+    // 单键单字：枚举该键所有字母(a/b/c)取单字候选合并，供 UI/点击使用（跟随选音锁定字母变化）
+    private var t9SingleKeyCands: List<String> = emptyList()
     // 上次喂给 Rime 会话的 feed 串（增量喂判断依据）：新 feed 以其为前缀→只增量喂新增部分，
     // 否则（退格/切简拼全拼/提交后队列变化）整串重放。避免每键重放“整个数字队列”导致长码 O(n²) 卡顿。
     private var lastT9Feed: String? = null
@@ -2337,8 +2339,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；全键盘始终走自身 pinyin 候选
-        val rimeAllCands = if (keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty()) t9FenCiMerged else rimeEngine.getAllCandidates(candPageWalk)
+        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；单键单字用枚举候选；全键盘始终走自身 pinyin 候选
+        val rimeAllCands = when {
+            keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty() -> t9FenCiMerged
+            keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
+            else -> rimeEngine.getAllCandidates(candPageWalk)
+        }
         var allCands = rimeAllCands
         // 注入用户自建词组：当前待匹配数字串是某用户词数字串的前缀时，插到候选最前（接龙组词记忆）
         if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && userPhrases.isNotEmpty()) {
@@ -2442,10 +2448,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 候选懒加载：候选栏横向滚到右端阈值时，拉取下一批 50 候选（candPageWalk+10页）追加到列表与点击反查源 */
+    /** 候选懒加载：候选栏横向滚到右端阈值时，拉取下一批 50 候选（candPageWalk+10页）追加到列表与点击反查源。
+     *  不设置数量上限，纯靠滚动懒加载（每批 50 字词），滚到底继续加载更多。 */
     private fun loadMoreCandidates() {
         if (keyboardMode != KeyboardMode.NUMBER) return
-        if (candPageWalk >= 50) return   // 上限 50 页(=250候选)，与 RimeEngine.MAX_PAGE_WALK 对齐
         if (candTotalLoaded <= 0) return
         candPageWalk += 10
         val fresh = rimeEngine.getAllCandidates(candPageWalk)
@@ -6432,7 +6438,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (t9ConsumedLen == 0) t9ComposedSoFar.clear()
         // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
         if (t9DigitQueue.isNotEmpty()) {
-            if (t9FenCiOn) {
+            if (t9DigitQueue.length == 1 && t9ConsumedLen == 0) {
+                // 单键单字：枚举该键所有字母(a/b/c)取单字候选合并，覆盖全部开头单字。
+                // 无论简拼/全拼模式，单键只出单字(不出词组)；跟随选音锁定字母变化(锁定某字母则只该字母)。
+                val d = t9DigitQueue[0].digitToInt()
+                t9SingleKeyCands = enumSingleKeyCands(d)
+                t9FenCiMerged = emptyList()
+                lastT9Feed = t9DigitQueue.toString()
+            } else if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
                 // 接龙态(t9ConsumedLen>0)下只取「未消费后缀」算简拼码，否则候选仍是整串、接龙失败
                 val digits = t9DigitQueue.substring(t9ConsumedLen).map { it.digitToInt() }
@@ -6573,6 +6586,29 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             processT9Input()
         }
         updateStatus(if (t9FenCiOn) "简拼模式（分词开）" else "全拼模式（分词关）")
+    }
+
+    // 单键单字：枚举该数字键所有字母(a/b/c)，复用当前会话逐个 clear+喂取单字(length==1)合并去重
+    // 覆盖该键全部开头单字，而非只首字母一个；且只出单字不出词组。
+    // 已选音锁定某字母(t9SpellPrefix 单字母)时只取该字母单字，候选随选音变化。
+    private fun enumSingleKeyCands(digit: Int): List<String> {
+        val letters = (t9Map[digit] ?: "").filter { it != ' ' }
+        if (letters.isEmpty()) return emptyList()
+        val out = LinkedHashSet<String>()
+        if (t9SpellPrefix.length == 1) {
+            // 已锁定某字母：只出该字母单字
+            rimeEngine.clear()
+            rimeEngine.processKey(t9SpellPrefix.toString())
+            out.addAll(rimeEngine.getAllCandidates(candPageWalk).filter { it.length == 1 })
+        } else {
+            // 未锁定：枚举该键每个字母，逐个取单字合并
+            for (ch in letters) {
+                rimeEngine.clear()
+                rimeEngine.processKey(ch.toString())
+                out.addAll(rimeEngine.getAllCandidates(candPageWalk).filter { it.length == 1 })
+            }
+        }
+        return out.toList()
     }
 
     /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
