@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner） -->
+    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner + 关闭 X） -->
     <LinearLayout
         android:id="@+id/banner_bar"
         android:layout_width="match_parent"
@@ -15,6 +15,7 @@
         android:layout_marginBottom="12dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:background="#81D8D0"
         android:paddingHorizontal="16dp">
 
         <TextView
@@ -25,6 +26,17 @@
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/btn_smart_close"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="20sp"
+            android:textColor="#FFFFFF"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="关闭" />
     </LinearLayout>
 
     <!-- 选项区域：2列布局 -->
@@ -186,7 +198,7 @@
 
         <!-- 关闭：⨯ -->
         <TextView
-            android:id="@+id/btn_smart_close"
+            android:id="@+id/btn_smart_close_bottom"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"

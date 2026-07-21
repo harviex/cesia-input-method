@@ -7075,7 +7075,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close_bottom)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
