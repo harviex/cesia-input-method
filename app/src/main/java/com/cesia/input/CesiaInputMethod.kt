@@ -391,8 +391,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 接龙组词：已消费的数字位数（从 t9DigitQueue 头部）。待匹配 = substring(t9ConsumedLen)。
     // 选词后消费对应长度，剩余字符继续组词；耗尽自动上屏；无匹配停留等退格。
     private var t9ConsumedLen = 0
-    // 用户自建词组库：词 → 全拼数字串（如 "大家不好"→"3254228426"），接龙上屏时写入，下次匹配注入候选
-    private val userPhrases = LinkedHashMap<String, String>()
+    // 用户自建词组库：词 → Pair(全拼数字串, 频次)（如 "大家不好"→("3254228426", 5)），接龙上屏时写入/累加频次，下次按频次降序融入候选
+    private val userPhrases = LinkedHashMap<String, Pair<String, Int>>()
     // 候选懒加载：candPageWalk=已扫页数(10页=50候选)，滚到底+10页(50)；上限 MAX_PAGE_WALK(50页=250)
     private var candPageWalk = 10
     private var candTotalLoaded = 0
@@ -2365,14 +2365,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
         var allCands = rimeAllCands
-        // 注入用户自建词组：当前待匹配数字串是某用户词数字串的前缀时，插到候选最前（接龙组词记忆）
+        // 注入用户自建词组：按频次降序融入 Rime 候选（不强行置顶），保持整体词频顺序
         // 单键(length==1)只出单字，不注入用户词组，避免高频词组挤掉单字
         if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length != 1 && userPhrases.isNotEmpty()) {
             val curDigits = if (t9DigitQueue.length > t9ConsumedLen) t9DigitQueue.substring(t9ConsumedLen) else ""
             if (curDigits.isNotEmpty()) {
-                val injected = userPhrases.filter { (_, dig) -> dig.startsWith(curDigits) }.map { it.key }
-                if (injected.isNotEmpty()) {
-                    allCands = (injected + allCands).distinct()
+                val matched = userPhrases.filter { (_, pair) -> pair.first.startsWith(curDigits) }
+                    .toList()
+                    .sortedByDescending { it.second.second } // it: Pair<String, Pair<String, Int>> -> second.second = freq
+                    .map { it.first } // phrase
+                if (matched.isNotEmpty()) {
+                    // 按频次插入：遍历 Rime 候选，在合适位置插入用户词（不破坏整体词频序）
+                    allCands = mergeByFrequency(allCands, matched)
                 }
             }
         }
@@ -4645,6 +4649,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     // ===== 用户自建词组库：接龙组词上屏写入，下次匹配注入候选，持久化到 cesia_dict =====
+
     private fun loadUserPhrases() {
         try {
             val json = getSharedPreferences("cesia_dict", MODE_PRIVATE).getString("user_phrases_json", "") ?: ""
@@ -4654,7 +4659,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val it = obj.keys()
                 while (it.hasNext()) {
                     val k = it.next()
-                    userPhrases[k] = obj.getString(k)
+                    val v = obj.getString(k)
+                    // 兼容旧格式：仅数字串 -> 频次默认 1
+                    if (v.contains(",")) {
+                        val parts = v.split(",")
+                        userPhrases[k] = parts[0] to (parts[1].toIntOrNull() ?: 1)
+                    } else {
+                        userPhrases[k] = v to 1
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -4663,21 +4675,24 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun saveUserPhrases() {
         try {
             val obj = org.json.JSONObject()
-            for ((k, v) in userPhrases) obj.put(k, v)
+            for ((k, v) in userPhrases) {
+                obj.put(k, "${v.first},${v.second}")
+            }
             getSharedPreferences("cesia_dict", MODE_PRIVATE).edit()
                 .putString("user_phrases_json", obj.toString()).apply()
         } catch (_: Exception) {}
     }
 
-    /** 写入用户词组（词→数字串），去重并保持最近优先 */
+    /** 写入用户词组（词→数字串），去重并累加频次，按频次降序保持前 500 */
     private fun addUserPhrase(phrase: String, digits: String) {
         if (phrase.length < 2 || digits.isEmpty()) return
-        userPhrases.remove(phrase)
-        userPhrases[phrase] = digits
-        // 限制规模，避免无限增长
-        while (userPhrases.size > 500) {
-            val firstKey = userPhrases.keys.firstOrNull() ?: break
-            userPhrases.remove(firstKey)
+        val (_, oldFreq) = userPhrases[phrase] ?: digits to 0
+        userPhrases[phrase] = digits to (oldFreq + 1)
+        // 限制规模，避免无限增长：保留频次最高的 500 条
+        if (userPhrases.size > 500) {
+            val minFreq = userPhrases.values.map { it.second }.minOrNull() ?: 1
+            val keysToRemove = userPhrases.filter { it.value.second == minFreq }.keys.take(userPhrases.size - 500)
+            keysToRemove.forEach { userPhrases.remove(it) }
         }
         saveUserPhrases()
     }
@@ -6681,6 +6696,42 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (initials.startsWith(prefix)) cand else null
         }
         return if (filtered.isNotEmpty()) filtered else cands
+    }
+
+    /** 将用户高频词按词频融入 Rime 候选列表（不破坏整体词频序）。
+     *  策略：双指针归并——Rime 候选按原序遍历，用户词按频次降序遍历，
+     *  每当用户词频次 >= 当前 Rime 候选的隐含词频（用位置近似）时插入。 */
+    private fun mergeByFrequency(rimeCands: List<String>, userPhrasesByFreq: List<String>): List<String> {
+        if (userPhrasesByFreq.isEmpty()) return rimeCands
+        val merged = mutableListOf<String>()
+        var rimeIdx = 0
+        var userIdx = 0
+        // Rime 候选隐含词频：位置越前词频越高。简单近似：每前进 10 个 Rime 候选，词频档次下降 1 档
+        // 用户词频：按实际频次降序，档次 = 100 - userIdx * 10（确保高频用户词能插入前段）
+        while (rimeIdx < rimeCands.size && userIdx < userPhrasesByFreq.size) {
+            val rimeFreqTier = 100 - (rimeIdx / 10) * 10
+            val userFreqTier = 100 - userIdx * 10
+            if (userFreqTier >= rimeFreqTier) {
+                val up = userPhrasesByFreq[userIdx]
+                if (up !in merged) merged.add(up)
+                userIdx++
+            } else {
+                val rc = rimeCands[rimeIdx]
+                if (rc !in merged) merged.add(rc)
+                rimeIdx++
+            }
+        }
+        while (rimeIdx < rimeCands.size) {
+            val rc = rimeCands[rimeIdx]
+            if (rc !in merged) merged.add(rc)
+            rimeIdx++
+        }
+        while (userIdx < userPhrasesByFreq.size) {
+            val up = userPhrasesByFreq[userIdx]
+            if (up !in merged) merged.add(up)
+            userIdx++
+        }
+        return merged
     }
 
     /** 简易四则运算求值（复刻 Rime =expr）：支持 + - * / % ^ 及括号、小数、负数。
