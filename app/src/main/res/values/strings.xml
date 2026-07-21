@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Cesia输入法</string>
-    <string name="settings">设置</string>
+    <string name="app_name">Cesia AI</string>
+    <string name="settings">Cesia AI</string>
     <string name="screen_reader_desc">Cesia 输入法无障碍服务，用于读取当前屏幕内容以提供 AI 上下文理解。仅读取文本内容，不做任何修改操作。</string>
     <string name="api_url_hint">https://typeless-ai-service.vercel.app/api/polish</string>
     <string name="save">保存</string>

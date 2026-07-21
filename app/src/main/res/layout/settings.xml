@@ -54,15 +54,6 @@
                     android:padding="8dp" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <ImageView
-                android:id="@+id/iv_version_logo"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:layout_gravity="center"
-                android:layout_marginBottom="8dp"
-                android:src="@drawable/cesia_android_logo_512"
-                android:contentDescription="Cesia 图标" />
-
             <TextView
                 android:id="@+id/tv_version"
                 android:layout_width="match_parent"

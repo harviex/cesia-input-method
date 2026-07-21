@@ -3335,8 +3335,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         applyAccentToViewTree(popupView, themeAccent)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
-        val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)
-        tvTitle?.text = magicBookTitle
+        val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.banner_bar)?.findViewById<android.widget.TextView>(android.R.id.text1)
+        // banner_bar 内部只有一个 TextView，直接找第一个 TextView
+        val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
+        val titleTv = bannerBar?.getChildAt(0) as? android.widget.TextView
+        titleTv?.text = magicBookTitle
 
         val keyboardWidth = keyboardView.width
         val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
@@ -3346,7 +3349,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
-        val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_magic_title)?.measuredHeight
+        val titleHeightPx = titleTv?.measuredHeight
             ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
 
         val barHeightPx = TypedValue.applyDimension(
@@ -3390,7 +3393,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
         val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
         val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
-        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
 
         // 追踪当前编辑状态
         var editingPosition = -1
@@ -3488,10 +3490,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             true
         }
 
-        // ===== 关闭按钮 =====
-        btnClose.setOnClickListener {
-            popup.dismiss()
-        }
 
         // ===== 滚动时退出编辑模式但不保存 =====
         gridView.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
@@ -3604,8 +3602,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
             applyAccentToViewTree(popupView, themeAccent)
 
-            val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
-            tvTitle.text = smartWritingLabel
+            // 新 banner_bar：找第一个 TextView 设置标题
+            val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
+            val titleTv = bannerBar?.getChildAt(0) as? android.widget.TextView
+            titleTv?.text = smartWritingLabel
 
             // 选项视图（4个数据源：剪贴板、RSS源、网络搜索、本地文库）
             val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
@@ -3747,7 +3747,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_smart_delete)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
 
             // ===== ＋：进入编辑模式输入新命令 =====
             btnAdd.setOnClickListener {
@@ -3807,23 +3806,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 popupMenu.show()
             }
 
-            // ===== 关闭按钮 =====
-            btnClose.setOnClickListener {
-                smartWritingPopup?.dismiss()
-                smartWritingPopup = null
-            }
-
             // 弹窗尺寸和定位（与魔法书一致）
             val keyboardWidth = keyboardView.width
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
 
-            // 测量标题栏实际高度
+            // 测量标题栏实际高度（新 banner_bar）
             popupView.measure(
                 android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
                 android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
             )
-            val titleHeightPx = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)?.measuredHeight
-                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
+            val titleHeightPx = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)?.measuredHeight
+                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48f, resources.displayMetrics).toInt()
 
             val barHeightPx = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
@@ -7068,7 +7061,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
@@ -7167,8 +7159,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 新增：打开编辑弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入）
                 showClipboardAddPopup()
             }
-
-            btnClose.setOnClickListener { popup.dismiss() }
 
             // 置顶按钮
             btnPin.setOnClickListener {
@@ -7483,19 +7473,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         clipboardPopupView = view
 
         // 更新标题为"新增"
-        view.findViewById<TextView>(R.id.tv_clipboard_title)?.text = "➕ 新增剪贴板"
+        val bannerBar = view.findViewById<LinearLayout>(R.id.banner_bar)
+        bannerBar?.getChildAt(0)?.let { (it as TextView).text = "➕ 新增剪贴板" }
 
         // 状态栏提示
         updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
 
-        // 关闭按钮
-        view.findViewById<ImageView>(R.id.btn_clipboard_close)?.setOnClickListener {
-            exitClipboardAddMode(save = false)
-            popup.dismiss()
-        }
-
         // 新增按钮 -> 保存
-        view.findViewById<ImageView>(R.id.btn_clipboard_add)?.setOnClickListener {
+        view.findViewById<TextView>(R.id.btn_clipboard_add)?.setOnClickListener {
             exitClipboardAddMode(save = true)
             popup.dismiss()
         }
@@ -8145,10 +8130,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             commitCandidateText(selectedWord)
                             updateCandidateBar()
                         }
-                    } else {
-                        // T9模式：空格 = 选择首候选上屏（与点击候选完全一致，
-                        // 尊重单键枚举/选音过滤/用户词组置顶/CandidatePrefs.reorder，避免显示与上屏不一致）
+                    } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
+                        // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
                         selectCandidateByGlobalIndex(0)
+                    } else {
+                        // 无拼音、无候选：直接输出空格
+                        ic?.commitText(" ", 1)
                     }
                 }
                 if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()

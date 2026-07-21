@@ -4,7 +4,7 @@
     android:isAccessibilityTool="false">
     
     <subtype
-        android:label="@string/app_name"
+        android:label="Cesia AI输入平台"
         android:imeSubtypeLocale=""
         android:imeSubtypeMode="keyboard"
         android:isAsciiCapable="true" />

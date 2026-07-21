@@ -5,18 +5,28 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 标题 -->
-    <TextView
-        android:id="@+id/tv_magic_title"
+    <!-- 标题栏：与主题设置菜单统一风格（Tiffany色背景，白字，无X按钮） -->
+    <LinearLayout
+        android:id="@+id/banner_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:padding="10dp"
-        android:text="芙莉莲的魔法书"
-        android:textSize="18sp"
-        android:textColor="#333333"
-        android:textStyle="bold"
-        android:background="#E0E0E0" />
+        android:layout_height="48dp"
+        android:layout_marginStart="-16dp"
+        android:layout_marginEnd="-16dp"
+        android:layout_marginBottom="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#81D8D0"
+        android:paddingHorizontal="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=" 芙莉莲的魔法书"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
 
     <!-- 魔法语句列表 -->
     <GridView
@@ -32,7 +42,7 @@
         android:listSelector="@android:color/transparent"
         android:stretchMode="columnWidth" />
 
-    <!-- 底部管理栏：新增 + 置顶 + 删除 + 关闭 -->
+    <!-- 底部管理栏：新增 + 置顶 + 删除（无关闭X） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -93,25 +103,6 @@
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <!-- 关闭：⨯ -->
-        <TextView
-            android:id="@+id/btn_close_magic"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
 
     </LinearLayout>
 
