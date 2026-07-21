@@ -2381,6 +2381,43 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 懒加载：记录首屏已拉取的 Rime 候选数（纯 Rime，不含用户词组注入），供滚动到底 drop 取新增
         candTotalLoaded = rimeAllCands.size
 
+        // === 全拼模式：适度提升「完全匹配当前拼音的单字」===
+        // 不无条件置顶，而是结合原词频顺序：给完全匹配单字一个「前移加分」，
+        // 避免同音字过多（如 shi 对应 10+ 单字）把高频词组挤到不可见区。
+        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && pinyin.isNotEmpty() && allCands.isNotEmpty()) {
+            val targetPinyin = pinyin.lowercase()
+            val candPinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
+            // 标记哪些是「完全匹配拼音的单字」
+            val isExactSingle = BooleanArray(allCands.size) { i ->
+                val cand = allCands[i]
+                val py = if (i < candPinyins.size) candPinyins[i].lowercase() else ""
+                cand.length == 1 && py == targetPinyin
+            }
+            // 只有一个或零个完全匹配单字时，原逻辑够用；多个时做加权重排
+            val exactCount = isExactSingle.count { it }
+            if (exactCount > 1) {
+                // 加权排序：分数 = (原位置索引) - (是完全匹配单字 ? BOOST : 0)
+                // BOOST 设为 8，使单字大致前移 5~8 位，但不会全部堆在最前
+                val BOOST = 8
+                val scored = allCands.mapIndexed { idx, cand ->
+                    val score = idx - (if (isExactSingle[idx]) BOOST else 0)
+                    Triple(score, idx, cand) // 原 idx 作次级键保稳定性
+                }.sortedBy { it.first }.map { it.third }
+                allCands = scored
+            } else if (exactCount == 1) {
+                // 仅 1 个完全匹配单字：把它前移到前 3 位以内（不超过原位置）
+                val exactIdx = isExactSingle.indexOfFirst { it }
+                val targetPos = minOf(2, exactIdx) // 0-based，即前 3 位
+                if (exactIdx > targetPos) {
+                    val exactCand = allCands[exactIdx]
+                    allCands = allCands.toMutableList().also { list ->
+                        list.removeAt(exactIdx)
+                        list.add(targetPos, exactCand)
+                    }
+                }
+            }
+        }
+
         // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
         if (t9SpellPrefix.isNotEmpty() && !t9FenCiOn) {
             val pinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
