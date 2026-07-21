@@ -33,7 +33,7 @@ object RssFetchManager {
         .readTimeout(FETCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
-    // ===== 预置国内可访问 RSS 源（按分类组织，去重、去除需翻墙、平衡分类） =====
+    // ===== 预置国内可访问 RSS 源（按分类组织，已验证可用性，去重、去除需翻墙、平衡分类） =====
 
     data class RssSource(val name: String, val url: String, val category: String)
 
@@ -48,7 +48,6 @@ object RssFetchManager {
         RssSource("新华网", "https://plink.anyfeeder.com/weixin/newsxinhua", "官方主流媒体"),
         RssSource("中国日报: 专栏", "https://plink.anyfeeder.com/chinadaily/column", "官方主流媒体"),
         RssSource("中国日报: 双语新闻", "https://plink.anyfeeder.com/chinadaily/dual", "官方主流媒体"),
-        RssSource("中国日报: 时政", "https://plink.anyfeeder.com/chinadaily/china", "官方主流媒体"),
         RssSource("中国日报: 财经", "https://plink.anyfeeder.com/chinadaily/caijing", "官方主流媒体"),
         RssSource("中国日报: 资讯", "https://plink.anyfeeder.com/chinadaily/world", "官方主流媒体"),
         RssSource("侠客岛", "https://plink.anyfeeder.com/weixin/xiake_island", "官方主流媒体"),
@@ -58,7 +57,6 @@ object RssFetchManager {
         RssSource("央视新闻", "https://plink.anyfeeder.com/weixin/cctvnewscenter", "官方主流媒体"),
         RssSource("央视财经", "https://plink.anyfeeder.com/weixin/cctvyscj", "官方主流媒体"),
         RssSource("头条 - 求是网", "https://plink.anyfeeder.com/qstheory", "官方主流媒体"),
-        RssSource("新京报 - 好新闻，无止境", "https://plink.anyfeeder.com/bjnews", "官方主流媒体"),
         RssSource("新京报书评周刊", "https://plink.anyfeeder.com/weixin/ibookreview", "官方主流媒体"),
         RssSource("环球时报", "https://plink.anyfeeder.com/weixin/hqsbwx", "官方主流媒体"),
         RssSource("经济观察报", "https://plink.anyfeeder.com/weixin/eeo-com-cn", "官方主流媒体"),
@@ -67,7 +65,6 @@ object RssFetchManager {
 
         // ===== 军事国防 =====
         RssSource("解放军报", "https://plink.anyfeeder.com/jiefangjunbao", "军事国防"),
-        RssSource("铁血军事", "https://plink.anyfeeder.com/weixin/tiexuejunshi", "军事国防"),
 
         // ===== 商业财经媒体 =====
         RssSource("21世纪经济报道", "https://plink.anyfeeder.com/weixin/jjbd21", "商业财经媒体"),
@@ -75,10 +72,8 @@ object RssFetchManager {
         RssSource("界面新闻: 商业", "https://plink.anyfeeder.com/jiemian/business", "商业财经媒体"),
         RssSource("界面新闻: 财经", "https://plink.anyfeeder.com/jiemian/finance", "商业财经媒体"),
         RssSource("新财富", "https://plink.anyfeeder.com/weixin/newfortune", "商业财经媒体"),
-        RssSource("猎云网", "https://plink.anyfeeder.com/lieyunwang", "商业财经媒体"),
         RssSource("财富中文网", "https://plink.anyfeeder.com/fortunechina", "商业财经媒体"),
         RssSource("人人都是产品经理", "https://www.woshipm.com/feed", "商业财经媒体"),
-        RssSource("今日话题 - 雪球", "https://xueqiu.com/hots/topic/rss", "商业财经媒体"),
 
         // ===== 教育考试 =====
         RssSource("InfoQ 推荐", "https://plink.anyfeeder.com/infoq/recommend", "教育考试"),
@@ -95,7 +90,6 @@ object RssFetchManager {
         RssSource("南方周末-新闻", "https://plink.anyfeeder.com/infzm/news", "人文历史读物"),
         RssSource("历史研习社", "https://plink.anyfeeder.com/weixin/mingqinghistory", "人文历史读物"),
         RssSource("国家人文历史", "https://plink.anyfeeder.com/weixin/gjrwls", "人文历史读物"),
-        RssSource("每日一文", "http://node2.feed43.com/mryw.xml", "人文历史读物"),
         RssSource("简书", "https://plink.anyfeeder.com/weixin/jianshuio", "人文历史读物"),
         RssSource("简书首页", "https://plink.anyfeeder.com/jianshu/home", "人文历史读物"),
         RssSource("观止·每日一文", "https://plink.anyfeeder.com/meiriyiwen", "人文历史读物"),
@@ -105,10 +99,8 @@ object RssFetchManager {
         // ===== 科技互联网媒体 =====
         RssSource("36氪", "https://36kr.com/feed", "科技互联网媒体"),
         RssSource("IT之家", "https://www.ithome.com/rss/", "科技互联网媒体"),
-        RssSource("品玩", "https://plink.anyfeeder.com/pingwest", "科技互联网媒体"),
         RssSource("奇客Solidot", "https://www.solidot.org/index.rss", "科技互联网媒体"),
         RssSource("少数派", "https://sspai.com/feed", "科技互联网媒体"),
-        RssSource("数字尾巴", "https://plink.anyfeeder.com/dgtle", "科技互联网媒体"),
         RssSource("新智元", "https://plink.anyfeeder.com/weixin/AI_era", "科技互联网媒体"),
         RssSource("爱范儿", "https://www.ifanr.com/feed", "科技互联网媒体"),
         RssSource("腾讯科技", "https://plink.anyfeeder.com/weixin/qqtech", "科技互联网媒体"),
@@ -121,7 +113,6 @@ object RssFetchManager {
         RssSource("地球知识局", "https://plink.anyfeeder.com/weixin/diqiuzhishiju", "科学科普"),
         RssSource("物种日历", "https://plink.anyfeeder.com/weixin/guokrpac", "科学科普"),
         RssSource("环球科学", "https://plink.anyfeeder.com/weixin/ScientificAmerican", "科学科普"),
-        RssSource("科学松鼠会", "https://plink.anyfeeder.com/weixin/SquirrelClub", "科学科普"),
 
         // ===== 体育运动 =====
         RssSource("新浪体育", "https://plink.anyfeeder.com/weixin/sports_sina", "体育运动")
