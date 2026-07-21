@@ -150,8 +150,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val defaultColor = (view as? android.widget.TextView)?.textColors?.defaultColor ?: 0
         if (defaultColor == tiffany) (view as? android.widget.TextView)?.setTextColor(accent)
+        // 替换 backgroundTint
         val bgTint = try { view.backgroundTintList?.defaultColor ?: 0 } catch (_: Exception) { 0 }
         if (bgTint == tiffany) view.backgroundTintList = tintList
+        // 替换 background（如果是 ColorDrawable 且颜色是 tiffany）
+        if (view.background is android.graphics.drawable.ColorDrawable) {
+            val colorDrawable = view.background as android.graphics.drawable.ColorDrawable
+            val bgColor = colorDrawable.color
+            if (bgColor == tiffany) {
+                view.background = android.graphics.drawable.ColorDrawable(accent)
+            }
+        }
         // Handle TextInputLayout boxStrokeColor and hintTextColor
         if (view is com.google.android.material.textfield.TextInputLayout) {
             try {
@@ -3333,6 +3342,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
         applyAccentToViewTree(popupView, themeAccent)
+        // 显式给 banner_bar 设置背景色（跟随主题色）
+        popupView.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
         val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
@@ -3607,6 +3618,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
             applyAccentToViewTree(popupView, themeAccent)
+            // 显式给 banner_bar 设置背景色（跟随主题色）
+            popupView.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
 
             // 新 banner_bar：找第一个 TextView 设置标题
             val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
@@ -7066,6 +7079,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater2 = android.view.LayoutInflater.from(this)
             clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
             applyAccentToViewTree(clipboardPopupView!!, themeAccent)
+            // 显式给 banner_bar 设置背景色（跟随主题色）
+            clipboardPopupView!!.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)

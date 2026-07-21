@@ -33,37 +33,98 @@ object RssFetchManager {
         .readTimeout(FETCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
-    // ===== 预置国内可访问 RSS 源（去重、去除需翻墙、平衡分类） =====
+    // ===== 预置国内可访问 RSS 源（按分类组织，去重、去除需翻墙、平衡分类） =====
 
     data class RssSource(val name: String, val url: String, val category: String)
 
     val PRESET_SOURCES: List<RssSource> = listOf(
-        // 科技
-        RssSource("爱范儿", "https://www.ifanr.com/feed", "科技"),
-        RssSource("IT之家", "https://www.ithome.com/rss/", "科技"),
-        RssSource("少数派", "https://sspai.com/feed", "科技"),
-        RssSource("36氪", "https://36kr.com/feed", "科技"),
-        RssSource("钛媒体", "https://www.tmtpost.com/rss.xml", "科技"),
+        // ===== 官方主流媒体 =====
+        RssSource("人民日报", "https://plink.anyfeeder.com/people-daily", "官方主流媒体"),
+        RssSource("人民网", "https://plink.anyfeeder.com/weixin/people_rmw", "官方主流媒体"),
+        RssSource("人民网-国内新闻", "https://plink.anyfeeder.com/people/politics", "官方主流媒体"),
+        RssSource("人民网-国际新闻", "https://plink.anyfeeder.com/people/world", "官方主流媒体"),
+        RssSource("人民网-英语新闻", "https://plink.anyfeeder.com/people/english", "官方主流媒体"),
+        RssSource("新华社新闻_新华网", "https://plink.anyfeeder.com/newscn/whxw", "官方主流媒体"),
+        RssSource("新华网", "https://plink.anyfeeder.com/weixin/newsxinhua", "官方主流媒体"),
+        RssSource("中国日报: 专栏", "https://plink.anyfeeder.com/chinadaily/column", "官方主流媒体"),
+        RssSource("中国日报: 双语新闻", "https://plink.anyfeeder.com/chinadaily/dual", "官方主流媒体"),
+        RssSource("中国日报: 时政", "https://plink.anyfeeder.com/chinadaily/china", "官方主流媒体"),
+        RssSource("中国日报: 财经", "https://plink.anyfeeder.com/chinadaily/caijing", "官方主流媒体"),
+        RssSource("中国日报: 资讯", "https://plink.anyfeeder.com/chinadaily/world", "官方主流媒体"),
+        RssSource("侠客岛", "https://plink.anyfeeder.com/weixin/xiake_island", "官方主流媒体"),
+        RssSource("光明日报", "https://plink.anyfeeder.com/guangmingribao", "官方主流媒体"),
+        RssSource("半月谈", "https://plink.anyfeeder.com/weixin/banyuetan-weixin", "官方主流媒体"),
+        RssSource("参考消息", "https://plink.anyfeeder.com/weixin/ckxxwx", "官方主流媒体"),
+        RssSource("央视新闻", "https://plink.anyfeeder.com/weixin/cctvnewscenter", "官方主流媒体"),
+        RssSource("央视财经", "https://plink.anyfeeder.com/weixin/cctvyscj", "官方主流媒体"),
+        RssSource("头条 - 求是网", "https://plink.anyfeeder.com/qstheory", "官方主流媒体"),
+        RssSource("新京报 - 好新闻，无止境", "https://plink.anyfeeder.com/bjnews", "官方主流媒体"),
+        RssSource("新京报书评周刊", "https://plink.anyfeeder.com/weixin/ibookreview", "官方主流媒体"),
+        RssSource("环球时报", "https://plink.anyfeeder.com/weixin/hqsbwx", "官方主流媒体"),
+        RssSource("经济观察报", "https://plink.anyfeeder.com/weixin/eeo-com-cn", "官方主流媒体"),
+        RssSource("财新网", "https://plink.anyfeeder.com/weixin/caixinwang", "官方主流媒体"),
+        RssSource("界面新闻: 新闻", "https://plink.anyfeeder.com/jiemian/news", "官方主流媒体"),
 
-        // AI
-        RssSource("量子位", "https://www.qbitai.com/feed", "AI"),
+        // ===== 军事国防 =====
+        RssSource("解放军报", "https://plink.anyfeeder.com/jiefangjunbao", "军事国防"),
+        RssSource("铁血军事", "https://plink.anyfeeder.com/weixin/tiexuejunshi", "军事国防"),
 
-        // 财经
-        RssSource("华尔街见闻", "https://dedicated.wallstreetcn.com/rss.xml", "财经"),
-        RssSource("界面股市", "https://feedx.net/rss/jiemian.xml", "财经"),
+        // ===== 商业财经媒体 =====
+        RssSource("21世纪经济报道", "https://plink.anyfeeder.com/weixin/jjbd21", "商业财经媒体"),
+        RssSource("哈佛商业评论", "https://plink.anyfeeder.com/weixin/hbrchinese", "商业财经媒体"),
+        RssSource("界面新闻: 商业", "https://plink.anyfeeder.com/jiemian/business", "商业财经媒体"),
+        RssSource("界面新闻: 财经", "https://plink.anyfeeder.com/jiemian/finance", "商业财经媒体"),
+        RssSource("新财富", "https://plink.anyfeeder.com/weixin/newfortune", "商业财经媒体"),
+        RssSource("猎云网", "https://plink.anyfeeder.com/lieyunwang", "商业财经媒体"),
+        RssSource("财富中文网", "https://plink.anyfeeder.com/fortunechina", "商业财经媒体"),
+        RssSource("人人都是产品经理", "https://www.woshipm.com/feed", "商业财经媒体"),
+        RssSource("今日话题 - 雪球", "https://xueqiu.com/hots/topic/rss", "商业财经媒体"),
 
-        // 新闻/综合（国内主流媒体）
-        RssSource("人民日报", "https://feedx.net/rss/people.xml", "新闻"),
-        RssSource("澎湃新闻", "https://feedx.net/rss/thepaper.xml", "新闻"),
-        RssSource("界面新闻", "https://feedx.net/rss/jiemian.xml", "新闻"),
-        RssSource("中国日报", "http://www.chinadaily.com.cn/rss/china_rss.xml", "新闻"),
-        RssSource("人民网观点", "http://www.people.com.cn/rss/politics.xml", "新闻"),
+        // ===== 教育考试 =====
+        RssSource("InfoQ 推荐", "https://plink.anyfeeder.com/infoq/recommend", "教育考试"),
+        RssSource("MOOC", "https://plink.anyfeeder.com/weixin/mooc", "教育考试"),
+        RssSource("三节课", "https://plink.anyfeeder.com/weixin/sanjieke01", "教育考试"),
+        RssSource("罗辑思维", "https://plink.anyfeeder.com/weixin/luojisw", "教育考试"),
 
-        // 游戏/娱乐
-        RssSource("机核网", "https://www.gcores.com/rss", "游戏"),
+        // ===== 人文历史读物 =====
+        RssSource("三联生活周刊", "https://plink.anyfeeder.com/weixin/lifeweek", "人文历史读物"),
+        RssSource("人物", "https://plink.anyfeeder.com/weixin/renwumag1980", "人文历史读物"),
+        RssSource("单读", "https://plink.anyfeeder.com/weixin/dandureading", "人文历史读物"),
+        RssSource("南方周末", "https://plink.anyfeeder.com/weixin/nanfangzhoumo", "人文历史读物"),
+        RssSource("南方周末-推荐", "https://plink.anyfeeder.com/infzm/recommends", "人文历史读物"),
+        RssSource("南方周末-新闻", "https://plink.anyfeeder.com/infzm/news", "人文历史读物"),
+        RssSource("历史研习社", "https://plink.anyfeeder.com/weixin/mingqinghistory", "人文历史读物"),
+        RssSource("国家人文历史", "https://plink.anyfeeder.com/weixin/gjrwls", "人文历史读物"),
+        RssSource("每日一文", "http://node2.feed43.com/mryw.xml", "人文历史读物"),
+        RssSource("简书", "https://plink.anyfeeder.com/weixin/jianshuio", "人文历史读物"),
+        RssSource("简书首页", "https://plink.anyfeeder.com/jianshu/home", "人文历史读物"),
+        RssSource("观止·每日一文", "https://plink.anyfeeder.com/meiriyiwen", "人文历史读物"),
+        RssSource("读库小报", "https://plink.anyfeeder.com/weixin/dukuxiaobao", "人文历史读物"),
+        RssSource("青年文摘", "https://plink.anyfeeder.com/weixin/qnwzwx", "人文历史读物"),
 
-        // 编程/开发
-        RssSource("掘金", "https://juejin.cn/rss", "开发")
+        // ===== 科技互联网媒体 =====
+        RssSource("36氪", "https://36kr.com/feed", "科技互联网媒体"),
+        RssSource("IT之家", "https://www.ithome.com/rss/", "科技互联网媒体"),
+        RssSource("品玩", "https://plink.anyfeeder.com/pingwest", "科技互联网媒体"),
+        RssSource("奇客Solidot", "https://www.solidot.org/index.rss", "科技互联网媒体"),
+        RssSource("少数派", "https://sspai.com/feed", "科技互联网媒体"),
+        RssSource("数字尾巴", "https://plink.anyfeeder.com/dgtle", "科技互联网媒体"),
+        RssSource("新智元", "https://plink.anyfeeder.com/weixin/AI_era", "科技互联网媒体"),
+        RssSource("爱范儿", "https://www.ifanr.com/feed", "科技互联网媒体"),
+        RssSource("腾讯科技", "https://plink.anyfeeder.com/weixin/qqtech", "科技互联网媒体"),
+        RssSource("虎嗅", "https://rss.huxiu.com/", "科技互联网媒体"),
+        RssSource("钛媒体", "https://www.tmtpost.com/feed", "科技互联网媒体"),
+
+        // ===== 科学科普 =====
+        RssSource("果壳网", "https://plink.anyfeeder.com/weixin/Guokr42", "科学科普"),
+        RssSource("中国国家地理", "https://plink.anyfeeder.com/weixin/dili360", "科学科普"),
+        RssSource("地球知识局", "https://plink.anyfeeder.com/weixin/diqiuzhishiju", "科学科普"),
+        RssSource("物种日历", "https://plink.anyfeeder.com/weixin/guokrpac", "科学科普"),
+        RssSource("环球科学", "https://plink.anyfeeder.com/weixin/ScientificAmerican", "科学科普"),
+        RssSource("科学松鼠会", "https://plink.anyfeeder.com/weixin/SquirrelClub", "科学科普"),
+
+        // ===== 体育运动 =====
+        RssSource("新浪体育", "https://plink.anyfeeder.com/weixin/sports_sina", "体育运动")
     )
 
     // ===== 数据类 =====
