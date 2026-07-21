@@ -3577,6 +3577,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
         magicHistoryPopup = popup
 
+        // ===== 关闭按钮 =====
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
+        btnClose.setOnClickListener {
+            magicHistoryPopup?.dismiss()
+            magicHistoryPopup = null
+        }
+
         popup.setOnDismissListener {
             cancelMagicBookLongPress()
             magicHistoryPopup = null
@@ -3857,6 +3864,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
             smartWritingPopup = popup
+
+            // ===== 关闭按钮 =====
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
+            btnClose.setOnClickListener {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+            }
         } catch (e: Exception) {
             Log.e("Cesia", "showSmartWritingPopup 异常", e)
         }
@@ -7061,6 +7075,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
@@ -7225,6 +7240,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     true
                 }
                 popupMenu.show()
+            }
+
+            // ===== 关闭按钮 =====
+            btnClose.setOnClickListener {
+                clipboardPopup?.dismiss()
+                clipboardPopup = null
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
