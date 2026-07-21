@@ -2116,19 +2116,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 这样无论降频还是选音过滤，点到的词 = 上屏的词（点频上频、点管字上管字）。
         if (globalIndex >= lastDisplayedCands.size) return
         val clickedWord = lastDisplayedCands[globalIndex]
-        // 用户自建词组：独立点击路径，直接整词上屏，不走 Rime 翻页（避免混入候选后位置错位/选不中）
+        // 用户自建词组：独立点击路径，支持接龙组词（有剩余数字则继续，无剩余则上屏）
         if (userPhrases.containsKey(clickedWord)) {
-            if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9ConsumedLen > 0) {
-                // 接龙中：已组词 + 用户词拼接上屏
+            if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
+                // 接龙逻辑：累积已选词，按词长消费数字位数，有剩余则继续
                 t9ComposedSoFar.append(clickedWord)
-                commitCandidateText(t9ComposedSoFar.toString())
+                val consumed = clickedWord.length
+                t9ConsumedLen += consumed
+                val remaining = t9DigitQueue.length - t9ConsumedLen
+                if (remaining <= 0) {
+                    // 字符耗尽 → 上屏整串
+                    commitCandidateText(t9ComposedSoFar.toString())
+                    addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
+                    t9ComposedSoFar.clear(); t9ConsumedLen = 0
+                    rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
+                    lastT9Feed = null
+                    updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
+                } else {
+                    // 还有剩余 → 接龙继续，刷新候选栏
+                    feedRemaining()
+                }
             } else {
+                // 非接龙场景：直接上屏该词
                 commitCandidateText(clickedWord)
             }
-            t9ComposedSoFar.clear(); t9ConsumedLen = 0
-            rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
-            lastT9Feed = null
-            updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
             return
         }
         // 单键枚举候选（t9SingleKeyCands）：显示列表来自「逐字母枚举合并」，与 Rime 当前 t9 模糊态会话
