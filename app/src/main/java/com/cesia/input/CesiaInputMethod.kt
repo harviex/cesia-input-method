@@ -3577,6 +3577,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
         magicHistoryPopup = popup
 
+        // ===== 关闭按钮 =====
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic)
+        btnClose.setOnClickListener {
+            magicHistoryPopup?.dismiss()
+            magicHistoryPopup = null
+        }
+
         popup.setOnDismissListener {
             cancelMagicBookLongPress()
             magicHistoryPopup = null
@@ -3857,6 +3864,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
             smartWritingPopup = popup
+
+            // ===== 关闭按钮 =====
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close)
+            btnClose.setOnClickListener {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+            }
         } catch (e: Exception) {
             Log.e("Cesia", "showSmartWritingPopup 异常", e)
         }
