@@ -3335,9 +3335,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         applyAccentToViewTree(popupView, themeAccent)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
-        val tvTitle = popupView.findViewById<android.widget.TextView>(R.id.banner_bar)?.findViewById<android.widget.TextView>(android.R.id.text1)
-        // banner_bar 内部只有一个 TextView，直接找第一个 TextView
         val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
+        // banner_bar 的第一个子 View 是标题 TextView，第二个是关闭按钮
         val titleTv = bannerBar?.getChildAt(0) as? android.widget.TextView
         titleTv?.text = magicBookTitle
 
