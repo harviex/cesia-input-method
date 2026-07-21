@@ -5,27 +5,18 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner，无图标） -->
-    <LinearLayout
-        android:id="@+id/banner_bar"
+    <!-- 标题栏：统一风格 -->
+    <TextView
+        android:id="@+id/tv_clipboard_title"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginStart="-16dp"
-        android:layout_marginEnd="-16dp"
-        android:layout_marginBottom="12dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="16dp">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text=" 剪贴板管理"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF" />
-    </LinearLayout>
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="10dp"
+        android:text="📋 剪贴板管理"
+        android:textSize="18sp"
+        android:textColor="#333333"
+        android:textStyle="bold"
+        android:background="#E0E0E0" />
 
     <!-- 搜索栏：统一风格 -->
     <LinearLayout
@@ -95,7 +86,7 @@
         android:padding="16dp"
         android:visibility="gone" />
 
-    <!-- 底部管理栏：＋ 置顶 删除 关闭 -->
+    <!-- 底部管理栏：统一风格 ＋ ⤒ ⊗ ⨯ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"

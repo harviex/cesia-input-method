@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:background="@drawable/popup_bg">
 
-    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner） -->
+    <!-- 标题栏：与主题设置菜单统一风格（Tiffany色背景，白字，无X按钮） -->
     <LinearLayout
         android:id="@+id/banner_bar"
         android:layout_width="match_parent"
@@ -15,6 +15,7 @@
         android:layout_marginBottom="12dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:background="#81D8D0"
         android:paddingHorizontal="16dp">
 
         <TextView
@@ -116,7 +117,7 @@
         android:listSelector="@android:color/transparent"
         android:stretchMode="columnWidth" />
 
-    <!-- 底部按钮栏：＋ 置顶 删除 关闭 -->
+    <!-- 底部按钮栏：＋ 置顶 删除（无关闭X） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -177,25 +178,6 @@
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <!-- 关闭：⨯ -->
-        <TextView
-            android:id="@+id/btn_smart_close"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
 
     </LinearLayout>
 
