@@ -2119,9 +2119,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 用户自建词组：独立点击路径，支持接龙组词（有剩余数字则继续，无剩余则上屏）
         if (userPhrases.containsKey(clickedWord)) {
             if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
-                // 接龙逻辑：累积已选词，按词长消费数字位数，有剩余则继续
+                // 接龙逻辑：累积已选词，按该词的「全拼数字串长度」消费数字位数，有剩余则继续
                 t9ComposedSoFar.append(clickedWord)
-                val consumed = clickedWord.length
+                val (phraseDigits, _) = userPhrases[clickedWord] ?: "" to 0
+                val consumed = phraseDigits.length
                 t9ConsumedLen += consumed
                 val remaining = t9DigitQueue.length - t9ConsumedLen
                 if (remaining <= 0) {
