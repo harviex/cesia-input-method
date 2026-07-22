@@ -813,13 +813,16 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallVoice?.setOnLongClickListener { showUninstallMenu(true); true }
         // 手机AI模型的长按卸载入口已移除（卸载请到版本号菜单）。重新下载是卸载后的事。
 
-        // 用户词组库：导出/导入（接龙组词备份）
+        // 用户词组库：导出/导入/清空（接龙组词备份）
         findViewById<Button>(R.id.btn_export_phrases)?.setOnClickListener {
             val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             exportLauncher.launch("CesiaUserPhrases_$time.json")
         }
         findViewById<Button>(R.id.btn_import_phrases)?.setOnClickListener {
             importLauncher.launch(arrayOf("application/json"))
+        }
+        findViewById<Button>(R.id.btn_clear_phrases)?.setOnClickListener {
+            clearUserPhrases()
         }
     }
 
@@ -866,6 +869,21 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "导入失败：${e.message}", Toast.LENGTH_SHORT).show()
             appendLog("导入词库失败: ${e.message}")
         }
+    }
+
+    private fun clearUserPhrases() {
+        AlertDialog.Builder(this)
+            .setTitle("清空用户词库")
+            .setMessage("确定要清空所有用户个人词库内容吗？此操作将删除所有接龙组词保存的词组，且不可恢复（雾凇词库不受影响）。")
+            .setPositiveButton("确定清空") { _, _ ->
+                getSharedPreferences("cesia_dict", MODE_PRIVATE).edit()
+                    .remove("user_phrases_json")
+                    .apply()
+                Toast.makeText(this, "用户词库已清空", Toast.LENGTH_SHORT).show()
+                appendLog("用户词库已清空")
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     // ======================== API URL/Key 下拉自定义 ========================
@@ -1440,17 +1458,13 @@ class SettingsActivity : AppCompatActivity() {
     // 根据已安装状态刷新按钮文字/底色
     private fun refreshVoiceInstallState() {
         val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
-        val dictInstalled = dictManager.hasDownloadedDict()
         val zhInstalled = java.io.File(filesDir, "local_models/zipformer-zh-2025/encoder.onnx").exists()
+        val dictInstalled = dictManager.hasDownloadedDict()
+        // 语音套件完整 = 两个语音模型 + 词库 都已安装
+        val fullyInstalled = voiceInstalled && zhInstalled && dictInstalled
         btnInstallVoice?.setOnClickListener { downloadVoiceModel() }
-        if (voiceInstalled && dictInstalled) {
-            if (zhInstalled) {
-                installedButtonBg(btnInstallVoice, "语音文字套件已安装")
-            } else {
-                // 中英混已装，但纯中文未下：提示可单独补下
-                installedButtonBg(btnInstallVoice, "语音套件已安装")
-                btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
-            }
+        if (fullyInstalled) {
+            installedButtonBg(btnInstallVoice, "语音文字套件已安装")
         } else {
             resetButtonBg(btnInstallVoice, "安装语音文字输入套件")
         }
@@ -1513,160 +1527,134 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun doDownloadVoiceModel() {
-        val modelInfo = ModelRegistry.getById("sherpa-zipformer") ?: return
-        btnInstallVoice?.isEnabled = false
-        setBothVoiceProgress(0, "准备下载...")
-        getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
-            .putBoolean("voice_downloading", true).commit()
-        appendLog("⬇ 开始下载语音文字输入套件（语音模型 + 雾凇词库）")
+            btnInstallVoice?.isEnabled = false
+            setBothVoiceProgress(0, "准备下载...")
+            getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                .putBoolean("voice_downloading", true).commit()
+            appendLog("⬇ 开始下载语音文字输入套件（双语模型 + 纯中文模型 + 雾凇词库）")
 
-        // 阶段一：下载语音模型（0%~50%）
-        Thread {
-            try {
-                val dm = ModelDownloadManager(this@SettingsActivity)
-                val result = kotlinx.coroutines.runBlocking {
-                    dm.downloadZipformer { fileName, percent, downloadedBytes, totalBytes ->
-                        runOnUiThread {
-                            val pctStr = String.format("%.1f%%", percent)
-                            val dlStr = ModelDownloadManager.Formatter.formatSize(downloadedBytes)
-                            val totalStr = ModelDownloadManager.Formatter.formatSize(totalBytes)
-                            val overall = (percent * 0.5).toInt()
-                            setBothVoiceProgress(overall, "下载语音模型")
+            // 模型大小比例分配进度：双语 206MB + 纯中文 160MB + 词库 ~50MB = 总 416MB
+            // 双语模型占比 49.5%，纯中文占比 38.5%，词库占比 12%
+            val bilingualSize = 206.0
+            val chineseSize = 160.0
+            val dictSize = 50.0
+            val totalSize = bilingualSize + chineseSize + dictSize
+            val bilingualWeight = bilingualSize / totalSize  // ~0.495
+            val chineseWeight = chineseSize / totalSize      // ~0.385
+            val dictWeight = dictSize / totalSize            // ~0.12
+
+            // 并行下载两个语音模型，进度按大小加权合并
+            Thread {
+                try {
+                    val dm = ModelDownloadManager(this@SettingsActivity)
+
+                    var bilingualPercent = 0.0  // 0-100
+                    var chinesePercent = 0.0    // 0-100
+                    var dictPercent = 0.0       // 0-100
+
+                    // 发射初始进度到版本号进度条
+                    DownloadProgressBus.emit("语音套件", 0.0)
+
+                    // 启动纯中文模型下载（协程）
+                    val chineseDeferred = CompletableDeferred<Boolean>()
+                    kotlinx.coroutines.runBlocking {
+                        dm.downloadArchive("zipformer-zh-2025") { _, percent, _, _ ->
+                            chinesePercent = percent  // percent 已是 0-100
+                            // 模型阶段进度 = 双语进度*权重 + 纯中文进度*权重（结果 0-88）
+                            val modelProgress = bilingualPercent * bilingualWeight + chinesePercent * chineseWeight
+                            runOnUiThread {
+                                setBothVoiceProgress(modelProgress.toInt(), "下载语音模型 ${String.format("%.1f", modelProgress)}%")
+                                DownloadProgressBus.emit("语音模型", modelProgress)
+                            }
+                        }
+                        chineseDeferred.complete(true)
+                    }
+
+                    // 下载双语模型（主进度）
+                    val bilingualResult = kotlinx.coroutines.runBlocking {
+                        dm.downloadZipformer { fileName, percent, downloadedBytes, totalBytes ->
+                            bilingualPercent = percent  // percent 已是 0-100
+                            val modelProgress = bilingualPercent * bilingualWeight + chinesePercent * chineseWeight
+                            runOnUiThread {
+                                setBothVoiceProgress(modelProgress.toInt(), "下载语音模型 ${String.format("%.1f", modelProgress)}%")
+                                DownloadProgressBus.emit("语音模型", modelProgress)
+                            }
                         }
                     }
-                }
-                if (!result.isSuccess) {
-                    runOnUiThread {
-                        btnInstallVoice?.isEnabled = true
-                        getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
-                            .putBoolean("voice_downloading", false).commit()
-                        appendLog("❌ 语音模型下载失败: ${result.exceptionOrNull()?.message}")
-                        resetBothVoice("安装语音文字输入套件")
-                    }
-                    return@Thread
-                }
-                // 阶段二：下载雾凇词库（50%~100%）
-                runOnUiThread {
-                    setBothVoiceProgress(50, "正在下载雾凇词库")
-                }
-                var dictOk = false
-                var dictMsg = ""
-                dictManager.downloadFullDict(
-                    onProgress = { percent, _, _, msg ->
-                        runOnUiThread {
-                            val overall = 50 + (percent * 0.5).toInt()
-                            setBothVoiceProgress(overall, "正在下载雾凇词库")
-                        }
-                    },
-                    onComplete = { success, msg ->
-                        dictOk = success
-                        dictMsg = msg
+
+                    if (!bilingualResult.isSuccess) {
                         runOnUiThread {
                             btnInstallVoice?.isEnabled = true
                             getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
                                 .putBoolean("voice_downloading", false).commit()
-                            if (dictOk) {
-                                appendLog("✅ 语音文字输入套件安装完成")
-                                Toast.makeText(this, "语音文字输入套件安装完成", Toast.LENGTH_SHORT).show()
-                                refreshVoiceInstallState()
-                                refreshDictInfo()
-                                // 触发 Rime 重新部署
-                                try {
-                                    val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
-                                    rimeEngine.redeploy()
-                                    Toast.makeText(this, "词库已部署！请重启输入法后生效", Toast.LENGTH_LONG).show()
-                                } catch (_: Exception) {}
-                                // 阶段三：下载纯中文模型（独立目录，不影响中英双语套件）
-                                runOnUiThread { setBothVoiceProgress(98, "正在下载纯中文模型") }
-                                try {
-                                    val dm = ModelDownloadManager(this@SettingsActivity)
-                                    val zhResult = kotlinx.coroutines.runBlocking {
-                                        dm.downloadArchive("zipformer-zh-2025") { _, percent, _, _ ->
-                                            runOnUiThread {
-                                                val overall = 98 + (percent * 0.02).toInt()
-                                                setBothVoiceProgress(overall, "下载纯中文模型")
-                                            }
-                                        }
-                                    }
-                                    if (zhResult.isSuccess) {
-                                        appendLog("✅ 纯中文模型下载完成（双击语音键可切换）")
-                                        runOnUiThread { appendLog("🎉 语音套件 + 纯中文模型已全部安装完成") }
-                                    } else {
-                                        val msg = zhResult.exceptionOrNull()?.message ?: "未知错误"
-                                        appendLog("⚠️ 纯中文模型下载失败（中英混仍可用）: $msg")
-                                        runOnUiThread {
-                                            Toast.makeText(this, "纯中文模型下载失败，可单独重试", Toast.LENGTH_LONG).show()
-                                            // 主按钮提示可重试纯中文模型
-                                            btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
-                                            btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
-                                        }
-                                    }
-                                } catch (ze: Exception) {
-                                    appendLog("⚠️ 纯中文模型下载异常（中英混仍可用）: ${ze.message}")
-                                    runOnUiThread {
-                                        Toast.makeText(this, "纯中文模型下载异常，可单独重试", Toast.LENGTH_LONG).show()
-                                        btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
-                                        btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
-                                    }
+                            appendLog("❌ 双语语音模型下载失败: ${bilingualResult.exceptionOrNull()?.message}")
+                            resetBothVoice("安装语音文字输入套件")
+                            DownloadProgressBus.emit("语音模型", 0.0, failed = true)
+                        }
+                        return@Thread
+                    }
+
+                    // 等待纯中文模型下载完成
+                    kotlinx.coroutines.runBlocking { chineseDeferred.await() }
+
+                    // 模型阶段完成，开始下载词库（进度从模型总权重开始到 100%）
+                    val modelPhaseComplete = (bilingualWeight + chineseWeight) * 100  // ~88
+                    runOnUiThread {
+                        setBothVoiceProgress(modelPhaseComplete.toInt(), "正在下载雾凇词库")
+                        DownloadProgressBus.emit("雾凇词库", modelPhaseComplete.toDouble())
+                    }
+
+                    var dictOk = false
+                    var dictMsg = ""
+                    dictManager.downloadFullDict(
+                        onProgress = { percent, _, _, msg ->
+                            dictPercent = percent.toDouble()  // percent 是 0-100
+                            // 总进度 = 模型阶段完成度 + 词库进度 * 词库权重
+                            val totalProgress = modelPhaseComplete + dictPercent * dictWeight
+                            runOnUiThread {
+                                setBothVoiceProgress(totalProgress.toInt(), "正在下载雾凇词库 ${String.format("%.1f", totalProgress)}%")
+                                DownloadProgressBus.emit("雾凇词库", totalProgress)
+                            }
+                        },
+                        onComplete = { success, msg ->
+                            dictOk = success
+                            dictMsg = msg
+                            runOnUiThread {
+                                btnInstallVoice?.isEnabled = true
+                                getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                                    .putBoolean("voice_downloading", false).commit()
+                                if (dictOk) {
+                                    appendLog("✅ 语音文字输入套件安装完成")
+                                    Toast.makeText(this, "语音文字输入套件安装完成", Toast.LENGTH_SHORT).show()
+                                    refreshVoiceInstallState()
+                                    refreshDictInfo()
+                                    // 触发 Rime 重新部署
+                                    try {
+                                        val rimeEngine = com.cesia.input.engine.rime.RimeEngine(this)
+                                        rimeEngine.redeploy()
+                                        Toast.makeText(this, "词库已部署！请重启输入法后生效", Toast.LENGTH_LONG).show()
+                                    } catch (_: Exception) {}
+                                    DownloadProgressBus.emit("语音套件", 100.0, done = true)
+                                } else {
+                                    appendLog("❌ 词库下载失败: $dictMsg")
+                                    resetBothVoice("安装语音文字输入套件")
+                                    DownloadProgressBus.emit("雾凇词库", 0.0, failed = true)
                                 }
-                            } else {
-                                appendLog("❌ 词库下载失败: $dictMsg")
-                                resetBothVoice("安装语音文字输入套件")
                             }
                         }
-                    }
-                )
-            } catch (e: Exception) {
-                getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
-                    .putBoolean("voice_downloading", false).commit()
-                runOnUiThread {
-                    btnInstallVoice?.isEnabled = true
-                    resetBothVoice("安装语音文字输入套件")
-                    appendLog("❌ 套件下载异常: ${e.message}")
-                }
-            }
-        }.start()
-    }
-
-    /**
-     * 单独下载纯中文模型（双击语音键切换用，独立目录，不影响已装的中英双语套件）
-     * 用于阶段三失败后的重试入口
-     */
-    private fun downloadChineseModelOnly() {
-        val dm = ModelDownloadManager(this)
-        btnInstallVoice?.isEnabled = false
-        btnInstallVoice?.text = "正在下载纯中文模型..."
-        appendLog("⬇ 单独下载纯中文模型（双击语音键切换用）")
-        Thread {
-            try {
-                val result = kotlinx.coroutines.runBlocking {
-                    dm.downloadArchive("zipformer-zh-2025") { _, percent, _, _ ->
-                        runOnUiThread { setBothVoiceProgress(98 + (percent * 0.02).toInt(), "下载纯中文模型") }
+                    )
+                } catch (e: Exception) {
+                    getSharedPreferences("cesia_download", Context.MODE_PRIVATE).edit()
+                        .putBoolean("voice_downloading", false).commit()
+                    runOnUiThread {
+                        btnInstallVoice?.isEnabled = true
+                        resetBothVoice("安装语音文字输入套件")
+                        appendLog("❌ 套件下载异常: ${e.message}")
+                        DownloadProgressBus.emit("语音套件", 0.0, failed = true)
                     }
                 }
-                runOnUiThread {
-                    btnInstallVoice?.isEnabled = true
-                    if (result.isSuccess) {
-                        appendLog("✅ 纯中文模型下载完成（双击语音键可切换）")
-                        Toast.makeText(this, "纯中文模型已安装", Toast.LENGTH_SHORT).show()
-                        refreshVoiceInstallState()
-                    } else {
-                        appendLog("⚠️ 纯中文模型下载失败: ${result.exceptionOrNull()?.message}")
-                        Toast.makeText(this, "纯中文模型下载失败，可再次点击重试", Toast.LENGTH_LONG).show()
-                        btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
-                        btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    btnInstallVoice?.isEnabled = true
-                    appendLog("⚠️ 纯中文模型下载异常: ${e.message}")
-                    btnInstallVoice?.text = "纯中文模型未下载(点此重试)"
-                    btnInstallVoice?.setOnClickListener { downloadChineseModelOnly() }
-                }
-            }
-        }.start()
-    }
+            }.start()
+        }
 
     private fun downloadAiModel() {
         // 已安装时点击 → 直接跑自测点亮，不重新下载（重新下载是卸载后的事）

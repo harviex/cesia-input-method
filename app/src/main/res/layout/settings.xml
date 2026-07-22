@@ -875,7 +875,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginEnd="6dp"
+                    android:layout_marginEnd="4dp"
                     android:text="导出词库"
                     android:textSize="13sp"
                     style="?attr/materialButtonOutlinedStyle"
@@ -886,11 +886,24 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
                     android:text="导入词库"
                     android:textSize="13sp"
                     style="?attr/materialButtonOutlinedStyle"
                     app:strokeColor="#81D8D0" />
+
+                <Button
+                    android:id="@+id/btn_clear_phrases"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="清空词库"
+                    android:textSize="13sp"
+                    style="?attr/materialButtonOutlinedStyle"
+                    app:strokeColor="#FF6B6B"
+                    android:textColor="#FF6B6B" />
             </LinearLayout>
 
             <!-- ═══════════ 分隔 ═══════════ -->
