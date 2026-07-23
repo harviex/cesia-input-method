@@ -2268,6 +2268,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 单字/简拼/其他：立即上屏（保留原行为，避免重复上屏）
                 commitCandidateText(toCommit)
             }
+            // QWERTY 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
+            if (keyboardMode == KeyboardMode.QWERTY) {
+                rimeEngine.clear()
+            }
             if (keyboardMode == KeyboardMode.NUMBER) {
                 // T9 选词后：数字已转成字，清显示缓存
                 t9InputBuffer.clear()

@@ -303,53 +303,57 @@ class RimeEngine(private val context: Context) : InputEngine {
     private var dictIndexBuilt = false
     private var dictIndexBuildTime = 0L
 
-    /** 构建词库索引：按首字分桶，桶内按权重降序，只保留高频词（在后台线程执行） */
+    /** 构建词库索引：按首字分桶，桶内按权重降序，只保留高频词（在后台线程执行，流式处理避免 OOM） */
     private fun buildDictIndex(): Map<String, List<AssociationEntry>> {
-        val index = mutableMapOf<String, MutableList<AssociationEntry>>()
         val rimeDir = java.io.File(context.getExternalFilesDir(null), "rime")
-        if (!rimeDir.exists()) return index
+        if (!rimeDir.exists()) return emptyMap()
 
-        var entryCount = 0
-        rimeDir.walkTopDown()
+        // 使用序列流式处理，避免一次性加载所有词条到内存
+        val dictFiles = rimeDir.walkTopDown()
             .filter { it.isFile && it.name.endsWith(".dict.yaml") }
-            .forEach { dictFile ->
-                try {
-                    dictFile.bufferedReader().useLines { lines ->
-                        lines.forEach { line ->
-                            val trimmed = line.trim()
-                            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("...")) return@forEach
-                            if (trimmed.startsWith("name:") || trimmed.startsWith("version:") || trimmed.startsWith("sort:") || trimmed.startsWith("use_preset_")) return@forEach
+            .toList()
 
-                            val parts = trimmed.split("\t")
-                            if (parts.size >= 3) {
-                                val word = parts[0]
-                                if (word.length < 2) return@forEach // 跳过单字词
-                                val weight = parts[2].toIntOrNull() ?: 0
-                                if (weight < MIN_WEIGHT_THRESHOLD) return@forEach // 过滤低频词
-                                val bucket = word.substring(0, 1)
-                                val entry = AssociationEntry(word, "", weight)
-                                index.getOrPut(bucket) { mutableListOf() }.add(entry)
-                                entryCount++
+        // 每个桶用 PriorityQueue 维护 Top-K，内存占用固定
+        val bucketHeaps = mutableMapOf<String, MutableList<AssociationEntry>>()
+
+        for (dictFile in dictFiles) {
+            try {
+                dictFile.bufferedReader().use { reader ->
+                    reader.forEachLine { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("...")) return@forEachLine
+                        if (trimmed.startsWith("name:") || trimmed.startsWith("version:") || trimmed.startsWith("sort:") || trimmed.startsWith("use_preset_")) return@forEachLine
+
+                        val parts = trimmed.split("\t")
+                        if (parts.size >= 3) {
+                            val word = parts[0]
+                            if (word.length < 2) return@forEachLine // 跳过单字词
+                            val weight = parts[2].toIntOrNull() ?: 0
+                            if (weight < MIN_WEIGHT_THRESHOLD) return@forEachLine // 过滤低频词
+                            val bucket = word.substring(0, 1)
+                            val entry = AssociationEntry(word, "", weight)
+                            val heap = bucketHeaps.getOrPut(bucket) { mutableListOf() }
+                            heap.add(entry)
+                            // 堆大小超过限制时，移除最小权重的元素
+                            if (heap.size > MAX_ENTRIES_PER_BUCKET) {
+                                heap.minByOrNull { it.weight }?.let { heap.remove(it) }
                             }
                         }
                     }
-                } catch (_: Exception) {}
-            }
-
-        // 每个桶只保留权重最高的 MAX_ENTRIES_PER_BUCKET 个词
-        val limitedIndex = mutableMapOf<String, List<AssociationEntry>>()
-        var limitedCount = 0
-        index.forEach { (bucket, list) ->
-            list.sortByDescending { it.weight }
-            if (list.size > MAX_ENTRIES_PER_BUCKET) {
-                limitedIndex[bucket] = list.take(MAX_ENTRIES_PER_BUCKET)
-            } else {
-                limitedIndex[bucket] = list
-            }
-            limitedCount += limitedIndex[bucket]!!.size
+                }
+            } catch (_: Exception) {}
         }
-        Log.d(TAG, "联想索引: ${limitedIndex.size} 桶, $limitedCount 词条 (原 $entryCount 词条, 过滤 weight<$MIN_WEIGHT_THRESHOLD + 每桶限制 $MAX_ENTRIES_PER_BUCKET), 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
-        return limitedIndex
+
+        // 转换为不可变 Map，每个桶按权重降序
+        val result = mutableMapOf<String, List<AssociationEntry>>()
+        var totalCount = 0
+        bucketHeaps.forEach { (bucket, heap) ->
+            heap.sortByDescending { it.weight }
+            result[bucket] = heap
+            totalCount += heap.size
+        }
+        Log.d(TAG, "联想索引: ${result.size} 桶, $totalCount 词条 (每桶限制 $MAX_ENTRIES_PER_BUCKET, 过滤 weight<$MIN_WEIGHT_THRESHOLD), 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
+        return result
     }
 
     /**
