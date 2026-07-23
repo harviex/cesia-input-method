@@ -813,16 +813,13 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallVoice?.setOnLongClickListener { showUninstallMenu(true); true }
         // 手机AI模型的长按卸载入口已移除（卸载请到版本号菜单）。重新下载是卸载后的事。
 
-        // 用户词组库：导出/导入/清空（接龙组词备份）
+        // 用户词组库：导出/导入（接龙组词备份）
         findViewById<Button>(R.id.btn_export_phrases)?.setOnClickListener {
             val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             exportLauncher.launch("CesiaUserPhrases_$time.json")
         }
         findViewById<Button>(R.id.btn_import_phrases)?.setOnClickListener {
             importLauncher.launch(arrayOf("application/json"))
-        }
-        findViewById<Button>(R.id.btn_clear_phrases)?.setOnClickListener {
-            clearUserPhrases()
         }
     }
 
@@ -869,21 +866,6 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "导入失败：${e.message}", Toast.LENGTH_SHORT).show()
             appendLog("导入词库失败: ${e.message}")
         }
-    }
-
-    private fun clearUserPhrases() {
-        AlertDialog.Builder(this)
-            .setTitle("清空用户词库")
-            .setMessage("确定要清空所有用户个人词库内容吗？此操作将删除所有接龙组词保存的词组，且不可恢复（雾凇词库不受影响）。")
-            .setPositiveButton("确定清空") { _, _ ->
-                getSharedPreferences("cesia_dict", MODE_PRIVATE).edit()
-                    .remove("user_phrases_json")
-                    .apply()
-                Toast.makeText(this, "用户词库已清空", Toast.LENGTH_SHORT).show()
-                appendLog("用户词库已清空")
-            }
-            .setNegativeButton("取消", null)
-            .show()
     }
 
     // ======================== API URL/Key 下拉自定义 ========================

@@ -281,15 +281,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val hasAiModel = modelManager.hasAiModel()
 
             if (!bridgeLoaded) {
-                updateStatus("⚠️ 无法切换到本地模式：Sherpa 库未加载")
+                updateStatus("无法切换到本地模式")
                 return
             }
             if (!hasVoiceModel) {
-                updateStatus("⚠️ 无法切换到本地模式：语音模型未安装")
+                updateStatus("无法切换到本地模式")
                 return
             }
             if (!hasAiModel) {
-                updateStatus("⚠️ 无法切换到本地模式：Qwen 模型未安装")
+                updateStatus("无法切换到本地模式")
                 return
             }
         }
@@ -830,7 +830,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val result = toUpperCaseText(selectedText)
         ic.commitText(result, 1)
-        updateStatus(" 已转换 ${selectedText.length} 字")
+        updateStatus("已转换 ${selectedText.length} 字")
     }
 
     /** 大小写/数字切换：英文小写↔大写，阿拉伯数字↔中文小写数字（一二三四五六七八九零） */
@@ -1018,6 +1018,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             onItemClick = { index, _ ->
                 if (rimeEngine.hasCandidates || isAssociationMode) {
                     selectCandidateByGlobalIndex(index)
+                    // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
+                    if (keyboardMode == KeyboardMode.QWERTY) {
+                        rimeEngine.clear()
+                    }
                 }
             },
             onItemLongClick = { view, index, word ->
@@ -1221,7 +1225,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     btnMicNoAi.visibility = View.GONE
                     keyboardView.visibility = View.VISIBLE
                     setStatusDot("idle")
-                    updateStatus(" 已完成")
+                    updateStatus("已完成")
                 }
             }
             engine.onRecognitionComplete = { text ->
@@ -1250,19 +1254,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         hideAiChoiceButtons()
 
                         if (textBefore.isEmpty()) {
-                            updateStatus("⚠️ 未识别到文字")
+                            updateStatus("未识别到文字")
                             resetToIdle()
                             return@post
                         }
 
                         if (command == "ai") {
-                            updateStatus("✨ 语音润色中...")
+                            updateStatus("AI正在处理中")
                             setStatusDot("processing")
                             isProcessingResult = true
                             polishRecognizedText(textBefore)
                         } else if (command == "writing") {
                             // 写作命令：延迟1秒执行智能写作
-                            updateStatus("✨ 语音写作中...")
+                            updateStatus("AI正在处理中")
                             CoroutineScope(Dispatchers.Main).launch {
                                 delay(1000)
                                 // 删除完整语音识别文本（含命令词）
@@ -1282,7 +1286,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             }
                         } else {
                             currentInputConnection?.commitText(textBefore, 1)
-                            updateStatus(" 已上屏")
                             if (isVoiceLocked) {
                                 startRecordingLocked()
                             } else {
@@ -1301,10 +1304,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         isWaitingForChoice = false
                         hideAiChoiceButtons()
                         if (text.isEmpty()) {
-                            updateStatus("⚠️ 未识别到文字")
+                            updateStatus("未识别到文字")
                             resetToIdle()
                         } else {
-                            updateStatus("✨ 正在施展魔法...")
+                            updateStatus("AI正在处理中")
                             setStatusDot("processing")
                             isProcessingResult = true
                             polishRecognizedText(text)
@@ -1318,11 +1321,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         resetToIdle()
                     } else {
                         if (text.isEmpty()) {
-                            updateStatus("⚠️ 未识别到文字，请重试")
+                            updateStatus("未识别到文字")
                             resetToIdle()
                         } else {
                             isWaitingForChoice = true
-                            updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
+                            updateStatus("「$text」→ 选择 润色 或 直接上屏")
                             micButton.visibility = View.GONE
                             btnMicAi.visibility = View.VISIBLE
                             btnMicNoAi.visibility = View.VISIBLE
@@ -1353,8 +1356,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         setupCandidatePanel()
         applyKeyboardTheme()
 
-        updateStatus("Cesia 已就绪 | Rime init=${rimeEngine.isInitialized}" +
-            (rimeErrorMsg?.let { " | 错误: $it" } ?: ""))
+        updateStatus(statusIdleText)
         setStatusDot("idle")
         isViewInitialized = true
 
@@ -1373,78 +1375,75 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     /**
-     * 启动输入法后自动检测语音文字套件（三件套）是否已安装：
-     * 中英双语模型 + 纯中文模型 + 雾凇词库。任一缺失即后台自动下载（不挑网络）。
-     * 进度复用状态栏（updateStatus），关键节点写入运行日志。
+     * 启动输入法后自动检测语音文字套件（主件套：中英双语模型 + 雾凇词库）是否已安装。
+     * 纯中文模型作为增强包，不在此自动下载（避免与设置页手动安装竞态），由设置页显式触发。
+     * 下载进度仅在设置页版本号区域显示（通过 DownloadProgressBus 同步），键盘状态栏不显示进度，仅写入运行日志。
+     * 支持前后台下载（不依赖 Activity 生命周期）。
      */
     private fun ensureVoiceSuite() {
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
                 val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
                 val dictInstalled = dictManager.hasDownloadedDict()
+                // 纯中文模型不在此自动下载，避免与设置页阶段三竞态
                 val zhInstalled = java.io.File(filesDir, "local_models/zipformer-zh-2025/encoder.onnx").exists()
-                if (voiceInstalled && dictInstalled && zhInstalled) {
-                    Log.i("Cesia", "语音文字套件已完整，跳过自动下载")
+                if (voiceInstalled && dictInstalled) {
+                    Log.i("Cesia", "语音文字主套件已完整（纯中文模型：${if (zhInstalled) "已装" else "未装"}），跳过自动下载")
                     return@launch
                 }
-                withContext(Dispatchers.Main) {
-                    updateStatus("开始下载语音文字输入套件（Zipformer中英双语 / Zipformer纯中文2025 / 雾凇词库）")
-                }
-                appendSuiteLog("开始下载语音文字输入套件（Zipformer中英双语 / Zipformer纯中文2025 / 雾凇词库）")
+                appendSuiteLog("开始下载语音文字输入套件（Zipformer中英双语 / 雾凇词库）")
+
+                // 模型大小比例：双语 206MB + 词库 50MB = 256MB
+                val bilingualSize = 206.0
+                val dictSize = 50.0
+                val totalSize = bilingualSize + dictSize
+                val bilingualWeight = bilingualSize / totalSize  // ~0.805
+                val dictWeight = dictSize / totalSize            // ~0.195
+
+                var bilingualPercent = 0.0  // 0-100
+                var dictPercent = 0.0       // 0-100
+
+                DownloadProgressBus.emit("语音套件", 0.0)
 
                 // 1) 中英双语模型
                 if (!voiceInstalled) {
-                    withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer中英双语模型...") }
                     var lastPct1 = -1.0
                     downloadManager.downloadZipformer { _: String, percent: Double, _: Long, _: Long ->
                         if (kotlin.math.abs(percent - lastPct1) >= 0.3) {
                             lastPct1 = percent
-                            val txt = "下载中：中英双语模型 ${String.format("%.1f", percent)}%"
-                            updateStatus(txt)
-                            DownloadProgressBus.emit("中英双语模型", percent)
+                            bilingualPercent = percent  // percent 已是 0-100
+                            val totalProgress = bilingualPercent * bilingualWeight + dictPercent * dictWeight
+                            DownloadProgressBus.emit("语音模型", totalProgress)
                         }
                     }
+                } else {
+                    bilingualPercent = 100.0
                 }
-                // 2) 纯中文模型
-                if (!zhInstalled) {
-                    withContext(Dispatchers.Main) { updateStatus("下载中：Zipformer纯中文2025模型...") }
-                    var lastPct2 = -1.0
-                    downloadManager.downloadArchive("zipformer-zh-2025") { _: String, percent: Double, _: Long, _: Long ->
-                        if (kotlin.math.abs(percent - lastPct2) >= 0.3) {
-                            lastPct2 = percent
-                            val txt = "下载中：纯中文模型 ${String.format("%.1f", percent)}%"
-                            updateStatus(txt)
-                            DownloadProgressBus.emit("纯中文模型", percent)
-                        }
-                    }
-                }
-                // 3) 雾凇词库
+
+                // 2) 雾凇词库
                 if (!dictInstalled) {
-                    withContext(Dispatchers.Main) { updateStatus("下载中：雾凇词库...") }
                     val deferred = CompletableDeferred<Boolean>()
                     dictManager.downloadFullDict(
                         onProgress = { percent: Int, _: Long, _: Long, _: String ->
-                            val pct = percent.toDouble()
-                            val txt = "下载中：雾凇词库 ${String.format("%.1f", pct)}%"
-                            updateStatus(txt)
-                            DownloadProgressBus.emit("雾凇词库", pct)
+                            dictPercent = percent.toDouble()  // percent 是 0-100
+                            val totalProgress = bilingualPercent * bilingualWeight + dictPercent * dictWeight
+                            DownloadProgressBus.emit("雾凇词库", totalProgress)
                         },
                         onComplete = { ok: Boolean, _: String ->
                             deferred.complete(ok)
                         }
                     )
                     deferred.await()
+                } else {
+                    dictPercent = 100.0
                 }
-                withContext(Dispatchers.Main) {
-                    updateStatus("语音文字输入套件已下载完成，可以正常使用")
-                }
+
                 appendSuiteLog("语音文字输入套件已下载完成，可以正常使用")
+                DownloadProgressBus.emit("语音套件", 100.0, done = true)
             } catch (e: Exception) {
                 Log.e("Cesia", "ensureVoiceSuite 失败: ${e.message}", e)
-                withContext(Dispatchers.Main) {
-                    updateStatus("语音套件下载失败：${e.message ?: "未知错误"}（可到设置页重试）")
-                }
                 appendSuiteLog("❌ 语音套件自动下载失败: ${e.message}")
+                DownloadProgressBus.emit("语音套件", 0.0, failed = true)
             }
         }
     }
@@ -2043,6 +2042,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // GridView 点击选候选词
         gvCandidates.setOnItemClickListener { _, _, position, _ ->
             selectCandidateByGlobalIndex(position)
+            // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
+            if (keyboardMode == KeyboardMode.QWERTY) {
+                rimeEngine.clear()
+            }
             // 选中后候选面板滚动回顶部（高频词），避免停在当前滚动位置
             gvCandidates.post { gvCandidates.setSelection(0) }
         }
@@ -2316,7 +2319,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 显示联想候选词 */
     private fun showAssociationCandidates() {
         candidateBar.visibility = View.VISIBLE
-        updateStatus("💡$associationPrefix")
+        updateStatus("$associationPrefix")
         val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
         candidateAdapter?.updateData(displayCands)
         rvCandidates?.scrollToPosition(0)
@@ -2865,7 +2868,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else {
                 sendDownUpEnter()
             }
-            updateStatus("已发送（长按显示剪贴板）")
         }
         // 发送键长按：剪贴板管理器
         btnSend.setOnTouchListener { v, event ->
@@ -2913,12 +2915,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isVoiceLocked = false
             updateMicButtonLockedState()
             maybeShowButtonHint("voice", "退出语音锁定模式")
-            updateStatus("🔓 已退出语音锁定模式")
+            updateStatus("已退出语音锁定")
             resetToIdle()
             return
         }
         if (!isRecording && !isWaitingForChoice) {
-            maybeShowButtonHint("voice", "正在收听...（双击语音键可切换纯中文/中英混模型）")
+            maybeShowButtonHint("voice", "正在收听（双击切换模型）")
             try {
                 val bridgeLoaded = SherpaOnnxEngine.isLibraryLoaded()
                 val hasVoiceModel = modelManager.hasVoiceModel()
@@ -2926,17 +2928,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
                 if (simulTranslateEnabled) {
                     if (!bridgeLoaded || !hasVoiceModel) {
-                        updateStatus("⚠️ 同传模式需要语音识别模型，请先到设置中下载")
+                        updateStatus("需下载语音模型")
                         return
                     }
                     if (!modelManager.hasAiModel()) {
-                        updateStatus("⚠️ 同传模式需要 Qwen 模型，请先到设置中下载")
+                        updateStatus("需下载 AI 模型")
                         return
                     }
                     startSimulTranslateRecording()
                 } else if (localModeEnabled) {
                     if (!bridgeLoaded || !hasVoiceModel || !modelManager.hasAiModel()) {
-                        updateStatus("⚠️ 本地模式需要语音识别 + Qwen 模型，请先到设置中下载")
+                        updateStatus("需下载语音与 AI 模型")
                         return
                     }
                     startRecordingWithChoice(VoiceChoice.LOCAL_SHERPA, PolishChoice.LOCAL_AI)
@@ -2950,10 +2952,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             } catch (e: Throwable) {
                 Log.e("Cesia", "单击语音键异常", e)
-                updateStatus("❌ 语音启动失败: ${e.javaClass.simpleName}")
+                updateStatus("语音启动失败")
             }
         } else if (isWaitingForChoice) {
-            updateStatus("请点击 AI+ 或 AI× 选择处理方式")
+            updateStatus("请选择 处理方式")
         } else if (isRecording) {
             if (magicMode) {
                 // 智能写作模式：停止录音并完整清理
@@ -2992,11 +2994,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 语音键双击：未录音时切换中英混 / 纯中文 识别模型（不影响中英混模型本身）
     private fun handleMicDoubleTap() {
         if (isRecording || isWaitingForChoice) {
-            updateStatus("⚠️ 录音中，无法切换模型")
+            updateStatus("录音中不可切换")
             return
         }
         if (!voiceEngine.hasChineseModel()) {
-            updateStatus("⚠️ 纯中文模型未下载，请到设置下载「语音文字输入套件增强版」")
+            updateStatus("需下载中文模型")
             return
         }
         val mode = voiceEngine.switchVoiceMode()
@@ -3004,9 +3006,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 切换后立即在后台预热新模型的识别器，使下次点击语音键无需在线重建（消除切换后首次识别的卡顿）
         voiceEngine.warmupRecognizer()
         if (mode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE) {
-            updateStatus("🔤 已切换到纯中文识别模型（双击切回中英混）")
+            updateStatus("已切换到中文精准模型")
         } else {
-            updateStatus("🔡 已切回中英混识别模型")
+            updateStatus("已切换到中英语音模型")
         }
     }
 
@@ -3034,7 +3036,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (smartRecords.isNotEmpty()) {
             executeSmartCommand(smartRecords[0])
         } else {
-            updateStatus("⚠️ 暂无写作命令，请长按星星添加")
+            updateStatus("暂无写作命令")
         }
     }
 
@@ -3080,7 +3082,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } catch (e: Exception) {
                 Log.e("Cesia", "魔法模式本地识别失败", e)
                 Handler(Looper.getMainLooper()).post {
-                    updateStatus("❌ 本地识别失败: ${e.message}")
+                    updateStatus("本地识别失败")
                     resetMagicHighlight()
                     magicMode = false
                     typelessEngine?.magicMode = false
@@ -3099,7 +3101,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             typelessEngine?.startListening(continuous = true)
         } catch (e: Throwable) {
             Log.e("Cesia", "魔法模式 Google 识别失败", e)
-            updateStatus("❌ Google 语音启动失败: ${e.javaClass.simpleName}")
+            updateStatus("语音启动失败")
             resetMagicHighlight()
             magicMode = false
             typelessEngine?.magicMode = false
@@ -3152,11 +3154,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         val instruction = recognizedText.trim()
         if (instruction.isEmpty()) {
-            updateStatus("⚠️ 未识别到指令")
+            updateStatus("未识别到指令")
             return
         }
 
-        updateStatus("✨ 正在施展魔法...")
+        updateStatus("正在施展魔法")
 
         // 读取剪贴板非置顶首条内容作为语境
         val clipboardContext = getClipboardFirstNonPinned()
@@ -3179,7 +3181,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         saveUndoHistory(magicOriginalText, instruction)
                         try {
                             if (!isInputViewShown) {
-                                updateStatus("⚠️ 键盘已收起，AI结果未上屏")
+                                updateStatus("键盘已收起，结果未上屏")
                                 resetToIdle()
                             } else {
                             val ic2 = currentInputConnection
@@ -3189,17 +3191,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             }
                         } catch (e2: Exception) {
                             Log.e("Cesia", "handleMagicResult replaceInputText 异常", e2)
-                            updateStatus("❌ 上屏失败: ${e2.message}")
+                            updateStatus("上屏失败")
                         }
                     } else {
-                        updateStatus("⚠️ API返回为空，请检查网络或稍后重试")
+                        updateStatus("网络异常，请重试")
                     }
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "智能写作失败", e)
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
-                    updateStatus("❌ 修改失败: ${e.message}")
+                    updateStatus("操作失败")
                 }
             }
         }
@@ -3272,17 +3274,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         } catch (e: Exception) {
             Log.e("Cesia", "executeMagicOrAiReply 异常", e)
-            updateStatus("❌ 操作失败: ${e.message}")
+            updateStatus("操作失败")
         }
     }
 
     private fun executeSelectedMagic(instruction: String) {
         if (isAiProcessing) {
-            updateStatus("⏳ AI正在处理中，请稍候...")
+            updateStatus("AI正在处理中，请稍候")
             return
         }
         val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
+            updateStatus("无输入框连接")
             return
         }
         val textBefore = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
@@ -3291,12 +3293,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // 生成类魔法允许空文本，修改类魔法要求有文本
         if (fullText.isEmpty() && !isGenerationMagic(instruction)) {
-            updateStatus("⚠️ 输入框无文字，无法执行修改类魔法")
+            updateStatus("输入框无文字")
             return
         }
 
         isAiProcessing = true
-        updateStatus("✨ 正在施展魔法...")
+        updateStatus("AI正在处理中")
         setStatusDot("processing")
         // 使用统一润色入口（自动适配本地/云端）
         executePolish(fullText, instruction) { result, success ->
@@ -3306,7 +3308,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 saveUndoHistory(fullText, instruction)
                 try {
                     if (!isInputViewShown) {
-                        updateStatus("⚠️ 键盘已收起，AI结果未上屏")
+                        updateStatus("键盘已收起，结果未上屏")
                         resetToIdle()
                     } else {
                     val ic2 = currentInputConnection
@@ -3316,12 +3318,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                 } catch (e2: Exception) {
                     Log.e("Cesia", "replaceInputText 异常", e2)
-                    updateStatus("❌ 上屏失败: ${e2.message}")
+                    updateStatus("上屏失败")
                 }
             } else if (result == fullText) {
-                updateStatus("⚠️ 修改结果与原文相同，可能指令不够明确")
+                updateStatus("修改结果与原文相同")
             } else {
-                updateStatus("⚠️ AI未返回有效结果，请重试")
+                updateStatus("AI未返回有效结果，请重试")
             }
         }
     }
@@ -3918,7 +3920,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         Log.d("Cesia", "executeSmartCommand: selectedOptions=$selectedOptions")
 
         // 立即显示状态，让用户知道正在处理
-        updateStatus("⏳ 智能写作处理中...")
+        updateStatus("智能写作处理中")
 
         // 获取剪贴板内容
         val clipboardText = if (selectedOptions.contains("clipboard")) {
@@ -3985,7 +3987,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val ic = currentInputConnection ?: run {
                     withContext(Dispatchers.Main) {
                         isAiProcessing = false
-                        updateStatus("❌ 无法获取输入连接")
+                        updateStatus("无法获取输入连接")
                     }
                     return@launch
                 }
@@ -4049,14 +4051,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             Log.e("Cesia", "保存智能写作记录失败", e)
                         }
                     } else {
-                        updateStatus("⚠️ 无输出")
+                        updateStatus("无输出")
                     }
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "executeSmartCommand failed", e)
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
-                    updateStatus("❌ 失败：${e.message}")
+                    updateStatus("操作失败")
                 }
             }
         }
@@ -4226,7 +4228,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         Log.d("Cesia", "executeSmartWriting: selected=${selectedOptions.size}")
 
         if (selectedOptions.isEmpty()) {
-            updateStatus("⚠️ 请先长按星星按钮设置写作选项")
+            updateStatus("请先设置写作选项")
             return
         }
 
@@ -4259,7 +4261,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
 
         if (contextParts.isEmpty()) {
-            updateStatus("⚠️ 未获取到有效语境内容")
+            updateStatus("未获取到语境内容")
             return
         }
 
@@ -4304,14 +4306,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         ic.commitText(result, 1)
                         updateStatus(" 智能写作已完成")
                     } else {
-                        updateStatus("⚠️ 智能写作无输出")
+                        updateStatus("智能写作无输出")
                     }
                 }
             } catch (e: Exception) {
                 Log.e("Cesia", "executeSmartWriting failed", e)
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
-                    updateStatus("❌ 智能写作失败：${e.message}")
+                    updateStatus("操作失败")
                 }
             }
         }
@@ -4407,7 +4409,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 updateStatus(" 已保存至剪贴板：${text.take(20)}")
             }
         } else {
-            if (clipboardAddMode) updateStatus("❌ 已取消新增剪贴板")
+            if (clipboardAddMode) updateStatus("已取消新增剪贴板")
         }
         clipboardAddMode = false
         clipboardAddBuffer.clear()
@@ -4431,7 +4433,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 updateStatus(" 已保存魔法：${text.take(20)}")
             }
         } else {
-            if (magicEditMode) updateStatus("❌ 已取消新增魔法")
+            if (magicEditMode) updateStatus("已取消新增魔法")
         }
         magicEditMode = false
         magicEditBuffer.clear()
@@ -4491,7 +4493,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
         } else {
-            if (smartEditMode) updateStatus("❌ 已取消新增命令")
+            if (smartEditMode) updateStatus("已取消新增命令")
         }
         smartEditMode = false
         smartEditBuffer.clear()
@@ -4538,11 +4540,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun triggerAiReply() {
         if (isAiProcessing) {
-            updateStatus("✨ 正在施展魔法...")
+            updateStatus("正在施展魔法")
             return
         }
         val ic = currentInputConnection ?: run {
-            updateStatus("❌ 无输入框连接")
+            updateStatus("无输入框连接")
             return
         }
         val textBefore = ic.getTextBeforeCursor(2000, 0)?.toString() ?: ""
@@ -4585,7 +4587,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun generateAiReply(context: String, ic: android.view.inputmethod.InputConnection) {
         isAiProcessing = true
-        updateStatus("✨ 正在施展魔法...")
+        updateStatus("AI正在处理中")
         setStatusDot("processing")
         val prompt = buildAiReplyPrompt(context, aiReplyStyle)
         executeAiPrompt(prompt, ic)
@@ -4600,7 +4602,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 ic.commitText(result, 1)
                 updateStatus(" AI已生成建议内容")
             } else {
-                updateStatus("⚠️ AI未生成有效内容，请重试")
+                updateStatus("AI未生成有效内容，请重试")
             }
         }
     }
@@ -4782,10 +4784,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (!bridgeLoaded) {
                 val reason = bridgeError ?: "未知错误"
                 Log.w("Cesia", "语音后端: Google（本地模式但 Sherpa 库未加载: $reason）")
-                updateStatus("🎤 语音: Google（⚠️ Sherpa 库未加载: $reason）")
+                updateStatus("语音: Google（Sherpa 库未加载: $reason）")
             } else if (!hasLocalModel) {
                 Log.w("Cesia", "语音后端: Google（本地模式但 Sherpa 模型未安装）")
-                updateStatus("🎤 语音: Google（⚠️ Sherpa 模型未安装）")
+                updateStatus("语音: Google（Sherpa 模型未安装）")
             }
             return
         }
@@ -4843,11 +4845,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 开始同传录音 */
     private fun startSimulTranslateRecording() {
         val mgr = simulTranslateManager ?: run {
-            updateStatus("⚠️ 同传管理器未初始化")
+            updateStatus("同传管理器未初始化")
             return
         }
         if (!mgr.isInitialized()) {
-            updateStatus("⚠️ 同传未就绪，请长按语音键切换到同传模式")
+            updateStatus("同传未就绪，请长按语音键切换到同传模式")
             return
         }
 
@@ -4865,13 +4867,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             voiceEngineScope.launch(Dispatchers.Main) { updateStatus(status) }
         }
         mgr.onRecognized = { text ->
-            voiceEngineScope.launch(Dispatchers.Main) { updateStatus("🎤 $text") }
+            voiceEngineScope.launch(Dispatchers.Main) { updateStatus(text) }
         }
         mgr.onTranslated = { text ->
             voiceEngineScope.launch(Dispatchers.Main) { updateStatus("🌐 $text") }
         }
         mgr.onError = { error ->
-            voiceEngineScope.launch(Dispatchers.Main) { updateStatus("❌ $error") }
+            voiceEngineScope.launch(Dispatchers.Main) { updateStatus("同传错误：$error") }
         }
 
         // 启动同传
@@ -4893,7 +4895,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (e: Throwable) {
                 Log.e("Cesia", "同传录音失败", e)
                 withContext(Dispatchers.Main) {
-                    updateStatus("❌ 同传录音失败: ${e.javaClass.simpleName}")
+                    updateStatus("语音启动失败")
                 }
             } finally {
                 mgr.stop()
@@ -4943,11 +4945,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         when (voiceChoice) {
             VoiceChoice.LOCAL_SHERPA -> {
-                updateStatus("🎤 正在收听 (本地 Sherpa)...")
+                updateStatus("正在收听")
                 startWhisperRecordingAsync()
             }
             VoiceChoice.GOOGLE -> {
-                updateStatus("🎤 正在收听 (Google)...")
+                updateStatus("正在收听")
                 startGoogleRecording(polishChoice)
             }
         }
@@ -4974,7 +4976,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         candidateBar.visibility = View.GONE
         candidateBarKeep = false
         voiceStartTime = System.currentTimeMillis()
-        updateStatus("🎤 正在收听 (锁定模式)...")
+        updateStatus("正在收听·锁定")
         startWhisperRecordingAsync()
         // 不调用 showAiChoiceButtons()，保持语音键不分列
     }
@@ -5020,7 +5022,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             keyboardView.visibility = View.GONE
             candidateBar.visibility = View.GONE
             voiceStartTime = System.currentTimeMillis()
-            updateStatus("🎤 正在收听 (锁定模式)...")
+            updateStatus("正在收听·锁定")
             startWhisperRecordingAsync()
         } else {
             resetToIdle()
@@ -5034,7 +5036,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             typelessEngine?.startListening(continuous = true)
         } catch (e: Throwable) {
             Log.e("Cesia", "startGoogleRecording 异常", e)
-            updateStatus("❌ Google 语音启动失败: ${e.javaClass.simpleName}")
+            updateStatus("云端语音启动失败")
         }
     }
 
@@ -5054,14 +5056,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             !hasLocalModel -> "模型文件未找到"
                             else -> "未知原因"
                         }
-                        updateStatus("⚠️ 本地语音不可用（$reason），回退到 Google...")
+                        updateStatus("本地语音不可用，已切换云端")
                         startGoogleRecording(PolishChoice.CLOUD_OPENROUTER)
                     }
                     return@launch
                 }
 
                 withContext(Dispatchers.Main) {
-                    updateStatus("🎤 正在收听...")
+                    updateStatus("正在收听")
                 }
 
                 var lastStreamingText = ""
@@ -5090,7 +5092,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 流式显示：直接在光标位置显示已累计的全部识别文本（组合态）
                                     val ic = currentInputConnection ?: return@withContext
                                     ic.setComposingText(text, 1)
-                                    updateStatus("🎤 $text")
+                                    updateStatus(text)
                                 }
                             }
                         }
@@ -5168,12 +5170,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     isContinuingSession = false
                                     voiceKeptText = ""
                                     updateMicButtonLockedState()
-                                    updateStatus("🔓 已退出语音输入")
+                                    updateStatus("已退出语音锁定")
                                     resetToIdle()
                                 }
                                 "send" -> {
                                     // 发送（中等级）：确认文本（含前缀）+ 发送，然后——若处于锁定态则恢复监听继续识别
-                                    updateStatus("已发送（长按显示剪贴板）")
                                     val editorInfo = currentInputEditorInfo
                                     val canSend = editorInfo != null &&
                                         (editorInfo.imeOptions and EditorInfo.IME_ACTION_SEND) != 0
@@ -5182,9 +5183,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         // → forceExitVoiceMode 把锁定解除。发送后由 finishCommandResumeIfLocked 重新进入监听。
                                         justSentWhileLocked = isVoiceLocked
                                         ic.performEditorAction(EditorInfo.IME_ACTION_SEND)
-                                    } else {
-                                        Log.w("Cesia", "当前输入框不支持 IME_ACTION_SEND，imeOptions=${editorInfo?.imeOptions}")
-                                        updateStatus(" 已上屏（当前输入框不支持自动发送）")
                                     }
                                     // 锁定态：作为全新一段恢复监听+启动识别；未锁定：退出
                                     finishCommandResumeIfLocked()
@@ -5197,10 +5195,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
-                                        updateStatus("⚠️ 没有需要润色的文字")
+                                        updateStatus("请输入内容")
                                         finishCommandResumeIfLocked()
                                     } else {
-                                        updateStatus("✨ 语音润色中...")
+                                        updateStatus("AI正在处理中")
                                         setStatusDot("processing")
                                         isProcessingResult = true
                                         isWaitingForChoice = false
@@ -5221,7 +5219,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
-                                        updateStatus("⚠️ 请输入指令")
+                                        updateStatus("请输入内容")
                                         finishCommandResumeIfLocked()
                                     } else {
                                         Log.i("Cesia", "命令模式: 指令='$fullText'")
@@ -5236,7 +5234,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 注意：即使此前说过撤销/清空/恢复（会置 isVoiceLocked=true），
                                     // “结束”按其命令词本意应结束输入，不能因为之前的状态而变成继续录音。
                                     ic.finishComposingText()
-                                    updateStatus(" 已上屏")
                                     isVoiceLocked = false
                                     resetToIdle()
                                 }
@@ -5248,11 +5245,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         textNoCmd
                                     }
                                     if (fullText.isEmpty()) {
-                                        updateStatus("⚠️ 请输入写作内容")
+                                        updateStatus("请输入内容")
                                         finishCommandResumeIfLocked()
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$fullText'")
-                                        updateStatus("✨ 语音写作中...")
+                                        updateStatus("AI正在处理中")
                                         val keptSnapshot = voiceKeptText
                                         // 延迟1秒执行，让用户看到状态提示
                                         CoroutineScope(Dispatchers.Main).launch {
@@ -5290,12 +5287,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         // 还有上一句：保留为组合态（不提交）
                                         ic.setComposingText(remaining, 1)
                                         recognizedText = remaining
-                                        updateStatus("↩️ 已撤销最近语段：$remaining")
+                                        updateStatus("已撤销：$remaining")
                                     } else {
                                         // 已无上一句：清空组合态（用 setComposingText 而非 finish，避免“撤销”二字被提交上屏）
                                         ic.setComposingText("", 1)
                                         recognizedText = ""
-                                        updateStatus("↩️ 已撤销全部")
+                                        updateStatus("已撤销全部")
                                     }
                                     isContinuingSession = true
                                     resumeRecordingKeepText()
@@ -5312,7 +5309,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     ic.setComposingText("", 1)
                                     voiceKeptText = ""
                                     recognizedText = ""
-                                    updateStatus("🧹 已清空，继续识别")
+                                    updateStatus("已清空")
                                     isContinuingSession = true
                                     resumeRecordingKeepText()
                                 }
@@ -5322,9 +5319,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                         voiceKeptText = voiceUndoBackup
                                         recognizedText = voiceUndoBackup
                                         ic.setComposingText(voiceUndoBackup, 1)
-                                        updateStatus("♻️ 已恢复：$voiceUndoBackup")
+                                        updateStatus("已恢复：$voiceUndoBackup")
                                     } else {
-                                        updateStatus("⚠️ 没有可恢复的内容")
+                                        updateStatus("无可恢复内容")
                                     }
                                     isContinuingSession = true
                                     resumeRecordingKeepText()
@@ -5337,7 +5334,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (e: Throwable) {
                 Log.e("Cesia", "Zipformer 录音失败", e)
                 withContext(Dispatchers.Main) {
-                    updateStatus("❌ 语音识别失败: ${e.javaClass.simpleName}: ${e.message}")
+                    updateStatus("语音启动失败")
                     resetToIdle()
                 }
             }
@@ -5363,7 +5360,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         recognizedText = text
 
         if (text.isEmpty()) {
-            updateStatus("⚠️ 未识别到文字，请重试")
+            updateStatus("未识别到文字")
             resetToIdle()
             return
         }
@@ -5376,13 +5373,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 锁定模式下，根据云按钮状态决定润色或直接上屏
             if (isLocalPolishMode() && modelManager.hasAiModel()) {
                 // 本地润色模式
-                updateStatus("✨ 语音润色中...")
+                updateStatus("语音润色中")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(text)
             } else if (isCloudPolishAvailable()) {
                 // 云端润色模式
-                updateStatus("☁️ 云端润色中...")
+                updateStatus("云端润色中")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(text)
@@ -5405,12 +5402,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             hideAiChoiceButtons()
             if (text.isEmpty()) {
                 // 没有识别到文字，直接退出
-                updateStatus("⚠️ 未识别到文字")
+                updateStatus("未识别到文字")
                 resetToIdle()
                 return
             }
             if (mode) {
-                updateStatus("✨ 正在润色...")
+                updateStatus("正在润色")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(text)
@@ -5424,7 +5421,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // 否则显示 AI+/AI× 选择按钮等待用户点击
         isWaitingForChoice = true
-        updateStatus("📝 「$text」→ 选择 AI+ 润色 或 AI× 直接上屏")
+        updateStatus("「$text」→ 选择 润色 或 直接上屏")
         micButton.visibility = View.GONE
         btnMicAi.visibility = View.VISIBLE
         btnMicNoAi.visibility = View.VISIBLE
@@ -5440,7 +5437,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             isWaitingForChoice = false
             pendingAiMode = true
             hideAiChoiceButtons()
-            updateStatus("✨ 正在润色...")
+            updateStatus("正在润色")
             setStatusDot("processing")
             isProcessingResult = true
             polishRecognizedText(recognizedText)
@@ -5449,13 +5446,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val currentText = recognizedText
             stopRecordingAndWait()
             if (currentText.isNotEmpty()) {
-                updateStatus("✨ 正在润色...")
+                updateStatus("正在润色")
                 setStatusDot("processing")
                 isProcessingResult = true
                 polishRecognizedText(currentText)
             } else {
                 // 没有识别到文字，直接退出语音状态
-                updateStatus("⚠️ 未识别到文字")
+                updateStatus("未识别到文字")
                 resetToIdle()
             }
         }
@@ -5487,7 +5484,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 resetToIdle()
             } else {
                 // 没有识别到文字，直接退出语音状态
-                updateStatus("⚠️ 未识别到文字")
+                updateStatus("未识别到文字")
                 resetToIdle()
             }
         }
@@ -5599,7 +5596,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 Log.i("Cesia", "polishWithLocalAi: modelFile=$modelFile, exists=${modelFile?.exists()}, isDir=${modelFile?.isDirectory}")
                 if (modelFile == null || !modelFile.exists()) {
                     withContext(Dispatchers.Main) {
-                        updateStatus("⚠️ AI 模型未安装，使用原文")
+                        updateStatus("AI 模型未安装，使用原文")
                         isProcessingResult = false
                         if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                     }
@@ -5620,7 +5617,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         val mnnLog = aiEngine.getMnnLog()
                         Log.e("Cesia", "polishWithLocalAi: MNN log: $mnnLog")
                         withContext(Dispatchers.Main) {
-                            updateStatus("⚠️ AI 模型加载失败（${loadTime}ms），使用原文")
+                            updateStatus("AI 模型加载失败（${loadTime}ms），使用原文")
                             isProcessingResult = false
                             if (isVoiceLocked) startRecordingLocked() else resetToIdle()
                         }
@@ -5771,12 +5768,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         Log.i("Cesia", "executeVoiceCommand: currentText='${currentText.take(80)}', length=${currentText.length}")
 
         if (currentText.isEmpty() && !isGenerationMagic(cmdLower)) {
-            updateStatus("⚠️ 输入框没有文字，无法执行修改类指令")
+            updateStatus("请输入内容")
             resetToIdle()
             return
         }
 
-        updateStatus("✨ 执行指令中...")
+        updateStatus("执行指令中")
         setStatusDot("processing")
         isProcessingResult = true
 
@@ -5845,7 +5842,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         // 将指令加入魔法书历史第1位
                         magicHistoryManager?.addRecord(cmdLabel)
                     } else {
-                        updateStatus("⚠️ 执行失败，已保留原文")
+                        updateStatus("执行失败，已保留原文")
                     }
                     // 锁定模式下恢复录音，否则重置
                     if (isVoiceLocked) {
@@ -5873,7 +5870,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         }
                         ic.commitText(text, 1)
                     }
-                    updateStatus("⚠️ 执行失败，已恢复原文")
+                    updateStatus("执行失败，已恢复原文")
                     if (isVoiceLocked) {
                         startRecordingLocked()
                     } else {
@@ -7338,7 +7335,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             Log.d("Cesia", "showClipboardManagerPopup: saved to prefs, clipboardItems.size=${clipboardItems.size}")
 
         } catch (e: Exception) {
-            updateStatus("❌ 剪贴板管理器异常: ${e.message}")
+            updateStatus("操作失败")
         }
     }
 
@@ -7493,7 +7490,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             startActivity(this)
                         }
                     } catch (_: Exception) {
-                        updateStatus("❌ 无法启动搜索")
+                        updateStatus("无法启动搜索")
                     }
                 }
                 6 -> { // 删除
@@ -7510,7 +7507,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             }
                         } catch (_: Exception) {}
                     } else {
-                        updateStatus("⚠️ 已锁定，无法删除")
+                        updateStatus("已锁定，无法删除")
                     }
                 }
                 7 -> { // 分享
@@ -7522,7 +7519,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             startActivity(Intent.createChooser(this, "分享"))
                         }
                     } catch (_: Exception) {
-                        updateStatus("❌ 无法启动分享")
+                        updateStatus("无法启动分享")
                     }
                 }
             }
@@ -7542,7 +7539,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             .setPositiveButton("保存") { _, _ ->
                 val newText = editText.text.toString().trim()
                 if (newText.isNotEmpty()) onSave(newText)
-                else updateStatus("⚠️ 文本为空，未保存")
+                else updateStatus("文本为空，未保存")
             }
             .setNegativeButton("取消", null)
             .create()
@@ -8229,14 +8226,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             updateCandidateBar()
                         }
                     } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
-                        // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
-                        selectCandidateByGlobalIndex(0)
-                    } else {
-                        // 无拼音、无候选：直接输出空格
-                        ic?.commitText(" ", 1)
-                    }
-                }
-                if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
+                        } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
+                                                // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
+                                                selectCandidateByGlobalIndex(0)
+                                                // 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
+                                                if (keyboardMode == KeyboardMode.QWERTY) {
+                                                    rimeEngine.clear()
+                                                }
+                                            } else {
+                                                // 无拼音、无候选：直接输出空格
+                                                ic?.commitText(" ", 1)
+                                            }
+                                        }
+                                        if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
             }
 
             // ======================== 退格键 ========================
@@ -9027,9 +9029,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 本字 → 切云字
             if (cloudReady) {
                 cloudMode = CloudMode.CLOUD
-                updateStatus("☁️ 已切换到云端润色模式")
+                updateStatus("已切换到云端润色模式")
             } else {
-                updateStatus("⚠️ 云端模型未通过测试，请到设置页测试 Ollama / OpenRouter")
+                updateStatus("云端模型未通过测试，请到设置页测试 Ollama / OpenRouter")
             }
         } else {
             // 云字 → 切本字
@@ -9041,7 +9043,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (modelManager.hasAiModel()) {
                     markLocalAiReadyInIme()
                 } else {
-                    updateStatus("⚠️ 手机AI模型未下载，正在开始下载...")
+                    updateStatus("手机AI模型未下载，正在开始下载")
                     promptDownloadPhoneAi()
                 }
             }
@@ -9053,7 +9055,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun promptDownloadPhoneAi() {
         val modelInfo = ModelRegistry.getById("qwen35-2b-mnn")
             ?: ModelRegistry.ALL_MODELS.find { it.type == ModelInfo.ModelType.AI } ?: run {
-                updateStatus("⚠️ 无可用手机AI模型定义")
+                updateStatus("无可用手机AI模型定义")
                 return
             }
         DownloadProgressBus.emit("手机AI模型", 0.0)
@@ -9071,11 +9073,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     updateStatus("✅ 手机AI模型下载完成，本字已点亮（可到设置页测试）")
                     markLocalAiReadyInIme()
                 } else {
-                    updateStatus("❌ 手机AI模型下载失败：${result.exceptionOrNull()?.message}")
+                    updateStatus("手机AI模型下载失败：${result.exceptionOrNull()?.message}")
                     DownloadProgressBus.emit("手机AI模型", 0.0, failed = true)
                 }
             } catch (e: Exception) {
-                updateStatus("❌ 手机AI模型下载异常：${e.message}")
+                updateStatus("手机AI模型下载异常：${e.message}")
                 DownloadProgressBus.emit("手机AI模型", 0.0, failed = true)
             }
         }.start()
@@ -9097,18 +9099,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val cloudPolish = isCloudPolishAvailable()
 
         if (!localPolish || !cloudPolish) {
-            updateStatus("⚠️ 需要 MNN 和 API 都可用才能锁定")
+            updateStatus("需要 MNN 和 API 都可用才能锁定")
             return
         }
 
         if (cloudMode == CloudMode.LOCAL_LOCKED) {
             // 已锁定 → 解锁
             cloudMode = CloudMode.LOCAL
-            updateStatus("🔓 已解锁，恢复默认本地模式")
+            updateStatus("已解锁，恢复默认本地模式")
         } else {
             // 锁定本地
             cloudMode = CloudMode.LOCAL_LOCKED
-            updateStatus("🔒 已锁定本地模式（MNN + Zipformer）")
+            updateStatus("已锁定本地模式（MNN + Zipformer）")
         }
         updateCloudButtonState()
     }
@@ -9206,19 +9208,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 已锁定 → 退出锁定
             isVoiceLocked = false
             updateMicButtonLockedState()
-            updateStatus("🔓 已退出语音锁定模式")
+            updateStatus("已退出语音锁定")
         } else {
             // 未锁定 → 进入锁定，直接录音（不分裂按钮）
             val recognitionAvailable = isVoiceRecognitionAvailable()
             if (!recognitionAvailable) {
-                updateStatus("⚠️ 语音识别不可用，无法进入锁定模式")
+                updateStatus("语音识别不可用，无法进入锁定模式")
                 return
             }
             isVoiceLocked = true
             updateMicButtonLockedState()
             // 显示语音锁定模式提示（命令词）
             showVoiceLockHints()
-            updateStatus("🔒 已进入语音锁定模式，说话后自动处理")
+            updateStatus("已进入语音锁定")
             // 锁定模式直接录音，不分裂按钮
             startRecordingLocked()
         }
@@ -9287,7 +9289,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun showVoiceCommandHints() {
         val hints = VoiceEngine.getCommandHints()
         if (hints.isNotEmpty() && ::statusText.isInitialized) {
-            updateStatus("💡 $hints")
+            updateStatus("$hints")
         }
     }
 
@@ -9295,7 +9297,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun showVoiceLockHints() {
         val hints = VoiceEngine.getCommandHints()
         if (hints.isNotEmpty() && ::statusText.isInitialized) {
-            updateStatus("🔒 语音锁定命令：$hints")
+            updateStatus("语音锁定命令：$hints")
         }
     }
 
