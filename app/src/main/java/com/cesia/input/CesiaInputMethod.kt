@@ -8230,19 +8230,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             updateCandidateBar()
                         }
                     } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
-                        } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
-                                                // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
-                                                selectCandidateByGlobalIndex(0)
-                                                // 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
-                                                if (keyboardMode == KeyboardMode.QWERTY) {
-                                                    rimeEngine.clear()
-                                                }
-                                            } else {
-                                                // 无拼音、无候选：直接输出空格
-                                                ic?.commitText(" ", 1)
-                                            }
-                                        }
-                                        if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
+                        // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
+                        selectCandidateByGlobalIndex(0)
+                        // 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
+                        if (keyboardMode == KeyboardMode.QWERTY) {
+                            rimeEngine.clear()
+                        }
+                    } else {
+                        // 无拼音、无候选：直接输出空格
+                        ic?.commitText(" ", 1)
+                    }
+                }
+                if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
             }
 
             // ======================== 退格键 ========================
@@ -9010,14 +9009,33 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /**
      * 加载云按钮状态
+     * 默认模式：哪个模型先就绪（local_ai_ready 或 cloud_ready），就默认哪个模式
+     * 如果两个都未就绪，默认本地模式（等待下载）
      */
     private fun loadCloudMode() {
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
-        val savedMode = prefs.getString("cloud_mode", CloudMode.LOCAL.name)
-        cloudMode = try {
-            CloudMode.valueOf(savedMode ?: CloudMode.LOCAL.name)
-        } catch (e: Exception) {
-            CloudMode.LOCAL
+        val savedMode = prefs.getString("cloud_mode", null)
+        
+        // 如果有保存的模式，直接恢复
+        if (savedMode != null) {
+            cloudMode = try {
+                CloudMode.valueOf(savedMode)
+            } catch (e: Exception) {
+                CloudMode.LOCAL
+            }
+            return
+        }
+        
+        // 首次运行：根据模型就绪情况决定默认模式
+        val modelStatus = getSharedPreferences("cesia_model_status", MODE_PRIVATE)
+        val localReady = modelStatus.getBoolean("local_ai_ready", false)
+        val cloudReady = modelStatus.getBoolean("cloud_ready", false)
+        
+        cloudMode = when {
+            localReady && !cloudReady -> CloudMode.LOCAL      // 只有本地就绪
+            cloudReady && !localReady -> CloudMode.CLOUD      // 只有云端就绪
+            localReady && cloudReady -> CloudMode.LOCAL       // 都就绪，默认本地
+            else -> CloudMode.LOCAL                            // 都未就绪，默认本地（等待下载）
         }
     }
 
