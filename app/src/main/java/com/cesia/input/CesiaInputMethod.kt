@@ -4750,6 +4750,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } catch (_: Exception) {
             apiUrl = DEFAULT_API_URL
         }
+        // 每次激活键盘时，根据模型就绪情况重新评估默认云/本地模式
+        // 如果用户在设置页测试通过云端模型，云字会自动亮起
+        loadCloudMode()
     }
 
 // endregion AI自动回复
