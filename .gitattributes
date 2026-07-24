@@ -1,1 +1,11 @@
 *.a filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNN.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNN_Express.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libc++_shared.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNN_CL.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNN_Vulkan.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNNAudio.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libMNNOpenCV.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/jniLibs/arm64-v8a/libmnncore.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/cpp/mnn/libs/libMNN.so filter=lfs diff=lfs merge=lfs -text
+ai-engine/src/main/cpp/mnn/libs/libMNN_Express.so filter=lfs diff=lfs merge=lfs -text
