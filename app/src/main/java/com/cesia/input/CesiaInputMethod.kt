@@ -7153,10 +7153,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
             this.etSearch = etSearch
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val btnAdd = popupView.findViewById<TextView>(R.id.btn_clipboard_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
             val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close_bottom)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
             // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
@@ -7251,11 +7249,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
 
-            btnAdd.setOnClickListener {
-                // 新增：打开编辑弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入）
-                showClipboardAddPopup()
-            }
-
             // 置顶按钮
             btnPin.setOnClickListener {
                 val realItems = clipboardItems.filter { !it.isEmpty }
@@ -7321,12 +7314,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     true
                 }
                 popupMenu.show()
-            }
-
-            // ===== 关闭按钮 =====
-            btnClose.setOnClickListener {
-                clipboardPopup?.dismiss()
-                clipboardPopup = null
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
@@ -7580,12 +7567,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // 状态栏提示
         updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
-
-        // 新增按钮 -> 保存
-        view.findViewById<TextView>(R.id.btn_clipboard_add)?.setOnClickListener {
-            exitClipboardAddMode(save = true)
-            popup.dismiss()
-        }
 
         // 显示弹窗
         val parentView = keyboardView

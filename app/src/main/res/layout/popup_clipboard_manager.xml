@@ -22,7 +22,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text=" 剪贴板管理"
+            android:gravity="center"
+            android:text="剪贴板管理"
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
@@ -107,7 +108,7 @@
         android:padding="16dp"
         android:visibility="gone" />
 
-    <!-- 底部管理栏：＋ 置顶 删除 关闭 -->
+    <!-- 底部管理栏：置顶 删除 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -116,26 +117,6 @@
         android:background="#F5F5F5"
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
-
-        <!-- 新增：＋ -->
-        <TextView
-            android:id="@+id/btn_clipboard_add"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="＋"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:textStyle="bold"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="新增" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
 
         <!-- 置顶：⤒ -->
         <TextView
@@ -168,25 +149,6 @@
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <!-- 关闭：⨯ -->
-        <TextView
-            android:id="@+id/btn_clipboard_close_bottom"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
 
     </LinearLayout>
 

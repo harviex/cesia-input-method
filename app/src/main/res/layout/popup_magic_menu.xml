@@ -22,7 +22,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text=" 芙莉莲的魔法书"
+            android:gravity="center"
+            android:text="芙莉莲的魔法书"
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
@@ -41,10 +42,10 @@
 
     <!-- 魔法语句列表 -->
     <GridView
-    android:id="@+id/gv_magic_items"
-    android:layout_width="match_parent"
-    android:layout_height="0dp"
-    android:layout_weight="1"
+        android:id="@+id/gv_magic_items"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:numColumns="2"
         android:horizontalSpacing="0dp"
         android:verticalSpacing="2dp"
@@ -53,7 +54,7 @@
         android:listSelector="@android:color/transparent"
         android:stretchMode="columnWidth" />
 
-    <!-- 底部管理栏：新增 + 置顶 + 删除 + 关闭 -->
+    <!-- 底部管理栏：新增 + 置顶 + 删除 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -114,25 +115,6 @@
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <!-- 关闭：⨯ -->
-        <TextView
-            android:id="@+id/btn_close_magic_bottom"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
 
     </LinearLayout>
 
