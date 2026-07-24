@@ -28,16 +28,6 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
 
-        <TextView
-            android:id="@+id/btn_smart_close"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:gravity="center"
-            android:text="⨯"
-            android:textSize="20sp"
-            android:textColor="#FFFFFF"
-            android:background="?android:attr/selectableItemBackground"
-            android:contentDescription="关闭" />
     </LinearLayout>
 
     <!-- 选项区域：2列布局 -->
@@ -190,6 +180,25 @@
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="删除" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center_vertical"
+            android:background="#DDDDDD" />
+
+        <!-- 关闭：⨯ -->
+        <TextView
+            android:id="@+id/btn_smart_close_bottom"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="⨯"
+            android:textSize="18sp"
+            android:textColor="#81D8D0"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="关闭" />
 
     </LinearLayout>
 
