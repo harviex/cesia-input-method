@@ -3543,67 +3543,64 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
 
-        // ===== 置顶按钮 =====
+        // ===== 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
         btnPin.setOnClickListener {
             val realItems = items
             if (realItems.isEmpty()) return@setOnClickListener
-            val dialog = android.app.AlertDialog.Builder(this)
-                .setTitle("选择要置顶/取消置顶的魔法")
-                .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                    realItems.map { "${if (it.isPinned) "⤒ " else "○ "}${it.instruction.take(20)}" }.toTypedArray()
-                )) { _, which ->
-                    if (which >= 0 && which < realItems.size) {
-                        val record = realItems[which]
-                        mgr.togglePin(record.id)
-                        rebuildItems()
-                        notifyChanged()
-                        updateStatus(if (!record.isPinned) "⤒ 已置顶" else "取消置顶")
-                    }
-                    // 不关闭 dialog，允许连续操作
+            val menu = android.widget.PopupMenu(this, btnPin)
+            realItems.forEachIndexed { idx, record ->
+                val label = "${if (record.isPinned) "⤒ " else "○ "}${record.instruction.take(20)}"
+                menu.menu.add(0, idx, idx, label)
+            }
+            menu.setOnMenuItemClickListener { mi ->
+                val which = mi.itemId
+                if (which >= 0 && which < realItems.size) {
+                    val record = realItems[which]
+                    mgr.togglePin(record.id)
+                    rebuildItems()
+                    notifyChanged()
+                    updateStatus(if (!record.isPinned) "⤒ 已置顶" else "取消置顶")
                 }
-                .setNegativeButton("完成") { _, _ -> }
-                .create()
-            dialog.show()
+                true
+            }
+            menu.show()
         }
 
-        // ===== 删除按钮 =====
+        // ===== 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
         btnDelete.setOnClickListener {
             val realItems = items
             if (realItems.isEmpty()) return@setOnClickListener
-            val dialog = android.app.AlertDialog.Builder(this)
-                .setTitle("选择要删除的魔法")
-                .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                    arrayOf("⊗ 删除全部（${realItems.size}条，保留置顶）") + realItems.map { "⊗ ${it.instruction.take(18)}" }.toTypedArray()
-                )) { _, which ->
-                    if (which == 0) {
-                        // 删除全部（保留置顶）
-                        val pinned = realItems.filter { it.isPinned }
-                        mgr.clearAll()
-                        for (r in pinned) {
-                            mgr.addRecord(r.instruction)
-                        }
-                        currentMagicPrompt = null
-                        rebuildItems()
-                        notifyChanged()
-                        updateStatus("⊗ 已删除全部（保留置顶）")
-                    } else {
-                        val pos = which - 1
-                        if (pos >= 0 && pos < realItems.size) {
-                            mgr.removeRecord(realItems[pos].id)
-                            val updated = mgr.getRecords()
-                            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                                currentMagicPrompt = mgr.getActiveInstruction()
-                            }
-                            rebuildItems()
-                            notifyChanged()
-                            updateStatus("⊗ 已删除")
-                        }
+            val menu = android.widget.PopupMenu(this, btnDelete)
+            menu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条，保留置顶）")
+            realItems.forEachIndexed { idx, record ->
+                menu.menu.add(0, idx, idx + 1, "⊗ ${record.instruction.take(18)}")
+            }
+            menu.setOnMenuItemClickListener { mi ->
+                val which = mi.itemId
+                if (which == -1) {
+                    // 删除全部（保留置顶）
+                    val pinned = realItems.filter { it.isPinned }
+                    mgr.clearAll()
+                    for (r in pinned) {
+                        mgr.addRecord(r.instruction)
                     }
-                    // 不关闭 dialog，允许连续操作
+                    currentMagicPrompt = null
+                    rebuildItems()
+                    notifyChanged()
+                    updateStatus("⊗ 已删除全部（保留置顶）")
+                } else if (which >= 0 && which < realItems.size) {
+                    mgr.removeRecord(realItems[which].id)
+                    val updated = mgr.getRecords()
+                    if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                        currentMagicPrompt = mgr.getActiveInstruction()
+                    }
+                    rebuildItems()
+                    notifyChanged()
+                    updateStatus("⊗ 已删除")
                 }
-                .setNegativeButton("完成") { _, _ -> }
-                .create()
-            dialog.show()
+                true
+            }
+            menu.show()
         }
 
         // 显示在键盘View正上方，顶部对齐状态栏底部
@@ -3801,75 +3798,70 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 enterSmartEditMode()
             }
 
-            // ===== 置顶按钮：自定义 Dialog 选择置顶指定命令（不自动关闭）=====
+            // ===== 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
             btnPin.setOnClickListener {
                 if (smartRecords.isEmpty()) return@setOnClickListener
                 val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
                 val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf<String>()
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("选择要置顶/取消置顶的命令")
-                    .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                        smartRecords.map { cmd -> 
-                            val isPinned = pinnedSet.contains(cmd)
-                            "${if (isPinned) "⤒ " else "○ "}${cmd.take(20)}" 
-                        }.toTypedArray()
-                    )) { _, which ->
-                        if (which >= 0 && which < smartRecords.size) {
-                            val cmd = smartRecords[which]
-                            if (pinnedSet.contains(cmd)) {
-                                pinnedSet.remove(cmd)
-                            } else {
-                                pinnedSet.add(cmd)
-                            }
-                            smartRecords.removeAt(which)
-                            smartRecords.add(0, cmd)
-                            // 保存时包含置顶状态
-                            val arr = org.json.JSONArray()
-                            for (item in smartRecords) {
-                                arr.put(org.json.JSONObject().put("instruction", item))
-                            }
-                            prefs.edit()
-                                .putString("records_json", arr.toString())
-                                .putStringSet("pinned_set", pinnedSet)
-                                .apply()
-                            notifyChanged()
-                            updateStatus(if (pinnedSet.contains(cmd)) "⤒ 已置顶" else "取消置顶：${cmd.take(18)}")
+                val menu = android.widget.PopupMenu(this, btnPin)
+                smartRecords.forEachIndexed { idx, cmd ->
+                    val isPinned = pinnedSet.contains(cmd)
+                    val label = "${if (isPinned) "⤒ " else "○ "}${cmd.take(20)}"
+                    menu.menu.add(0, idx, idx, label)
+                }
+                menu.setOnMenuItemClickListener { mi ->
+                    val which = mi.itemId
+                    if (which >= 0 && which < smartRecords.size) {
+                        val cmd = smartRecords[which]
+                        if (pinnedSet.contains(cmd)) {
+                            pinnedSet.remove(cmd)
+                        } else {
+                            pinnedSet.add(cmd)
                         }
-                        // 不关闭 dialog，允许连续操作
+                        smartRecords.removeAt(which)
+                        smartRecords.add(0, cmd)
+                        // 保存时包含置顶状态
+                        val arr = org.json.JSONArray()
+                        for (item in smartRecords) {
+                            arr.put(org.json.JSONObject().put("instruction", item))
+                        }
+                        prefs.edit()
+                            .putString("records_json", arr.toString())
+                            .putStringSet("pinned_set", pinnedSet)
+                            .apply()
+                        notifyChanged()
+                        updateStatus(if (pinnedSet.contains(cmd)) "⤒ 已置顶" else "取消置顶：${cmd.take(18)}")
                     }
-                    .setNegativeButton("完成") { _, _ -> }
-                    .create()
-                dialog.show()
+                    true
+                }
+                menu.show()
             }
 
-            // ===== 删除按钮：自定义 Dialog 选择删除（不自动关闭）=====
+            // ===== 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
             btnDelete.setOnClickListener {
                 if (smartRecords.isEmpty()) return@setOnClickListener
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("选择要删除的命令")
-                    .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                        arrayOf("⊗ 删除全部（${smartRecords.size}条）") + smartRecords.mapIndexed { idx, cmd -> "⊗ ${cmd.take(18)}" }.toTypedArray()
-                    )) { _, which ->
-                        if (which == 0) {
-                            // 删除全部
-                            smartRecords.clear()
-                            saveSmartRecords(smartRecords)
-                            notifyChanged()
-                            updateStatus("⊗ 已清空智能写作命令")
-                        } else {
-                            val pos = which - 1
-                            if (pos >= 0 && pos < smartRecords.size) {
-                                val removed = smartRecords.removeAt(pos)
-                                saveSmartRecords(smartRecords)
-                                notifyChanged()
-                                updateStatus("⊗ 已删除：${removed.take(18)}")
-                            }
-                        }
-                        // 不关闭 dialog，允许连续操作
+                val menu = android.widget.PopupMenu(this, btnDelete)
+                menu.menu.add(0, -1, 0, "⊗ 删除全部（${smartRecords.size}条）")
+                smartRecords.forEachIndexed { idx, cmd ->
+                    menu.menu.add(0, idx, idx + 1, "⊗ ${cmd.take(18)}")
+                }
+                menu.setOnMenuItemClickListener { mi ->
+                    val which = mi.itemId
+                    if (which == -1) {
+                        // 删除全部
+                        smartRecords.clear()
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⊗ 已清空智能写作命令")
+                    } else if (which >= 0 && which < smartRecords.size) {
+                        val removed = smartRecords.removeAt(which)
+                        saveSmartRecords(smartRecords)
+                        notifyChanged()
+                        updateStatus("⊗ 已删除：${removed.take(18)}")
                     }
-                    .setNegativeButton("完成") { _, _ -> }
-                    .create()
-                dialog.show()
+                    true
+                }
+                menu.show()
             }
 
             // 弹窗尺寸和定位（与魔法书一致）
@@ -7299,72 +7291,69 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
 
-            // 置顶按钮
+            // 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）
             btnPin.setOnClickListener {
                 val realItems = clipboardItems.filter { !it.isEmpty }
                 if (realItems.isEmpty()) return@setOnClickListener
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("选择要置顶/取消置顶的内容")
-                    .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                        realItems.map { "${if (it.isPinned) "⤒ " else "○ "}${it.text.take(18)}" }.toTypedArray()
-                    )) { _, which ->
-                        if (which >= 0 && which < realItems.size) {
-                            val target = realItems[which]
-                            clipboardItems.removeAll { it.text == target.text }
-                            clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
-                            saveClipboardHistoryFromClassMembers()
-                            applyClipboardFilter()
-                        }
-                        // 不关闭 dialog，允许连续操作
+                val menu = android.widget.PopupMenu(this, btnPin)
+                realItems.forEachIndexed { idx, item ->
+                    val label = "${if (item.isPinned) "⤒ " else "○ "}${item.text.take(18)}"
+                    menu.menu.add(0, idx, idx, label)
+                }
+                menu.setOnMenuItemClickListener { mi ->
+                    val which = mi.itemId
+                    if (which >= 0 && which < realItems.size) {
+                        val target = realItems[which]
+                        clipboardItems.removeAll { it.text == target.text }
+                        clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
                     }
-                    .setNegativeButton("完成") { _, _ -> }
-                    .create()
-                dialog.show()
+                    true
+                }
+                menu.show()
             }
 
-            // 删除按钮
+            // 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）
             btnDelete.setOnClickListener {
                 val realItems = clipboardItems.filter { !it.isEmpty }
                 if (realItems.isEmpty()) return@setOnClickListener
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("选择要删除的内容")
-                    .setAdapter(android.widget.ArrayAdapter<String>(this, android.R.layout.select_dialog_item,
-                        arrayOf("⊗ 删除全部（${realItems.size}条，保留置顶）") + realItems.map { "⊗ ${it.text.take(18)}" }.toTypedArray()
-                    )) { _, which ->
-                        if (which == 0) {
-                            // 删除全部（保留置顶）
-                            clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
-                            saveClipboardHistoryFromClassMembers()
-                            applyClipboardFilter()
-                            try {
-                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                clipboardMgr?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                            } catch (_: Exception) {}
-                            updateStatus("⊗ 已删除全部（保留置顶）")
-                        } else {
-                            val pos = which - 1
-                            if (pos >= 0 && pos < realItems.size) {
-                                val target = realItems[pos]
-                                clipboardItems.removeAll { it.text == target.text }
-                                saveClipboardHistoryFromClassMembers()
-                                applyClipboardFilter()
-                                try {
-                                    val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                    if (clipboardMgr?.hasPrimaryClip() == true) {
-                                        val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                        if (clipText == target.text) {
-                                            clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                                updateStatus("⊗ 已删除")
+                val menu = android.widget.PopupMenu(this, btnDelete)
+                menu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条，保留置顶）")
+                realItems.forEachIndexed { idx, item ->
+                    menu.menu.add(0, idx, idx + 1, "⊗ ${item.text.take(18)}")
+                }
+                menu.setOnMenuItemClickListener { mi ->
+                    val which = mi.itemId
+                    if (which == -1) {
+                        // 删除全部（保留置顶）
+                        clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                        try {
+                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            clipboardMgr?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                        } catch (_: Exception) {}
+                        updateStatus("⊗ 已删除全部（保留置顶）")
+                    } else if (which >= 0 && which < realItems.size) {
+                        val target = realItems[which]
+                        clipboardItems.removeAll { it.text == target.text }
+                        saveClipboardHistoryFromClassMembers()
+                        applyClipboardFilter()
+                        try {
+                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            if (clipboardMgr?.hasPrimaryClip() == true) {
+                                val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                if (clipText == target.text) {
+                                    clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                                }
                             }
-                        }
-                        // 不关闭 dialog，允许连续操作
+                        } catch (_: Exception) {}
+                        updateStatus("⊗ 已删除")
                     }
-                    .setNegativeButton("完成") { _, _ -> }
-                    .create()
-                dialog.show()
+                    true
+                }
+                menu.show()
             }
 
             popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
