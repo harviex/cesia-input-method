@@ -478,6 +478,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 回车键长按检测
     private var enterLongPressRunnable: Runnable? = null
 
+    // 标记：正在进行功能键长按/对调等操作，暂不刷新简繁键视觉（避免闪烁）
+    private var skipTraditionalRefresh = false
+
     // -100 键长按检测（符号键盘切换）
     private var symbolKeyLongPressRunnable: Runnable? = null
     private var defaultKeyboardLongPressRunnable: Runnable? = null
@@ -1544,7 +1547,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 简繁切换：仅在 traditionalGlowing（即正体模式）时随主题刷新；
         // 简体模式下跳过，避免主题漂移/长按功能键时简繁键背景闪动
-        if (::btnTraditional.isInitialized && traditionalGlowing) {
+        // 功能键长按期间也跳过，防止闪烁
+        if (::btnTraditional.isInitialized && traditionalGlowing && !skipTraditionalRefresh) {
             btnTraditional.setTextColor(accent)
             btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
         }
@@ -4682,10 +4686,41 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun toggleTraditionalSimplified() {
         isTraditional = !isTraditional
         traditionalGlowing = isTraditional  // 正体模式才允许简繁键高亮随主题刷新
+        // 持久化简繁状态
+        saveTraditionalMode()
         maybeShowButtonHint("traditional", if (isTraditional) "正体输入模式" else "简体输入模式")
+        // 圆形脉冲动画（类似云/本地切换按钮）
+        animateTraditionalButton()
         updateTraditionalButton()
         // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
         updateCandidateBar()
+    }
+
+    /** 简繁按钮圆形脉冲动画 */
+    private fun animateTraditionalButton() {
+        val pulse = ScaleAnimation(
+            1.0f, 1.15f, 1.0f, 1.15f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
+            ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+        ).apply {
+            duration = 300
+            repeatMode = ScaleAnimation.REVERSE
+            repeatCount = 1
+        }
+        btnTraditional.startAnimation(pulse)
+    }
+
+    /** 保存简繁模式到 SharedPreferences */
+    private fun saveTraditionalMode() {
+        getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+            .putBoolean("traditional_mode", isTraditional).apply()
+    }
+
+    /** 从 SharedPreferences 加载简繁模式 */
+    private fun loadTraditionalMode() {
+        isTraditional = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getBoolean("traditional_mode", false)
+        traditionalGlowing = isTraditional
     }
 
     /** 逐字组词去重：若 Rime 最后一步返回整串(如"六牛柳")，而前面已上屏"六牛"，
@@ -4795,6 +4830,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 每次激活键盘时，根据模型就绪情况重新评估默认云/本地模式
         // 如果用户在设置页测试通过云端模型，云字会自动亮起
         loadCloudMode()
+        // 加载简繁模式（持久化）
+        loadTraditionalMode()
     }
 
 // endregion AI自动回复
@@ -8532,10 +8569,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val runnable = Runnable {
                     if (longPressOwnerCode != primaryCode) return@Runnable
                     if (!shortPressHandled) {
+                        // 功能键长按期间跳过简繁键视觉刷新（防止闪烁）
+                        skipTraditionalRefresh = true
                         getFunctionalLongAction(primaryCode)?.invoke()
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                         longPressTriggered = true
                         longPressConsumed = false
+                        skipTraditionalRefresh = false
                     }
                     currentLongPressKey = null
                     functionalLongPressRunnables.remove(primaryCode)
