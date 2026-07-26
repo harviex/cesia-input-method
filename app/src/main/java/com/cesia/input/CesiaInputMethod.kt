@@ -2453,6 +2453,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             updateStatus(pinyin)
         }
 
+        // 逐键选音：已选字母前缀非空时，按候选拼音完整前缀过滤（全拼模式用首字母；简拼模式用完整拼音前缀）
+        if (t9SpellPrefix.isNotEmpty() && !t9FenCiOn) {
+            val pinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
+            allCands = filterCandsByInitials(allCands, pinyins, t9SpellPrefix.toString())
+        } else if (t9SpellPrefix.isNotEmpty() && t9FenCiOn) {
+            // 简拼模式：完整拼音前缀匹配
+            val pinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
+            allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
+        }
+
         // 联想模式：显示联想候选词
         if (isAssociationMode && associationCandidates.isNotEmpty()) {
             val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
@@ -3194,7 +3204,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             } else {
                             val ic2 = currentInputConnection
                             ic2?.performContextMenuAction(android.R.id.selectAll)
-                            ic2?.commitText(result, 1)
+                            val output = if (isTraditional) toTraditional(result) else result
+                            ic2?.commitText(output, 1)
                             resetToIdle()
                             }
                         } catch (e2: Exception) {
@@ -4721,6 +4732,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         isTraditional = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getBoolean("traditional_mode", false)
         traditionalGlowing = isTraditional
+        // 刷新按钮显示（简/正字）
+        updateTraditionalButton()
     }
 
     /** 逐字组词去重：若 Rime 最后一步返回整串(如"六牛柳")，而前面已上屏"六牛"，
@@ -4741,6 +4754,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } catch (e: Exception) {
             Log.e("Cesia", "commitCandidateText failed: ${e.message}")
         }
+    }
+
+    /** 语音/润色上屏统一入口：根据 isTraditional 自动转繁 */
+    private fun commitTextWithTraditional(text: String) {
+        val output = if (isTraditional) toTraditional(text) else text
+        currentInputConnection?.commitText(output, 1)
     }
 
     // ===== 用户自建词组库：接龙组词上屏写入，下次匹配注入候选，持久化到 cesia_dict =====
@@ -5194,7 +5213,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     // 最终结果：确认组合文本（已是全部已识别内容）
                                     voiceKeptText = streamedAll
                                     val ic = currentInputConnection ?: return@withContext
-                                    Log.i("Cesia", "onSegmentResult final: setComposing='${streamedAll.take(50)}' beforeFinish")
+                                    // 繁体模式：组合态转繁体再 finishComposingText
+                                    val finalText = if (isTraditional) toTraditional(streamedAll) else streamedAll
+                                    Log.i("Cesia", "onSegmentResult final: setComposing='${finalText.take(50)}' beforeFinish")
+                                    ic.setComposingText(finalText, 1)
                                     ic.finishComposingText()
                                     Log.i("Cesia", "onSegmentResult final: afterFinish, calling handleCloudVoiceResult")
                                     handleCloudVoiceResult(streamedAll)
@@ -5472,6 +5494,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } else {
                 // 无润色服务 → 原文已上屏（finishComposingText），直接结束
                 updateStatus(" 已上屏")
+                commitTextWithTraditional(text)
             }
             // 锁定模式下自动重新开始录音
             if (isVoiceLocked) {
@@ -5499,6 +5522,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 polishRecognizedText(text)
             } else {
                 // AI×：原文已上屏（finishComposingText），直接结束
+                commitTextWithTraditional(text)
                 addSentMessage(text)
                 resetToIdle()
             }
@@ -5557,7 +5581,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             isWaitingForChoice = false
             pendingAiMode = false
             hideAiChoiceButtons()
-            currentInputConnection?.commitText(recognizedText, 1)
+            commitTextWithTraditional(recognizedText)
             addSentMessage(recognizedText)
             resetToIdle()
         } else if (isRecording) {
@@ -5565,7 +5589,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val currentText = recognizedText
             stopRecordingAndWait()
             if (currentText.isNotEmpty()) {
-                currentInputConnection?.commitText(currentText, 1)
+                commitTextWithTraditional(currentText)
                 addSentMessage(currentText)
                 resetToIdle()
             } else {
@@ -5642,14 +5666,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (deleteLen > 0) {
                 ic.deleteSurroundingText(deleteLen, 0)
             }
-            // 插入润色结果
-            ic.commitText(polishedText, 1)
+            // 插入润色结果（根据 isTraditional 转繁）
+            val output = if (isTraditional) toTraditional(polishedText) else polishedText
+            ic.commitText(output, 1)
         } catch (e: Exception) {
             Log.e("Cesia", "replaceTextWithPolish 失败，fallback commitText", e)
             try {
                 val ic2 = currentInputConnection ?: return
                 ic2.finishComposingText()
-                ic2.commitText(polishedText, 1)
+                val output = if (isTraditional) toTraditional(polishedText) else polishedText
+                ic2.commitText(output, 1)
             } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
@@ -6774,24 +6800,37 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 按已选字母前缀(拼音首字母)过滤候选词列表，返回过滤后的子集（候选拼音首字母以 prefix 开头）。
-     *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
-    // 拼音首字母分词正则（常量，只编译一次，避免 filterCandsBySpellPrefix 每次按键重复编译）
-    private val SPELL_SPLIT_REGEX = Regex("[\\s'·]")
-    // 语音命令词剥离正则（常量，避免每次语音结果重复编译）
-    private val COMMAND_STRIP_REGEX = Regex("(续写|扩写|改写|润色|翻译|写作|修改|帮我写|帮我改|帮我润色)")
-    // 剪贴板分词正则（常量，避免每条剪贴板项渲染时重复编译）
-    private val CLIPBOARD_SPLIT_REGEX = Regex("""[\s,，。；;:：！!？?、]+""")
+         *  pinyins 与 cands 顺序一一对应。过滤结果为空时返回原列表（避免误清空）。 */
+        // 拼音首字母分词正则（常量，只编译一次，避免 filterCandsBySpellPrefix 每次按键重复编译）
+        private val SPELL_SPLIT_REGEX = Regex("[\\\\s'·]")
+        // 语音命令词剥离正则（常量，避免每次语音结果重复编译）
+        private val COMMAND_STRIP_REGEX = Regex("(续写|扩写|改写|润色|翻译|写作|修改|帮我写|帮我改|帮我润色)")
+        // 剪贴板分词正则（常量，避免每条剪贴板项渲染时重复编译）
+        private val CLIPBOARD_SPLIT_REGEX = Regex("""[\s,，。；;:：！!？?、]+""")
 
-    private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
-        if (prefix.isEmpty()) return cands
-        val filtered = cands.mapIndexedNotNull { i, cand ->
-            val py = pinyins.getOrElse(i) { "" }
-            val initials = py.split(SPELL_SPLIT_REGEX).filter { it.isNotEmpty() }
-                .joinToString("") { it.first().toString() }
-            if (initials.startsWith(prefix)) cand else null
+        /** T9 逐键选音过滤：按候选拼音**完整前缀**匹配（而非首字母）。
+         *  如 t9SpellPrefix="wa" 只保留拼音以 "wa" 开头的候选（王、亡、网...），随选音级数收窄。 */
+        private fun filterCandsBySpellPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
+            if (prefix.isEmpty()) return cands
+            val filtered = cands.mapIndexedNotNull { i, cand ->
+                val py = pinyins.getOrElse(i) { "" }
+                val normalizedPy = py.replace(SPELL_SPLIT_REGEX, "") // 去除空格/分隔符，得到连续拼音串
+                if (normalizedPy.startsWith(prefix)) cand else null
+            }
+            return if (filtered.isNotEmpty()) filtered else cands
         }
-        return if (filtered.isNotEmpty()) filtered else cands
-    }
+
+        /** 兼容旧首字母过滤（全拼模式用） */
+        private fun filterCandsByInitials(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
+            if (prefix.isEmpty()) return cands
+            val filtered = cands.mapIndexedNotNull { i, cand ->
+                val py = pinyins.getOrElse(i) { "" }
+                val initials = py.split(SPELL_SPLIT_REGEX).filter { it.isNotEmpty() }
+                    .joinToString("") { it.first().toString() }
+                if (initials.startsWith(prefix)) cand else null
+            }
+            return if (filtered.isNotEmpty()) filtered else cands
+        }
 
     /** 将用户高频词按词频融入 Rime 候选列表（不破坏整体词频序）。
      *  策略：双指针归并——Rime 候选按原序遍历，用户词按频次降序遍历，

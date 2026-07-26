@@ -362,7 +362,7 @@ class RimeEngine(private val context: Context) : InputEngine {
      * @return 去掉前缀后的显示词列表，按权重降序，去重
      */
     fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 500): List<String> {
-        if (prefix.length < 2) return emptyList() // 至少两个字才联想
+        if (prefix.length < 1) return emptyList() // 至少一个字才联想
 
         if (!dictIndexBuilt) {
             // 索引未完成：触发后台构建，直接返回空避免卡顿
