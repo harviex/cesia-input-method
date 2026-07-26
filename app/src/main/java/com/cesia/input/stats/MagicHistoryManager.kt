@@ -31,21 +31,27 @@ class MagicHistoryManager(context: Context) {
     }
 
     init {
-        // 每次启动都重新同步：清空旧数据，注入全部60条标准指令
-        val allStdNames = defaultInstructions
-        if (allStdNames.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            val records = allStdNames.mapIndexed { index, name ->
-                MagicRecord(
-                    id = index.toLong() + 1,
-                    instruction = name,
-                    isPinned = false,
-                    timestamp = now - (allStdNames.size - index).toLong() * 1000
-                )
+        // 首次启动才初始化：只有 records 为空时才注入默认指令，避免覆盖用户置顶/删除数据
+        val json = listPrefs.getString("records", "[]") ?: "[]"
+        val isFirstRun = json == "[]" || json.isEmpty()
+        if (isFirstRun) {
+            val allStdNames = defaultInstructions
+            if (allStdNames.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                val records = allStdNames.mapIndexed { index, name ->
+                    MagicRecord(
+                        id = index.toLong() + 1,
+                        instruction = name,
+                        isPinned = false,
+                        timestamp = now - (allStdNames.size - index).toLong() * 1000
+                    )
+                }
+                saveRecords(records)
+                listPrefs.edit().putBoolean("initialized", true).apply()
+                Log.i("MagicHistory", "魔法书首次初始化 ${records.size} 条标准指令")
             }
-            saveRecords(records)
-            listPrefs.edit().putBoolean("initialized", true).apply()
-            Log.i("MagicHistory", "魔法书已同步 ${records.size} 条标准指令")
+        } else {
+            Log.i("MagicHistory", "魔法书已有数据，跳过默认指令注入")
         }
     }
 
