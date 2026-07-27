@@ -2404,10 +2404,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 懒加载：记录首屏已拉取的 Rime 候选数（纯 Rime，不含用户词组注入），供滚动到底 drop 取新增
         candTotalLoaded = rimeAllCands.size
 
-        // 逐键选音：已选字母前缀非空时，按候选拼音首字母过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
+        // 逐键选音：已选字母前缀非空时，按候选拼音完整前缀过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
         if (t9SpellPrefix.isNotEmpty() && !t9FenCiOn) {
             val pinyins = rimeEngine.getAllCandidatePinyins(candPageWalk)
-            allCands = filterCandsBySpellPrefix(allCands, pinyins, t9SpellPrefix.toString())
+            allCands = filterCandsByFullPinyinPrefix(allCands, pinyins, t9SpellPrefix.toString())
         }
 
         // 去重：输入状态( composing/拼音/选音前缀/繁体/面板/联想/候选集 )未变则跳过整轮重建，
@@ -6554,13 +6554,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 简拼 qlen=${t9DigitQueue.length} feed=$feed | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
             } else {
-                // 全拼：数字直连增量喂（feedRimeIncrementally），O(1) 不卡。
-                // 单键枚举已把会话恢复成「数字 digit 的 t9 模糊态」并同步 lastT9Feed=数字串，
-                // 故增量时只喂新增数字，长码不再整串重放；会话态与数字串一致 → 23 出 ce（非 a3）。
-                // 接龙态只取未消费后缀喂入（t9ConsumedLen）。
-                val remaining = t9DigitQueue.substring(t9ConsumedLen)
+                // 全拼：未锁定字母时数字直连增量喂（Rime 反解 T9 模糊态，首屏给同键候选供选音）；
+                // 已锁定字母(t9SpellPrefix 非空)时改用「锁定字母+剩余数字首字母」的精确 feed（同简拼 buildT9SpellFeed），
+                // 让 Rime 直接精确出该音候选（如 9426 锁 zhao → 喂 "zhao"），不再依赖客户端拼音注释过滤
+                // （T9 schema 候选拼音注释是数字态派生串，字母前缀匹配会全失败→回退成全部同键候选，旧版因此出 xian/xiao）。
+                val feed = if (t9SpellPrefix.isNotEmpty()) buildT9SpellFeed() else t9DigitQueue.substring(t9ConsumedLen)
                 val tFeed = System.currentTimeMillis()
-                feedRimeIncrementally(remaining)
+                feedRimeIncrementally(feed)
                 val tGet = System.currentTimeMillis()
                 rimeEngine.getAllCandidates(candPageWalk)
                 val tEnd = System.currentTimeMillis()
@@ -6752,6 +6752,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val initials = py.split(SPELL_SPLIT_REGEX).filter { it.isNotEmpty() }
                 .joinToString("") { it.first().toString() }
             if (initials.startsWith(prefix)) cand else null
+        }
+        return if (filtered.isNotEmpty()) filtered else cands
+    }
+
+    /** 全拼逐键选音：按完整拼音前缀匹配（如 wang 锁定 w/a/n/g 时，候选拼音以 "wang" 前缀匹配）。
+     *  与 filterCandsBySpellPrefix（首字母匹配，仅适用简拼）不同：全拼每锁定一位字母都要用完整拼音前缀缩窄，
+     *  否则锁定到非首字母位（如 wan/g）时首字母匹配为空、回退 cands 导致不再缩窄。 */
+    private fun filterCandsByFullPinyinPrefix(cands: List<String>, pinyins: List<String>, prefix: String): List<String> {
+        if (prefix.isEmpty()) return cands
+        val filtered = cands.mapIndexedNotNull { i, cand ->
+            val py = pinyins.getOrElse(i) { "" }
+            // 完整拼音（去掉分词符/空格）按前缀匹配；多音节词用完整拼音串拼接匹配（如 "da jia" → "dajia"）
+            val full = py.split(SPELL_SPLIT_REGEX).filter { it.isNotEmpty() }.joinToString("")
+            if (full.startsWith(prefix)) cand else null
         }
         return if (filtered.isNotEmpty()) filtered else cands
     }
