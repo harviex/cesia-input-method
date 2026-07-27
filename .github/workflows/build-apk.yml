@@ -68,6 +68,11 @@ jobs:
           # 格式：1.2.<gitCount>，保证覆盖安装且每次提交版本号自增
           GIT_COUNT=$(git rev-list --count HEAD)
           VERSION="1.2.${GIT_COUNT}"
+          # 若 tag 已存在则自动递增 patch（如 1.2.877 已存在 → 1.2.878），避免撞 tag 被跳过创建 Release
+          while git rev-parse "v${VERSION}" >/dev/null 2>&1; do
+            PATCH=$(( ${VERSION##*.} + 1 ))
+            VERSION="1.2.${PATCH}"
+          done
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "APK_VERSION=$VERSION" >> $GITHUB_ENV
           echo "apkVersion=$VERSION" > gradle.properties.tmp
