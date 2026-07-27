@@ -1285,7 +1285,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                                 }
                             }
                         } else {
-                            currentInputConnection?.commitText(textBefore, 1)
+                            // 语音识别文字上屏：繁体模式转繁体
+                            val outText = if (isTraditional) toTraditional(textBefore) else textBefore
+                            currentInputConnection?.commitText(outText, 1)
                             if (isVoiceLocked) {
                                 startRecordingLocked()
                             } else {
@@ -1316,7 +1318,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         isWaitingForChoice = false
                         hideAiChoiceButtons()
                         if (text.isNotEmpty()) {
-                            currentInputConnection?.commitText(text, 1)
+                            // 语音识别文字上屏：繁体模式转繁体
+                            val outText = if (isTraditional) toTraditional(text) else text
+                            currentInputConnection?.commitText(outText, 1)
                         }
                         resetToIdle()
                     } else {
@@ -5400,7 +5404,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 语音识别结果统一转阿拉伯数字：本地 sherpa 路径已在 VoiceEngine 转过，
         // 但 Google 语音路径（FallbackRecognizer）不经过转换，这里兜底，
         // 保证“识别到什么、上屏就是什么”，不出现“先阿拉伯后又变回汉字”。
-        val text = voiceEngine.convertChineseDigitsToArabic(rawText)
+        val text = if (isTraditional) toTraditional(voiceEngine.convertChineseDigitsToArabic(rawText))
+                   else voiceEngine.convertChineseDigitsToArabic(rawText)
         // 已在点击 AI+/AI× 时处理过，跳过
         if (isProcessingResult) {
             Log.i("Cesia", "handleCloudVoiceResult: already processed, skipping")
@@ -5524,7 +5529,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             isWaitingForChoice = false
             pendingAiMode = false
             hideAiChoiceButtons()
-            currentInputConnection?.commitText(recognizedText, 1)
+            // 语音识别文字上屏（AI× 直接上屏）：繁体模式转繁体
+            val outText = if (isTraditional) toTraditional(recognizedText) else recognizedText
+            currentInputConnection?.commitText(outText, 1)
             addSentMessage(recognizedText)
             resetToIdle()
         } else if (isRecording) {
@@ -5532,7 +5539,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val currentText = recognizedText
             stopRecordingAndWait()
             if (currentText.isNotEmpty()) {
-                currentInputConnection?.commitText(currentText, 1)
+                // 语音识别文字上屏（说话中AI×）：繁体模式转繁体
+                val outText = if (isTraditional) toTraditional(currentText) else currentText
+                currentInputConnection?.commitText(outText, 1)
                 addSentMessage(currentText)
                 resetToIdle()
             } else {
@@ -5609,14 +5618,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (deleteLen > 0) {
                 ic.deleteSurroundingText(deleteLen, 0)
             }
-            // 插入润色结果
-            ic.commitText(polishedText, 1)
+            // 插入润色结果（繁体模式转繁体）
+            ic.commitText(if (isTraditional) toTraditional(polishedText) else polishedText, 1)
         } catch (e: Exception) {
             Log.e("Cesia", "replaceTextWithPolish 失败，fallback commitText", e)
             try {
                 val ic2 = currentInputConnection ?: return
                 ic2.finishComposingText()
-                ic2.commitText(polishedText, 1)
+                ic2.commitText(if (isTraditional) toTraditional(polishedText) else polishedText, 1)
             } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
@@ -5912,8 +5921,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val ic = currentInputConnection ?: return@withContext
                     val selectedText = ic.getSelectedText(0)
                     if (selectedText != null && selectedText.isNotEmpty()) {
-                        // 有选区：恢复选区文字
-                        ic.commitText(text, 1)
+                        // 有选区：恢复选区文字（繁体模式转繁体）
+                        ic.commitText(if (isTraditional) toTraditional(text) else text, 1)
                     } else {
                         // 无选区：恢复全文
                         val before = ic.getTextBeforeCursor(64, 0)?.length ?: 0
@@ -5921,7 +5930,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (before > 0 || after > 0) {
                             ic.deleteSurroundingText(before, after)
                         }
-                        ic.commitText(text, 1)
+                        ic.commitText(if (isTraditional) toTraditional(text) else text, 1)
                     }
                     updateStatus("执行失败，已恢复原文")
                     if (isVoiceLocked) {
