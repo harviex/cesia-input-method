@@ -2465,16 +2465,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
 
-        // 简繁转换：繁体模式下候选词显示繁体
-        val displayCands = if (isTraditional) allCands.map { toTraditional(it) } else allCands
+        // 简繁转换：显示层转繁体，但点击定位/选中用简体原词，
+        // 否则繁体词(如「簡單」)匹配不到 Rime 简体候选(lastAllCands)导致点击不上屏。
+        val base = allCands  // 简体原词（Rime 候选），用于置顶 key、点击反查、Rime 翻页选中
+        val displayCands = if (isTraditional) base.map { toTraditional(it) } else base
 
-        // 应用候选偏好（置顶/降频），全局持久化
-        val reordered = CandidatePrefs.reorder(this, displayCands)
-        // 快照：供点击时反查用户点的是哪个词（显示顺序）
+        // 应用候选偏好（置顶/降频），全局持久化（用简体词做 key，与点击反查一致）
+        val reordered = CandidatePrefs.reorder(this, base)
+        // 快照：供点击时反查用户点的是哪个词（简体原词，与 Rime 候选/翻页选中一致）
         lastDisplayedCands = reordered
 
-        // 更新候选词列表
-        candidateAdapter?.updateData(reordered)
+        // 更新候选词列表（显示繁体）
+        candidateAdapter?.updateData(displayCands)
         rvCandidates?.scrollToPosition(0)
         btnCandidateExpand.visibility = if (reordered.size > 4) View.VISIBLE else View.GONE
 
@@ -2503,14 +2505,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (more.isEmpty()) { candPageWalk -= 4; return }
         candTotalLoaded = fresh.size
         lastAllCands = (lastAllCands + more).distinct()
-        val merged = (lastDisplayedCands + more).distinct()
+        val merged = (lastDisplayedCands + more).distinct()  // 简体原词，供点击反查/Rime选中
         lastDisplayedCands = merged
-        candidateAdapter?.updateData(merged)
+        val displayMerged = if (isTraditional) merged.map { toTraditional(it) } else merged
+        candidateAdapter?.updateData(displayMerged)
         if (isPanelExpanded) {
-            val displayPanel = if (isTraditional) merged.map { toTraditional(it) } else merged
-            val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
+            // 面板 reorder 用简体 key（与点击反查一致），仅显示层转繁
+            val reorderedPanel = CandidatePrefs.reorder(this, merged)
+            val displayPanel = if (isTraditional) reorderedPanel.map { toTraditional(it) } else reorderedPanel
             panelAdapter?.clear()
-            panelAdapter?.addAll(reorderedPanel)
+            panelAdapter?.addAll(displayPanel)
             panelAdapter?.notifyDataSetChanged()
         }
     }
