@@ -8624,7 +8624,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
         // popupCharacters 长按检测（功能键不注册，避免与功能长按冲突）
-        if (!skipPopupLongPress && primaryCode > 0) {
+        // 注意：符号键盘按键码为负值（-301~-341），故需同时放行 primaryCode > 0 与负值符号码
+        if (!skipPopupLongPress && (primaryCode > 0 || primaryCode in -341..-301)) {
             val key = currentKeyboard?.keys?.find { it.codes?.contains(primaryCode) == true }
             if (key != null && !key.popupCharacters.isNullOrEmpty()) {
                 startLongPressDetection(key)

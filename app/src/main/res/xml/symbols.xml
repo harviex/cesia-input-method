@@ -8,9 +8,9 @@
     已排除全键盘/T9 已有标点（, . ! ? ？ ： ; ； “ # @ $ % ^ & * ( ) + - × ÷ = : / \ _ —）
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
-    android:keyWidth="10%p"
+    android:keyWidth="9.5%p"
     android:keyHeight="48dp"
-    android:horizontalGap="4dp"
+    android:horizontalGap="0dp"
     android:verticalGap="4dp">
 
     <!-- ===== 第1行：引号/括号/书名号（10键，1~7为配对键） ===== -->
