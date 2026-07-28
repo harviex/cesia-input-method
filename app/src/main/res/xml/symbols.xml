@@ -8,7 +8,7 @@
     已排除全键盘/T9 已有标点（, . ! ? ？ ： ; ； “ # @ $ % ^ & * ( ) + - × ÷ = : / \ _ —）
 -->
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
-    android:keyWidth="9.5%p"
+    android:keyWidth="10%p"
     android:keyHeight="48dp"
     android:horizontalGap="0dp"
     android:verticalGap="4dp">
@@ -69,15 +69,15 @@
         <Key android:codes="-5" android:keyLabel="⌫" android:isRepeatable="true" android:keyEdgeFlags="right" />
     </Row>
 
-    <!-- ===== 第5行：返回 + 翻转 + 符库 + 空格 + — + …… + 回车（7键） ===== -->
+    <!-- ===== 第5行：返回 + 翻转 + 符库 + 空格 + — + …… + 回车（7键，总宽100%） ===== -->
     <Row>
-        <Key android:codes="-999" android:keyLabel="←" android:keyEdgeFlags="left" android:keyWidth="12%p" />
+        <Key android:codes="-999" android:keyLabel="←" android:keyEdgeFlags="left" android:keyWidth="11%p" />
         <Key android:codes="-105" android:keyLabel="⇄" android:keyWidth="10%p" />
         <Key android:codes="-103" android:keyLabel="〰️" android:keyWidth="10%p" />
-        <Key android:codes="32" android:keyLabel="       " android:keyWidth="32%p" />
+        <Key android:codes="32" android:keyLabel="       " android:keyWidth="33%p" />
         <Key android:codes="-340" android:keyLabel="—" android:popupCharacters="——" android:keyWidth="10%p" />
         <Key android:codes="-341" android:keyLabel="……" android:popupCharacters="…" android:keyWidth="10%p" />
-        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" android:keyWidth="18%p" />
+        <Key android:codes="10" android:keyLabel="↵" android:keyEdgeFlags="right" android:keyWidth="16%p" />
     </Row>
 
 </Keyboard>
