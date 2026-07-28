@@ -1546,11 +1546,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val accent = themeAccent
         val accentStateList = android.content.res.ColorStateList.valueOf(accent)
 
-        // 简繁切换：仅在 traditionalGlowing（即正体模式）时随主题刷新；
-        // 简体模式下跳过，避免主题漂移/长按功能键时简繁键背景闪动
+        // 简繁切换：仅在 traditionalGlowing（即正体模式）时随主题刷新文字色；
+        // 不 setBackgroundColor，保留圆形脉冲(ripple)效果，与云端/主题按钮统一
         if (::btnTraditional.isInitialized && traditionalGlowing) {
             btnTraditional.setTextColor(accent)
-            btnTraditional.setBackgroundColor((accent and 0x00FFFFFF) or 0x22000000)
         }
 
         // 功能按钮层级（智能写作、修改、清退、发送） - 移除阴影
@@ -2687,8 +2686,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnDelete.setOnClickListener {
             maybeShowButtonHint("clear", "清空")
-            // 清空键：清除候选栏内容（保持可见），并结束语音保持模式
-            clearCandidateContent()
+            // 仅在候选栏已显示（有输入内容）时清空并保留候选栏；否则不弹出候选栏
+            val candBarWasVisible = candidateBar.visibility == View.VISIBLE
+            if (candBarWasVisible) {
+                // 清空键：清除候选栏内容（保持可见），并结束语音保持模式
+                clearCandidateContent()
+            }
             if (rimeEngine.isComposing) {
                 rimeEngine.processKey("BackSpace")
                 updateCandidateBar()
@@ -4692,8 +4695,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         traditionalGlowing = isTraditional  // 正体模式才允许简繁键高亮随主题刷新
         maybeShowButtonHint("traditional", if (isTraditional) "正体输入模式" else "简体输入模式")
         updateTraditionalButton()
-        // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
-        updateCandidateBar()
+        // 仅在候选栏已显示（有输入内容）时才重新触发候选，避免无候选内容时弹出候选栏
+        if (candidateBar.visibility == View.VISIBLE) {
+            // 切换后重新触发候选（Rime stub 不支持 setOption，用本地 OpenCC 转换）
+            updateCandidateBar()
+        }
     }
 
     /** 逐字组词去重：若 Rime 最后一步返回整串(如"六牛柳")，而前面已上屏"六牛"，
@@ -4766,12 +4772,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun updateTraditionalButton() {
-        // 更新按钮视觉状态（不再弹出脉冲动画，仅颜色变化）
+        // 更新按钮视觉状态：移除高亮方框，保留 selectableItemBackgroundBorderless 的圆形脉冲效果，与云端/主题按钮统一
         if (::btnTraditional.isInitialized) {
             // 简体模式显示"简"字，正体模式显示"正"字
             btnTraditional.text = if (isTraditional) "正" else "简"
             btnTraditional.setTextColor(if (isTraditional) themeAccent else 0xFF888888.toInt())
-            btnTraditional.setBackgroundColor(if (isTraditional) (themeAccent and 0x00FFFFFF) or 0x22000000 else 0x00000000)
+            // 不再 setBackgroundColor，保留圆形脉冲(ripple)效果
         }
     }
 
@@ -9117,7 +9123,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 云字 → 切本字
             if (localReady) {
                 cloudMode = CloudMode.LOCAL
-                updateStatus("🏠 已切换到本地润色模式")
+                updateStatus("已切换到本地润色模式")
             } else {
                 // 本字灰度：已下载则直接点亮，未下载则触发下载（键盘状态栏显示进度）
                 if (modelManager.hasAiModel()) {
