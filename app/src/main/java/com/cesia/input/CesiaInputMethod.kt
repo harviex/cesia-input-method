@@ -6295,7 +6295,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .edit().putBoolean(SYMBOL_FLIP_PREF, symbolFlipped).apply()
         applySymbolFlip()
-        updateStatus(if (symbolFlipped) "符号：英文主 / 中文副" else "符号：中文主 / 英文副")
+        updateStatus("主/副切换")
     }
 
     private fun toggleSymbolKeyboard() {
