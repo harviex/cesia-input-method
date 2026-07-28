@@ -175,7 +175,8 @@ class NewsSourceActivity : AppCompatActivity() {
                 holder.tvCategory.visibility = View.GONE
             }
             holder.tvName.text = item.name
-            holder.tvUrl.text = item.url
+            // 源地址不展示在列表中（仅用于内部匹配），隐藏 URL 文本
+            holder.tvUrl.visibility = View.GONE
 
             val isChecked = item.url == selectedUrl
             holder.cb.setOnCheckedChangeListener(null)
