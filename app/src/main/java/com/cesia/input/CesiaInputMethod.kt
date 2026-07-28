@@ -2128,17 +2128,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 t9ComposedSoFar.append(clickedWord)
                 val consumed = actualWordDigitLen(clickedWord)
                 t9ConsumedLen += consumed
+                // 标准输入法语义：点/空格即上屏该词，不再按住等待后续数字（修复 742647→上屏 等 parked）
+                commitCandidateText(clickedWord)
                 val remaining = t9DigitQueue.length - t9ConsumedLen
                 if (remaining <= 0) {
-                    // 字符耗尽 → 上屏整串
-                    commitCandidateText(t9ComposedSoFar.toString())
+                    // 数字耗尽：整串已逐词上屏，此处仅把整串写入用户词库（不再重复上屏）
                     addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
                     t9ComposedSoFar.clear(); t9ConsumedLen = 0
                     rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
                     lastT9Feed = null
                     updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
                 } else {
-                    // 还有剩余 → 接龙继续，刷新候选栏
+                    // 还有剩余 → 剩余数字继续作为下一词输入（保留接龙组词能力）
                     feedRemaining()
                 }
             } else {
@@ -2166,9 +2167,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 简拼接龙：消费长度 = 词字数（简拼每位数字对应一个音节首字母），与全拼接龙对称
             if (t9ConsumedLen > 0 || t9DigitQueue.length > clickedWord.length) {
                 t9ConsumedLen += clickedWord.length
+                // 立即上屏该词（标准输入法语义，不再按住等整串）
+                when {
+                    smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
+                    magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
+                    clipboardAddMode -> { clipboardAddBuffer.append(toCommit); updateClipboardAddStatus() }
+                    else -> commitCandidateText(toCommit)
+                }
                 val remaining = t9DigitQueue.length - t9ConsumedLen
                 if (remaining <= 0) {
-                    commitCandidateText(t9ComposedSoFar.toString())
+                    // 数字耗尽：整串已逐词上屏，仅写入用户词库（不再重复上屏）
                     addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
                     t9ComposedSoFar.clear(); t9ConsumedLen = 0
                     rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
@@ -2244,17 +2252,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.clear()
                 updateClipboardAddStatus()
             } else {
-                // 上屏分支：全拼接龙组词不立即上屏，其余(单字/简拼/其他)正常立即上屏
+                // 上屏分支：全拼接龙组词——点/空格即上屏该词（标准输入法语义），剩余数字继续接龙
                 if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
                     // 全拼接龙：用候选拼音反推消费的数字长度（区分全拼32542与缩写325），剩余继续组词
                     // 注意 t9ComposedSoFar 已在上方 2129 append(selectedWord)，此处不再重复 append
                     val py = prePinyins.getOrElse(realGlobalIndex) { "" }
                     val consumed = pinyinToDigitLen(py)
                     t9ConsumedLen += consumed
+                    // 立即上屏该词（而非按住等整串）
+                    commitCandidateText(toCommit)
                     val remaining = t9DigitQueue.length - t9ConsumedLen
                     if (remaining <= 0) {
-                        // 字符耗尽 → 自动上屏整串组词结果（仅此一次上屏）
-                        commitCandidateText(t9ComposedSoFar.toString())
+                        // 数字耗尽：整串已逐词上屏，仅把整串写入用户词库（不再重复上屏）
                         addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())  // 接龙组词写入用户词库
                         t9ComposedSoFar.clear(); t9ConsumedLen = 0
                         rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
