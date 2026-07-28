@@ -6713,9 +6713,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
         } catch (_: Exception) { /* 回退下方 */ }
-        // 选最长的、且是 remaining 前缀的码长
+        // 选最长的、且是 remaining 前缀的码长；若无（该词是已输入数字串的预测/缩写，其完整码非前缀），
+        // 则消费全部已输入剩余位数（用户为这些数字选了此词，应整段消费并上屏，而非按字数消费导致漏位 parked）
         val best = candidates.filter { it.isNotEmpty() && remaining.startsWith(it) }.maxByOrNull { it.length }
-        return best?.length ?: word.length
+        return best?.length ?: remaining.length
     }
 
     /** 拼音反推 T9 数字串（ziji → 9454），遇未知字母返回空串 */
