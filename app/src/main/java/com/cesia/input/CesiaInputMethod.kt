@@ -6194,6 +6194,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             KeyboardMode.SYMBOL_CN -> symbolKeyboardCn
             KeyboardMode.NUMBER -> numberKeyboard
         }
+        keyboardView.keyboard = currentKeyboard
         if (mode == KeyboardMode.SYMBOL_CN) applySymbolFlip()
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
