@@ -2121,10 +2121,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 用户自建词组：独立点击路径，支持接龙组词（有剩余数字则继续，无剩余则上屏）
         if (userPhrases.containsKey(clickedWord)) {
             if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
-                // 接龙逻辑：累积已选词，按该词的「全拼数字串长度」消费数字位数，有剩余则继续
+                // 接龙逻辑：累积已选词，按该词「实际拼音」的数字长度消费位数（用 Rime 候选拼音反推，
+                // 而非 userPhrases 里可能陈旧的码长），有剩余则继续。
+                // 例：自己 既能被 945 拼出也被 9454 拼出。若按陈旧码长 3 消费，9454 会漏掉末位 4，
+                // 导致已组词停在「自己」不提交，下一次输入被累加 → 重复字。
                 t9ComposedSoFar.append(clickedWord)
-                val (phraseDigits, _) = userPhrases[clickedWord] ?: "" to 0
-                val consumed = phraseDigits.length
+                val consumed = actualWordDigitLen(clickedWord)
                 t9ConsumedLen += consumed
                 val remaining = t9DigitQueue.length - t9ConsumedLen
                 if (remaining <= 0) {
@@ -6684,6 +6686,47 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (key != null) n++
         }
         return n
+    }
+
+    /**
+     * 取某词在当前已输入数字串里「实际消费的数字位数」。
+     * 一个词可能有多个有效码（如 自己：945=缩写，9454=ziji 全拼）。必须取「仍是剩余队列前缀」的
+     * 最长码长，避免：
+     *  - 码长比实拼短（旧 bug：9454 按陈旧 945 消费3位，漏掉末位4，已组词 parked 不提交，下次输入累加→重复字）
+     *  - 码长比实拼长（若直接取 Rime 全拼 4 位：945+8264 会多吞1位，破坏下一词切分）
+     * 候选码 = {用户词库存储码} ∪ {Rime 候选拼音反推的 T9 数字串}。
+     */
+    private fun actualWordDigitLen(word: String): Int {
+        val remaining = if (t9DigitQueue.length > t9ConsumedLen) t9DigitQueue.substring(t9ConsumedLen) else ""
+        val candidates = mutableListOf<String>()
+        val (stored, _) = userPhrases[word] ?: "" to 0
+        if (stored.isNotEmpty()) candidates.add(stored)
+        try {
+            val cands = rimeEngine.getAllCandidates(50)
+            val idx = cands.indexOf(word)
+            if (idx >= 0) {
+                val pys = rimeEngine.getAllCandidatePinyins(50)
+                val py = pys.getOrNull(idx) ?: ""
+                if (py.isNotEmpty()) {
+                    val digits = pinyinToDigits(py)
+                    if (digits.isNotEmpty()) candidates.add(digits)
+                }
+            }
+        } catch (_: Exception) { /* 回退下方 */ }
+        // 选最长的、且是 remaining 前缀的码长
+        val best = candidates.filter { it.isNotEmpty() && remaining.startsWith(it) }.maxByOrNull { it.length }
+        return best?.length ?: word.length
+    }
+
+    /** 拼音反推 T9 数字串（ziji → 9454），遇未知字母返回空串 */
+    private fun pinyinToDigits(py: String): String {
+        val sb = StringBuilder()
+        for (ch in py.lowercase()) {
+            if (ch == ' ' || ch == '\'' || ch == '·') continue
+            val key = t9Map.entries.firstOrNull { it.value.contains(ch) }?.key ?: return ""
+            sb.append(key)
+        }
+        return sb.toString()
     }
 
     /** 接龙组词：用「未消费后缀」重新喂 Rime，刷新候选栏为剩余部分候选 */
