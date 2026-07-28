@@ -85,7 +85,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 视图 ========================
     private lateinit var keyboardView: CesiaKeyboardView
     private lateinit var qwertyKeyboard: Keyboard
-    private lateinit var symbolKeyboardEn: Keyboard
     private lateinit var symbolKeyboardCn: Keyboard
     private lateinit var numberKeyboard: Keyboard
     private var currentKeyboard: Keyboard? = null
@@ -713,7 +712,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var apiUrl = "https://openrouter.ai/api/v1/chat/completions"
 
     // ======================== 键盘模式枚举 ========================
-    enum class KeyboardMode { QWERTY, SYMBOL_CN, SYMBOL_EN, NUMBER }
+    enum class KeyboardMode { QWERTY, SYMBOL_CN, NUMBER }
 
 // endregion 状态变量
 
@@ -1056,17 +1055,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化键盘
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
         try {
-            symbolKeyboardEn = Keyboard(this, R.xml.symbols)
+            symbolKeyboardCn = Keyboard(this, R.xml.symbols)
         } catch (e: Exception) {
-            Log.e("Cesia", "加载英文符号键盘失败", e)
-            symbolKeyboardEn = qwertyKeyboard
+            Log.e("Cesia", "加载符号键盘失败", e)
+            symbolKeyboardCn = qwertyKeyboard
         }
-        try {
-            symbolKeyboardCn = Keyboard(this, R.xml.symbols_cn)
-        } catch (e: Exception) {
-            Log.e("Cesia", "加载中文符号键盘失败", e)
-            symbolKeyboardCn = symbolKeyboardEn
-        }
+        // 读取符号键盘主/副翻转偏好
+        symbolFlipped = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getBoolean(SYMBOL_FLIP_PREF, false)
         try {
             numberKeyboard = Keyboard(this, R.xml.number)
             Log.d("Cesia", "number 键盘加载成功")
@@ -6188,19 +6184,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (clipboardAddMode) exitClipboardAddMode(save = false)
         // 记录进入符号键盘前的模式，用于返回
         // 只在从非符号键盘进入符号键盘时记录，符号↔符号切换不更新
-        if ((mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN)
-            && keyboardMode != KeyboardMode.SYMBOL_CN && keyboardMode != KeyboardMode.SYMBOL_EN) {
+        if (mode == KeyboardMode.SYMBOL_CN
+            && keyboardMode != KeyboardMode.SYMBOL_CN) {
             prevKeyboardMode = keyboardMode
         }
         keyboardMode = mode
         currentKeyboard = when (mode) {
             KeyboardMode.QWERTY -> qwertyKeyboard
             KeyboardMode.SYMBOL_CN -> symbolKeyboardCn
-            KeyboardMode.SYMBOL_EN -> symbolKeyboardEn
             KeyboardMode.NUMBER -> numberKeyboard
         }
-        keyboardView.keyboard = currentKeyboard
-        // 只有 NUMBER 模式（T9 数字键盘）才绘制字母主字符
+        if (mode == KeyboardMode.SYMBOL_CN) applySymbolFlip()
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
         if (mode == KeyboardMode.NUMBER) {
@@ -6243,7 +6237,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         updateShiftIndicator()
         keyboardView.invalidateAllKeys()
         // 符号键盘增加左右3px边距
-        val paddingPx = if (mode == KeyboardMode.SYMBOL_CN || mode == KeyboardMode.SYMBOL_EN) {
+        val paddingPx = if (mode == KeyboardMode.SYMBOL_CN) {
             (1.5f * resources.displayMetrics.density).toInt() // ≈3px on xhdpi
         } else 0
         keyboardView.setPadding(paddingPx, 0, paddingPx, 0)
@@ -6255,19 +6249,56 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    private fun toggleSymbolLanguage() {
-        // 在中文符号键盘和英文符号键盘之间切换（不更新 prevKeyboardMode，保持返回原键盘）
-        val wasPrev = prevKeyboardMode
-        if (keyboardMode == KeyboardMode.SYMBOL_CN) {
-            switchToKeyboard(KeyboardMode.SYMBOL_EN)
-        } else if (keyboardMode == KeyboardMode.SYMBOL_EN) {
-            switchToKeyboard(KeyboardMode.SYMBOL_CN)
+    // ===== 符号键盘：主/副语言翻转（⇄ 键） =====
+    // 合并键盘：主字符=CJ符号，副字符=EN变体。常打英文者点 ⇄ 翻转，
+    // 翻后主=EN变体、副=CJ符号，并持久化到 SharedPreferences。
+    private var symbolFlipped = false
+    private val SYMBOL_FLIP_PREF = "cesia_symbol_flip"
+
+    // 每个符号键的码 → (主字符, 副字符)。翻转时两者互换。
+    private val symbolPairMap: Map<Int, Pair<String, String>> by lazy {
+        val list = listOf(
+            -301 to ("（）" to "()"), -302 to ("《》" to "⟨⟩"), -303 to ("〔〕" to "{}"),
+            -304 to ("[]" to "<>"), -305 to ("『』" to "「」"), -306 to ("【】" to "⟦ ⟧"),
+            -307 to ("“”" to "‘’"), -308 to ("、" to "`"), -309 to (";" to "；"),
+            -310 to ("," to ","), -311 to ("+" to "-"), -312 to ("×" to "÷"),
+            -313 to ("√" to "✕"), -314 to ("=" to "≈"), -315 to ("<" to "≤"),
+            -316 to (">" to "≥"), -317 to ("%" to "‰"), -318 to ("～" to "~"),
+            -319 to ("·" to "∙"), -320 to ("。" to "."), -321 to ("*" to "#"),
+            -322 to ("@" to "&"), -323 to ("/" to "\\"), -324 to ("|" to "¦"),
+            -325 to ("°" to "′"), -326 to ("∞" to "∾"), -327 to ("■" to "□"),
+            -328 to ("★" to "☆"), -329 to ("！" to "!"), -330 to ("?" to "？"),
+            -331 to ("①" to "②"), -332 to ("③" to "④"), -333 to ("⑤" to "⑥"),
+            -334 to ("⑦" to "⑧"), -335 to ("⑨" to "⑩"), -336 to ("α" to "β"),
+            -337 to ("℃" to "℉"), -338 to ("€" to "₿"), -339 to ("¥" to "$"),
+            -340 to ("—" to "——"), -341 to ("……" to "…")
+        )
+        list.toMap()
+    }
+
+    // 切换符号键盘时按当前翻转状态刷新每个键的主/副字符，并立即重绘
+    private fun applySymbolFlip() {
+        val kb = symbolKeyboardCn
+        for (key in kb.keys) {
+            val primary = key.codes?.firstOrNull() ?: continue
+            val pair = symbolPairMap[primary] ?: continue
+            val (main, sub) = if (symbolFlipped) (pair.second to pair.first) else (pair.first to pair.second)
+            key.label = main
+            key.popupCharacters = sub
         }
-        prevKeyboardMode = wasPrev  // 恢复，确保返回键回到符号前原键盘
+        keyboardView.invalidateAllKeys()
+    }
+
+    private fun toggleSymbolFlip() {
+        symbolFlipped = !symbolFlipped
+        getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .edit().putBoolean(SYMBOL_FLIP_PREF, symbolFlipped).apply()
+        applySymbolFlip()
+        updateStatus(if (symbolFlipped) "符号：英文主 / 中文副" else "符号：中文主 / 英文副")
     }
 
     private fun toggleSymbolKeyboard() {
-        if (keyboardMode == KeyboardMode.SYMBOL_CN || keyboardMode == KeyboardMode.SYMBOL_EN) {
+        if (keyboardMode == KeyboardMode.SYMBOL_CN) {
             switchToKeyboard(KeyboardMode.QWERTY)
         } else { switchToKeyboard(KeyboardMode.SYMBOL_CN) }
     }
@@ -6379,7 +6410,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 keyboardView.isShiftMode = qwertyShiftTemp
                 keyboardView.isShiftLocked = qwertyShiftLocked
             }
-            KeyboardMode.SYMBOL_CN, KeyboardMode.SYMBOL_EN -> {
+            KeyboardMode.SYMBOL_CN -> {
                 keyboardView.isShiftMode = false
                 keyboardView.isShiftLocked = symbolShiftLocked
             }
@@ -6969,7 +7000,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun switchToDefaultKeyboard() {
         // 返回进入符号键盘前的键盘模式
         val targetMode = prevKeyboardMode
-        val wasSymbols = keyboardMode == KeyboardMode.SYMBOL_CN || keyboardMode == KeyboardMode.SYMBOL_EN
+        val wasSymbols = keyboardMode == KeyboardMode.SYMBOL_CN
         if (wasSymbols) {
             // 进入符号键盘时未曾切换 schema，直接切回即可
             switchToKeyboard(targetMode)
@@ -7012,7 +7043,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         longPressRunnable = Runnable {
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
-                val symbol = popup[0].toString()
+                // 长按符号上屏整串副字符（如 () 、<> ），而非仅第一个字符
+                val symbol = popup
                 // 长按符号上屏（，。！？等）：参照空格/点选上屏——先把当前 T9 首候选上屏，再上屏符号，最后清状态栏+候选栏
                 if (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty()) {
                     val cands = rimeEngine.candidates
@@ -8411,8 +8443,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
 
-            // ======================== 符号语言切换（中英符号）========================
-            KEYCODE_SWITCH_SYMBOL_LANG -> toggleSymbolLanguage()
+            // ======================== 符号主/副翻转（⇄）========================
+            KEYCODE_SWITCH_SYMBOL_LANG -> toggleSymbolFlip()
 
             // ======================== 数字切换（123）========================
             KEYCODE_SWITCH_NUMBER -> {
@@ -8420,7 +8452,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 defaultKeyboardLongPressRunnable = null
                 toggleNumberKeyboard()
             }
-            KEYCODE_CONTROL -> handleControlKey()
+
+            // ======================== 符号库（〰️）========================
+            KEYCODE_CONTROL -> showSymbolPanel()
             KEYCODE_SHIFT -> {
                 if (keyboardMode == KeyboardMode.QWERTY || keyboardMode == KeyboardMode.NUMBER) {
                     shortPressHandled = true; handleShiftKey()
@@ -8470,6 +8504,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (action == EditorInfo.IME_ACTION_SEND || action == EditorInfo.IME_ACTION_DONE) {
                     ic?.performEditorAction(action)
                 } else sendDownUpEnter()
+            }
+
+            // ======================== 符号键盘按键（-301~-341）=======================
+            // 由 symbolPairMap 决定主/副字符（受 ⇄ 翻转影响），点一下上屏整段
+            in -341..-301 -> {
+                shortPressHandled = true
+                val pair = symbolPairMap[primaryCode] ?: return
+                val out = if (symbolFlipped) pair.second else pair.first
+                // 配对类（长度>1且非「——」「……」等重复符号）上屏后光标停在中间
+                val caret = if (out.length > 1) 1 else out.length
+                currentInputConnection?.commitText(out, caret)
             }
 
             // ======================== 其他按键（标点等）=======================
