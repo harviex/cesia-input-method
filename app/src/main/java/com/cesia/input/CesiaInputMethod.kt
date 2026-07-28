@@ -390,8 +390,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 接龙组词：已消费的数字位数（从 t9DigitQueue 头部）。待匹配 = substring(t9ConsumedLen)。
     // 选词后消费对应长度，剩余字符继续组词；耗尽自动上屏；无匹配停留等退格。
     private var t9ConsumedLen = 0
-    // 用户自建词组库：词 → Pair(全拼数字串, 频次)（如 "大家不好"→("3254228426", 5)），接龙上屏时写入/累加频次，下次按频次降序融入候选
-    private val userPhrases = LinkedHashMap<String, Pair<String, Int>>()
+    // 用户自建词组库：词 → (该词所有有效 T9 数字码集合, 频次)。
+    // 数字码包括：组词时按下的原始数字串、全拼反推码、简拼首字母反推码。
+    // 匹配时任一码以当前输入为前缀即注入候选，从而全拼/简拼/任意前缀都能命中该词。
+    private data class UserPhraseEntry(val codes: MutableSet<String>, var freq: Int)
+    private val userPhrases = LinkedHashMap<String, UserPhraseEntry>()
     // 候选懒加载：candPageWalk=已扫页数(10页=50候选)，滚到底+10页(50)；上限 MAX_PAGE_WALK(50页=250)
     private var candPageWalk = 10
     private var candTotalLoaded = 0
@@ -2394,14 +2397,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
         var allCands = rimeAllCands
-        // 注入用户自建词组：按频次降序融入 Rime 候选（不强行置顶），保持整体词频顺序
-        // 单键(length==1)只出单字，不注入用户词组，避免高频词组挤掉单字
-        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length != 1 && userPhrases.isNotEmpty()) {
+        // 注入用户自建词组：按频次降序融入候选（不强行置顶），保持整体词频顺序。
+        // 匹配规则：该词的任一登记码（原始数字串/全拼码/简拼码）以当前输入为前缀即命中，
+        // 从而使全拼、简拼、任意前缀数字串都能找到该词。单键(length==1)不注入（避免挤掉单字）。
+        if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length != 1 && userPhrases.isNotEmpty()) {
             val curDigits = if (t9DigitQueue.length > t9ConsumedLen) t9DigitQueue.substring(t9ConsumedLen) else ""
             if (curDigits.isNotEmpty()) {
-                val matched = userPhrases.filter { (_, pair) -> pair.first.startsWith(curDigits) }
-                    .toList()
-                    .sortedByDescending { it.second.second } // it: Pair<String, Pair<String, Int>> -> second.second = freq
+                val matched = userPhrases.filter { (_, entry) ->
+                    entry.codes.any { it.startsWith(curDigits) }
+                }.toList()
+                    .sortedByDescending { it.second.freq }
                     .map { it.first } // phrase
                 if (matched.isNotEmpty()) {
                     // 按频次插入：遍历 Rime 候选，在合适位置插入用户词（不破坏整体词频序）
@@ -4744,9 +4749,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     // 兼容旧格式：仅数字串 -> 频次默认 1
                     if (v.contains(",")) {
                         val parts = v.split(",")
-                        userPhrases[k] = parts[0] to (parts[1].toIntOrNull() ?: 1)
+                        userPhrases[k] = UserPhraseEntry(mutableSetOf(parts[0]), parts[1].toIntOrNull() ?: 1)
                     } else {
-                        userPhrases[k] = v to 1
+                        userPhrases[k] = UserPhraseEntry(mutableSetOf(v), 1)
                     }
                 }
             }
@@ -4757,25 +4762,45 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val obj = org.json.JSONObject()
             for ((k, v) in userPhrases) {
-                obj.put(k, "${v.first},${v.second}")
+                // 存储格式：主码,频次（其余码运行时反推，无需持久化）
+                val mainCode = v.codes.firstOrNull { it.isNotEmpty() } ?: v.codes.firstOrNull() ?: ""
+                obj.put(k, "$mainCode,${v.freq}")
             }
             getSharedPreferences("cesia_dict", MODE_PRIVATE).edit()
                 .putString("user_phrases_json", obj.toString()).apply()
         } catch (_: Exception) {}
     }
 
-    /** 写入用户词组（词→数字串），去重并累加频次，按频次降序保持前 500 */
-    private fun addUserPhrase(phrase: String, digits: String) {
-        if (phrase.length < 2 || digits.isEmpty()) return
-        val (_, oldFreq) = userPhrases[phrase] ?: digits to 0
-        userPhrases[phrase] = digits to (oldFreq + 1)
+    /** 把一组数字码登记进某词（合并去重），并累加频次 */
+    private fun registerUserPhraseCodes(phrase: String, codes: Set<String>, freqDelta: Int = 1) {
+        if (phrase.length < 2) return
+        val entry = userPhrases[phrase]
+        if (entry != null) {
+            entry.codes.addAll(codes.filter { it.isNotEmpty() })
+            entry.freq += freqDelta
+        } else {
+            userPhrases[phrase] = UserPhraseEntry(codes.filter { it.isNotEmpty() }.toMutableSet(), freqDelta)
+        }
         // 限制规模，避免无限增长：保留频次最高的 500 条
         if (userPhrases.size > 500) {
-            val minFreq = userPhrases.values.map { it.second }.minOrNull() ?: 1
-            val keysToRemove = userPhrases.filter { it.value.second == minFreq }.keys.take(userPhrases.size - 500)
+            val minFreq = userPhrases.values.map { it.freq }.minOrNull() ?: 1
+            val keysToRemove = userPhrases.filter { it.value.freq == minFreq }.keys.take(userPhrases.size - 500)
             keysToRemove.forEach { userPhrases.remove(it) }
         }
         saveUserPhrases()
+    }
+    /** 写入用户词组（接龙上屏时调用）：把「原始数字串 + 全拼反推码 + 简拼首字母反推码」全部登记，
+     *  使该词在输入全拼/简拼/任意前缀数字串时都能被匹配到。 */
+    private fun addUserPhrase(phrase: String, digits: String) {
+        if (phrase.length < 2 || digits.isEmpty()) return
+        // 反推全拼码：转简体后逐字取拼音再转 T9 数字（无 Rime 会话依赖）
+        val simplex = toSimplified(phrase)
+        val fullPy = toPinyinFull(simplex)        // 全拼：youmajiana
+        val fullCode = if (fullPy.isNotEmpty()) pinyinToDigits(fullPy) else ""
+        val simpPy = toPinyinFirstLetters(simplex) // 简拼首字母：ymjn
+        val simpDigits = if (simpPy.isNotEmpty()) pinyinToDigits(simpPy) else ""
+        val codes = mutableSetOf(digits, fullCode, simpDigits).filter { it.isNotEmpty() }.toSet()
+        registerUserPhraseCodes(phrase, codes, 1)
     }
 
     private fun updateTraditionalButton() {
@@ -6708,7 +6733,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun actualWordDigitLen(word: String): Int {
         val remaining = if (t9DigitQueue.length > t9ConsumedLen) t9DigitQueue.substring(t9ConsumedLen) else ""
         val candidates = mutableListOf<String>()
-        val (stored, _) = userPhrases[word] ?: "" to 0
+        val stored = userPhrases[word]?.codes?.firstOrNull { it.isNotEmpty() } ?: ""
         if (stored.isNotEmpty()) candidates.add(stored)
         try {
             val cands = rimeEngine.getAllCandidates(50)
