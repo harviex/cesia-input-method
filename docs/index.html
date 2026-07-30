@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cesia — 懂你的 AI 输入法</title>
+  <style>
+    :root {
+      --bg: #f6f9fb;
+      --surface: #ffffff;
+      --brand: #7ec8e3;
+      --brand2: #b8e4d0;
+      --text: #1f2937;
+      --subtle: #6b7280;
+      --border: #e5e7eb;
+      --shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", PingFang SC, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+      background: rgba(246, 249, 251, 0.85);
+      border-bottom: 1px solid var(--border);
+    }
+    header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      color: #0f172a;
+    }
+    .brand-icon {
+      width: 32px; height: 32px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      display: grid; place-items: center; color: white; font-weight: 800;
+    }
+    nav a { color: #334155; margin-left: 18px; font-size: 14px; font-weight: 500; }
+    nav a.btn {
+      background: #0f172a; color: white; padding: 8px 14px; border-radius: 10px; margin-left: 18px;
+    }
+    nav a.btn:hover { background: #1e293b; text-decoration: none; }
+
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 56px);
+      line-height: 1.15;
+      margin: 0 0 16px;
+      letter-spacing: -0.02em;
+    }
+    .hero p.lead {
+      color: var(--subtle);
+      font-size: 18px;
+      max-width: 680px;
+      margin: 0 auto 28px;
+    }
+    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 18px; border-radius: 14px; font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .btn.primary { background: #0f172a; color: white; }
+    .btn.secondary { background: white; color: #0f172a; border-color: var(--border); }
+
+    .section { padding: 60px 0; }
+    .section-title { font-size: 24px; margin: 0 0 24px; }
+
+    .grid { display: grid; gap: 16px; }
+    .features { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .card .icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: grid; place-items: center; margin-bottom: 12px; font-size: 18px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 16px; }
+    .card p { margin: 0; color: var(--subtle); font-size: 14px; }
+
+    .kv {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .kv .item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      text-align: center;
+    }
+    .kv .num { font-size: 28px; font-weight: 700; }
+    .kv .label { color: var(--subtle); font-size: 13px; margin-top: 4px; }
+
+    .install {
+      background: linear-gradient(180deg, #eef6ff, #f6f9fb);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .install ol { max-width: 640px; margin: 0 auto; padding-left: 20px; color: #334155; }
+    .install li { margin: 10px 0; }
+    code {
+      background: #eef2ff; color: #3730a3; padding: 2px 6px; border-radius: 6px; font-size: 13px;
+    }
+
+    .cta { text-align: center; padding: 70px 0; }
+    .cta .box {
+      background: #0f172a; color: white; border-radius: 22px; padding: 40px;
+    }
+    .cta .box h2 { margin: 0 0 10px; }
+    .cta .box p { color: #cbd5e1; margin: 0 0 20px; }
+    .cta .box .btn { background: white; color: #0f172a; }
+
+    footer {
+      padding: 30px 0;
+      color: var(--subtle);
+      font-size: 13px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 640px) {
+      nav a { display: none; }
+      .hero { padding: 56px 0 48px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="brand">
+        <div class="brand-icon">C</div>
+        <span>Cesia</span>
+      </div>
+      <nav>
+        <a href="#features">功能</a>
+        <a href="#install">安装</a>
+        <a href="https://github.com/harviex/cesia-input-method" target="_blank">GitHub</a>
+        <a class="btn" href="https://github.com/harviex/cesia-input-method/releases/latest" target="_blank">下载 APK</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>懂你的 AI 输入法<br>语音润色 · 魔法修改 · 双拼 / T9</h1>
+      <p class="lead">
+        Cesia 把 AI 真正融入输入体验。语音输入后自动润色，选中文字即可用“魔法”一键改写；支持全键盘、T9 九宫格、Rime 引擎输入。你的数据留在本地。
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/harviex/cesia-input-method/releases/latest" target="_blank">下载最新 APK</a>
+        <a class="btn secondary" href="#install">安装指引</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="container">
+      <h2 class="section-title">核心功能</h2>
+      <div class="grid features">
+        <div class="card">
+          <div class="icon" style="background:#dff2e7">🎤</div>
+          <h3>AI 语音润色</h3>
+          <p>说完就润色：系统语音识别 → AI 润色 → 一键上屏。支持语气、风格、翻译、缩写等。</p>
+        </div>
+        <div class="card">
+          <div class="icon" style="background:#e7f2ff">✨</div>
+          <h3>魔法修改</h3>
+          <p>选中文字，用语音或预设指令让 AI 改写：扩写、缩写、翻译、换语气，立刻替换原文。</p>
+        </div>
+        <div class="card">
+          <div class="icon" style="background:#fff0e6">📖</div>
+          <h3>魔法书</h3>
+          <p>管理你的魔法指令：固定、新增、编辑、删除、撤销。打造你的专属“改写词库”。</p>
+        </div>
+        <div class="card">
+          <div class="icon" style="background:#f3e8ff">⌨️</div>
+          <h3>全键盘 / 双拼</h3>
+          <p>标准 QWERTY 布局，Rime 引擎驱动，支持拼音、双拼、模糊音，以及长按功能键快捷键。</p>
+        </div>
+        <div class="card">
+          <div class="icon" style="background:#ffe7f0">🔢</div>
+          <h3>T9 九宫格</h3>
+          <p>单手输入：2-9 数字键拼音 + 长按候选字母 + Shift 切换纯数字，兼顾效率与便利。</p>
+        </div>
+        <div class="card">
+          <div class="icon" style="background:#e8f8ff">🔤</div>
+          <h3>英文 / 符号键盘</h3>
+          <p>中英符号快速切换、数字键盘，满足邮箱、密码、公式等输入场景。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="philosophy">
+    <div class="container">
+      <h2 class="section-title">为什么选 Cesia</h2>
+      <div class="kv">
+        <div class="item"><div class="num">本地优先</div><div class="label">数据不回传，设置实时生效</div></div>
+        <div class="item"><div class="num">Rime 引擎</div><div class="label">成熟中文输入，可定制词库</div></div>
+        <div class="item"><div class="num">AI 可替换</div><div class="label">自备 OpenRouter Key，模型自己选</div></div>
+        <div class="item"><div class="num">免费体验</div><div class="label">基础功能永久免费</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section install" id="install">
+    <div class="container">
+      <h2 class="section-title">安装与使用</h2>
+      <ol>
+        <li>从 <a href="https://github.com/harviex/cesia-input-method/releases/latest" target="_blank">GitHub Releases</a> 下载 <code>Cesia-xxx-debug.apk</code>（约 55MB，覆盖安装即可）。</li>
+        <li>安装后进入 <strong>系统设置 → 系统 → 语言和输入法 → 虚拟键盘</strong>，启用<strong> Cesia</strong>。</li>
+        <li>再进入<strong>默认键盘</strong>，选择 <strong>Cesia</strong>。</li>
+        <li>打开任意输入框，即可使用全键盘、T9，以及录音润色和魔法修改。</li>
+        <li>在 Cesia 设置中可配置 API URL / Key、AI 模型、回复风格、开关模糊音、切换深浅主题。</li>
+      </ol>
+      <div class="actions" style="margin-top:22px">
+        <a class="btn primary" href="https://github.com/harviex/cesia-input-method/releases/latest" target="_blank">前往 Releases 下载</a>
+        <a class="btn secondary" href="https://github.com/harviex/cesia-input-method" target="_blank">查看源码</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">路线图</h2>
+      <div class="grid features">
+        <div class="card">
+          <h3>P0 状态栏情感化定制</h3>
+          <p>让输入法有温度：可自定义状态栏文案，内置模板一键选用，成长阶段自动变化。</p>
+        </div>
+        <div class="card">
+          <h3>P1 AI 成长进度条</h3>
+          <p>把“记住你多少表达方式”可视化，用进度条和迷你指示器营造归属感。</p>
+        </div>
+        <div class="card">
+          <h3>P2 本地词频学习</h3>
+          <p>Trie + SQLite 持久化，在不联网的前提下越用越懂你。</p>
+        </div>
+        <div class="card">
+          <h3>P3 上下文预测</h3>
+          <p>未来方向：基于本地历史输入的上下文辅助预测，不依赖云端。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <div class="box">
+        <h2>试试 Cesia</h2>
+        <p>免费下载，覆盖安装。你输入的每一个字，都值得被认真对待。</p>
+        <a class="btn" href="https://github.com/harviex/cesia-input-method/releases/latest" target="_blank">下载最新版本</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      © Cesia Input Method · 隐私优先，数据留在本地
+    </div>
+  </footer>
+</body>
+</html>
