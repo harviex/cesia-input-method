@@ -2380,23 +2380,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
-        
-        // 【输入时联想】：正常模式下有拼音输入时，实时查询联想词（像搜索建议）
-        // 仅在非编辑模式、非联想模式、有 composing 且拼音长度>=10 时触发
-        // 短拼音不联想，避免与新词接龙冲突
-        if (!smartEditMode && !magicEditMode && !isAssociationMode && composing && pinyin.length >= 10) {
-            val associations = rimeEngine.getAssociations(pinyin).take(20)
-            if (associations.isNotEmpty()) {
-                isAssociationMode = true
-                associationPrefix = pinyin
-                associationCandidates = associations
-                if (isPanelExpanded) collapseCandidatePanel()
-                showAssociationCandidates()
-                return
-            }
-        }
 
-        // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；单键单字用枚举候选(跟随选音)；全键盘始终走自身 pinyin 候选
+        // 简拼模式：仅 T9 数字键盘下用合并候选（分词字符串 + 字母组合交叉）；单键单字用枚举候选(跟随选音)；全键盘始终走自身 pinyin 候选
         val rimeAllCands = when {
             keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty() -> t9FenCiMerged
             keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
