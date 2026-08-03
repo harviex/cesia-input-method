@@ -4445,7 +4445,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val comp = rimeEngine.composingText
         val display = magicEditBuffer.toString() + comp
         if (display.isEmpty()) {
-            updateStatus("✏️ 输入魔法指令...（按发送键保存）")
+            updateStatus("✏️ 输入智能修改指令...（按发送键保存）")
         } else {
             updateStatus("✏️ $display")
         }
@@ -4458,7 +4458,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         magicEditMode = true
         magicEditBuffer.clear()
         magicEditMgr = mgr
-        updateStatus("✏️ 输入魔法指令...（按发送键保存）")
+        updateStatus("✏️ 输入智能修改指令...（按发送键保存）")
     }
 
     /** 退出魔法编辑模式 */
@@ -4471,7 +4471,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 updateStatus(" 已保存魔法：${text.take(20)}")
             }
         } else {
-            if (magicEditMode) updateStatus("已取消新增魔法")
+            if (magicEditMode) updateStatus("已取消新增智能修改命令")
         }
         magicEditMode = false
         magicEditBuffer.clear()
