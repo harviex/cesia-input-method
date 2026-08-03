@@ -2089,9 +2089,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } else if (magicEditMode) {
                 magicEditBuffer.append(selectedDisplay)
                 updateMagicEditStatus()
-            } else if (clipboardAddMode) {
-                clipboardAddBuffer.append(selectedDisplay)
-                updateClipboardAddStatus()
             } else {
                 commitCandidateText(selectedDisplay)
             }
@@ -2174,7 +2171,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 when {
                     smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
                     magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
-                    clipboardAddMode -> { clipboardAddBuffer.append(toCommit); updateClipboardAddStatus() }
                     else -> commitCandidateText(toCommit)
                 }
                 val remaining = t9DigitQueue.length - t9ConsumedLen
@@ -2194,13 +2190,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             when {
                 smartEditMode -> { smartEditBuffer.append(toCommit); updateSmartEditStatus() }
                 magicEditMode -> { magicEditBuffer.append(toCommit); updateMagicEditStatus() }
-                clipboardAddMode -> { clipboardAddBuffer.append(toCommit); updateClipboardAddStatus() }
                 else -> commitCandidateText(toCommit)
             }
             rimeEngine.clear()
             // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
             val newAssoc = rimeEngine.getAssociations(clickedWord).take(20)
-            if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode && !clipboardAddMode) {
+            if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode) {
                 // 清 T9 残留（数字队列/候选音区），避免点击上屏后状态栏和候选音不消失
                 t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
                 updateSpellBar()
@@ -2249,11 +2244,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 magicEditBuffer.append(toCommit)
                 rimeEngine.clear()
                 updateMagicEditStatus()
-            } else if (clipboardAddMode) {
-                // 剪贴板新增模式：写入 buffer 而不是上屏
-                clipboardAddBuffer.append(toCommit)
-                rimeEngine.clear()
-                updateClipboardAddStatus()
             } else {
                 // 上屏分支：全拼接龙组词——点/空格即上屏该词（标准输入法语义），剩余数字继续接龙
                 if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
@@ -2390,6 +2380,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
+        
+        // 【输入时联想】：正常模式下有拼音输入时，实时查询联想词（像搜索建议）
+        // 仅在非编辑模式、非联想模式、有 composing 时触发
+        if (!smartEditMode && !magicEditMode && !isAssociationMode && composing && pinyin.isNotEmpty()) {
+            val associations = rimeEngine.getAssociations(pinyin).take(20)
+            if (associations.isNotEmpty()) {
+                isAssociationMode = true
+                associationPrefix = pinyin
+                associationCandidates = associations
+                if (isPanelExpanded) collapseCandidatePanel()
+                showAssociationCandidates()
+                return
+            }
+        }
+
         // 简拼模式：仅 T9 数字键盘下用合并候选（分词符串 + 字母组合交叉）；单键单字用枚举候选(跟随选音)；全键盘始终走自身 pinyin 候选
         val rimeAllCands = when {
             keyboardMode == KeyboardMode.NUMBER && t9FenCiOn && t9FenCiMerged.isNotEmpty() -> t9FenCiMerged
@@ -2455,13 +2460,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // T9 模式：状态栏显示「已选字母 + 剩余未选数字」（逐键选音进度）；选满后只显示字母
         // 接龙态(t9ConsumedLen>0)下跳过已消费前缀，只显示未消费后缀的选音进度
-        if (keyboardMode == KeyboardMode.NUMBER && (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty())) {
-            val skip = t9ConsumedLen.coerceAtMost(t9DigitQueue.length)
-            val from = (skip + t9SpellPrefix.length).coerceAtMost(t9DigitQueue.length)
-            val remaining = if (from < t9DigitQueue.length) t9DigitQueue.substring(from) else ""
-            updateStatus(t9SpellPrefix.toString() + remaining)
-        } else {
-            updateStatus(pinyin)
+        // 编辑模式(smartEditMode/magicEditMode)已自行设置状态栏，跳过覆盖
+        if (!(smartEditMode || magicEditMode)) {
+            if (keyboardMode == KeyboardMode.NUMBER && (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty())) {
+                val skip = t9ConsumedLen.coerceAtMost(t9DigitQueue.length)
+                val from = (skip + t9SpellPrefix.length).coerceAtMost(t9DigitQueue.length)
+                val remaining = if (from < t9DigitQueue.length) t9DigitQueue.substring(from) else ""
+                updateStatus(t9SpellPrefix.toString() + remaining)
+            } else {
+                updateStatus(pinyin)
+            }
         }
 
         // 联想模式：显示联想候选词
@@ -4424,10 +4432,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private var smartEditMode = false
     private var smartEditBuffer = StringBuilder()
 
-    // ======================== 剪贴板新增模式 ========================
-    private var clipboardAddMode = false
-    private var clipboardAddBuffer = StringBuilder()
-
     /** 关闭所有弹窗（长按互斥） */
     private fun dismissAllPopups() {
         magicHistoryPopup?.dismiss()
@@ -4443,8 +4447,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         btnMagic.background = makeKeyBgDrawable(currentKeyBg)
         btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
         stopMagicBookGlow()
-        // 退出剪贴板新增模式
-        if (clipboardAddMode) exitClipboardAddMode(save = false)
     }
 
 // endregion 候选适配器
@@ -4461,27 +4463,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } else {
             updateStatus("✏️ $display")
         }
-        // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
-        candidateAdapter?.updateData(allCands)
-        rvCandidates?.scrollToPosition(0)
-        setCandidateBarVisible(rimeEngine.isComposing)
-    }
-
-    /** 退出剪贴板新增模式 */
-    private fun exitClipboardAddMode(save: Boolean = false) {
-        if (save && clipboardAddBuffer.isNotEmpty()) {
-            val text = clipboardAddBuffer.toString().trim()
-            if (text.isNotEmpty()) {
-                clipboardItems.add(0, ClipboardItem(text = text, isPinned = false))
-                saveClipboardHistoryFromClassMembers()
-                updateStatus(" 已保存至剪贴板：${text.take(20)}")
-            }
-        } else {
-            if (clipboardAddMode) updateStatus("已取消新增剪贴板")
-        }
-        clipboardAddMode = false
-        clipboardAddBuffer.clear()
+        // 复用正常的候选栏更新流水线，保证 T9过滤/用户词组/简繁/置顶降频 完整处理
+        updateCandidateBar()
     }
 
     /** 进入魔法编辑模式：关闭弹窗，清空缓冲区，等待键盘输入 */
@@ -4518,27 +4501,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         } else {
             updateStatus("✏️ $display")
         }
-        // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
-        candidateAdapter?.updateData(allCands)
-        rvCandidates?.scrollToPosition(0)
-        setCandidateBarVisible(rimeEngine.isComposing)
-    }
-
-    /** 更新剪贴板新增模式状态（同步候选栏） */
-    private fun updateClipboardAddStatus() {
-        val comp = rimeEngine.composingText
-        val display = clipboardAddBuffer.toString() + comp
-        if (display.isEmpty()) {
-            updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
-        } else {
-            updateStatus("✏️ $display")
-        }
-        // 同步更新候选栏
-        val allCands = rimeEngine.getAllCandidates()
-        candidateAdapter?.updateData(allCands)
-        rvCandidates?.scrollToPosition(0)
-        setCandidateBarVisible(rimeEngine.isComposing)
+        // 复用正常的候选栏更新流水线，保证 T9过滤/用户词组/简繁/置顶降频 完整处理
+        updateCandidateBar()
     }
 
     /** 退出智能写作命令编辑模式 */
@@ -6217,7 +6181,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 切换键盘时退出魔法编辑模式和智能写作编辑模式
         if (magicEditMode) exitMagicEditMode(save = false)
         if (smartEditMode) exitSmartEditMode(save = false)
-        if (clipboardAddMode) exitClipboardAddMode(save = false)
         // 记录进入符号键盘前的模式，用于返回
         // 只在从非符号键盘进入符号键盘时记录，符号↔符号切换不更新
         if (mode == KeyboardMode.SYMBOL_CN
@@ -7731,39 +7694,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         dialog.show()
     }
 
-    /** 显示剪贴板新增弹窗（PopupWindow 内的 EditText 无法接收 IME，需手动拦截输入） */
-    private fun showClipboardAddPopup() {
-        clipboardAddMode = true
-        clipboardAddBuffer.clear()
-        dismissAllPopups()
-        val inflater = LayoutInflater.from(this)
-        val view = inflater.inflate(R.layout.popup_clipboard_manager, null)
-        val popup = PopupWindow(
-            view,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        ).apply {
-            isFocusable = true
-            setBackgroundDrawable(ContextCompat.getDrawable(this@CesiaInputMethod, R.drawable.popup_bg))
-            elevation = 8f
-            setOutsideTouchable(true)
-        }
-        clipboardPopup = popup
-        clipboardPopupView = view
-
-        // 更新标题为"新增"
-        val bannerBar = view.findViewById<LinearLayout>(R.id.banner_bar)
-        bannerBar?.getChildAt(0)?.let { (it as TextView).text = "➕ 新增剪贴板" }
-
-        // 状态栏提示
-        updateStatus("✏️ 输入剪贴板内容...（按发送键保存）")
-
-        // 显示弹窗
-        val parentView = keyboardView
-        popup.showAtLocation(parentView, Gravity.CENTER, 0, 0)
-    }
-
     private fun updateClipboardFavorites() {
         // 原实现从已废弃的 clipboardHistory(恒为空)读取导致 favorites 被清空；
         // 直接复用 saveClipboardHistoryFromClassMembers 统一持久化(历史+收藏)，避免覆盖正确数据。
@@ -7944,12 +7874,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
                 in 97..122 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     rimeEngine.processKey(primaryCode.toChar())
                     updateSmartEditStatus()
                     return
                 }
                 // 数字键 0-9：T9模式走T9拼音引擎，全键盘模式选词或追加
                 in 48..57 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     if (keyboardMode == KeyboardMode.NUMBER) {
                         rimeEngine.processKey(primaryCode.toChar())
                         updateSmartEditStatus()
@@ -7971,6 +7903,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 空格：如果有候选词则选第一个词，否则追加空格
                 32 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                         val selected = rimeEngine.selectCandidate(0)
                         if (selected.isNotEmpty()) {
@@ -8033,12 +7966,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
                 in 97..122 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     rimeEngine.processKey(primaryCode.toChar())
                     updateMagicEditStatus()
                     return
                 }
                 // 数字键 0-9：T9模式走T9拼音引擎，全键盘模式选词或追加
                 in 48..57 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     if (keyboardMode == KeyboardMode.NUMBER) {
                         // T9模式：数字键直接走Rime引擎（字母输入模式），不走T9 buffer
                         rimeEngine.processKey(primaryCode.toChar())
@@ -8061,6 +7996,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
                 // 空格：如果有候选词则选第一个词，否则追加空格
                 32 -> {
+                    if (isAssociationMode) exitAssociationMode()
                     if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
                         val selected = rimeEngine.selectCandidate(0)
                         if (selected.isNotEmpty()) {
@@ -8085,94 +8021,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     rimeEngine.clear()
                     magicEditBuffer.append(primaryCode.toChar())
                     updateMagicEditStatus()
-                    return
-                }
-            }
-        }
-
-        // ======================== 剪贴板新增模式拦截 ========================
-        if (clipboardAddMode) {
-            when (primaryCode) {
-                // 发送键/回车键：保存剪贴板并退出编辑模式
-                -200, 10 -> {
-                    val comp = rimeEngine.composingText
-                    if (comp.isNotEmpty()) {
-                        clipboardAddBuffer.append(comp)
-                        rimeEngine.clear()
-                    }
-                    exitClipboardAddMode(save = true)
-                    return
-                }
-                // 返回键：取消并退出编辑模式
-                KeyEvent.KEYCODE_BACK -> {
-                    rimeEngine.clear()
-                    exitClipboardAddMode(save = false)
-                    return
-                }
-                // 退格键：优先删除 Rime composition，其次删除缓冲区
-                -5, Keyboard.KEYCODE_DELETE -> {
-                    if (rimeEngine.isComposing) {
-                        rimeEngine.processKey("BackSpace")
-                        updateClipboardAddStatus()
-                    } else if (clipboardAddBuffer.isNotEmpty()) {
-                        clipboardAddBuffer.deleteCharAt(clipboardAddBuffer.length - 1)
-                        updateClipboardAddStatus()
-                    }
-                    return
-                }
-                // 字母键 a-z：走 Rime 引擎，让候选栏正常显示
-                in 97..122 -> {
-                    rimeEngine.processKey(primaryCode.toChar())
-                    updateClipboardAddStatus()
-                    return
-                }
-                // 数字键 0-9
-                in 48..57 -> {
-                    if (keyboardMode == KeyboardMode.NUMBER) {
-                        rimeEngine.processKey(primaryCode.toChar())
-                        updateClipboardAddStatus()
-                    } else if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                        val index = if (primaryCode == 48) 9 else (primaryCode - 49)
-                        val cands = rimeEngine.candidates
-                        if (index < cands.size) {
-                            val selected = rimeEngine.selectCandidate(index)
-                            if (selected.isNotEmpty()) {
-                                clipboardAddBuffer.append(selected)
-                                rimeEngine.clear()
-                            }
-                        }
-                    } else {
-                        clipboardAddBuffer.append(primaryCode.toChar())
-                    }
-                    updateClipboardAddStatus()
-                    return
-                }
-                // 空格：如果有候选词则选第一个词，否则追加空格
-                32 -> {
-                    if (rimeEngine.isComposing && rimeEngine.hasCandidates) {
-                        val selected = rimeEngine.selectCandidate(0)
-                        if (selected.isNotEmpty()) {
-                            clipboardAddBuffer.append(selected)
-                            rimeEngine.clear()
-                        }
-                    } else {
-                        clipboardAddBuffer.append(' ')
-                    }
-                    updateClipboardAddStatus()
-                    return
-                }
-                // 标点符号直接追加
-                44, 46, 59, 33, 63, 45, 95, 43, 61, 40, 41, 123, 125, 91, 93, 47, 92, 58, 34, 39, 60, 62, 42, 38, 37, 35, 64, 36, 94, 126, 96, 124 -> {
-                    rimeEngine.clear()
-                    clipboardAddBuffer.append(primaryCode.toChar())
-                    updateClipboardAddStatus()
-                    return
-                }
-                // 中文标点（Unicode）
-                65292, 12290, 65307, 65281, 65311, 12289, 65288, 65289, 8220, 8221, 8216, 8217 -> {
-                    rimeEngine.clear()
-                    clipboardAddBuffer.append(primaryCode.toChar())
-                    updateClipboardAddStatus()
                     return
                 }
             }
