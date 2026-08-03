@@ -365,7 +365,7 @@ class RimeEngine(private val context: Context) : InputEngine {
         if (prefix.isEmpty()) return emptyList() // 允许单字联想
 
         if (!dictIndexBuilt) {
-            // 索引未完成：触发后台构建，直接返回空避免卡顿
+            // 索引未完成：触发后台构建（如果尚未启动）
             if (dictIndex == null) {
                 Thread {
                     try {
@@ -378,7 +378,13 @@ class RimeEngine(private val context: Context) : InputEngine {
                     }
                 }.start()
             }
-            return emptyList()
+            // 首次查询时短暂等待索引构建（最多 timeoutMs），避免首次选词联想为空
+            var waited = 0L
+            while (!dictIndexBuilt && waited < timeoutMs) {
+                try { Thread.sleep(50) } catch (_: InterruptedException) {}
+                waited += 50
+            }
+            if (!dictIndexBuilt) return emptyList()
         }
 
         val index = dictIndex ?: return emptyList()
