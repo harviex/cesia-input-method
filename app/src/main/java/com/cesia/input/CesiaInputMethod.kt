@@ -2382,8 +2382,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val pinyin = rimeEngine.composingText
         
         // 【输入时联想】：正常模式下有拼音输入时，实时查询联想词（像搜索建议）
-        // 仅在非编辑模式、非联想模式、有 composing 时触发
-        if (!smartEditMode && !magicEditMode && !isAssociationMode && composing && pinyin.isNotEmpty()) {
+        // 仅在非编辑模式、非联想模式、有 composing 且拼音长度>=10 时触发
+        // 短拼音不联想，避免与新词接龙冲突
+        if (!smartEditMode && !magicEditMode && !isAssociationMode && composing && pinyin.length >= 10) {
             val associations = rimeEngine.getAssociations(pinyin).take(20)
             if (associations.isNotEmpty()) {
                 isAssociationMode = true
