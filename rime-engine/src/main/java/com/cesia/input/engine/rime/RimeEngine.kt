@@ -78,6 +78,9 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     fun lastError(): String? = RimeJni.unavailableMessage()
 
+    /** 联想索引是否已构建完成（用于首查失败后延时补查） */
+    fun isAssociationIndexReady(): Boolean = dictIndexBuilt
+
     private fun copyRimeAssetsIfNeeded() {
         // 使用外部存储目录：/sdcard/Android/data/com.cesia.input/files/rime/
         // 词库下载到此目录，schema 配置从 APK assets 复制（仅首次）
