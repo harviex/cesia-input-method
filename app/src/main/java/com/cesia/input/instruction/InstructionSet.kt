@@ -80,7 +80,7 @@ object InstructionSet {
     )
 
     // ==================== 生成类（15条，星星按钮专用，允许空文本）====================
-    private val generateInstructions = listOf(
+    private val generateInstructionsInternal = listOf(
         Instruction("gen_news", "生成", "生成今日新闻简报", "请搜索今天发生的国内外重要新闻，生成一份200字左右的新闻简报，包含3-5条要点，语言简洁客观，只输出新闻内容，不要输出任何解释", listOf("新闻", "今日新闻", "新闻简报", "今天新闻"), isGeneration = true),
         Instruction("gen_idea", "生成", "帮我想几个创意点子", "根据以下主题，帮我想出5个创意点子，每个点子用一句话概括，以列表形式输出，只输出点子列表，不要输出任何解释", listOf("帮我想", "帮我想想", "想点子", "出主意", "给建议"), isGeneration = true),
         Instruction("gen_write", "生成", "帮我写一段文字", "根据以下要求，帮我写一段文字，内容通顺流畅，逻辑清晰，不少于150字，只输出文字内容，不要输出任何解释", listOf("帮我写", "帮我写一段", "写一段", "写一篇"), isGeneration = true),
@@ -125,8 +125,13 @@ object InstructionSet {
         polishInstructions
     ).flatten()
 
+    // ==================== 公开访问器 ====================
+
+    /** 获取生成类指令（智能写作用） */
+    fun getGenerateInstructions(): List<Instruction> = generateInstructionsInternal
+
     // ==================== 仅生成类（星星按钮专用） ====================
-    val starInstructions: List<Instruction> = generateInstructions
+    val starInstructions: List<Instruction> = generateInstructionsInternal
 
     // ==================== 分类列表 ====================
     val categories: List<String> = listOf(
@@ -239,13 +244,10 @@ object InstructionSet {
     /** 获取所有翻译类指令 */
     fun getTranslateInstructions(): List<Instruction> = translateInstructions
 
-    /** 获取所有生成类指令 */
-    fun getGenerateInstructions(): List<Instruction> = generateInstructions
-
     /** 判断是否为生成类指令 */
     fun isGenerationInstruction(text: String): Boolean {
         val normalized = text.trim().replace(" ", "")
-        return generateInstructions.any { inst ->
+        return generateInstructionsInternal.any { inst ->
             inst.keywords.any { keyword -> normalized.contains(keyword.replace(" ", "")) }
         }
     }

@@ -46,7 +46,7 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import android.text.TextUtils
-import android.graphics.Typeface
+import android.graphics.Color
 import java.io.File
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -58,6 +58,9 @@ import com.cesia.input.engine.rime.RimeEngine
 import com.cesia.input.model.ModelManager
 import com.cesia.input.stats.PolishStatsManager
 import com.cesia.input.stats.MagicHistoryManager
+import com.cesia.input.stats.CommandLibrary
+import com.cesia.input.stats.CommandAdapter
+import com.cesia.input.stats.CommandLibraryType
 import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
@@ -534,6 +537,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 智能修改历史（魔法书）
     private var magicHistoryManager: MagicHistoryManager? = null
     private var currentMagicPrompt: String? = null
+
+    // 命令库（智能写作/智能修改分类库）
+    private var smartWritingLibrary: CommandLibrary? = null
+    private var smartEditingLibrary: CommandLibrary? = null
+    private var commandLibraryPopup: PopupWindow? = null
 
     // 发送消息历史
     private val sentMessages = mutableListOf<String>()
@@ -1128,6 +1136,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
+
+        // 初始化命令库
+        smartWritingLibrary = CommandLibrary(this, CommandLibraryType.SMART_WRITING)
+        smartEditingLibrary = CommandLibrary(this, CommandLibraryType.SMART_EDITING)
 
         rimeEngine = RimeEngine(this)
         val rimeOk = rimeEngine.initialize()
@@ -2877,7 +2889,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         magicBookLongPressTriggered = true
                         keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                         maybeShowButtonHint("smart_write_long", "智能写作 菜单")
-                        showSmartWritingPopup()
+                        showCommandLibraryPopup(true)
                     }.also {
                         magicBookHandler.postDelayed(it, 600)
                     }
@@ -3690,7 +3702,354 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private val OPT_SEARCH = "🌐 网络搜索"
     private val OPT_LOCAL_LIB = "📚 本地文库"
 
-    /** 显示智能写作设置弹窗 */
+    /** 显示统一命令库弹窗（智能写作/智能修改） */
+    private fun showCommandLibraryPopup(isWriting: Boolean) {
+        val library = if (isWriting) smartWritingLibrary else smartEditingLibrary
+        val libraryName = if (isWriting) "智能写作" else "智能修改"
+        val title = if (isWriting) smartWritingLabel else magicBookTitle
+        
+        library?.let { lib ->
+            try {
+                val inflater = android.view.LayoutInflater.from(this)
+                val popupView = inflater.inflate(R.layout.popup_command_library, null)
+                applyAccentToViewTree(popupView, themeAccent)
+                popupView.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
+                
+                // 标题
+                val titleTv = popupView.findViewById<TextView>(R.id.tv_library_title)
+                titleTv.text = title
+                
+                // 分类标签栏
+                val tabContainer = popupView.findViewById<android.widget.LinearLayout>(R.id.tab_container)
+                val categoryIds = lib.getCategoryIds()
+                val categoryNames = lib.getCategoryNames()
+                var currentCatIndex = 0
+                
+                // 这些需要在 lambda 外部声明以便按钮点击时访问
+                var commandAdapter: CommandAdapter? = null
+                var selectCategoryFunc: ((Int) -> Unit)? = null
+                
+                fun buildTabs() {
+                    tabContainer.removeAllViews()
+                    categoryNames.forEachIndexed { idx, name ->
+                        val tab = TextView(this@CesiaInputMethod).apply {
+                            text = name
+                            setPadding(dp(16), dp(8), dp(16), dp(8))
+                            textSize = 14f
+                            gravity = Gravity.CENTER
+                            setTextColor(if (idx == currentCatIndex) Color.WHITE else 0xFF666666.toInt())
+                            background = if (idx == currentCatIndex) makeTabBg(themeAccent) else null
+                            setOnClickListener { selectCategoryFunc?.invoke(idx) }
+                        }
+                        tabContainer.addView(tab)
+                    }
+                }
+                
+                selectCategoryFunc = { idx: Int ->
+                    currentCatIndex = idx
+                    buildTabs()
+                    val catId = categoryIds[idx]
+                    val items = if (catId == "frequent") {
+                        lib.getFrequentItems(50)
+                    } else {
+                        lib.getItemsByCategory(catId)
+                    }
+                    val frequentIds = lib.loadFrequentIdsPublic().toSet()
+                    commandAdapter?.updateData(items, frequentIds)
+                }
+                
+                // RecyclerView 设置
+                val rvCommands = popupView.findViewById<RecyclerView>(R.id.rv_commands)
+                rvCommands.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 2)
+                
+                commandAdapter = CommandAdapter(
+                    context = this,
+                    onItemClick = { item ->
+                        lib.recordUsage(item.id)
+                        commandLibraryPopup?.dismiss()
+                        commandLibraryPopup = null
+                        if (isWriting) {
+                            executeSmartCommand(item.name)
+                        } else {
+                            executeSelectedMagic(item.instruction)
+                        }
+                    },
+                    onItemLongClick = { anchorView, item ->
+                        showCommandLongPressMenu(anchorView, item, lib, isWriting)
+                        true
+                    },
+                    themeAccent = themeAccent
+                )
+                rvCommands.adapter = commandAdapter
+                
+                // 初始加载常用分类
+                buildTabs()
+                selectCategoryFunc?.invoke(0)
+                
+                // 底部按钮
+                val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_command)
+                val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
+                val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+                val btnClose = popupView.findViewById<TextView>(R.id.btn_close_bottom)
+                
+                // ＋ 新增命令
+                btnAdd.setOnClickListener {
+                    commandLibraryPopup?.dismiss()
+                    commandLibraryPopup = null
+                    enterCommandEditMode(isWriting)
+                }
+                
+                // ⤒ 置顶管理
+                btnPin.setOnClickListener {
+                    val allItems = lib.getAllItems()
+                    if (allItems.isEmpty()) return@setOnClickListener
+                    val menu = android.widget.PopupMenu(this, btnPin)
+                    allItems.forEachIndexed { idx, item ->
+                        val label = "${if (item.isPinned) "⤒ " else "○ "}${item.name.take(20)}"
+                        menu.menu.add(0, idx, idx, label)
+                    }
+                    menu.setOnMenuItemClickListener { mi ->
+                        val which = mi.itemId
+                        if (which >= 0 && which < allItems.size) {
+                            val item = allItems[which]
+                            val newPinned = lib.togglePin(item.id)
+                            val items = if (categoryIds[currentCatIndex] == "frequent") {
+                                lib.getFrequentItems(50)
+                            } else {
+                                lib.getItemsByCategory(categoryIds[currentCatIndex])
+                            }
+                            val frequentIds = lib.loadFrequentIdsPublic().toSet()
+                            commandAdapter.updateData(items, frequentIds)
+                            updateStatus(if (newPinned) "⤒ 已置顶：${item.name.take(18)}" else "取消置顶：${item.name.take(18)}")
+                        }
+                        true
+                    }
+                    menu.show()
+                }
+                
+                // ⊗ 删除管理
+                btnDelete.setOnClickListener {
+                    val allItems = lib.getAllItems()
+                    if (allItems.isEmpty()) return@setOnClickListener
+                    val menu = android.widget.PopupMenu(this, btnDelete)
+                    menu.menu.add(0, -1, 0, "⊗ 删除全部（${allItems.size}条）")
+                    allItems.forEachIndexed { idx, item ->
+                        menu.menu.add(0, idx, idx + 1, "⊗ ${item.name.take(18)}")
+                    }
+                    menu.setOnMenuItemClickListener { mi ->
+                        val which = mi.itemId
+                        if (which == -1) {
+                            // 删除全部 - 重置为默认
+                            lib.resetToDefault()
+                            val items = lib.getFrequentItems(50)
+                            val frequentIds = lib.loadFrequentIdsPublic().toSet()
+                            commandAdapter.updateData(items, frequentIds)
+                            updateStatus("⊗ 已重置为默认命令库")
+                        } else if (which >= 0 && which < allItems.size) {
+                            val item = allItems[which]
+                            lib.removeItem(item.id)
+                            val items = if (categoryIds[currentCatIndex] == "frequent") {
+                                lib.getFrequentItems(50)
+                            } else {
+                                lib.getItemsByCategory(categoryIds[currentCatIndex])
+                            }
+                            val frequentIds = lib.loadFrequentIdsPublic().toSet()
+                            commandAdapter.updateData(items, frequentIds)
+                            updateStatus("⊗ 已删除：${item.name.take(18)}")
+                        }
+                        true
+                    }
+                    menu.show()
+                }
+                
+                // 关闭
+                btnClose.setOnClickListener {
+                    commandLibraryPopup?.dismiss()
+                    commandLibraryPopup = null
+                }
+                
+                // 弹窗尺寸定位
+                val keyboardWidth = keyboardView.width
+                val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
+                
+                popupView.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+                )
+                val titleHeightPx = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)?.measuredHeight
+                    ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48f, resources.displayMetrics).toInt()
+                val tabHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics).toInt()
+                val barHeightPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics).toInt()
+                
+                val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
+                    if (id > 0) resources.getDimensionPixelSize(id) else 88
+                }
+                val keyboardLocation = IntArray(2)
+                keyboardView.getLocationOnScreen(keyboardLocation)
+                val keyboardTopScreenY = keyboardLocation[1]
+                val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
+                
+                val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+                popup.isOutsideTouchable = false
+                popup.elevation = 4f
+                popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+                popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                popup.setFocusable(false)
+                
+                popup.setOnDismissListener {
+                    commandLibraryPopup = null
+                    if (isWriting) {
+                        stopMagicButtonGlow()
+                        btnMagic.background = makeKeyBgDrawable(currentKeyBg)
+                        btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
+                    } else {
+                        stopMagicBookGlow()
+                    }
+                }
+                
+                popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
+                commandLibraryPopup = popup
+                
+            } catch (e: Exception) {
+                Log.e("Cesia", "showCommandLibraryPopup 异常", e)
+            }
+        }
+    }
+    
+    private fun showCommandLongPressMenu(
+        anchorView: View,
+        item: CommandLibrary.CommandItem,
+        lib: CommandLibrary,
+        isWriting: Boolean
+    ) {
+        val menuView = layoutInflater.inflate(R.layout.popup_candidate_menu, null)
+        val tvTitle = menuView.findViewById<TextView>(R.id.tv_menu_title)
+        val btnClose = menuView.findViewById<ImageButton>(R.id.btn_menu_close)
+        val llItems = menuView.findViewById<LinearLayout>(R.id.ll_menu_items)
+        
+        tvTitle.text = "命令：${item.name}"
+        
+        val menuSp = when (textThemeSize) {
+            0 -> 12f
+            2 -> 16f
+            3 -> 18f
+            else -> 14f
+        }
+        tvTitle.textSize = menuSp
+        
+        val popup = PopupWindow(menuView,
+            (200 * resources.displayMetrics.density).toInt(),
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup.setBackgroundDrawable(
+            ContextCompat.getDrawable(this, android.R.drawable.dialog_holo_light_frame)
+                ?: GradientDrawable().apply {
+                    setColor(android.graphics.Color.WHITE)
+                    setStroke(1, 0xFFCCCCCC.toInt())
+                }
+        )
+        popup.elevation = 8f
+        
+        fun doAction(action: String) {
+            when (action) {
+                "置顶/取消置顶" -> {
+                    val newPinned = lib.togglePin(item.id)
+                    updateCommandLibraryView(lib, isWriting)
+                    updateStatus(if (newPinned) "⤒ 已置顶" else "取消置顶")
+                }
+                "编辑" -> {
+                    popup.dismiss()
+                    editCommand(item, lib, isWriting)
+                }
+                "删除" -> {
+                    lib.removeItem(item.id)
+                    updateCommandLibraryView(lib, isWriting)
+                    updateStatus("⊗ 已删除：${item.name.take(18)}")
+                }
+            }
+            popup.dismiss()
+        }
+        
+        val items = mutableListOf<String>()
+        items.add(if (item.isPinned) "取消置顶" else "置顶/取消置顶")
+        items.add("编辑")
+        items.add("删除")
+        items.add("关闭")
+        
+        for (action in items) {
+            val row = TextView(this).apply {
+                text = action
+                textSize = menuSp
+                setTextColor(0xFF333333.toInt())
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((16 * resources.displayMetrics.density).toInt(), 0, (16 * resources.displayMetrics.density).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    (44 * resources.displayMetrics.density).toInt()
+                )
+                isClickable = true
+                isFocusable = true
+                val typedValue = TypedValue()
+                if (theme.resolveAttribute(android.R.attr.selectableItemBackground, typedValue, true)) {
+                    setBackgroundResource(typedValue.resourceId)
+                }
+                setOnClickListener { doAction(action) }
+            }
+            llItems.addView(row)
+        }
+        
+        btnClose.setOnClickListener { popup.dismiss() }
+        
+        popup.showAsDropDown(anchorView)
+    }
+    
+    private fun updateCommandLibraryView(lib: CommandLibrary, isWriting: Boolean) {
+        // 刷新当前分类视图 - 重新显示弹窗来刷新
+        commandLibraryPopup?.dismiss()
+        commandLibraryPopup = null
+        showCommandLibraryPopup(isWriting)
+    }
+    
+    private fun editCommand(item: CommandLibrary.CommandItem, lib: CommandLibrary, isWriting: Boolean) {
+        // 进入编辑模式，预填当前指令
+        val buffer = if (isWriting) smartEditBuffer else magicEditBuffer
+        buffer.clear()
+        buffer.append(item.instruction)
+        if (isWriting) {
+            smartEditMode = true
+        } else {
+            magicEditMode = true
+            magicEditMgr = magicHistoryManager
+        }
+        updateStatus("✏️ 编辑命令...（按发送键保存）")
+    }
+    
+    /** 进入命令编辑模式（新增） */
+    private fun enterCommandEditMode(isWriting: Boolean) {
+        if (isWriting) {
+            smartEditMode = true
+            smartEditBuffer.clear()
+            updateStatus("✏️ 输入智能写作命令...（按发送键保存）")
+        } else {
+            magicEditMode = true
+            magicEditBuffer.clear()
+            magicEditMgr = magicHistoryManager
+            updateStatus("✏️ 输入智能修改指令...（按发送键保存）")
+        }
+    }
+    
+    private fun makeTabBg(color: Int): android.graphics.drawable.Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(color)
+            cornerRadius = dp(14).toFloat()
+        }
+    }
+    
+    private fun dp(v: Int): Int =
+        TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, v.toFloat(),
+            resources.displayMetrics
+        ).toInt()
     private fun showSmartWritingPopup() {
         Log.d("Cesia", "showSmartWritingPopup: 弹窗被调用")
         try {
@@ -7227,7 +7586,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         magicBookRunnable = Runnable {
             magicBookLongPressTriggered = true
             keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            showMagicHistoryPopup()
+            showCommandLibraryPopup(false)
         }.also {
             magicBookHandler.postDelayed(it, 600)
         }

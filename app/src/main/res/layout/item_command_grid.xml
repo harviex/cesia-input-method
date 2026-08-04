@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="2dp">
+
+    <!-- 正常显示模式 -->
+    <TextView
+        android:id="@+id/tv_command_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:textColor="#333333"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:background="@drawable/magic_item_bg"
+        android:letterSpacing="0.02"
+        android:lineSpacingExtra="2dp" />
+
+    <!-- 置顶标记（右上角小红点） -->
+    <View
+        android:id="@+id/indicator_pinned"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_gravity="end|top"
+        android:layout_margin="4dp"
+        android:background="@drawable/pinned_indicator"
+        android:visibility="gone" />
+
+    <!-- 常用标记（左上角小星标） -->
+    <View
+        android:id="@+id/indicator_frequent"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_gravity="start|top"
+        android:layout_margin="4dp"
+        android:background="@drawable/frequent_indicator"
+        android:visibility="gone" />
+
+    <!-- 编辑模式：EditText（默认隐藏） -->
+    <EditText
+        android:id="@+id/et_command_edit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:textColor="#1565C0"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:background="#E3F2FD"
+        android:visibility="gone"
+        android:inputType="text"
+        android:imeOptions="actionDone"
+        android:lineSpacingExtra="2dp" />
+
+</FrameLayout>
