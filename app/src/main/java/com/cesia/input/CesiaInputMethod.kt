@@ -6755,9 +6755,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun feedRemaining() {
         // 清空 Rime 会话，让 processT9Input 按 t9FenCiOn 重新走全拼/简拼剩余分支
         // （简拼需 substring(t9ConsumedLen) 算剩余首字母 feed，不能直喂数字串）
+        val wasInAssociation = isAssociationMode
+        val savedPrefix = associationPrefix
         rimeEngine.clear(); rimeEngine.createSession()
         lastT9Feed = null
         processT9Input()
+        // 如果之前在联想模式，重新查询联想
+        if (wasInAssociation && savedPrefix.isNotEmpty()) {
+            val associations = rimeEngine.getAssociations(savedPrefix, 20, 500, 10)
+            if (associations.isNotEmpty()) {
+                isAssociationMode = true
+                associationPrefix = savedPrefix
+                associationCandidates = associations
+                showAssociationCandidates()
+            }
+        }
     }
 
     /** 1 键：单击=切换全拼/简拼（并提示）；双击=锁定/解锁当前模式（防误触，持久化） */
@@ -8244,10 +8256,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         val cands = rimeEngine.candidates
                         if (cands.isNotEmpty()) {
                             selectCandidateByGlobalIndex(0)
+                            // 如果进入了联想模式，不重置 T9 状态（保留联想）
+                            if (!isAssociationMode) {
+                                resetT9State()
+                            }
                         } else {
                             ic?.commitText(" ", 1)
+                            resetT9State()
                         }
-                        resetT9State()
                     } else {
                         ic?.commitText(" ", 1)
                     }
