@@ -2293,10 +2293,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 选词组(>=2字)或 composing 已结束 → 强制清 Rime composing，确保选词完整并触发词组联想；
                 // 仅选单字(length==1)且 composing 仍在继续时保留(逐字组词场景，如 624'624 选‘麦’后继续选下一音节)。
                 // 注: T9 组词累积靠 t9ComposedSoFar(StringBuilder)，不依赖 Rime composing 跨次保留。
+                // 修复：选中单字且有已选音时，清除该音节的选音状态（spellPrefix + 对应数字），避免后续输入追加在后面
                 if (selectedWord.length >= 2 || !rimeEngine.isComposing) {
                     rimeEngine.clear()
                     t9ComposedSoFar.clear()  // 组合结束，清空累积
                     t9DigitQueue.clear(); t9SpellPrefix.clear()
+                } else if (t9SpellPrefix.isNotEmpty()) {
+                    // 选中单字但有已选音：该音节已完成，清除选音前缀和对应的已消费数字
+                    val consumed = t9SpellPrefix.length
+                    if (consumed > 0 && consumed <= t9DigitQueue.length) {
+                        t9DigitQueue.delete(0, consumed)
+                        t9SpellPrefix.clear()
+                    }
                 }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
