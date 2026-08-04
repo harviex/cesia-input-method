@@ -328,7 +328,8 @@ class RimeEngine(private val context: Context) : InputEngine {
                         if (parts.size >= 3) {
                             val word = parts[0]
                             if (word.length < 2) return@forEachLine // 跳过单字词
-                            val weight = parts[2].toIntOrNull() ?: 0
+                            // 兼容 3 列 (pinyin.dict.yaml: 词\t拼音\t权重) 和 4 列 (t9_pinyin.dict.yaml: 词\t数字码\t拼音\t权重)
+                            val weight = if (parts.size >= 4) parts[3].toIntOrNull() ?: 0 else parts[2].toIntOrNull() ?: 0
                             if (weight < MIN_WEIGHT_THRESHOLD) return@forEachLine // 过滤低频词
                             val bucket = word.substring(0, 1)
                             val entry = AssociationEntry(word, "", weight)
