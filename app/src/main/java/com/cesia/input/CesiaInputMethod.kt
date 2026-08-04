@@ -8263,7 +8263,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         // 联想模式：选择第一个联想词继续联想
                         val selectedWord = associationCandidates[0]
                         val newPrefix = associationPrefix + selectedWord
-                        val newAssociations = rimeEngine.getAssociations(newPrefix)
+                        val newAssociations = rimeEngine.getAssociations(newPrefix, 20, 500, 10)
                         if (newAssociations.isNotEmpty()) {
                             associationPrefix = newPrefix
                             associationCandidates = newAssociations

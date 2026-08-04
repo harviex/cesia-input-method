@@ -411,8 +411,10 @@ class RimeEngine(private val context: Context) : InputEngine {
         val allMatches = (singleChar.sortedByDescending { w ->
             candidates.firstOrNull { it.fullWord == prefix + w && it.fullWord.length == prefix.length + 1 }?.weight ?: 0
         } + sortedMulti)
-        // 支持分页：pageWalk=10 为第一页，每页 limit 个
-        val offset = (pageWalk - 10) * limit
+        // 支持分页：pageWalk=10 为第1页，pageWalk=20 为第2页，每页 limit 个
+        // pageWalk 每增加 10 翻一页
+        val page = (pageWalk - 10) / 10
+        val offset = page * limit
         return allMatches.drop(offset).take(limit)
     }
 
