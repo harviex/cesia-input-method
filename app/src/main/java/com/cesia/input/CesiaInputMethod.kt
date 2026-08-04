@@ -2325,13 +2325,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 isAssociationMode = false
                 associationPrefix = ""
                 associationCandidates = emptyList()
-                // 清 T9 残留（候选音区），避免全拼单字上屏后候选音不消失
-                t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-                if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
-                updateSpellBar()
-                // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
-                updateCandidateBar()
-                gvCandidates?.setSelection(0)
+                // 修复：选中单字且有已选音后，无联想词时应完全重置到空闲状态（清除状态栏、候选栏、候选音区）
+                if (keyboardMode == KeyboardMode.NUMBER && t9SpellPrefix.isNotEmpty()) {
+                    // 这种情况在前面的 else if 分支已处理清除 spellPrefix，这里确保彻底重置
+                    resetT9State()
+                } else {
+                    // 清 T9 残留（候选音区），避免全拼单字上屏后候选音不消失
+                    t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                    if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
+                    updateSpellBar()
+                    // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
+                    updateCandidateBar()
+                    gvCandidates?.setSelection(0)
+                }
             }
         }
         } catch (e: Exception) {
