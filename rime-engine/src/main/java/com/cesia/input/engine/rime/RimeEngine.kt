@@ -358,11 +358,11 @@ class RimeEngine(private val context: Context) : InputEngine {
     }
 
     /**
-     * 词语联想：查询以 prefix 为前缀的词语
-     * 如果索引未构建完成，直接返回空列表（不阻塞主线程），后台会自动构建
+     * 词语联想：查询以 prefix 为前缀的词语（支持分页加载更多）
+     * @param pageWalk 翻页步数，用于加载更多
      * @return 去掉前缀后的显示词列表，按权重降序，去重
      */
-    fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 500): List<String> {
+    fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 500, pageWalk: Int = 10): List<String> {
         if (prefix.isEmpty()) return emptyList() // 允许单字联想
 
         if (!dictIndexBuilt) {
@@ -408,9 +408,12 @@ class RimeEngine(private val context: Context) : InputEngine {
             }
         }
         val sortedMulti = multiChar.sortedByDescending { it.second }.map { it.first }
-        return (singleChar.sortedByDescending { w ->
+        val allMatches = (singleChar.sortedByDescending { w ->
             candidates.firstOrNull { it.fullWord == prefix + w && it.fullWord.length == prefix.length + 1 }?.weight ?: 0
-        } + sortedMulti).take(limit)
+        } + sortedMulti)
+        // 支持分页：pageWalk=10 为第一页，每页 limit 个
+        val offset = (pageWalk - 10) * limit
+        return allMatches.drop(offset).take(limit)
     }
 
     /** 清除索引（词库更新后调用） */

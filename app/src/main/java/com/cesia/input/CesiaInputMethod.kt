@@ -349,9 +349,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     // === 词语联想 ===
     private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
-    private var associationCandidates = emptyList<String>()  // 当前联想候选词列表
+    private var associationCandidates = emptyList<String>()  // 当前联想候选词列表（当前已加载的）
     private var isAssociationMode = false   // 是否处于联想模式
     private var selectedCandidateIndex = 0   // 当前长按选中的候选词 index（用于菜单定位）
+    // 联想懒加载状态
+    private var assocPageWalk = 10
+    private var assocTotalLoaded = 0
+    private var lastAssocPrefix = ""
     // 候选栏显示列表快照：经 CandidatePrefs.reorder(置顶/降频) + T9选音过滤后实际显示的顺序。
     // 点击时先按显示位置反查用户点的是哪个词。
     private var lastDisplayedCands: List<String> = emptyList()
@@ -1042,7 +1046,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
                 val total = rv.adapter?.itemCount ?: 0
                 if (lm.findLastVisibleItemPosition() >= total - 3) {
-                    loadMoreCandidates()
+                    if (isAssociationMode) {
+                        loadMoreAssociations()
+                    } else {
+                        loadMoreCandidates()
+                    }
                 }
             }
         })
@@ -2080,7 +2088,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isAssociationMode && globalIndex < associationCandidates.size) {
             val selectedDisplay = associationCandidates[globalIndex]
             val newPrefix = associationPrefix + selectedDisplay
-            val newAssociations = rimeEngine.getAssociations(newPrefix).take(20)
+            val newAssociations = rimeEngine.getAssociations(newPrefix, 20, 500, 10)
 
             // 上屏选中的词（追加到已有前缀后面）
             if (smartEditMode) {
@@ -2194,7 +2202,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             rimeEngine.clear()
             // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
-            val newAssoc = rimeEngine.getAssociations(clickedWord).take(20)
+            val newAssoc = rimeEngine.getAssociations(clickedWord, 20, 500, 10)
             if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode) {
                 // 清 T9 残留（数字队列/候选音区），避免点击上屏后状态栏和候选音不消失
                 t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
@@ -2288,7 +2296,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
-            val associations = rimeEngine.getAssociations(selectedWord).take(20)
+            val associations = rimeEngine.getAssociations(selectedWord, 20, 500, 10)
             if (associations.isNotEmpty()) {
                 // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
                 t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
@@ -2327,6 +2335,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun showAssociationCandidates() {
         candidateBar.visibility = View.VISIBLE
         updateStatus("$associationPrefix")
+        // 重置联想懒加载状态
+        assocPageWalk = 10
+        assocTotalLoaded = associationCandidates.size
+        lastAssocPrefix = associationPrefix
         val displayCands = if (isTraditional) associationCandidates.map { toTraditional(it) } else associationCandidates
         candidateAdapter?.updateData(displayCands)
         rvCandidates?.scrollToPosition(0)
@@ -2524,6 +2536,32 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val displayPanel = if (isTraditional) reorderedPanel.map { toTraditional(it) } else reorderedPanel
             panelAdapter?.clear()
             panelAdapter?.addAll(displayPanel)
+            panelAdapter?.notifyDataSetChanged()
+        }
+    }
+
+    /** 联想懒加载：候选栏横向滚到右端阈值时，追加加载更多联想词 */
+    private fun loadMoreAssociations() {
+        if (!isAssociationMode) return
+        if (associationPrefix != lastAssocPrefix) return // 前缀变了，不加载
+        // 增加 pageWalk 加载下一页
+        assocPageWalk += 10
+        val more = rimeEngine.getAssociations(associationPrefix, 20, 500, assocPageWalk)
+        if (more.isEmpty()) {
+            assocPageWalk -= 10
+            return
+        }
+        // 追加到现有列表（去重）
+        val combined = (associationCandidates + more).distinct()
+        associationCandidates = combined
+        assocTotalLoaded = combined.size
+        lastAssocPrefix = associationPrefix
+        val displayCands = if (isTraditional) combined.map { toTraditional(it) } else combined
+        candidateAdapter?.updateData(displayCands)
+        if (isPanelExpanded) {
+            tvPanelComposing.text = "💡$associationPrefix"
+            panelAdapter?.clear()
+            panelAdapter?.addAll(displayCands)
             panelAdapter?.notifyDataSetChanged()
         }
     }
