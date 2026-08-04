@@ -2043,7 +2043,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             override fun onScroll(view: android.widget.AbsListView?, firstVisible: Int, visible: Int, total: Int) {
                 if (total <= 0) return
                 if (firstVisible + visible >= total - 3) {
-                    loadMoreCandidates()
+                    if (isAssociationMode) {
+                        loadMoreAssociations()
+                    } else {
+                        loadMoreCandidates()
+                    }
                 }
             }
             override fun onScrollStateChanged(view: android.widget.AbsListView?, state: Int) {}
