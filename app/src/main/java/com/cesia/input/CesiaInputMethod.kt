@@ -3906,42 +3906,47 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val tabStrip = popupView.findViewById<HorizontalScrollView>(R.id.category_tab_strip)
             val tabContainer = popupView.findViewById<android.widget.LinearLayout>(R.id.category_tab_container)
 
-            // 用户自定义命令（instruction 文本集合），归入「通用 / 常用」
+            // 用户自定义命令（instruction 文本集合），归入各分类
             val userRecords = mutableListOf<String>()
             loadSmartRecords(userRecords)
             val userRecordSet = userRecords.toSet()
+            // 元数据覆盖层（内置删除/修改、用户命令归属分类）
+            val meta = loadSmartMeta()
+            // 置顶集合（按 instruction 文本，内置/用户通用）
+            val pinnedSet = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                .getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf<String>()
 
             // 当前选中的分类标签
             var currentTab = "常用"
 
             // 根据当前标签计算要显示的「指令 id + 显示名 + instruction」列表
             data class CmdEntry(val id: String, val name: String, val instruction: String, val isUser: Boolean)
+
+            // 取某内置指令当前的 instruction（被修改则用覆盖值）
+            fun builtinInstruction(id: String, ins: String): String = meta.overriddenBuiltin[id] ?: ins
+
             fun buildEntries(): List<CmdEntry> {
-                val ids = if (currentTab == "常用") {
-                    CategorizedCommandMenu.getFrequentIds(this@CesiaInputMethod, true)
-                } else {
-                    CategorizedCommandMenu.getCommandIdsForTab(this@CesiaInputMethod, true, currentTab)
+                val result = mutableListOf<CmdEntry>()
+                // 内置命令（过滤已删除）
+                for (ins in com.cesia.input.instruction.InstructionSet.starInstructions) {
+                    if (meta.deletedBuiltin.contains(ins.id)) continue
+                    val showIns = builtinInstruction(ins.id, ins.instruction)
+                    val belongTabs = com.cesia.input.command.CategorizedCommandMenu.getInstructionTabs(ins.id)
+                    val shown = if (currentTab == "常用") true
+                                else belongTabs.contains(currentTab)
+                    if (shown) result.add(CmdEntry(ins.id, ins.name, showIns, false))
                 }
-                val entries = ids.mapNotNull { id ->
-                    CategorizedCommandMenu.getInstruction(id)?.let { CmdEntry(id, it.name, it.instruction, false) }
-                }.toMutableList()
-                // 用户自定义命令：在「常用」和「通用」标签下追加（去重），置顶项排前
-                if (currentTab == "常用" || currentTab == "通用") {
-                    val pinnedSet = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                        .getStringSet("pinned_set", emptySet()) ?: emptySet()
-                    val sortedUsers = userRecords.sortedBy { !pinnedSet.contains(it) }
-                    for (rec in sortedUsers) {
-                        if (entries.none { it.instruction == rec }) {
-                            entries.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
-                        }
+                // 用户自定义命令（按 cmdTab 归属）
+                for (rec in userRecords) {
+                    val tab = meta.cmdTab[rec] ?: "常用"
+                    val shown = if (currentTab == "常用") true else tab == currentTab
+                    if (shown && result.none { it.instruction == rec }) {
+                        result.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
                     }
                 }
-                return entries
-            }
-
-            fun isPinnedUser(instruction: String): Boolean {
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                return prefs.getStringSet("pinned_set", emptySet())?.contains(instruction) ?: false
+                // pinned 排前（按 instruction 命中 pinnedSet）
+                result.sortBy { !pinnedSet.contains(it.instruction) }
+                return result
             }
 
             // ===== 批量模式状态 =====
@@ -3969,13 +3974,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
                     val entry = entries[p]
                     tvCommand.text = entry.name
-                    if (entry.isUser && isPinnedUser(entry.instruction)) {
-                        // 置顶项：跟随主题色的描边 + 淡主题色填充（动态生成，避免固定颜色）
+                    if (pinnedSet.contains(entry.instruction)) {
                         val d = android.graphics.drawable.GradientDrawable().apply {
                             shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                             cornerRadius = (resources.displayMetrics.density * 8f)
                             setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
-                            // 主题色加约 10% alpha 作淡填充
                             val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
                             setColor(fill)
                         }
@@ -4000,26 +4003,41 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 recordAdapter.notifyDataSetChanged()
             }
 
-            fun togglePinUser(cmd: String) {
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf()
-                if (pinnedSet.contains(cmd)) pinnedSet.remove(cmd) else pinnedSet.add(cmd)
-                val arr = org.json.JSONArray()
-                for (item in userRecords) arr.put(org.json.JSONObject().put("instruction", item))
-                prefs.edit()
-                    .putString("records_json", arr.toString())
-                    .putStringSet("pinned_set", pinnedSet)
-                    .apply()
+            fun isPinnedUser(instruction: String): Boolean = pinnedSet.contains(instruction)
+
+            fun persistPinned() {
+                getSharedPreferences("cesia_smart_records", MODE_PRIVATE).edit()
+                    .putStringSet("pinned_set", pinnedSet).apply()
+            }
+
+            fun togglePin(entry: CmdEntry) {
+                if (pinnedSet.contains(entry.instruction)) pinnedSet.remove(entry.instruction)
+                else pinnedSet.add(entry.instruction)
+                persistPinned()
                 notifyChanged()
             }
-            fun deleteUser(cmd: String) {
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                userRecords.remove(cmd)
-                val arr = org.json.JSONArray()
-                for (item in userRecords) arr.put(org.json.JSONObject().put("instruction", item))
-                prefs.edit()
-                    .putString("records_json", arr.toString())
-                    .apply()
+
+            fun deleteCmd(entry: CmdEntry) {
+                if (entry.isUser) {
+                    userRecords.remove(entry.instruction)
+                    meta.cmdTab.remove(entry.instruction)
+                    saveSmartRecords(userRecords)
+                } else {
+                    meta.deletedBuiltin.add(entry.id)
+                    saveSmartMeta(meta)
+                }
+                notifyChanged()
+            }
+
+            fun modifyCmd(entry: CmdEntry, newText: String) {
+                if (entry.isUser) {
+                    userRecords.remove(entry.instruction)
+                    if (!userRecords.contains(newText)) userRecords.add(newText)
+                    saveSmartRecords(userRecords)
+                } else {
+                    meta.overriddenBuiltin[entry.id] = newText
+                    saveSmartMeta(meta)
+                }
                 notifyChanged()
             }
 
@@ -4088,18 +4106,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             gvRecords.setOnItemLongClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
                 if (position < entries.size) {
                     val entry = entries[position]
-                    if (!entry.isUser) {
-                        updateStatus("内置命令不可操作")
-                        return@setOnItemLongClickListener true
-                    }
                     val menu = android.widget.PopupMenu(this@CesiaInputMethod, gvRecords)
-                    menu.menu.add(0, 1, 0, "⤒ 置顶")
-                    menu.menu.add(0, 2, 1, "⊗ 删除")
-                    menu.menu.add(0, 3, 2, "✏️ 修改")
+                    val pinned = isPinnedUser(entry.instruction)
+                    // 置顶项显示「取消置顶」并可点击；非置顶显示「置顶」
+                    val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
+                    pinItem.isEnabled = true
+                    val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
+                    delItem.isEnabled = true
+                    val modItem = menu.menu.add(0, 3, 2, "✏️ 修改")
+                    modItem.isEnabled = true
                     menu.setOnMenuItemClickListener { mi ->
                         when (mi.itemId) {
-                            1 -> { togglePinUser(entry.instruction); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
-                            2 -> { deleteUser(entry.instruction); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
+                            1 -> { togglePin(entry); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
+                            2 -> { deleteCmd(entry); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
                             3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateSmartEditStatus() }
                         }
                         true
@@ -4126,30 +4145,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 smartWritingPopup = null
             }
 
-            // ===== ＋：进入编辑模式输入新命令 =====
+            // ===== ＋：进入编辑模式输入新命令（记录当前分类）=====
             btnAdd.setOnClickListener {
+                pendingSmartAddTab = currentTab
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
                 enterSmartEditMode()
             }
 
-            // ===== 置顶按钮：对单个用户命令置顶（操作后不关闭，可重复）=====
+            // ===== 置顶按钮：弹出列表，对单条命令置顶（内置/用户通用，可重复）=====
             btnPin.setOnClickListener {
-                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf<String>()
+                if (entries.isEmpty()) { updateStatus("暂无命令"); return@setOnClickListener }
                 val menu = android.widget.PopupMenu(this, btnPin)
-                userRecords.forEachIndexed { idx, cmd ->
-                    val isPinned = pinnedSet.contains(cmd)
-                    val label = "${if (isPinned) "⤒ " else "○ "}${cmd.take(20)}"
+                entries.forEachIndexed { idx, e ->
+                    val pinned = isPinnedUser(e.instruction)
+                    val label = "${if (pinned) "⤒ " else "○ "}${e.name.take(20)}"
                     menu.menu.add(0, idx, idx, label)
                 }
                 menu.setOnMenuItemClickListener { mi ->
                     val which = mi.itemId
-                    if (which >= 0 && which < userRecords.size) {
-                        val cmd = userRecords[which]
-                        togglePinUser(cmd)
-                        updateStatus(if (isPinnedUser(cmd)) "⤒ 已置顶" else "取消置顶：${cmd.take(18)}")
+                    if (which >= 0 && which < entries.size) {
+                        togglePin(entries[which])
+                        updateStatus(if (isPinnedUser(entries[which].instruction)) "⤒ 已置顶" else "取消置顶：${entries[which].instruction.take(18)}")
                     }
                     true
                 }
@@ -4162,33 +4179,30 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // ===== 批量栏：取消 / 批量置顶 / 批量删除 =====
             btnBatchCancel.setOnClickListener { exitBatchMode() }
             btnBatchPin.setOnClickListener {
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf()
                 for (cmd in selectedSet) pinnedSet.add(cmd)
-                prefs.edit().putStringSet("pinned_set", pinnedSet).apply()
+                persistPinned()
                 notifyChanged()
                 updateStatus("⤒ 已批量置顶 ${selectedSet.size} 条")
                 exitBatchMode()
             }
             btnBatchDelete.setOnClickListener {
-                for (cmd in selectedSet) userRecords.remove(cmd)
-                saveSmartRecords(userRecords)
-                notifyChanged()
-                updateStatus("⊗ 已批量删除 ${selectedSet.size} 条")
+                // selectedSet 存的是 instruction 文本，匹配 entries 删除（内置/用户通用）
+                val toDelete = entries.filter { selectedSet.contains(it.instruction) }.toList()
+                for (e in toDelete) deleteCmd(e)
+                updateStatus("⊗ 已批量删除 ${toDelete.size} 条")
                 exitBatchMode()
             }
             btnBatchAll.setOnClickListener {
-                // 全选：勾选当前所有用户自定义命令
-                for (e in entries) if (e.isUser) selectedSet.add(e.instruction)
+                // 全选：勾选当前所有可见命令（含内置）
+                for (e in entries) selectedSet.add(e.instruction)
                 recordAdapter.notifyDataSetChanged()
                 updateBatchCount()
             }
             btnBatchDeleteAll.setOnClickListener {
-                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
-                userRecords.clear()
-                saveSmartRecords(userRecords)
-                notifyChanged()
-                updateStatus("⊗ 已清空智能写作命令")
+                val all = entries.toList()
+                if (all.isEmpty()) { updateStatus("暂无命令"); return@setOnClickListener }
+                for (e in all) deleteCmd(e)
+                updateStatus("⊗ 已清空当前分类命令")
                 exitBatchMode()
             }
 
@@ -4216,9 +4230,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val keyboardTopScreenY = keyboardLocation[1]
             val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
 
-            // 顶部留出安全间距（不再贴边），视觉为底部上滑 sheet
-            val topGapPx = (resources.displayMetrics.density * 12f).toInt()
-            val sheetHeight = (totalHeight - topGapPx).coerceAtLeast(200)
+            // 高度上限放开到键盘顶部（status bar 之下），允许拖到屏幕顶端
+            val maxSheetHeight = totalHeight
+            val minSheetHeight = (resources.displayMetrics.density * 160f).toInt()
+
+            // 记忆上次高度
+            val sheetPrefs = getSharedPreferences("cesia_smart_sheet", MODE_PRIVATE)
+            val savedH = sheetPrefs.getInt("height", -1)
+            val sheetHeight = if (savedH > 0) savedH.coerceIn(minSheetHeight, maxSheetHeight) else maxSheetHeight
 
             // GridView 使用 weight=1 自动填满剩余空间，无需手动设置高度
 
@@ -4228,6 +4247,50 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
+
+            // ===== 顶部手柄拖动改高度 + 快速下滑关闭 =====
+            val density = resources.displayMetrics.density
+            // 上限放开到键盘顶部（status bar 之下），允许拖到屏幕顶端
+            val maxSheetHeightLocal = totalHeight
+            val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
+            var dragStartY = 0f
+            var dragStartH = 0
+            var lastMoveY = 0f
+            var lastMoveT = 0L
+            var velY = 0f
+            dragHandle.setOnTouchListener { _: android.view.View, ev ->
+                when (ev.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        dragStartY = ev.rawY
+                        dragStartH = popup.height
+                        lastMoveY = ev.rawY
+                        lastMoveT = System.currentTimeMillis()
+                        velY = 0f
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dy = ev.rawY - dragStartY
+                        val newH = (dragStartH - dy).toInt().coerceIn(minSheetHeight, maxSheetHeightLocal)
+                        popup.update(popupWidth, newH)
+                        val now = System.currentTimeMillis()
+                        val dt = (now - lastMoveT).coerceAtLeast(1)
+                        velY = (ev.rawY - lastMoveY) / dt * 1000f
+                        lastMoveY = ev.rawY
+                        lastMoveT = now
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                        sheetPrefs.edit().putInt("height", popup.height).apply()
+                        // 快速向下滑（速度超阈值）则关闭
+                        if (velY > 1500f) {
+                            smartWritingPopup?.dismiss()
+                            smartWritingPopup = null
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
 
             popup.setOnDismissListener {
                 smartWritingPopup = null
@@ -4551,6 +4614,57 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
+    /**
+     * 智能写作命令元数据（覆盖层）：
+     *  - deletedBuiltin: 被删除的内置命令 id 集合
+     *  - overriddenBuiltin: 被修改的内置命令 id -> 新 instruction 文本
+     *  - cmdTab: 用户自定义命令 instruction 文本 -> 归属分类 tab
+     * 持久化到 cesia_smart_meta（JSON）
+     */
+    private data class SmartMeta(
+        val deletedBuiltin: MutableSet<String> = mutableSetOf(),
+        val overriddenBuiltin: MutableMap<String, String> = mutableMapOf(),
+        val cmdTab: MutableMap<String, String> = mutableMapOf()
+    )
+
+    private fun loadSmartMeta(): SmartMeta {
+        val meta = SmartMeta()
+        try {
+            val prefs = getSharedPreferences("cesia_smart_meta", MODE_PRIVATE)
+            val json = prefs.getString("meta", "") ?: ""
+            if (json.isNotEmpty()) {
+                val obj = org.json.JSONObject(json)
+                val del = obj.optJSONArray("deleted")
+                if (del != null) for (i in 0 until del.length()) meta.deletedBuiltin.add(del.getString(i))
+                val ov = obj.optJSONObject("overridden")
+                if (ov != null) ov.keys().forEach { meta.overriddenBuiltin[it] = ov.getString(it) }
+                val tabs = obj.optJSONObject("tabs")
+                if (tabs != null) tabs.keys().forEach { meta.cmdTab[it] = tabs.getString(it) }
+            }
+        } catch (e: Exception) {
+            Log.e("Cesia", "loadSmartMeta 异常", e)
+        }
+        return meta
+    }
+
+    private fun saveSmartMeta(meta: SmartMeta) {
+        try {
+            val obj = org.json.JSONObject()
+            val del = org.json.JSONArray()
+            for (id in meta.deletedBuiltin) del.put(id)
+            obj.put("deleted", del)
+            val ov = org.json.JSONObject()
+            for ((k, v) in meta.overriddenBuiltin) ov.put(k, v)
+            obj.put("overridden", ov)
+            val tabs = org.json.JSONObject()
+            for ((k, v) in meta.cmdTab) tabs.put(k, v)
+            obj.put("tabs", tabs)
+            getSharedPreferences("cesia_smart_meta", MODE_PRIVATE).edit().putString("meta", obj.toString()).apply()
+        } catch (e: Exception) {
+            Log.e("Cesia", "saveSmartMeta 异常", e)
+        }
+    }
+
 
     /** 加载智能写作记录 */
     private fun loadMagicRecords(list: MutableList<String>) {
@@ -4714,6 +4828,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private var clipboardPopup: PopupWindow? = null
     private var smartEditMode = false
     private var smartEditBuffer = StringBuilder()
+    // 新增智能写作命令时记录的归属分类（由弹窗 btnAdd 设置）
+    private var pendingSmartAddTab: String = "常用"
 
     /** 关闭所有弹窗（长按互斥） */
     private fun dismissAllPopups() {
@@ -4793,12 +4909,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (save && smartEditBuffer.isNotEmpty()) {
             val text = smartEditBuffer.toString().trim()
             if (text.isNotEmpty()) {
-                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
-                val records = prefs.getString("records", "") ?: ""
-                val list = if (records.isNotEmpty()) records.split("\n").filter { it.isNotEmpty() }.toMutableList() else mutableListOf()
-                list.add(0, text)
-                if (list.size > 50) list.removeAt(list.size - 1)
-                prefs.edit().putString("records", list.joinToString("\n")).apply()
+                // 写入用户自定义命令（records_json），并记录归属分类
+                val userList = mutableListOf<String>()
+                loadSmartRecords(userList)
+                if (!userList.contains(text)) userList.add(0, text)
+                saveSmartRecords(userList)
+                // 记录该命令归属当前新增分类
+                try {
+                    val metaPrefs = getSharedPreferences("cesia_smart_meta", MODE_PRIVATE)
+                    val obj = org.json.JSONObject(metaPrefs.getString("meta", "{}"))
+                    val tabs = obj.optJSONObject("tabs") ?: org.json.JSONObject()
+                    tabs.put(text, pendingSmartAddTab)
+                    obj.put("tabs", tabs)
+                    metaPrefs.edit().putString("meta", obj.toString()).apply()
+                } catch (_: Exception) {}
                 updateStatus(" 已保存并执行：${text.take(20)}")
                 // 保存后直接执行
                 if (execute) {

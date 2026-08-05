@@ -5,15 +5,22 @@
     android:orientation="vertical"
     android:background="@drawable/sheet_top_rounded">
 
-    <!-- 顶部抓手（长条 handle，主流 bottom sheet 风格） -->
-    <View
-        android:layout_width="36dp"
-        android:layout_height="4dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="6dp"
-        android:background="#D0D0D0"
-        android:backgroundTint="#D0D0D0" />
+    <!-- 顶部拖动手柄（长条 handle + 透明命中区，绑定拖动改高度） -->
+    <LinearLayout
+        android:id="@+id/drag_handle"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="?attr/selectableItemBackground">
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:background="#D0D0D0"
+            android:backgroundTint="#D0D0D0" />
+
+    </LinearLayout>
 
     <!-- 标题栏：居中标题 + 右上角 X 关闭 -->
     <LinearLayout

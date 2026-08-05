@@ -134,6 +134,9 @@ object CategorizedCommandMenu {
         "常用", "语言转换", "风格重塑", "内容深化", "特殊处理"
     )
 
+    /** 某指令 id 归属的分类标签列表（可能为多个）。isGen=true 写作，false 修改 */
+    fun getInstructionTabs(id: String): List<String> = ID_TO_TABS[id] ?: emptyList()
+
     /** 返回标签顺序（常用 + 各分类）。isGen=true 写作，false 修改 */
     fun getTabOrder(isGen: Boolean): List<String> = if (isGen) TAB_ORDER_GEN else TAB_ORDER_MODIFY
 
