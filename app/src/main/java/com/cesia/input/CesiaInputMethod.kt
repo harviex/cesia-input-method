@@ -3925,9 +3925,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val entries = ids.mapNotNull { id ->
                     CategorizedCommandMenu.getInstruction(id)?.let { CmdEntry(id, it.name, it.instruction, false) }
                 }.toMutableList()
-                // 用户自定义命令：在「常用」和「通用」标签下追加（去重）
+                // 用户自定义命令：在「常用」和「通用」标签下追加（去重），置顶项排前
                 if (currentTab == "常用" || currentTab == "通用") {
-                    for (rec in userRecords) {
+                    val pinnedSet = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                        .getStringSet("pinned_set", emptySet()) ?: emptySet()
+                    val sortedUsers = userRecords.sortedBy { !pinnedSet.contains(it) }
+                    for (rec in sortedUsers) {
                         if (entries.none { it.instruction == rec }) {
                             entries.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
                         }
@@ -3966,12 +3969,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
                     val entry = entries[p]
                     tvCommand.text = entry.name
-                    val bgRes = if (entry.isUser) {
-                        if (isPinnedUser(entry.instruction)) R.drawable.smart_item_selected else R.drawable.magic_item_bg
-                    } else R.drawable.magic_item_bg
-                    tvCommand.setBackgroundResource(bgRes)
+                    if (entry.isUser && isPinnedUser(entry.instruction)) {
+                        // 置顶项：跟随主题色的描边 + 淡主题色填充（动态生成，避免固定颜色）
+                        val d = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                            cornerRadius = (resources.displayMetrics.density * 8f)
+                            setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                            // 主题色加约 10% alpha 作淡填充
+                            val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                            setColor(fill)
+                        }
+                        tvCommand.background = d
+                    } else {
+                        tvCommand.setBackgroundResource(R.drawable.magic_item_bg)
+                    }
                     cb.visibility = if (batchMode) android.view.View.VISIBLE else android.view.View.GONE
                     cb.isChecked = selectedSet.contains(entry.instruction)
+                    cb.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
                     cb.setOnCheckedChangeListener { _, checked ->
                         if (checked) selectedSet.add(entry.instruction) else selectedSet.remove(entry.instruction)
                         updateBatchCount()
@@ -4051,10 +4065,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             selectTab("常用")
 
-            // 单击：执行该命令（调用AI）
+            // 单击：批量模式下切换勾选；普通模式执行该命令（调用AI）
             gvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
                 if (position < entries.size) {
                     val entry = entries[position]
+                    if (batchMode) {
+                        // 批量模式：点 item 切换勾选，不触发命令
+                        if (selectedSet.contains(entry.instruction)) selectedSet.remove(entry.instruction)
+                        else selectedSet.add(entry.instruction)
+                        recordAdapter.notifyDataSetChanged()
+                        updateBatchCount()
+                        return@setOnItemClickListener
+                    }
                     if (!entry.isUser) CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
                     smartWritingPopup?.dismiss()
                     smartWritingPopup = null
