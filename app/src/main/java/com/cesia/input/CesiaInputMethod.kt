@@ -550,6 +550,19 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var clipboardItems = mutableListOf<ClipboardItem>()
     private var clipboardFilteredItems = mutableListOf<ClipboardItem>()
     private var clipboardSearchFilter = ""
+    private var clipboardSearchActive = false  // 搜索编辑进行中（复用 smartEditMode 输入法）
+    private var clipboardSearchResuming = false  // 搜索回车后重新弹出菜单时，保留已输入过滤词
+    // 已删除（防复活）的文本集合：持久化到 SharedPreferences，load 时跳过这些文本（含系统剪贴板里残留的）
+    private var clipboardDeleted = mutableSetOf<String>()
+    private fun loadClipboardDeleted() {
+        val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
+        val s = prefs.getString("deleted", "") ?: ""
+        clipboardDeleted = if (s.isNotEmpty()) s.split("\n").toSet().toMutableSet() else mutableSetOf()
+    }
+    private fun saveClipboardDeleted() {
+        val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
+        prefs.edit().putString("deleted", clipboardDeleted.joinToString("\n")).apply()
+    }
     private fun applyClipboardFilter() {
         clipboardFilteredItems.clear()
         if (clipboardSearchFilter.isEmpty()) {
@@ -2408,6 +2421,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             candidateAdapter?.updateData(emptyList())
             rvCandidates?.scrollToPosition(0)
             setCandidateBarVisible(false)
+            // 退格删掉已上屏文字后，状态栏仍残留联想前缀（=已上屏文字），这里一并清空
+            if (!smartEditMode && !magicEditMode) updateStatus(statusIdleText)
         }
     }
 
@@ -3472,8 +3487,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
         applyAccentToViewTree(popupView, themeAccent)
-        // 显式给 banner_bar 设置背景色（跟随主题色）
-        popupView.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
         val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
@@ -3484,40 +3497,72 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val keyboardWidth = keyboardView.width
         val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
 
-        // 测量标题栏实际高度
-        popupView.measure(
-            View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        val titleHeightPx = titleTv?.measuredHeight
-            ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics).toInt()
-
-        val barHeightPx = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
-        ).toInt()
         // 获取状态栏高度
         val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
             if (id > 0) resources.getDimensionPixelSize(id) else 88
         }
-        // 高度 = 状态栏底部到键盘顶部的可用空间
-        val keyboardLocation = IntArray(2)
-        keyboardView.getLocationOnScreen(keyboardLocation)
-        val keyboardTopScreenY = keyboardLocation[1]
-        val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
-        // Grid 高度 = 总高度 - 标题栏 - 按钮栏，填满剩余空间
-        val gridHeightPx = (totalHeight - titleHeightPx - barHeightPx).coerceAtLeast(100)
-        Log.d("Cesia", "MagicBookPopup: statusBar=$statusBarHeight keyboardTop=$keyboardTopScreenY total=$totalHeight grid=$gridHeightPx")
+        // 高度上限放开到整屏（状态栏之下），允许拖到屏幕顶端、覆盖键盘区
+        val density = resources.displayMetrics.density
+        val minSheetHeight = (density * 160f).toInt()
+        val screenH = resources.displayMetrics.heightPixels
+        val maxSheetHeight = (screenH - statusBarHeight).coerceAtLeast(minSheetHeight)
+
+        // 记忆上次高度
+        val sheetPrefs = getSharedPreferences("cesia_magic_sheet", MODE_PRIVATE)
+        val savedH = sheetPrefs.getInt("height", -1)
+        val totalHeight = if (savedH > 0) savedH.coerceIn(minSheetHeight, maxSheetHeight) else maxSheetHeight
 
         val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
         popup.isOutsideTouchable = false
-        popup.elevation = 4f
+        popup.elevation = 8f
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.setFocusable(false)
 
-        // 动态设置 GridView 高度，填满标题栏和按钮栏之间的空间
-        gridView.layoutParams = gridView.layoutParams.apply {
-            height = gridHeightPx
+        // 顶部手柄拖动改高度 + 快速下滑关闭
+        val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
+        var dragStartY = 0f
+        var dragStartH = 0
+        var lastMoveY = 0f
+        var lastMoveT = 0L
+        var velY = 0f
+        var totalDy = 0f
+        dragHandle.setOnTouchListener { _: android.view.View, ev ->
+            when (ev.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    dragStartY = ev.rawY
+                    dragStartH = popup.height
+                    lastMoveY = ev.rawY
+                    lastMoveT = System.currentTimeMillis()
+                    velY = 0f
+                    totalDy = 0f
+                    true
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val dy = ev.rawY - dragStartY
+                    totalDy = dy
+                    val newH = (dragStartH - dy).toInt().coerceIn(minSheetHeight, maxSheetHeight)
+                    popup.update(popupWidth, newH)
+                    val now = System.currentTimeMillis()
+                    val dt = (now - lastMoveT).coerceAtLeast(1)
+                    velY = (ev.rawY - lastMoveY) / dt * 1000f
+                    lastMoveY = ev.rawY
+                    lastMoveT = now
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    sheetPrefs.edit().putInt("height", popup.height).apply()
+                    val downward = totalDy.coerceAtLeast(0f)
+                    val closeByDistance = downward > (popup.height * 0.35f) || downward > density * 80f
+                    val closeByFling = velY > density * 1500f && downward > density * 40f
+                    if (closeByDistance || closeByFling) {
+                        popup.dismiss()
+                        magicHistoryPopup = null
+                    }
+                    true
+                }
+                else -> false
+            }
         }
 
         // ===== 数据列表：置顶项在前，非置顶项按时间倒序（常用标签）=====
@@ -3530,6 +3575,27 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         rebuildItems()
 
+        // ===== 批量模式状态 =====
+        var magicBatchMode = false
+        val selectedMagic = mutableSetOf<String>()  // 以 instruction 为 key
+        val actionBarNormal = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_normal)
+        val actionBarBatch = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_batch)
+        val tvBatchCount = popupView.findViewById<TextView>(R.id.tv_magic_batch_count)
+        fun updateMagicBatchCount() { tvBatchCount.text = "已选 ${selectedMagic.size}" }
+        fun enterMagicBatch() {
+            magicBatchMode = true
+            actionBarNormal.visibility = android.view.View.GONE
+            actionBarBatch.visibility = android.view.View.VISIBLE
+            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+        }
+        fun exitMagicBatch() {
+            magicBatchMode = false
+            selectedMagic.clear()
+            actionBarNormal.visibility = android.view.View.VISIBLE
+            actionBarBatch.visibility = android.view.View.GONE
+            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateMagicBatchCount()
+        }
         // ===== 分类标签：常用(用户记录) + 翻译/语气/长度/格式/内容/特殊/润色(默认指令) =====
         var currentMagicTab = "常用"
         // 默认分类指令条目（点击直接执行 instruction）
@@ -3543,10 +3609,65 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
 
-        val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
-        val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
-        val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val btnAdd = popupView.findViewById<TextView>(R.id.btn_magic_add)
+        val btnClose = popupView.findViewById<TextView>(R.id.btn_magic_close)
+        val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_magic_select_all)
+        val btnBatchCancel = popupView.findViewById<TextView>(R.id.btn_magic_batch_cancel)
+        val btnBatchAll = popupView.findViewById<TextView>(R.id.btn_magic_batch_all)
+        val btnBatchPin = popupView.findViewById<TextView>(R.id.btn_magic_batch_pin)
+        val btnBatchDelete = popupView.findViewById<TextView>(R.id.btn_magic_batch_delete)
+        val btnBatchDeleteAll = popupView.findViewById<TextView>(R.id.btn_magic_batch_delete_all)
         val tabContainer = popupView.findViewById<android.widget.LinearLayout>(R.id.category_tab_container)
+
+        // 批量选择（□）
+        btnSelectAll.setOnClickListener { enterMagicBatch() }
+        btnBatchCancel.setOnClickListener { exitMagicBatch() }
+        btnBatchAll.setOnClickListener {
+            if (currentMagicTab == "常用") for (r in items) selectedMagic.add(r.instruction)
+            (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateMagicBatchCount()
+        }
+        btnBatchPin.setOnClickListener {
+            val ids = items.filter { selectedMagic.contains(it.instruction) }.map { it.id }.toSet()
+            mgr.setPinned(ids, true)
+            selectedMagic.clear()
+            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⤒ 已批量置顶 ${ids.size} 条")
+            exitMagicBatch()
+        }
+        btnBatchDelete.setOnClickListener {
+            val toDel = items.filter { selectedMagic.contains(it.instruction) }
+            mgr.removeRecords(toDel.map { it.id })
+            val updated = mgr.getRecords()
+            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                currentMagicPrompt = mgr.getActiveInstruction()
+            }
+            selectedMagic.clear()
+            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⊗ 已批量删除 ${toDel.size} 条")
+            exitMagicBatch()
+        }
+        btnBatchDeleteAll.setOnClickListener {
+            mgr.clearAll()
+            currentMagicPrompt = null
+            selectedMagic.clear()
+            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⊗ 已清空全部魔法")
+            exitMagicBatch()
+        }
+
+        // 新增魔法
+        btnAdd.setOnClickListener {
+            popup.dismiss()
+            magicHistoryPopup = null
+            enterMagicEditMode(mgr)
+        }
+
+        // 右上角 X 关闭
+        btnClose.setOnClickListener {
+            popup.dismiss()
+            magicHistoryPopup = null
+        }
 
         // 追踪当前编辑状态
         var editingPosition = -1
@@ -3601,6 +3722,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
+                val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_magic_select)
+                val showCb = magicBatchMode && currentMagicTab == "常用"
+                cb.visibility = if (showCb) android.view.View.VISIBLE else android.view.View.GONE
+                if (showCb) {
+                    val inst = if (currentMagicTab == "常用") items[p].instruction else ""
+                    // 先挂监听（引用当前 instruction），再设 isChecked，避免复用旧视图误删已选项
+                    cb.setOnCheckedChangeListener { _, checked ->
+                        if (checked) selectedMagic.add(inst) else selectedMagic.remove(inst)
+                        updateMagicBatchCount()
+                    }
+                    cb.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                    cb.isChecked = selectedMagic.contains(inst)
+                }
                 if (currentMagicTab == "常用") {
                     val record = items[p]
                     val isEditing = (p == editingPosition)
@@ -3663,6 +3797,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // ===== 单击：打钩+装载+执行+关闭 =====
         gridView.setOnItemClickListener { _, _, position, _ ->
+            if (magicBatchMode && currentMagicTab == "常用") {
+                // 批量模式：点 item 切换勾选，不执行命令
+                val inst = items[position].instruction
+                if (selectedMagic.contains(inst)) selectedMagic.remove(inst) else selectedMagic.add(inst)
+                (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                updateMagicBatchCount()
+                return@setOnItemClickListener
+            }
             if (currentMagicTab == "常用") {
                 val record = items[position]
                 currentMagicPrompt = record.instruction
@@ -3677,15 +3819,40 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
 
-        // ===== 长按：进入编辑模式（仅常用标签的用户记录）=====
+        // ===== 长按：弹出操作菜单（置顶 / 取消置顶 / 删除 / 修改）=====
         gridView.setOnItemLongClickListener { _, _, position, _ ->
             if (currentMagicTab != "常用") return@setOnItemLongClickListener true  // 默认分类指令不可编辑
             if (position < items.size) {
                 val record = items[position]
-                mgr.togglePin(record.id)
-                rebuildItems()
-                notifyChanged()
-                updateStatus("⤒ 已置顶：${record.instruction.take(20)}")
+                val menu = android.widget.PopupMenu(this@CesiaInputMethod, gridView)
+                val pinned = record.isPinned
+                val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
+                pinItem.isEnabled = true
+                val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
+                modItem.isEnabled = true
+                menu.setOnMenuItemClickListener { mi ->
+                    when (mi.itemId) {
+                        1 -> {
+                            mgr.togglePin(record.id)
+                            rebuildItems()
+                            notifyChanged()
+                            updateStatus(if (record.isPinned) "↻ 已取消置顶" else "⤒ 已置顶：${record.instruction.take(18)}")
+                        }
+                        3 -> {
+                            // 修改：进入内联编辑
+                            editingPosition = position
+                            hasFocusedEdit = true
+                            notifyChanged()
+                            gridView.post {
+                                val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
+                                val et = child?.findViewById<android.widget.EditText?>(R.id.et_magic_edit)
+                                et?.requestFocus()
+                            }
+                        }
+                    }
+                    true
+                }
+                menu.show()
             }
             true
         }
@@ -3711,80 +3878,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
         }
 
-        // ===== 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
-        btnPin.setOnClickListener {
-            val realItems = items
-            if (realItems.isEmpty()) return@setOnClickListener
-            val menu = android.widget.PopupMenu(this, btnPin)
-            realItems.forEachIndexed { idx, record ->
-                val label = "${if (record.isPinned) "⤒ " else "○ "}${record.instruction.take(20)}"
-                menu.menu.add(0, idx, idx, label)
-            }
-            menu.setOnMenuItemClickListener { mi ->
-                val which = mi.itemId
-                if (which >= 0 && which < realItems.size) {
-                    val record = realItems[which]
-                    mgr.togglePin(record.id)
-                    rebuildItems()
-                    notifyChanged()
-                    updateStatus(if (!record.isPinned) "⤒ 已置顶" else "取消置顶")
-                }
-                true
-            }
-            menu.show()
-        }
-
-        // ===== 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
-        btnDelete.setOnClickListener {
-            val realItems = items
-            if (realItems.isEmpty()) return@setOnClickListener
-            val menu = android.widget.PopupMenu(this, btnDelete)
-            menu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条，保留置顶）")
-            realItems.forEachIndexed { idx, record ->
-                menu.menu.add(0, idx, idx + 1, "⊗ ${record.instruction.take(18)}")
-            }
-            menu.setOnMenuItemClickListener { mi ->
-                val which = mi.itemId
-                if (which == -1) {
-                    // 删除全部（保留置顶）
-                    val pinned = realItems.filter { it.isPinned }
-                    mgr.clearAll()
-                    for (r in pinned) {
-                        mgr.addRecord(r.instruction)
-                    }
-                    currentMagicPrompt = null
-                    rebuildItems()
-                    notifyChanged()
-                    updateStatus("⊗ 已删除全部（保留置顶）")
-                } else if (which >= 0 && which < realItems.size) {
-                    mgr.removeRecord(realItems[which].id)
-                    val updated = mgr.getRecords()
-                    if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                        currentMagicPrompt = mgr.getActiveInstruction()
-                    }
-                    rebuildItems()
-                    notifyChanged()
-                    updateStatus("⊗ 已删除")
-                }
-                true
-            }
-            menu.show()
-        }
-
-        // 显示在键盘View正上方，顶部对齐状态栏底部
-        // 弹窗顶部 = keyboardTopScreenY + yOffset = keyboardTopScreenY - totalHeight = statusBarHeight
-        val anchorLocation = IntArray(2)
-        keyboardView.getLocationOnScreen(anchorLocation)
-        Log.d("Cesia", "MagicBookPopup: anchorScreenY=${anchorLocation[1]} statusBar=$statusBarHeight total=$totalHeight yOffset=${-totalHeight}")
-        popup.showAtLocation(keyboardView, Gravity.TOP or Gravity.START, 0, -totalHeight)
+        // 显示在顶部状态栏下方，允许拖到整屏高度（覆盖键盘区）
+        popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, statusBarHeight)
         magicHistoryPopup = popup
-
-        // ===== 关闭按钮（底部）=====
-        val btnClose = popupView.findViewById<TextView>(R.id.btn_close_magic_bottom)
-        btnClose.setOnClickListener {
-            magicHistoryPopup?.dismiss()
-            magicHistoryPopup = null
-        }
 
         popup.setOnDismissListener {
             cancelMagicBookLongPress()
@@ -4124,14 +4220,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     // 置顶项显示「取消置顶」并可点击；非置顶显示「置顶」
                     val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
                     pinItem.isEnabled = true
-                    val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
-                    delItem.isEnabled = true
                     val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
                     modItem.isEnabled = true
                     menu.setOnMenuItemClickListener { mi ->
                         when (mi.itemId) {
                             1 -> { togglePin(entry); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
-                            2 -> { deleteCmd(entry); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
                             3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateSmartEditStatus() }
                         }
                         true
@@ -4144,7 +4237,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 底部按钮
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
             val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_smart_select_all)
-            val btnMore = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_more)
             val btnBatchCancel = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_cancel)
             val btnBatchAll = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_all)
             val btnBatchPin = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_pin)
@@ -4152,10 +4244,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnBatchDeleteAll = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_delete_all)
 
             // ===== 右上角 X：关闭弹窗 =====
-            btnMore.setOnClickListener {
+            val btnClose = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_close)
+            btnClose.setOnClickListener {
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
             }
+
+            // ===== 批量栏：取消 / 批量置顶 / 批量删除 =====
 
             // ===== ＋：进入编辑模式输入新命令（记录当前分类）=====
             btnAdd.setOnClickListener {
@@ -5098,12 +5193,30 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 候选词选中上屏：根据当前简繁状态做转换 */
     private fun commitCandidateText(text: String) {
+        // 剪贴板搜索编辑模式：把中文候选词写入搜索框而非上屏到编辑器
+        if (clipboardSearchActive) {
+            // 搜索编辑进行中（smartEditMode 已为真）：中文候选词直接进 smartEditBuffer
+            smartEditBuffer.append(if (isTraditional) toTraditional(text) else text)
+            rimeEngine.clear()
+            updateSmartEditStatus()
+            return
+        }
         try {
             val output = if (isTraditional) toTraditional(text) else text
             currentInputConnection?.commitText(output, 1)
         } catch (e: Exception) {
             Log.e("Cesia", "commitCandidateText failed: ${e.message}")
         }
+    }
+
+    // 把文本直接追加进剪贴板搜索框并实时过滤（弹窗可见时，如粘贴）
+    private fun appendToClipboardSearch(text: String) {
+        val et = this.etSearch ?: return
+        val buf = et.text.toString() + text
+        et.setText(buf)
+        et.setSelection(buf.length)
+        clipboardSearchFilter = buf.trim()
+        applyClipboardFilter()
     }
 
     // ===== 用户自建词组库：接龙组词上屏写入，下次匹配注入候选，持久化到 cesia_dict =====
@@ -7708,7 +7821,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     // ====== 剪贴板搜索状态 =======
-    private var clipboardSearchEditMode = false
     private var etSearch: android.widget.EditText? = null
 
     /**
@@ -7719,28 +7831,35 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater2 = android.view.LayoutInflater.from(this)
             clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
             applyAccentToViewTree(clipboardPopupView!!, themeAccent)
-            // 显式给 banner_bar 设置背景色（跟随主题色）
-            clipboardPopupView!!.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
             this.etSearch = etSearch
             val tvSearchHint = popupView.findViewById<TextView>(R.id.tv_search_edit_hint)
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_clipboard_pin)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_delete)
             val tvEmpty = popupView.findViewById<TextView>(R.id.tv_clipboard_empty)
 
-            // 搜索框：点击获得焦点弹出软键盘，输入内容实时过滤
+            // 搜索框：点击后隐藏剪贴板菜单，复用智能写作新增的输入法（正常拼音，T9/全键盘皆可）输入中文
+            // 弹窗 setFocusable(false)：EditText 默认 focusableInTouchMode=true 时，首次点击会被当作“获取焦点”而吞掉、
+            // 第二次点击才触发 onClick，表现为“点两下才隐藏菜单”。设为 false，第一次点击即直接触发 onClick 进入搜索。
+            etSearch.isFocusableInTouchMode = false
+            etSearch.setOnClickListener {
+                if (clipboardSearchActive) return@setOnClickListener
+                clipboardSearchActive = true
+                smartEditMode = true
+                smartEditBuffer.clear()
+                smartEditBuffer.append(etSearch.text.toString())
+                rimeEngine.clear()
+                updateSmartEditStatus()
+                updateStatus("搜索剪贴板…（按回车保存）")
+                // 隐藏菜单，让出空间给键盘/候选栏输入
+                clipboardPopup?.dismiss()
+                clipboardPopup = null
+            }
             etSearch.setOnFocusChangeListener { _, hasFocus ->
-                clipboardSearchEditMode = hasFocus
-                if (hasFocus) {
-                    tvSearchHint.visibility = View.VISIBLE
-                    tvSearchHint.text = "输入搜索关键词..."
-                    etSearch.hint = ""
-                } else {
-                    tvSearchHint.visibility = View.GONE
-                    etSearch.hint = "🔍 点击搜索..."
-                }
+                // 保留焦点变化仅用于外观提示，不再用它驱动编辑模式（避免软键盘弹出冲突）
+                tvSearchHint.visibility = if (hasFocus) View.VISIBLE else View.GONE
+                tvSearchHint.text = if (hasFocus) "输入搜索关键词…" else ""
+                etSearch.hint = if (hasFocus) "" else "🔍 点击搜索…"
             }
             etSearch.addTextChangedListener(object : android.text.TextWatcher {
 // endregion 长按检测
@@ -7749,12 +7868,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: android.text.Editable?) {
-                    // 搜索编辑模式下，TextWatcher 不做任何事（由 onKey 拦截处理过滤）
-                    // 非搜索编辑模式下（如直接粘贴），才由 TextWatcher 触发过滤
-                    if (!clipboardSearchEditMode) {
-                        clipboardSearchFilter = s?.toString()?.trim() ?: ""
-                        applyClipboardFilter()
-                    }
+                    // 搜索框文本变化（如直接粘贴、或回车提交后恢复）即触发过滤
+                    clipboardSearchFilter = s?.toString()?.trim() ?: ""
+                    applyClipboardFilter()
                 }
             })
             etSearch.setOnEditorActionListener { _, actionId, _ ->
@@ -7772,9 +7888,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             loadClipboardHistoryToClassMembers(clipboardMgr)
             Log.d("Cesia", "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}")
 
-            // 初始化过滤
-            clipboardSearchFilter = ""
+            // 初始化过滤（搜索回车后重新弹出时保留已输入过滤词）
+            if (!clipboardSearchResuming) {
+                clipboardSearchFilter = ""
+            }
             applyClipboardFilter()
+            if (clipboardSearchResuming) {
+                etSearch.setText(clipboardSearchFilter)
+                etSearch.setSelection(clipboardSearchFilter.length)
+                applyClipboardFilter()
+                clipboardSearchResuming = false
+            }
 
             clipboardAdapter = ClipboardAdapter(inflater2, clipboardFilteredItems, this)
             gvClipboard.adapter = clipboardAdapter
@@ -7786,11 +7910,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android").let { id ->
                 if (id > 0) resources.getDimensionPixelSize(id) else 88
             }
-            // 高度 = 状态栏底部到键盘顶部的可用空间
-            val keyboardLocation = IntArray(2)
-            keyboardView.getLocationOnScreen(keyboardLocation)
-            val keyboardTopScreenY = keyboardLocation[1]
-            val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
+            // 高度上限放开到整屏（状态栏之下），允许拖到屏幕顶端、覆盖键盘区
+            val density = resources.displayMetrics.density
+            val minSheetHeight = (density * 160f).toInt()
+            val screenH = resources.displayMetrics.heightPixels
+            val maxSheetHeight = (screenH - statusBarHeight).coerceAtLeast(minSheetHeight)
+
+            // 记忆上次高度
+            val sheetPrefs = getSharedPreferences("cesia_clipboard_sheet", MODE_PRIVATE)
+            val savedH = sheetPrefs.getInt("height", -1)
+            val totalHeight = if (savedH > 0) savedH.coerceIn(minSheetHeight, maxSheetHeight) else maxSheetHeight
 
             val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
             popup.isOutsideTouchable = false
@@ -7800,97 +7929,193 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.setFocusable(false)   // IME 弹窗内保持 false，避免焦点冲突导致 popup dismiss；搜索输入由 Cesia 手写 onKey 分支处理
             clipboardPopup = popup
 
-            // 单击：插入文本（非空条目）
+            // 顶部手柄拖动改高度 + 快速下滑关闭
+            val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
+            var dragStartY = 0f
+            var dragStartH = 0
+            var lastMoveY = 0f
+            var lastMoveT = 0L
+            var velY = 0f
+            var totalDy = 0f
+            dragHandle.setOnTouchListener { _: android.view.View, ev ->
+                when (ev.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        dragStartY = ev.rawY
+                        dragStartH = popup.height
+                        lastMoveY = ev.rawY
+                        lastMoveT = System.currentTimeMillis()
+                        velY = 0f
+                        totalDy = 0f
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dy = ev.rawY - dragStartY
+                        totalDy = dy
+                        val newH = (dragStartH - dy).toInt().coerceIn(minSheetHeight, maxSheetHeight)
+                        popup.update(popupWidth, newH)
+                        val now = System.currentTimeMillis()
+                        val dt = (now - lastMoveT).coerceAtLeast(1)
+                        velY = (ev.rawY - lastMoveY) / dt * 1000f
+                        lastMoveY = ev.rawY
+                        lastMoveT = now
+                        true
+                    }
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                        sheetPrefs.edit().putInt("height", popup.height).apply()
+                        val downward = totalDy.coerceAtLeast(0f)
+                        val closeByDistance = downward > (popup.height * 0.35f) || downward > density * 80f
+                        val closeByFling = velY > density * 1500f && downward > density * 40f
+                        if (closeByDistance || closeByFling) {
+                            popup.dismiss()
+                            clipboardPopup = null
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
+
+            // ===== 批量栏 =====
+            val ca = clipboardAdapter as ClipboardAdapter
+            val clipActionBarNormal = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_normal)
+            val clipActionBarBatch = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_batch)
+            val tvClipBatchCount = popupView.findViewById<TextView>(R.id.tv_clipboard_batch_count)
+            val btnClipSelectAll = popupView.findViewById<TextView>(R.id.btn_clipboard_select_all)
+            val btnClipBatchCancel = popupView.findViewById<TextView>(R.id.btn_clipboard_batch_cancel)
+            val btnClipBatchAll = popupView.findViewById<TextView>(R.id.btn_clipboard_batch_all)
+            val btnClipBatchPin = popupView.findViewById<TextView>(R.id.btn_clipboard_batch_pin)
+            val btnClipBatchDelete = popupView.findViewById<TextView>(R.id.btn_clipboard_batch_delete)
+            val btnClipBatchDeleteAll = popupView.findViewById<TextView>(R.id.btn_clipboard_batch_delete_all)
+            fun updateClipBatchCount() { tvClipBatchCount.text = "已选 ${ca.selectedClip.size}" }
+            fun enterClipBatch() {
+                ca.batchMode = true
+                clipActionBarNormal.visibility = android.view.View.GONE
+                clipActionBarBatch.visibility = android.view.View.VISIBLE
+                ca.notifyDataSetChanged()
+            }
+            fun exitClipBatch() {
+                ca.batchMode = false
+                ca.selectedClip.clear()
+                clipActionBarNormal.visibility = android.view.View.VISIBLE
+                clipActionBarBatch.visibility = android.view.View.GONE
+                ca.notifyDataSetChanged()
+                updateClipBatchCount()
+            }
+            btnClipSelectAll.setOnClickListener { enterClipBatch() }
+            btnClipBatchCancel.setOnClickListener { exitClipBatch() }
+            btnClipBatchAll.setOnClickListener {
+                for (it in clipboardFilteredItems) if (!it.isEmpty) ca.selectedClip.add(it.text)
+                ca.notifyDataSetChanged()
+                updateClipBatchCount()
+            }
+            btnClipBatchPin.setOnClickListener {
+                val sel = ca.selectedClip
+                if (sel.isEmpty()) { updateStatus("请先选择"); return@setOnClickListener }
+                for (i in clipboardItems.indices) {
+                    val it = clipboardItems[i]
+                    if (sel.contains(it.text)) clipboardItems[i] = it.copy(isPinned = true)
+                }
+                ca.selectedClip.clear()
+                updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                updateStatus("⤒ 已批量置顶 ${sel.size} 条")
+                exitClipBatch()
+            }
+            btnClipBatchDelete.setOnClickListener {
+                val sel = ca.selectedClip
+                if (sel.isEmpty()) { updateStatus("请先选择"); return@setOnClickListener }
+                clipboardDeleted.addAll(sel)
+                clipboardItems.removeAll { sel.contains(it.text) }
+                ca.selectedClip.clear()
+                saveClipboardDeleted(); updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                updateStatus("⊗ 已批量删除 ${sel.size} 条")
+                exitClipBatch()
+            }
+            btnClipBatchDeleteAll.setOnClickListener {
+                val removed = clipboardItems.filter { !it.isPinned && !it.isEmpty }.map { it.text }
+                clipboardDeleted.addAll(removed)
+                clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
+                ca.selectedClip.clear()
+                saveClipboardDeleted(); updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                try {
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                } catch (_: Exception) {}
+                updateStatus("⊗ 已清空（保留置顶）")
+                exitClipBatch()
+            }
+
+            // 单击：批量模式下切换勾选；普通模式插入文本
             gvClipboard.setOnItemClickListener { _, _, position, _ ->
                 val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemClickListener
                 if (item.isEmpty) return@setOnItemClickListener
+                if (ca.batchMode) {
+                    if (ca.selectedClip.contains(item.text)) ca.selectedClip.remove(item.text)
+                    else ca.selectedClip.add(item.text)
+                    ca.notifyDataSetChanged()
+                    updateClipBatchCount()
+                    return@setOnItemClickListener
+                }
                 currentInputConnection?.commitText(item.text, 1)
+
                 popup.dismiss()
             }
 
-            // 长按：操作菜单（置顶/删除/编辑/分词）
+            // 长按：弹出操作菜单（置顶 / 取消置顶 / 删除 / 修改）
             gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
                 val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
                 if (item.isEmpty) return@setOnItemLongClickListener true
-                // 长按 = 置顶（与智能写作/智能修改统一）：切换置顶并移到列表最前
-                clipboardItems.remove(item)
-                val toggled = item.copy(isPinned = !item.isPinned)
-                if (toggled.isPinned) clipboardItems.add(0, toggled) else clipboardItems.add(toggled)
-                updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
-                updateStatus("⤒ 已置顶：${item.text.take(20)}")
+                val menu = android.widget.PopupMenu(this@CesiaInputMethod, gvClipboard)
+                val pinned = item.isPinned
+                val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
+                pinItem.isEnabled = true
+                val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
+                delItem.isEnabled = true
+                val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
+                modItem.isEnabled = true
+                menu.setOnMenuItemClickListener { mi ->
+                    when (mi.itemId) {
+                        1 -> {
+                            clipboardItems.remove(item)
+                            val toggled = item.copy(isPinned = !item.isPinned)
+                            if (toggled.isPinned) clipboardItems.add(0, toggled) else clipboardItems.add(toggled)
+                            updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                            updateStatus(if (item.isPinned) "↻ 已取消置顶" else "⤒ 已置顶：${item.text.take(18)}")
+                        }
+                        2 -> {
+                            clipboardItems.removeAll { it.text == item.text }
+                            clipboardDeleted.add(item.text); saveClipboardDeleted()
+                            saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                            try {
+                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                if (clipboardMgr?.hasPrimaryClip() == true) {
+                                    val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    if (clipText == item.text) clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
+                                }
+                            } catch (_: Exception) {}
+                            updateStatus("⊗ 已删除")
+                        }
+                        3 -> {
+                            showClipboardEditDialog(item.text) { newText ->
+                                if (newText != item.text) {
+                                    clipboardItems.removeAll { it.text == item.text }
+                                    clipboardItems.add(0, item.copy(text = newText))
+                                    updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
+                                }
+                            }
+                        }
+                    }
+                    true
+                }
+                menu.show()
                 true
             }
 
+            // 显示在顶部状态栏下方，允许拖到整屏高度（覆盖键盘区）
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, statusBarHeight)
+            clipboardPopup = popup
 
-            // 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）
-            btnPin.setOnClickListener {
-                val realItems = clipboardItems.filter { !it.isEmpty }
-                if (realItems.isEmpty()) return@setOnClickListener
-                val menu = android.widget.PopupMenu(this, btnPin)
-                realItems.forEachIndexed { idx, item ->
-                    val label = "${if (item.isPinned) "⤒ " else "○ "}${item.text.take(18)}"
-                    menu.menu.add(0, idx, idx, label)
-                }
-                menu.setOnMenuItemClickListener { mi ->
-                    val which = mi.itemId
-                    if (which >= 0 && which < realItems.size) {
-                        val target = realItems[which]
-                        clipboardItems.removeAll { it.text == target.text }
-                        clipboardItems.add(0, target.copy(isPinned = !target.isPinned))
-                        saveClipboardHistoryFromClassMembers()
-                        applyClipboardFilter()
-                    }
-                    true
-                }
-                menu.show()
-            }
-
-            // 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）
-            btnDelete.setOnClickListener {
-                val realItems = clipboardItems.filter { !it.isEmpty }
-                if (realItems.isEmpty()) return@setOnClickListener
-                val menu = android.widget.PopupMenu(this, btnDelete)
-                menu.menu.add(0, -1, 0, "⊗ 删除全部（${realItems.size}条，保留置顶）")
-                realItems.forEachIndexed { idx, item ->
-                    menu.menu.add(0, idx, idx + 1, "⊗ ${item.text.take(18)}")
-                }
-                menu.setOnMenuItemClickListener { mi ->
-                    val which = mi.itemId
-                    if (which == -1) {
-                        // 删除全部（保留置顶）
-                        clipboardItems.removeAll { !it.isPinned && !it.isEmpty }
-                        saveClipboardHistoryFromClassMembers()
-                        applyClipboardFilter()
-                        try {
-                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                            clipboardMgr?.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                        } catch (_: Exception) {}
-                        updateStatus("⊗ 已删除全部（保留置顶）")
-                    } else if (which >= 0 && which < realItems.size) {
-                        val target = realItems[which]
-                        clipboardItems.removeAll { it.text == target.text }
-                        saveClipboardHistoryFromClassMembers()
-                        applyClipboardFilter()
-                        try {
-                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                            if (clipboardMgr?.hasPrimaryClip() == true) {
-                                val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                if (clipText == target.text) {
-                                    clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                }
-                            }
-                        } catch (_: Exception) {}
-                        updateStatus("⊗ 已删除")
-                    }
-                    true
-                }
-                menu.show()
-            }
-
-            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
-
-            // ===== 关闭按钮（底部）=====
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close_bottom)
+            // 右上角 X 关闭
+            val btnClose = popupView.findViewById<TextView>(R.id.btn_clipboard_close)
             btnClose.setOnClickListener {
                 clipboardPopup?.dismiss()
                 clipboardPopup = null
@@ -7913,6 +8138,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun loadClipboardHistoryToClassMembers(clipboardMgr: android.content.ClipboardManager?) {
         clipboardItems.clear()
+        loadClipboardDeleted()
         try {
             // 1. 从 SharedPreferences 读取持久化历史
             val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
@@ -7929,7 +8155,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (clip != null) {
                     for (i in 0 until clip.itemCount) {
                         val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
-                        if (text.isNotEmpty() && text.length <= 500) {
+                        if (text.isNotEmpty() && text.length <= 500 && text !in clipboardDeleted) {
                             sysClipTexts.add(text)
                         }
                     }
@@ -7956,7 +8182,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text)))
                 }
                 for (text in historyList) {
-                    if (text !in sysClipTexts) {
+                    if (text !in sysClipTexts && text !in clipboardDeleted) {
                         clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text)))
                     }
                 }
@@ -8068,6 +8294,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 6 -> { // 删除
                     if (clipboardFavorites[item.text] == false) {
                         allItems.remove(item)
+                        clipboardDeleted.add(item.text); saveClipboardDeleted()
                         updateClipboardFavorites(); onUpdate()
                         try {
                             val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -8134,6 +8361,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         private val items: List<ClipboardItem>,
         private val context: CesiaInputMethod
     ) : android.widget.BaseAdapter() {
+        var batchMode = false
+        val selectedClip = mutableSetOf<String>()  // 以 text 为 key
         private val accentColor = context.themeAccent
         override fun getCount() = items.size
         override fun getItem(p: Int) = items[p]
@@ -8142,6 +8371,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val v = cv ?: inflater.inflate(R.layout.item_clipboard_grid, parent, false)
             val item = items[p]
             val tv = v.findViewById<TextView>(R.id.tv_clipboard_text)
+            val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_clipboard_select)
+            cb.visibility = if (batchMode && !item.isEmpty) android.view.View.VISIBLE else android.view.View.GONE
+            if (batchMode && !item.isEmpty) {
+                cb.setOnCheckedChangeListener { _, checked ->
+                    if (checked) selectedClip.add(item.text) else selectedClip.remove(item.text)
+                }
+                cb.buttonTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                cb.isChecked = selectedClip.contains(item.text)
+            }
             if (item.isEmpty) {
                 tv.text = item.text
                 tv.setTextColor(0xFF999999.toInt())
@@ -8181,100 +8419,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
-        // ======================== 剪贴板搜索编辑模式：手动写入 EditText ========================
-        if (clipboardSearchEditMode) {
-            val searchEt = this.etSearch
-            if (searchEt != null) {
-                when (primaryCode) {
-                    // 发送键/回车键：确认搜索，退出编辑模式
-                    -200, 10 -> {
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        searchEt.clearFocus()
-                        clipboardSearchEditMode = false
-                        return
-                    }
-                    // 返回键/ESC：取消搜索，清空并退出编辑模式
-                    KeyEvent.KEYCODE_BACK, 27 -> {
-                        searchEt.setText("")
-                        clipboardSearchFilter = ""
-                        applyClipboardFilter()
-                        searchEt.clearFocus()
-                        clipboardSearchEditMode = false
-                        return
-                    }
-                    // 退格键
-                    -5, Keyboard.KEYCODE_DELETE -> {
-                        val buf = searchEt.text.toString()
-                        if (buf.isNotEmpty()) {
-                            val newBuf = buf.dropLast(1)
-                            searchEt.setText(newBuf)
-                            searchEt.setSelection(newBuf.length)
-                        }
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 空格（直接追加空格）
-                    32 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + " ")
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 字母键 a-z：追加字符
-                    in 97..122 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 大写字母 A-Z
-                    in 65..90 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().lowercase())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 数字键 0-9：直接追加数字
-                    in 48..57 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他可打印符号直接追加
-                    in 33..47, in 58..64, in 91..96, in 123..126 -> {
-                        val buf = searchEt.text.toString()
-                        searchEt.setText(buf + primaryCode.toChar().toString())
-                        searchEt.setSelection(searchEt.text.length)
-                        clipboardSearchFilter = searchEt.text.toString().trim()
-                        applyClipboardFilter()
-                        return
-                    }
-                    // 其他按键（shift/ctrl等）忽略
-                    else -> return
-                }
-            }
-        }
+        // ======================== 剪贴板搜索编辑：复用 smartEditMode 输入法（见下方智能写作编辑模式拦截） ========================
 
         // ======================== 智能写作命令编辑模式拦截 ========================
         if (smartEditMode) {
             when (primaryCode) {
-                // 发送键/回车键：保存命令、退出编辑模式、直接执行
+                // 发送键/回车键：若处于剪贴板搜索编辑，则提交到搜索框并重现菜单；否则保存命令并执行
                 -200, 10 -> {
                     val comp = rimeEngine.composingText
                     if (comp.isNotEmpty()) {
                         smartEditBuffer.append(comp)
                         rimeEngine.clear()
+                    }
+                    if (clipboardSearchActive) {
+                        clipboardSearchFilter = smartEditBuffer.toString().trim()
+                        clipboardSearchActive = false
+                        smartEditMode = false
+                        smartEditBuffer.clear()
+                        updateStatus("搜索剪贴板：${clipboardSearchFilter}")
+                        clipboardSearchResuming = true
+                        statusText.text = ""
+                        showClipboardManagerPopup()
+                        return
                     }
                     exitSmartEditMode(save = true, execute = true)
                     return
@@ -8282,6 +8448,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 返回键：取消并退出编辑模式
                 KeyEvent.KEYCODE_BACK -> {
                     rimeEngine.clear()
+                    if (clipboardSearchActive) {
+                        clipboardSearchActive = false
+                        smartEditMode = false
+                        smartEditBuffer.clear()
+                        clipboardSearchResuming = true
+                        statusText.text = ""
+                        showClipboardManagerPopup()
+                        return
+                    }
                     exitSmartEditMode(save = false)
                     return
                 }

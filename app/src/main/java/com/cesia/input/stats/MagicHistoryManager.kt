@@ -116,6 +116,15 @@ class MagicHistoryManager(context: Context) {
         saveRecords(updated)
     }
 
+    /** 设为置顶（批量置顶用） */
+    fun setPinned(ids: Set<Long>, pinned: Boolean) {
+        val records = getRecords()
+        val updated = records.map { r ->
+            if (r.id in ids) r.copy(isPinned = pinned) else r
+        }
+        saveRecords(updated)
+    }
+
     /** 删除记录 */
     fun removeRecord(id: Long) {
         val records = getRecords()

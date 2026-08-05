@@ -1,43 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
     android:padding="2dp">
 
-    <!-- 正常显示模式：TextView -->
-    <TextView
-        android:id="@+id/tv_magic_text"
-        android:layout_width="match_parent"
+    <!-- 批量选择复选框（左侧，与命令保持间距，默认隐藏） -->
+    <CheckBox
+        android:id="@+id/cb_magic_select"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="13sp"
-        android:textColor="#333333"
-        android:maxLines="2"
-        android:ellipsize="end"
-        android:gravity="start|center_vertical"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:background="@drawable/magic_item_bg"
-        android:letterSpacing="0.02"
-        android:lineSpacingExtra="2dp" />
-
-    <!-- 编辑模式：EditText（默认隐藏） -->
-    <EditText
-        android:id="@+id/et_magic_edit"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="13sp"
-        android:textColor="#1565C0"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:background="#E3F2FD"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="2dp"
         android:visibility="gone"
-        android:inputType="text"
-        android:imeOptions="actionDone"
-        android:lineSpacingExtra="2dp" />
+        android:clickable="false"
+        android:focusable="false" />
 
-</FrameLayout>
+    <!-- 内容区：TextView / EditText 叠加 -->
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/tv_magic_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:gravity="start|center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:background="@drawable/magic_item_bg"
+            android:letterSpacing="0.02"
+            android:lineSpacingExtra="2dp" />
+
+        <EditText
+            android:id="@+id/et_magic_edit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#1565C0"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:background="#E3F2FD"
+            android:visibility="gone"
+            android:inputType="text"
+            android:imeOptions="actionDone"
+            android:lineSpacingExtra="2dp" />
+
+    </FrameLayout>
+
+</LinearLayout>

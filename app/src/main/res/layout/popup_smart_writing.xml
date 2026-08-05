@@ -22,7 +22,7 @@
 
     </LinearLayout>
 
-    <!-- 标题栏：居中标题 + 右上角 X 关闭 -->
+    <!-- 标题栏：居中标题 + 右侧 ✕ 关闭 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -42,7 +42,7 @@
             android:textColor="#333333" />
 
         <TextView
-            android:id="@+id/btn_smart_more"
+            android:id="@+id/btn_smart_close"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
@@ -50,7 +50,8 @@
             android:textSize="20sp"
             android:textColor="#666666"
             android:padding="6dp"
-            android:background="?attr/selectableItemBackground" />
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="关闭" />
 
     </LinearLayout>
 
@@ -149,7 +150,7 @@
         android:listSelector="@android:color/transparent"
         android:stretchMode="columnWidth" />
 
-    <!-- ===== 普通操作栏 ===== -->
+    <!-- ===== 普通操作栏（只剩批量选择；新增已移到标题栏） ===== -->
     <LinearLayout
         android:id="@+id/action_bar_normal"
         android:layout_width="match_parent"
@@ -168,8 +169,8 @@
             android:gravity="center"
             android:text="＋"
             android:textSize="20sp"
-            android:textColor="#81D8D0"
             android:textStyle="bold"
+            android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="新增智能写作命令" />
 
@@ -257,7 +258,8 @@
             android:textSize="14sp"
             android:textColor="#E53935"
             android:paddingHorizontal="12dp"
-            android:background="?attr/selectableItemBackground" />
+            android:background="?attr/selectableItemBackground"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/btn_smart_batch_delete_all"
@@ -268,7 +270,8 @@
             android:textSize="14sp"
             android:textColor="#E53935"
             android:paddingHorizontal="12dp"
-            android:background="?attr/selectableItemBackground" />
+            android:background="?attr/selectableItemBackground"
+            android:visibility="gone" />
 
     </LinearLayout>
 

@@ -21,4 +21,16 @@
         android:background="@drawable/magic_item_bg"
         android:lineSpacingExtra="2dp" />
 
+    <!-- 批量选择复选框（默认隐藏，由 batchMode 控制显示） -->
+    <CheckBox
+        android:id="@+id/cb_clipboard_select"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|top"
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="2dp"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false" />
+
 </LinearLayout>

@@ -3,20 +3,33 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/popup_bg">
+    android:background="@drawable/sheet_top_rounded">
 
-    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner + 关闭 X，无图标） -->
+    <!-- 顶部拖动手柄（长条 handle + 透明命中区，绑定拖动改高度/下滑关闭） -->
+    <LinearLayout
+        android:id="@+id/drag_handle"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="?attr/selectableItemBackground">
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:background="#D0D0D0"
+            android:backgroundTint="#D0D0D0" />
+
+    </LinearLayout>
+
+    <!-- 标题栏：标题 + 右上角 X 关闭 -->
     <LinearLayout
         android:id="@+id/banner_bar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginStart="-16dp"
-        android:layout_marginEnd="-16dp"
-        android:layout_marginBottom="12dp"
+        android:layout_height="44dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:backgroundTint="#81D8D0"
-        android:paddingHorizontal="16dp">
+        android:paddingHorizontal="12dp">
 
         <TextView
             android:layout_width="0dp"
@@ -26,7 +39,18 @@
             android:text="剪贴板管理"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF" />
+            android:textColor="#333333" />
+
+        <TextView
+            android:id="@+id/btn_clipboard_close"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="✕"
+            android:textSize="20sp"
+            android:textColor="#666666"
+            android:padding="6dp"
+            android:background="?attr/selectableItemBackground" />
 
     </LinearLayout>
 
@@ -47,7 +71,7 @@
             android:gravity="center_vertical"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
-            android:hint="🔍 搜索剪贴板..."
+            android:hint="点击后使用中文键盘输入搜索"
             android:textSize="13sp"
             android:textColor="#333333"
             android:textColorHint="#999999"
@@ -98,66 +122,107 @@
         android:padding="16dp"
         android:visibility="gone" />
 
-    <!-- 底部管理栏：置顶 删除 -->
+    <!-- ===== 普通操作栏（方形菜单按钮） ===== -->
     <LinearLayout
+        android:id="@+id/action_bar_normal"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="#F5F5F5"
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
-        <!-- 置顶：⤒ -->
         <TextView
-            android:id="@+id/btn_clipboard_pin"
+            android:id="@+id/btn_clipboard_select_all"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⤒"
+            android:text="□"
             android:textSize="18sp"
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
-            android:contentDescription="置顶" />
+            android:contentDescription="批量选择" />
 
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
+    </LinearLayout>
 
-        <!-- 删除：⊗ -->
+    <!-- ===== 批量操作栏（默认隐藏） ===== -->
+    <LinearLayout
+        android:id="@+id/action_bar_batch"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#FFFFFF"
+        android:paddingHorizontal="4dp"
+        android:elevation="2dp"
+        android:visibility="gone">
+
         <TextView
-            android:id="@+id/btn_clipboard_delete"
+            android:id="@+id/btn_clipboard_batch_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="取消"
+            android:textSize="15sp"
+            android:textColor="#666666"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/tv_clipboard_batch_count"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⊗"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="删除" />
+            android:text="已选 0"
+            android:textSize="13sp"
+            android:textColor="#333333" />
 
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <!-- 关闭：⨯ -->
         <TextView
-            android:id="@+id/btn_clipboard_close_bottom"
-            android:layout_width="0dp"
+            android:id="@+id/btn_clipboard_batch_all"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1"
             android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
+            android:text="全选"
+            android:textSize="14sp"
             android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_clipboard_batch_pin"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="批量置顶"
+            android:textSize="14sp"
+            android:textColor="#81D8D0"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_clipboard_batch_delete"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="批量删除"
+            android:textSize="14sp"
+            android:textColor="#E53935"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_clipboard_batch_delete_all"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="全部删除"
+            android:textSize="14sp"
+            android:textColor="#E53935"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
 
     </LinearLayout>
 
