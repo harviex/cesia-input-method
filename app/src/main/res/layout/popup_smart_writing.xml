@@ -15,24 +15,13 @@
         android:background="#D0D0D0"
         android:backgroundTint="#D0D0D0" />
 
-    <!-- 标题栏：左取消 / 居中标 / 右更多 -->
+    <!-- 标题栏：居中标题 + 右上角 X 关闭 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingHorizontal="12dp">
-
-        <TextView
-            android:id="@+id/btn_smart_cancel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="取消"
-            android:textSize="15sp"
-            android:textColor="#81D8D0"
-            android:padding="6dp"
-            android:background="?attr/selectableItemBackground" />
 
         <TextView
             android:id="@+id/tv_smart_title"
@@ -50,9 +39,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="⋯"
-            android:textSize="22sp"
-            android:textColor="#81D8D0"
+            android:text="✕"
+            android:textSize="20sp"
+            android:textColor="#666666"
             android:padding="6dp"
             android:background="?attr/selectableItemBackground" />
 
@@ -222,7 +211,7 @@
         android:layout_height="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#E6F7F5"
+        android:background="#FFFFFF"
         android:paddingHorizontal="4dp"
         android:elevation="2dp"
         android:visibility="gone">
@@ -249,6 +238,17 @@
             android:textColor="#333333" />
 
         <TextView
+            android:id="@+id/btn_smart_batch_all"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="全选"
+            android:textSize="14sp"
+            android:textColor="#81D8D0"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
             android:id="@+id/btn_smart_batch_pin"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
@@ -265,6 +265,17 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:text="批量删除"
+            android:textSize="14sp"
+            android:textColor="#E53935"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_smart_batch_delete_all"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="全部删除"
             android:textSize="14sp"
             android:textColor="#E53935"
             android:paddingHorizontal="12dp"

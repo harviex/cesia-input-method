@@ -4078,7 +4078,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         when (mi.itemId) {
                             1 -> { togglePinUser(entry.instruction); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
                             2 -> { deleteUser(entry.instruction); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
-                            3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateStatus("✏️ 修改命令...（按发送键保存）") }
+                            3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateSmartEditStatus() }
                         }
                         true
                     }
@@ -4091,37 +4091,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
             val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_smart_select_all)
-            val btnCancelTop = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_cancel)
             val btnMore = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_more)
             val btnBatchCancel = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_cancel)
+            val btnBatchAll = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_all)
             val btnBatchPin = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_pin)
             val btnBatchDelete = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_delete)
+            val btnBatchDeleteAll = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_delete_all)
 
-            // ===== 取消（顶部左侧）：退出弹窗 =====
-            btnCancelTop.setOnClickListener {
+            // ===== 右上角 X：关闭弹窗 =====
+            btnMore.setOnClickListener {
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
-            }
-
-            // ===== 更多（顶部右侧）：全选删除等 =====
-            btnMore.setOnClickListener {
-                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
-                val menu = android.widget.PopupMenu(this, btnMore)
-                menu.menu.add(0, 1, 0, "批量选择")
-                menu.menu.add(0, 2, 1, "全选删除（${userRecords.size}条）")
-                menu.setOnMenuItemClickListener { mi ->
-                    when (mi.itemId) {
-                        1 -> enterBatchMode()
-                        2 -> {
-                            userRecords.clear()
-                            saveSmartRecords(userRecords)
-                            notifyChanged()
-                            updateStatus("⊗ 已清空智能写作命令")
-                        }
-                    }
-                    true
-                }
-                menu.show()
             }
 
             // ===== ＋：进入编辑模式输入新命令 =====
@@ -4173,6 +4153,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 saveSmartRecords(userRecords)
                 notifyChanged()
                 updateStatus("⊗ 已批量删除 ${selectedSet.size} 条")
+                exitBatchMode()
+            }
+            btnBatchAll.setOnClickListener {
+                // 全选：勾选当前所有用户自定义命令
+                for (e in entries) if (e.isUser) selectedSet.add(e.instruction)
+                recordAdapter.notifyDataSetChanged()
+                updateBatchCount()
+            }
+            btnBatchDeleteAll.setOnClickListener {
+                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
+                userRecords.clear()
+                saveSmartRecords(userRecords)
+                notifyChanged()
+                updateStatus("⊗ 已清空智能写作命令")
                 exitBatchMode()
             }
 
