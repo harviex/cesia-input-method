@@ -79,7 +79,7 @@ object InstructionSet {
         Instruction("spc_split", "特殊", "逐词拆分用空格隔开", "将以下文字中的词语逐一分开，用空格隔开每个词，只输出拆分后的文字，不要输出任何解释", listOf("拆词", "分词", "词语分开", "逐词分开", "分词显示"))
     )
 
-    // ==================== 生成类（15条，星星按钮专用，允许空文本）====================
+    // ==================== 生成类（场景化，星星按钮专用，允许空文本）====================
     private val generateInstructions = listOf(
         Instruction("gen_news", "生成", "生成今日新闻简报", "请搜索今天发生的国内外重要新闻，生成一份200字左右的新闻简报，包含3-5条要点，语言简洁客观，只输出新闻内容，不要输出任何解释", listOf("新闻", "今日新闻", "新闻简报", "今天新闻"), isGeneration = true),
         Instruction("gen_idea", "生成", "帮我想几个创意点子", "根据以下主题，帮我想出5个创意点子，每个点子用一句话概括，以列表形式输出，只输出点子列表，不要输出任何解释", listOf("帮我想", "帮我想想", "想点子", "出主意", "给建议"), isGeneration = true),
@@ -95,7 +95,45 @@ object InstructionSet {
         Instruction("gen_continue", "生成", "续写后续内容", "根据以下文字的风格和主题，续写一段后续内容，保持文风一致，不少于100字，只输出续写部分，不要输出任何解释", listOf("续写", "接着写", "继续写", "往下写", "续写内容"), isGeneration = true),
         Instruction("gen_expand", "生成", "扩写增加细节", "对以下文字进行扩写，增加更多细节描述和具体事例，使内容更加丰富生动，长度不少于原来的两倍，只输出扩写后的文字，不要输出任何解释", listOf("扩写", "展开", "扩充", "扩写内容", "写详细", "详细描述"), isGeneration = true),
         Instruction("gen_rewrite", "生成", "改写换一种说法", "用不同的表达方式改写以下文字，保持原意不变但用词和句式完全不同，只输出改写后的文字，不要输出任何解释", listOf("改写", "换一种说法", "重新表达", "改写内容", "换个说法"), isGeneration = true),
-        Instruction("gen_translate_en", "生成", "翻译为英文", "将以下文字翻译为流畅自然的英文，只输出翻译后的英文，不要输出任何解释", listOf("翻译英文", "翻译成英文", "翻译为英文", "英文翻译", "翻英文", "翻成英文"), isGeneration = true)
+        Instruction("gen_translate_en", "生成", "翻译为英文", "将以下文字翻译为流畅自然的英文，只输出翻译后的英文，不要输出任何解释", listOf("翻译英文", "翻译成英文", "翻译为英文", "英文翻译", "翻英文", "翻成英文"), isGeneration = true),
+
+        // ---- 社媒文案 ----
+        Instruction("gen_xhs", "生成", "小红书风格文案", "根据以下主题，写一篇小红书风格的种草文案：用emoji分段、语气活泼亲切、带相关话题标签，300字左右，只输出文案", listOf("小红书", "种草", "小红书文案", "xhs"), isGeneration = true),
+        Instruction("gen_moments", "生成", "朋友圈文案", "根据以下主题，写一条朋友圈文案，简短有温度，可带1-2个emoji，不超过50字，只输出文案", listOf("朋友圈", "朋友圈文案", "发朋友圈"), isGeneration = true),
+        Instruction("gen_weibo", "生成", "微博热搜风短文案", "根据以下主题，写一条微博热搜风格的短文案，网感强、带#话题#，不超过140字，只输出文案", listOf("微博", "热搜", "微博文案"), isGeneration = true),
+        Instruction("gen_linkedin", "生成", "LinkedIn职场文", "根据以下主题，写一篇LinkedIn风格的职场专业文章，结构清晰（观点+案例+总结），中英双语或英文，只输出文章", listOf("linkedin", "领英", "职场文", "英文文章"), isGeneration = true),
+
+        // ---- 职场办公 ----
+        Instruction("gen_weekly", "生成", "写周报/月报", "根据以下工作要点，整理成一份周报/月报，分『本周完成 / 进行中 / 下周计划』三段，语言简练，只输出报告", listOf("周报", "月报", "写周报", "工作汇报"), isGeneration = true),
+        Instruction("gen_meeting", "生成", "会议纪要", "根据以下会议记录，整理成标准会议纪要，含『时间 / 参会人 / 议题 / 决议 / 待办』，只输出纪要", listOf("会议纪要", "会议记录", "整理会议"), isGeneration = true),
+        Instruction("gen_ppt", "生成", "汇报PPT大纲", "根据以下主题，生成一份汇报PPT大纲，含封面、目录、分章节要点、总结页，每页一句话要点，只输出大纲", listOf("ppt", "大纲", "汇报大纲", "ppt大纲"), isGeneration = true),
+        Instruction("gen_okr", "生成", "OKR拆解", "根据以下目标，拆解为O(目标)与3-5个KR(关键结果)，每条可量化可验收，只输出OKR", listOf("okr", "拆解目标", "目标拆解"), isGeneration = true),
+        Instruction("gen_compete", "生成", "竞品分析框架", "根据以下产品，生成竞品分析框架，从功能/价格/用户群/优劣势对比维度展开，只输出分析框架", listOf("竞品", "竞品分析", "对比分析"), isGeneration = true),
+
+        // ---- 学术写作 ----
+        Instruction("gen_litreview", "生成", "文献综述框架", "根据以下研究方向，生成文献综述的写作框架，含研究背景/主要流派/核心争议/研究空白/展望，只输出框架", listOf("文献综述", "综述框架", "文献框架"), isGeneration = true),
+        Instruction("gen_thesis", "生成", "论文大纲", "根据以下题目，生成学术论文大纲，含摘要/引言/方法/结果/讨论/结论，只输出大纲", listOf("论文大纲", "论文结构", "学术大纲"), isGeneration = true),
+        Instruction("gen_dedup", "生成", "降重改写", "对以下学术文字进行降重改写，替换同义表述、调整句式结构，保持原意与学术严谨，只输出改写后文字", listOf("降重", "去重", "降重改写"), isGeneration = true),
+        Instruction("gen_ref", "生成", "参考文献格式化", "将以下参考文献条目按GB/T 7714格式规范化排版，只输出格式化后的文献列表", listOf("参考文献", "文献格式", "引用格式"), isGeneration = true),
+
+        // ---- 电商运营 ----
+        Instruction("gen_selling", "生成", "产品卖点提炼", "根据以下产品描述，提炼5条核心卖点，每条一句话、突出用户利益点，只输出卖点列表", listOf("卖点", "产品卖点", "提炼卖点"), isGeneration = true),
+        Instruction("gen_detail", "生成", "详情页文案", "根据以下产品，写一份电商详情页文案，含标题/核心卖点/使用场景/规格参数，只输出文案", listOf("详情页", "商品文案", "详情页文案"), isGeneration = true),
+        Instruction("gen_live", "生成", "直播带货话术", "根据以下产品，写一份直播带货话术，含开场留人/卖点讲解/逼单话术三段，只输出话术", listOf("直播话术", "带货话术", "直播文案"), isGeneration = true),
+        Instruction("gen_review", "生成", "评价回复模板", "根据以下用户评价，写一条得体亲切的商家回复，感谢+回应+邀约复购，只输出回复文案", listOf("评价回复", "客服回复", "买家回复"), isGeneration = true),
+
+        // ---- 编程辅助 ----
+        Instruction("gen_refactor", "生成", "代码重构", "对以下代码进行重构，提升可读性与可维护性，保持功能不变，只输出重构后代码", listOf("重构", "代码重构", "refactor"), isGeneration = true),
+        Instruction("gen_unittest", "生成", "单元测试生成", "为以下代码生成单元测试，覆盖主要分支与边界情况，使用恰当的测试框架，只输出测试代码", listOf("单元测试", "单测", "测试生成", "unittest"), isGeneration = true),
+        Instruction("gen_apidoc", "生成", "API文档生成", "根据以下接口代码，生成API文档，含路径/请求参数/返回字段/调用示例，只输出文档", listOf("api文档", "接口文档", "apidoc"), isGeneration = true),
+        Instruction("gen_sql", "生成", "SQL优化建议", "分析以下SQL语句，指出性能瓶颈并给出优化建议与改写版本，只输出建议与改写", listOf("sql优化", "优化sql", "数据库优化"), isGeneration = true),
+
+        // ---- 生活实用 ----
+        Instruction("gen_travel", "生成", "旅行攻略", "根据以下目的地，生成一份旅行攻略，含行程安排/美食/住宿/交通/预算，只输出攻略", listOf("旅行攻略", "旅游攻略", "出行计划"), isGeneration = true),
+        Instruction("gen_recipe", "生成", "食谱生成", "根据以下食材或菜系，生成一份食谱，含用料清单/步骤/小贴士，只输出食谱", listOf("食谱", "菜谱", "怎么做"), isGeneration = true),
+        Instruction("gen_fitness", "生成", "健身计划", "根据以下目标与身体状况，生成一周健身计划，含训练动作/组数次数/饮食建议，只输出计划", listOf("健身计划", "锻炼计划", "减肥计划"), isGeneration = true),
+        Instruction("gen_gift", "生成", "礼物清单", "根据以下对象与预算，生成礼物清单，每条含推荐理由，只输出清单", listOf("礼物", "礼物清单", "送什么"), isGeneration = true),
+        Instruction("gen_decor", "生成", "装修避坑指南", "根据以下户型或风格，生成装修避坑指南，含预算分配/材料选择/施工要点，只输出指南", listOf("装修", "装修避坑", "装修指南"), isGeneration = true)
     )
 
     // ==================== 润色类（12条）====================
