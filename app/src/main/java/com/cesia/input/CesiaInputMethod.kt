@@ -3798,9 +3798,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private data class SmartOption(val label: String, val tag: String, var isChecked: Boolean = false)
 
     // 智能写作设置弹窗中的选项标签常量
-    private val OPT_RSS_SOURCE = "📰 RSS源"
-    private val OPT_SEARCH = "🌐 网络搜索"
-    private val OPT_LOCAL_LIB = "📚 本地文库"
+    private val OPT_RSS_SOURCE = "◉ RSS源"
+    private val OPT_SEARCH = "⌕ 网络搜索"
+    private val OPT_LOCAL_LIB = "▤ 本地文库"
     // NOTE: 剪贴板首条开关已按需求移除（2026-08）：UI 不再显示，以下功能保留但不可达
     // private val OPT_CLIPBOARD = "📋 剪贴板首条"
 
@@ -3987,12 +3987,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         tvCommand.setBackgroundResource(R.drawable.magic_item_bg)
                     }
                     cb.visibility = if (batchMode) android.view.View.VISIBLE else android.view.View.GONE
-                    cb.isChecked = selectedSet.contains(entry.instruction)
-                    cb.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                    // 先挂监听（引用当前 entry），再设置 isChecked，避免复用旧视图时监听器仍指向旧 entry 误删已选项
                     cb.setOnCheckedChangeListener { _, checked ->
                         if (checked) selectedSet.add(entry.instruction) else selectedSet.remove(entry.instruction)
                         updateBatchCount()
                     }
+                    cb.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                    cb.isChecked = selectedSet.contains(entry.instruction)
                     return v
                 }
             }
@@ -4083,8 +4084,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             selectTab("常用")
 
+            // 拖动识别：在 GridView 上滑动（哪怕小幅）不应触发 item click（避免复选框状态被误翻转）
+            var gvDownY = 0f
+            var gvMoved = false
+            gvRecords.setOnTouchListener { _: android.view.View, ev ->
+                when (ev.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> { gvDownY = ev.y; gvMoved = false }
+                    android.view.MotionEvent.ACTION_MOVE -> { if (Math.abs(ev.y - gvDownY) > 8f) gvMoved = true }
+                }
+                false  // 不消费事件，交给 GridView 正常处理
+            }
+
             // 单击：批量模式下切换勾选；普通模式执行该命令（调用AI）
             gvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+                if (gvMoved) return@setOnItemClickListener  // 拖动过则不视为点击
                 if (position < entries.size) {
                     val entry = entries[position]
                     if (batchMode) {
@@ -4113,7 +4126,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     pinItem.isEnabled = true
                     val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
                     delItem.isEnabled = true
-                    val modItem = menu.menu.add(0, 3, 2, "✏️ 修改")
+                    val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
                     modItem.isEnabled = true
                     menu.setOnMenuItemClickListener { mi ->
                         when (mi.itemId) {
@@ -4130,7 +4143,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // 底部按钮
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
-            val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
             val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_smart_select_all)
             val btnMore = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_more)
             val btnBatchCancel = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_cancel)
@@ -4151,26 +4163,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 smartWritingPopup?.dismiss()
                 smartWritingPopup = null
                 enterSmartEditMode()
-            }
-
-            // ===== 置顶按钮：弹出列表，对单条命令置顶（内置/用户通用，可重复）=====
-            btnPin.setOnClickListener {
-                if (entries.isEmpty()) { updateStatus("暂无命令"); return@setOnClickListener }
-                val menu = android.widget.PopupMenu(this, btnPin)
-                entries.forEachIndexed { idx, e ->
-                    val pinned = isPinnedUser(e.instruction)
-                    val label = "${if (pinned) "⤒ " else "○ "}${e.name.take(20)}"
-                    menu.menu.add(0, idx, idx, label)
-                }
-                menu.setOnMenuItemClickListener { mi ->
-                    val which = mi.itemId
-                    if (which >= 0 && which < entries.size) {
-                        togglePin(entries[which])
-                        updateStatus(if (isPinnedUser(entries[which].instruction)) "⤒ 已置顶" else "取消置顶：${entries[which].instruction.take(18)}")
-                    }
-                    true
-                }
-                menu.show()
             }
 
             // ===== 批量选择按钮：进入批量模式 =====
@@ -4230,9 +4222,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val keyboardTopScreenY = keyboardLocation[1]
             val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
 
-            // 高度上限放开到键盘顶部（status bar 之下），允许拖到屏幕顶端
-            val maxSheetHeight = totalHeight
+            // 高度上限放开到整屏（状态栏之下），允许菜单拖到屏幕顶端、覆盖键盘区
             val minSheetHeight = (resources.displayMetrics.density * 160f).toInt()
+            val screenH = resources.displayMetrics.heightPixels
+            val maxSheetHeight = (screenH - statusBarHeight).coerceAtLeast(minSheetHeight)
 
             // 记忆上次高度
             val sheetPrefs = getSharedPreferences("cesia_smart_sheet", MODE_PRIVATE)
@@ -4250,14 +4243,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // ===== 顶部手柄拖动改高度 + 快速下滑关闭 =====
             val density = resources.displayMetrics.density
-            // 上限放开到键盘顶部（status bar 之下），允许拖到屏幕顶端
-            val maxSheetHeightLocal = totalHeight
+            // 上限放开到整屏（状态栏之下），允许拖到屏幕顶端
+            val maxSheetHeightLocal = maxSheetHeight
             val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
             var dragStartY = 0f
             var dragStartH = 0
             var lastMoveY = 0f
             var lastMoveT = 0L
             var velY = 0f
+            var totalDy = 0f  // 从按下到抬起的累计位移（向下为正）
             dragHandle.setOnTouchListener { _: android.view.View, ev ->
                 when (ev.action) {
                     android.view.MotionEvent.ACTION_DOWN -> {
@@ -4266,10 +4260,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         lastMoveY = ev.rawY
                         lastMoveT = System.currentTimeMillis()
                         velY = 0f
+                        totalDy = 0f
                         true
                     }
                     android.view.MotionEvent.ACTION_MOVE -> {
                         val dy = ev.rawY - dragStartY
+                        totalDy = dy
                         val newH = (dragStartH - dy).toInt().coerceIn(minSheetHeight, maxSheetHeightLocal)
                         popup.update(popupWidth, newH)
                         val now = System.currentTimeMillis()
@@ -4281,8 +4277,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                         sheetPrefs.edit().putInt("height", popup.height).apply()
-                        // 快速向下滑（速度超阈值）则关闭
-                        if (velY > 1500f) {
+                        // 关闭判定（二选一即可，避免误关也保证可关）：
+                        // 1) 累计向下位移足够大（> 当前高度 35% 或 > 80dp）→ 视为下拉关闭
+                        // 2) 快速向下甩（瞬时速度 > 1500px/s 且向下位移 > 40dp）
+                        val downward = totalDy.coerceAtLeast(0f)
+                        val closeByDistance = downward > (popup.height * 0.35f) || downward > density * 80f
+                        val closeByFling = velY > density * 1500f && downward > density * 40f
+                        if (closeByDistance || closeByFling) {
                             smartWritingPopup?.dismiss()
                             smartWritingPopup = null
                         }
@@ -4299,8 +4300,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             }
 
-            // 从底部上滑：锚定键盘底部，顶部留出 topGapPx
-            popup.showAtLocation(keyboardView, android.view.Gravity.BOTTOM or android.view.Gravity.START, 0, 0)
+            // 从顶部状态栏下方开始，允许拖到整屏高度（覆盖键盘区）
+            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, statusBarHeight)
             smartWritingPopup = popup
 
         } catch (e: Exception) {

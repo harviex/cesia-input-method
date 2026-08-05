@@ -70,7 +70,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:padding="10dp"
-            android:text="○ RSS源"
+            android:text="◉ RSS源"
             android:textSize="13sp"
             android:textColor="#333333"
             android:background="?attr/selectableItemBackground"
@@ -83,7 +83,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:padding="10dp"
-            android:text="○ 网络搜索"
+            android:text="⌕ 网络搜索"
             android:textSize="13sp"
             android:textColor="#333333"
             android:background="?attr/selectableItemBackground"
@@ -96,7 +96,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:padding="10dp"
-            android:text="○ 本地文库"
+            android:text="▤ 本地文库"
             android:textSize="13sp"
             android:textColor="#333333"
             android:background="?attr/selectableItemBackground"
@@ -172,24 +172,6 @@
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="新增智能写作命令" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
-
-        <TextView
-            android:id="@+id/btn_smart_pin"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="⤒"
-            android:textSize="18sp"
-            android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="单个置顶（长按项也可）" />
 
         <View
             android:layout_width="1dp"
