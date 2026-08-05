@@ -3,22 +3,39 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/popup_bg">
+    android:background="@drawable/sheet_top_rounded">
 
-    <!-- 标题栏：与主题设置菜单统一风格（跟随主题色 banner + 关闭 X） -->
+    <!-- 顶部抓手（长条 handle，主流 bottom sheet 风格） -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="6dp"
+        android:background="#D0D0D0"
+        android:backgroundTint="#D0D0D0" />
+
+    <!-- 标题栏：左取消 / 居中标 / 右更多 -->
     <LinearLayout
-        android:id="@+id/banner_bar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginStart="-16dp"
-        android:layout_marginEnd="-16dp"
-        android:layout_marginBottom="12dp"
+        android:layout_height="44dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:backgroundTint="#81D8D0"
-        android:paddingHorizontal="16dp">
+        android:paddingHorizontal="12dp">
 
         <TextView
+            android:id="@+id/btn_smart_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="取消"
+            android:textSize="15sp"
+            android:textColor="#81D8D0"
+            android:padding="6dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/tv_smart_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -26,86 +43,103 @@
             android:text="智能写作"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF" />
+            android:textColor="#333333" />
+
+        <TextView
+            android:id="@+id/btn_smart_more"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="⋯"
+            android:textSize="22sp"
+            android:textColor="#81D8D0"
+            android:padding="6dp"
+            android:background="?attr/selectableItemBackground" />
 
     </LinearLayout>
 
-    <!-- 选项区域：2列布局 -->
+    <!-- 数据源一行：3 个开关（已去掉剪贴板首条） -->
     <LinearLayout
+        android:id="@+id/data_source_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp">
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="8dp">
 
-        <!-- 第一列：剪贴板、RSS源 -->
-        <LinearLayout
+        <TextView
+            android:id="@+id/opt_rss_news"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="○ RSS源"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground"
+            android:tag="rss_cache" />
 
-            <TextView
-                android:id="@+id/opt_clipboard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="12dp"
-                android:text="○ 📋 剪贴板首条"
-                android:textSize="14sp"
-                android:textColor="#333333"
-                android:background="?attr/selectableItemBackground"
-                android:tag="clipboard" />
-
-            <TextView
-                android:id="@+id/opt_rss_news"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="12dp"
-                android:text="○ 📰 RSS源"
-                android:textSize="14sp"
-                android:textColor="#333333"
-                android:background="?attr/selectableItemBackground"
-                android:tag="rss_news" />
-        </LinearLayout>
-
-        <!-- 第二列：网络搜索、本地文库 -->
-        <LinearLayout
+        <TextView
+            android:id="@+id/opt_search"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="○ 网络搜索"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground"
+            android:tag="search" />
 
-            <TextView
-                android:id="@+id/opt_search"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="12dp"
-                android:text="○ 🌐 网络搜索"
-                android:textSize="14sp"
-                android:textColor="#333333"
-                android:background="?attr/selectableItemBackground"
-                android:tag="search" />
+        <TextView
+            android:id="@+id/opt_local_lib"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="○ 本地文库"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground"
+            android:tag="local_lib" />
 
-            <TextView
-                android:id="@+id/opt_local_lib"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="12dp"
-                android:text="○ 📚 本地文库"
-                android:textSize="14sp"
-                android:textColor="#333333"
-                android:background="?attr/selectableItemBackground"
-                android:tag="local_lib" />
-        </LinearLayout>
     </LinearLayout>
 
     <!-- 分隔线 -->
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#CCCCCC"
-        android:layout_marginHorizontal="12dp" />
+        android:background="#E0E0E0"
+        android:layout_marginHorizontal="8dp" />
 
-    <!-- 智能写作命令列表（2列，可滚动，与魔法书一致） -->
+    <!-- 分类标签栏（横向滚动） -->
+    <HorizontalScrollView
+        android:id="@+id/category_tab_strip"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:scrollbars="none"
+        android:paddingHorizontal="4dp">
+
+        <LinearLayout
+            android:id="@+id/category_tab_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+
+    </HorizontalScrollView>
+
+    <!-- 分隔线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0"
+        android:layout_marginHorizontal="8dp" />
+
+    <!-- 智能写作命令列表（2列，可滚动） -->
     <GridView
         android:id="@+id/gv_smart_records"
         android:layout_width="match_parent"
@@ -113,23 +147,23 @@
         android:layout_weight="1"
         android:numColumns="2"
         android:horizontalSpacing="4dp"
-        android:verticalSpacing="2dp"
-        android:padding="6dp"
+        android:verticalSpacing="4dp"
+        android:padding="8dp"
         android:scrollbars="vertical"
         android:listSelector="@android:color/transparent"
         android:stretchMode="columnWidth" />
 
-    <!-- 底部按钮栏：＋ 置顶 删除 -->
+    <!-- ===== 普通操作栏 ===== -->
     <LinearLayout
+        android:id="@+id/action_bar_normal"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="#F5F5F5"
         android:paddingHorizontal="4dp"
         android:elevation="2dp">
 
-        <!-- 新增：＋ -->
         <TextView
             android:id="@+id/btn_smart_add"
             android:layout_width="0dp"
@@ -137,7 +171,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="＋"
-            android:textSize="18sp"
+            android:textSize="20sp"
             android:textColor="#81D8D0"
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
@@ -149,7 +183,6 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 置顶：⤒ -->
         <TextView
             android:id="@+id/btn_smart_pin"
             android:layout_width="0dp"
@@ -160,7 +193,7 @@
             android:textSize="18sp"
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
-            android:contentDescription="置顶" />
+            android:contentDescription="单个置顶（长按项也可）" />
 
         <View
             android:layout_width="1dp"
@@ -168,37 +201,74 @@
             android:layout_gravity="center_vertical"
             android:background="#DDDDDD" />
 
-        <!-- 删除：⊗ -->
         <TextView
-            android:id="@+id/btn_smart_delete"
+            android:id="@+id/btn_smart_select_all"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⊗"
+            android:text="□"
             android:textSize="18sp"
             android:textColor="#81D8D0"
             android:background="?attr/selectableItemBackground"
-            android:contentDescription="删除" />
+            android:contentDescription="批量选择" />
 
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center_vertical"
-            android:background="#DDDDDD" />
+    </LinearLayout>
 
-        <!-- 关闭：⨯ -->
+    <!-- ===== 批量操作栏（默认隐藏） ===== -->
+    <LinearLayout
+        android:id="@+id/action_bar_batch"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#E6F7F5"
+        android:paddingHorizontal="4dp"
+        android:elevation="2dp"
+        android:visibility="gone">
+
         <TextView
-            android:id="@+id/btn_smart_close_bottom"
+            android:id="@+id/btn_smart_batch_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="取消"
+            android:textSize="15sp"
+            android:textColor="#666666"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/tv_smart_batch_count"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⨯"
-            android:textSize="18sp"
+            android:text="已选 0"
+            android:textSize="13sp"
+            android:textColor="#333333" />
+
+        <TextView
+            android:id="@+id/btn_smart_batch_pin"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="批量置顶"
+            android:textSize="14sp"
             android:textColor="#81D8D0"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="关闭" />
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_smart_batch_delete"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="批量删除"
+            android:textSize="14sp"
+            android:textColor="#E53935"
+            android:paddingHorizontal="12dp"
+            android:background="?attr/selectableItemBackground" />
 
     </LinearLayout>
 

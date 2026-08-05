@@ -13,6 +13,7 @@ import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import com.cesia.input.CesiaKeyboardView
+import com.cesia.input.command.CategorizedCommandMenu
 import com.cesia.input.model.ModelInfo
 import com.cesia.input.model.ModelRegistry
 import android.os.Build
@@ -38,6 +39,7 @@ import android.view.inputmethod.InputConnection
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.GridView
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -3518,7 +3520,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             height = gridHeightPx
         }
 
-        // ===== 数据列表：置顶项在前，非置顶项按时间倒序 =====
+        // ===== 数据列表：置顶项在前，非置顶项按时间倒序（常用标签）=====
         val items = mutableListOf<MagicHistoryManager.MagicRecord>()
         fun rebuildItems() {
             val all = mgr.getRecords()
@@ -3528,15 +3530,30 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         rebuildItems()
 
+        // ===== 分类标签：常用(用户记录) + 翻译/语气/长度/格式/内容/特殊/润色(默认指令) =====
+        var currentMagicTab = "常用"
+        // 默认分类指令条目（点击直接执行 instruction）
+        data class DefEntry(val id: String, val name: String, val instruction: String)
+        var defEntries: List<DefEntry> = emptyList()
+        fun rebuildDefEntries() {
+            val ids = if (currentMagicTab == "常用") emptyList()
+            else CategorizedCommandMenu.getCommandIdsForTab(this@CesiaInputMethod, false, currentMagicTab)
+            defEntries = ids.mapNotNull { id ->
+                CategorizedCommandMenu.getInstruction(id)?.let { DefEntry(id, it.name, it.instruction) }
+            }
+        }
+
         val btnAdd = popupView.findViewById<TextView>(R.id.btn_add_magic)
         val btnPin = popupView.findViewById<TextView>(R.id.btn_pin_manage)
         val btnDelete = popupView.findViewById<TextView>(R.id.btn_delete_manage)
+        val tabContainer = popupView.findViewById<android.widget.LinearLayout>(R.id.category_tab_container)
 
         // 追踪当前编辑状态
         var editingPosition = -1
         var hasFocusedEdit = false
 
         fun notifyChanged() {
+            if (currentMagicTab == "常用") rebuildItems() else rebuildDefEntries()
             (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
         }
 
@@ -3546,61 +3563,97 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             enterMagicEditMode(mgr)
         }
 
+        // 构建标签栏
+        val magicTabs = CategorizedCommandMenu.getTabOrder(false)
+        fun selectMagicTab(tab: String) {
+            currentMagicTab = tab
+            for (i in 0 until tabContainer.childCount) {
+                val tv = tabContainer.getChildAt(i) as? android.widget.TextView
+                val active = tv?.tag == tab
+                tv?.setTextColor(if (active) themeAccent else 0xFF666666.toInt())
+                tv?.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+            notifyChanged()
+        }
+        tabContainer.removeAllViews()
+        magicTabs.forEach { tab ->
+            val tv = android.widget.TextView(this@CesiaInputMethod).apply {
+                text = tab
+                textSize = 14f
+                setPadding(20, 0, 20, 0)
+                tag = tab
+                gravity = android.view.Gravity.CENTER
+                setOnClickListener { selectMagicTab(tab) }
+            }
+            tabContainer.addView(tv)
+        }
+        selectMagicTab("常用")
+
         gridView.adapter = object : android.widget.BaseAdapter() {
 // endregion 魔法历史菜单
 
 // region 候选适配器
-            override fun getCount() = items.size
-            override fun getItem(p: Int) = items[p]
-            override fun getItemId(p: Int) = items[p].id
+            override fun getCount() = if (currentMagicTab == "常用") items.size else defEntries.size
+            override fun getItem(p: Int) = if (currentMagicTab == "常用") items[p] else defEntries[p]
+            override fun getItemId(p: Int) = if (currentMagicTab == "常用") items[p].id.hashCode().toLong() else p.toLong()
 
             override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                 val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
-                val record = items[p]
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
-                val isEditing = (p == editingPosition)
-
-                if (isEditing) {
-                    tv.visibility = View.GONE
-                    et.visibility = View.VISIBLE
-                    if (et.text.toString() != record.instruction) {
-                        et.setText(record.instruction)
-                        et.setSelection(et.text.length)
-                    }
-                    et.hint = "✏️ 修改魔法指令..."
-                    et.setOnEditorActionListener { _, actionId, _ ->
-                        if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                            saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
-                            editingPosition = -1
-                            hasFocusedEdit = false
-                            true
-                        } else false
+                if (currentMagicTab == "常用") {
+                    val record = items[p]
+                    val isEditing = (p == editingPosition)
+                    if (isEditing) {
+                        tv.visibility = View.GONE
+                        et.visibility = View.VISIBLE
+                        if (et.text.toString() != record.instruction) {
+                            et.setText(record.instruction)
+                            et.setSelection(et.text.length)
+                        }
+                        et.hint = "✏️ 修改魔法指令..."
+                        et.setOnEditorActionListener { _, actionId, _ ->
+                            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                                saveEditing(p, gridView, mgr) { rebuildItems(); notifyChanged() }
+                                editingPosition = -1
+                                hasFocusedEdit = false
+                                true
+                            } else false
+                        }
+                    } else {
+                        et.visibility = View.GONE
+                        tv.visibility = View.VISIBLE
+                        et.setOnEditorActionListener(null)
+                        val isActive = record.instruction == currentMagicPrompt
+                        val prefix = if (isActive) "✓ " else if (record.isPinned) "⤒ " else ""
+                        val displayText = "${prefix}${record.instruction}"
+                        if (record.isPinned && !isActive) {
+                            val spannable = android.text.SpannableString(displayText)
+                            spannable.setSpan(
+                                android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                                0, prefix.length,
+                                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            tv.text = spannable
+                            tv.setTextColor(0xFF333333.toInt())
+                            tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                        } else {
+                            tv.text = displayText
+                            tv.setTextColor(if (isActive) themeAccent else 0xFF333333.toInt())
+                            tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                        }
+                        tv.textSize = 13f
+                        tv.maxLines = 2
                     }
                 } else {
+                    // 默认分类指令：只读，点击执行
                     et.visibility = View.GONE
                     tv.visibility = View.VISIBLE
                     et.setOnEditorActionListener(null)
-
-                    val isActive = record.instruction == currentMagicPrompt
-                    val prefix = if (isActive) "✓ " else if (record.isPinned) "⤒ " else ""
-                    val displayText = "${prefix}${record.instruction}"
-                    if (record.isPinned && !isActive) {
-                        // 置顶但未激活：置顶标志加粗
-                        val spannable = android.text.SpannableString(displayText)
-                        spannable.setSpan(
-                            android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
-                            0, prefix.length,
-                            android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                        tv.text = spannable
-                        tv.setTextColor(0xFF333333.toInt())
-                        tv.setTypeface(null, android.graphics.Typeface.NORMAL)
-                    } else {
-                        tv.text = displayText
-                        tv.setTextColor(if (isActive) themeAccent else 0xFF333333.toInt())
-                        tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-                    }
+                    val entry = defEntries[p]
+                    tv.text = entry.name
+                    tv.setTextColor(0xFF333333.toInt())
+                    tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                     tv.textSize = 13f
                     tv.maxLines = 2
                 }
@@ -3610,14 +3663,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // ===== 单击：打钩+装载+执行+关闭 =====
         gridView.setOnItemClickListener { _, _, position, _ ->
-            val record = items[position]
-            currentMagicPrompt = record.instruction
-            popup.dismiss()
-            executeSelectedMagic(record.instruction)
+            if (currentMagicTab == "常用") {
+                val record = items[position]
+                currentMagicPrompt = record.instruction
+                popup.dismiss()
+                executeSelectedMagic(record.instruction)
+            } else {
+                val entry = defEntries[position]
+                CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
+                currentMagicPrompt = entry.instruction
+                popup.dismiss()
+                executeSelectedMagic(entry.instruction)
+            }
         }
 
-        // ===== 长按：进入编辑模式 =====
+        // ===== 长按：进入编辑模式（仅常用标签的用户记录）=====
         gridView.setOnItemLongClickListener { _, _, position, _ ->
+            if (currentMagicTab != "常用") return@setOnItemLongClickListener true  // 默认分类指令不可编辑
             if (position < items.size) {
                 val record = items[position]
                 mgr.togglePin(record.id)
@@ -3736,10 +3798,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private data class SmartOption(val label: String, val tag: String, var isChecked: Boolean = false)
 
     // 智能写作设置弹窗中的选项标签常量
-    private val OPT_CLIPBOARD = "📋 剪贴板首条"
     private val OPT_RSS_SOURCE = "📰 RSS源"
     private val OPT_SEARCH = "🌐 网络搜索"
     private val OPT_LOCAL_LIB = "📚 本地文库"
+    // NOTE: 剪贴板首条开关已按需求移除（2026-08）：UI 不再显示，以下功能保留但不可达
+    // private val OPT_CLIPBOARD = "📋 剪贴板首条"
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
@@ -3748,16 +3811,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
             applyAccentToViewTree(popupView, themeAccent)
-            // 显式给 banner_bar 设置背景色（跟随主题色）
-            popupView.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
 
-            // 新 banner_bar：找第一个 TextView 设置标题
-            val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
-            val titleTv = bannerBar?.getChildAt(0) as? android.widget.TextView
+            // 标题
+            val titleTv = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
             titleTv?.text = smartWritingLabel
 
-            // 选项视图（4个数据源：剪贴板、RSS源、网络搜索、本地文库）
-            val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)
+            // 选项视图（3个数据源：RSS源、网络搜索、本地文库；剪贴板首条已移除）
+            // val optClipboard = popupView.findViewById<TextView>(R.id.opt_clipboard)  // 已移除
             val optRssSource = popupView.findViewById<TextView>(R.id.opt_rss_news)
             val optSearch = popupView.findViewById<TextView>(R.id.opt_search)
             val optLocalLib = popupView.findViewById<TextView>(R.id.opt_local_lib)
@@ -3773,7 +3833,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.setTypeface(null, if (checked) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                 tv.tag = tag
             }
-            refreshOption(optClipboard, "clipboard", OPT_CLIPBOARD)
             refreshOption(optRssSource, "rss_cache", OPT_RSS_SOURCE)
             refreshOption(optSearch, "search", OPT_SEARCH)
             refreshOption(optLocalLib, "local_lib", OPT_LOCAL_LIB)
@@ -3787,7 +3846,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 savedOptions = smartPrefs.getStringSet("selected_options", null) ?: emptySet()
                 refreshOption(tv, tag, label)
             }
-            optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }
+            // optClipboard.setOnClickListener { toggleOption(it as TextView, "clipboard", OPT_CLIPBOARD) }  // 剪贴板首条已移除
             optRssSource.setOnClickListener {
                 // RSS源：直接切换选中/取消选中（不跳转页面）
                 val currentOpts = (smartPrefs.getStringSet("selected_options", null) ?: emptySet()).toMutableSet()
@@ -3842,60 +3901,228 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 }
             }
 
-            // 智能写作命令列表（2列，可滚动，与魔法书一致）
+            // ===== 分类命令菜单（标签栏 + 网格，纯代码映射，不依赖外部 JSON）=====
             val gvRecords = popupView.findViewById<android.widget.GridView>(R.id.gv_smart_records)
-            val smartRecords = mutableListOf<String>()
-            loadSmartRecords(smartRecords)
+            val tabStrip = popupView.findViewById<HorizontalScrollView>(R.id.category_tab_strip)
+            val tabContainer = popupView.findViewById<android.widget.LinearLayout>(R.id.category_tab_container)
 
+            // 用户自定义命令（instruction 文本集合），归入「通用 / 常用」
+            val userRecords = mutableListOf<String>()
+            loadSmartRecords(userRecords)
+            val userRecordSet = userRecords.toSet()
+
+            // 当前选中的分类标签
+            var currentTab = "常用"
+
+            // 根据当前标签计算要显示的「指令 id + 显示名 + instruction」列表
+            data class CmdEntry(val id: String, val name: String, val instruction: String, val isUser: Boolean)
+            fun buildEntries(): List<CmdEntry> {
+                val ids = if (currentTab == "常用") {
+                    CategorizedCommandMenu.getFrequentIds(this@CesiaInputMethod, true)
+                } else {
+                    CategorizedCommandMenu.getCommandIdsForTab(this@CesiaInputMethod, true, currentTab)
+                }
+                val entries = ids.mapNotNull { id ->
+                    CategorizedCommandMenu.getInstruction(id)?.let { CmdEntry(id, it.name, it.instruction, false) }
+                }.toMutableList()
+                // 用户自定义命令：在「常用」和「通用」标签下追加（去重）
+                if (currentTab == "常用" || currentTab == "通用") {
+                    for (rec in userRecords) {
+                        if (entries.none { it.instruction == rec }) {
+                            entries.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
+                        }
+                    }
+                }
+                return entries
+            }
+
+            fun isPinnedUser(instruction: String): Boolean {
+                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                return prefs.getStringSet("pinned_set", emptySet())?.contains(instruction) ?: false
+            }
+
+            // ===== 批量模式状态 =====
+            var batchMode = false
+            val selectedSet = mutableSetOf<String>()
+            val actionBarNormal = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_normal)
+            val actionBarBatch = popupView.findViewById<android.widget.LinearLayout>(R.id.action_bar_batch)
+            val tvBatchCount = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_batch_count)
+
+            fun updateBatchCount() {
+                tvBatchCount.text = "已选 ${selectedSet.size}"
+            }
+
+            var entries = buildEntries()
+
+            // ===== 列表适配器 =====
             val recordAdapter = object : android.widget.BaseAdapter() {
-                override fun getCount() = smartRecords.size
-                override fun getItem(p: Int) = smartRecords[p]
+                override fun getCount() = entries.size
+                override fun getItem(p: Int) = entries[p]
                 override fun getItemId(p: Int) = p.toLong()
                 override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                     val v = cv ?: android.view.LayoutInflater.from(this@CesiaInputMethod)
                         .inflate(R.layout.item_smart_command, parent, false)
                     val tvCommand = v.findViewById<android.widget.TextView>(R.id.tv_smart_command)
-                    tvCommand.text = smartRecords[p]
+                    val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
+                    val entry = entries[p]
+                    tvCommand.text = entry.name
+                    val bgRes = if (entry.isUser) {
+                        if (isPinnedUser(entry.instruction)) R.drawable.smart_item_selected else R.drawable.magic_item_bg
+                    } else R.drawable.magic_item_bg
+                    tvCommand.setBackgroundResource(bgRes)
+                    cb.visibility = if (batchMode) android.view.View.VISIBLE else android.view.View.GONE
+                    cb.isChecked = selectedSet.contains(entry.instruction)
+                    cb.setOnCheckedChangeListener { _, checked ->
+                        if (checked) selectedSet.add(entry.instruction) else selectedSet.remove(entry.instruction)
+                        updateBatchCount()
+                    }
                     return v
                 }
             }
             gvRecords.adapter = recordAdapter
 
-            // 追踪当前编辑状态
-            var editingPosition = -1
-            var hasFocusedEdit = false
-
             fun notifyChanged() {
-                (gvRecords.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                entries = buildEntries()
+                recordAdapter.notifyDataSetChanged()
             }
 
-            // 长按：置顶/删除（和魔法书一致）
-            gvRecords.setOnItemLongClickListener { _, view, position, _ ->
-                if (position < smartRecords.size) {
-                    val item = smartRecords[position]
-                    smartRecords.removeAt(position)
-                    smartRecords.add(0, item)
-                    saveSmartRecords(smartRecords)
-                    notifyChanged()
-                    updateStatus("⤒ 已置顶：${item.take(20)}")
+            fun togglePinUser(cmd: String) {
+                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+                if (pinnedSet.contains(cmd)) pinnedSet.remove(cmd) else pinnedSet.add(cmd)
+                val arr = org.json.JSONArray()
+                for (item in userRecords) arr.put(org.json.JSONObject().put("instruction", item))
+                prefs.edit()
+                    .putString("records_json", arr.toString())
+                    .putStringSet("pinned_set", pinnedSet)
+                    .apply()
+                notifyChanged()
+            }
+            fun deleteUser(cmd: String) {
+                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                userRecords.remove(cmd)
+                val arr = org.json.JSONArray()
+                for (item in userRecords) arr.put(org.json.JSONObject().put("instruction", item))
+                prefs.edit()
+                    .putString("records_json", arr.toString())
+                    .apply()
+                notifyChanged()
+            }
+
+            fun enterBatchMode() {
+                batchMode = true
+                actionBarNormal.visibility = android.view.View.GONE
+                actionBarBatch.visibility = android.view.View.VISIBLE
+                recordAdapter.notifyDataSetChanged()
+            }
+            fun exitBatchMode() {
+                batchMode = false
+                selectedSet.clear()
+                actionBarNormal.visibility = android.view.View.VISIBLE
+                actionBarBatch.visibility = android.view.View.GONE
+                recordAdapter.notifyDataSetChanged()
+                updateBatchCount()
+            }
+
+            // 构建标签栏
+            val tabs = CategorizedCommandMenu.getTabOrder(true)
+            fun selectTab(tab: String) {
+                currentTab = tab
+                // 高亮
+                for (i in 0 until tabContainer.childCount) {
+                    val tv = tabContainer.getChildAt(i) as? android.widget.TextView
+                    val active = tv?.tag == tab
+                    tv?.setTextColor(if (active) themeAccent else 0xFF666666.toInt())
+                    tv?.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                 }
-                true
+                notifyChanged()
             }
+            tabContainer.removeAllViews()
+            tabs.forEach { tab ->
+                val tv = android.widget.TextView(this@CesiaInputMethod).apply {
+                    text = tab
+                    textSize = 14f
+                    setPadding(20, 0, 20, 0)
+                    tag = tab
+                    gravity = android.view.Gravity.CENTER
+                    setOnClickListener { selectTab(tab) }
+                }
+                tabContainer.addView(tv)
+            }
+            selectTab("常用")
 
-            // 单击：直接执行该命令（调用AI）
+            // 单击：执行该命令（调用AI）
             gvRecords.setOnItemClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
-                if (position < smartRecords.size) {
-                    val command = smartRecords[position]
+                if (position < entries.size) {
+                    val entry = entries[position]
+                    if (!entry.isUser) CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
                     smartWritingPopup?.dismiss()
                     smartWritingPopup = null
-                    executeSmartCommand(command)
+                    executeSmartCommand(entry.instruction)
                 }
+            }
+
+            // 长按：弹出操作菜单（置顶 / 删除 / 修改）—— 仅自定义命令
+            gvRecords.setOnItemLongClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+                if (position < entries.size) {
+                    val entry = entries[position]
+                    if (!entry.isUser) {
+                        updateStatus("内置命令不可操作")
+                        return@setOnItemLongClickListener true
+                    }
+                    val menu = android.widget.PopupMenu(this@CesiaInputMethod, gvRecords)
+                    menu.menu.add(0, 1, 0, "⤒ 置顶")
+                    menu.menu.add(0, 2, 1, "⊗ 删除")
+                    menu.menu.add(0, 3, 2, "✏️ 修改")
+                    menu.setOnMenuItemClickListener { mi ->
+                        when (mi.itemId) {
+                            1 -> { togglePinUser(entry.instruction); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
+                            2 -> { deleteUser(entry.instruction); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
+                            3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateStatus("✏️ 修改命令...（按发送键保存）") }
+                        }
+                        true
+                    }
+                    menu.show()
+                }
+                true
             }
 
             // 底部按钮
             val btnAdd = popupView.findViewById<TextView>(R.id.btn_smart_add)
             val btnPin = popupView.findViewById<TextView>(R.id.btn_smart_pin)
-            val btnDelete = popupView.findViewById<TextView>(R.id.btn_smart_delete)
+            val btnSelectAll = popupView.findViewById<TextView>(R.id.btn_smart_select_all)
+            val btnCancelTop = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_cancel)
+            val btnMore = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_more)
+            val btnBatchCancel = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_cancel)
+            val btnBatchPin = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_pin)
+            val btnBatchDelete = popupView.findViewById<android.widget.TextView>(R.id.btn_smart_batch_delete)
+
+            // ===== 取消（顶部左侧）：退出弹窗 =====
+            btnCancelTop.setOnClickListener {
+                smartWritingPopup?.dismiss()
+                smartWritingPopup = null
+            }
+
+            // ===== 更多（顶部右侧）：全选删除等 =====
+            btnMore.setOnClickListener {
+                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
+                val menu = android.widget.PopupMenu(this, btnMore)
+                menu.menu.add(0, 1, 0, "批量选择")
+                menu.menu.add(0, 2, 1, "全选删除（${userRecords.size}条）")
+                menu.setOnMenuItemClickListener { mi ->
+                    when (mi.itemId) {
+                        1 -> enterBatchMode()
+                        2 -> {
+                            userRecords.clear()
+                            saveSmartRecords(userRecords)
+                            notifyChanged()
+                            updateStatus("⊗ 已清空智能写作命令")
+                        }
+                    }
+                    true
+                }
+                menu.show()
+            }
 
             // ===== ＋：进入编辑模式输入新命令 =====
             btnAdd.setOnClickListener {
@@ -3904,93 +4131,64 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 enterSmartEditMode()
             }
 
-            // ===== 置顶按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
+            // ===== 置顶按钮：对单个用户命令置顶（操作后不关闭，可重复）=====
             btnPin.setOnClickListener {
-                if (smartRecords.isEmpty()) return@setOnClickListener
+                if (userRecords.isEmpty()) { updateStatus("暂无自定义命令"); return@setOnClickListener }
                 val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
                 val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf<String>()
                 val menu = android.widget.PopupMenu(this, btnPin)
-                smartRecords.forEachIndexed { idx, cmd ->
+                userRecords.forEachIndexed { idx, cmd ->
                     val isPinned = pinnedSet.contains(cmd)
                     val label = "${if (isPinned) "⤒ " else "○ "}${cmd.take(20)}"
                     menu.menu.add(0, idx, idx, label)
                 }
                 menu.setOnMenuItemClickListener { mi ->
                     val which = mi.itemId
-                    if (which >= 0 && which < smartRecords.size) {
-                        val cmd = smartRecords[which]
-                        if (pinnedSet.contains(cmd)) {
-                            pinnedSet.remove(cmd)
-                        } else {
-                            pinnedSet.add(cmd)
-                        }
-                        smartRecords.removeAt(which)
-                        smartRecords.add(0, cmd)
-                        // 保存时包含置顶状态
-                        val arr = org.json.JSONArray()
-                        for (item in smartRecords) {
-                            arr.put(org.json.JSONObject().put("instruction", item))
-                        }
-                        prefs.edit()
-                            .putString("records_json", arr.toString())
-                            .putStringSet("pinned_set", pinnedSet)
-                            .apply()
-                        notifyChanged()
-                        updateStatus(if (pinnedSet.contains(cmd)) "⤒ 已置顶" else "取消置顶：${cmd.take(18)}")
+                    if (which >= 0 && which < userRecords.size) {
+                        val cmd = userRecords[which]
+                        togglePinUser(cmd)
+                        updateStatus(if (isPinnedUser(cmd)) "⤒ 已置顶" else "取消置顶：${cmd.take(18)}")
                     }
                     true
                 }
                 menu.show()
             }
 
-            // ===== 删除按钮：使用 PopupMenu（IME 环境不能用 AlertDialog）=====
-            btnDelete.setOnClickListener {
-                if (smartRecords.isEmpty()) return@setOnClickListener
-                val menu = android.widget.PopupMenu(this, btnDelete)
-                menu.menu.add(0, -1, 0, "⊗ 删除全部（${smartRecords.size}条）")
-                smartRecords.forEachIndexed { idx, cmd ->
-                    menu.menu.add(0, idx, idx + 1, "⊗ ${cmd.take(18)}")
-                }
-                menu.setOnMenuItemClickListener { mi ->
-                    val which = mi.itemId
-                    if (which == -1) {
-                        // 删除全部
-                        smartRecords.clear()
-                        saveSmartRecords(smartRecords)
-                        notifyChanged()
-                        updateStatus("⊗ 已清空智能写作命令")
-                    } else if (which >= 0 && which < smartRecords.size) {
-                        val removed = smartRecords.removeAt(which)
-                        saveSmartRecords(smartRecords)
-                        notifyChanged()
-                        updateStatus("⊗ 已删除：${removed.take(18)}")
-                    }
-                    true
-                }
-                menu.show()
+            // ===== 批量选择按钮：进入批量模式 =====
+            btnSelectAll.setOnClickListener { enterBatchMode() }
+
+            // ===== 批量栏：取消 / 批量置顶 / 批量删除 =====
+            btnBatchCancel.setOnClickListener { exitBatchMode() }
+            btnBatchPin.setOnClickListener {
+                val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+                val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+                for (cmd in selectedSet) pinnedSet.add(cmd)
+                prefs.edit().putStringSet("pinned_set", pinnedSet).apply()
+                notifyChanged()
+                updateStatus("⤒ 已批量置顶 ${selectedSet.size} 条")
+                exitBatchMode()
+            }
+            btnBatchDelete.setOnClickListener {
+                for (cmd in selectedSet) userRecords.remove(cmd)
+                saveSmartRecords(userRecords)
+                notifyChanged()
+                updateStatus("⊗ 已批量删除 ${selectedSet.size} 条")
+                exitBatchMode()
             }
 
-            // 弹窗尺寸和定位（与魔法书一致）
+            // 弹窗尺寸和定位（底部上滑 sheet 风格）
             val keyboardWidth = keyboardView.width
             val popupWidth = if (keyboardWidth > 0) keyboardWidth else resources.displayMetrics.widthPixels
 
-            // 测量标题栏实际高度（新 banner_bar）
-            popupView.measure(
-                android.view.View.MeasureSpec.makeMeasureSpec(popupWidth, android.view.View.MeasureSpec.EXACTLY),
-                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-            )
-            val titleHeightPx = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)?.measuredHeight
-                ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48f, resources.displayMetrics).toInt()
-
             val barHeightPx = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, 44f, resources.displayMetrics
+                TypedValue.COMPLEX_UNIT_DIP, 48f, resources.displayMetrics
             ).toInt()
 
-            // 选项区高度（2列×2行 × 40dp）
+            // 选项区高度（1行 × 约40dp + padding）
             val optionHeightPx = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 40f, resources.displayMetrics
             ).toInt()
-            val optionsHeightPx = optionHeightPx * 2 + TypedValue.applyDimension(
+            val optionsHeightPx = optionHeightPx + TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
             ).toInt() // padding
 
@@ -4002,12 +4200,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val keyboardTopScreenY = keyboardLocation[1]
             val totalHeight = (keyboardTopScreenY - statusBarHeight).coerceAtLeast(200)
 
+            // 顶部留出安全间距（不再贴边），视觉为底部上滑 sheet
+            val topGapPx = (resources.displayMetrics.density * 12f).toInt()
+            val sheetHeight = (totalHeight - topGapPx).coerceAtLeast(200)
+
             // GridView 使用 weight=1 自动填满剩余空间，无需手动设置高度
 
-            // 弹窗尺寸：固定高度 = 键盘顶部 - 状态栏底部，完全填满
-            val popup = PopupWindow(popupView, popupWidth, totalHeight, true)
+            val popup = PopupWindow(popupView, popupWidth, sheetHeight, true)
             popup.isOutsideTouchable = false
-            popup.elevation = 4f
+            popup.elevation = 8f
             popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)
@@ -4019,15 +4220,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 btnMagic.setColorFilter(themeAccent, android.graphics.PorterDuff.Mode.SRC_ATOP)
             }
 
-            popup.showAtLocation(keyboardView, android.view.Gravity.TOP or android.view.Gravity.START, 0, -totalHeight)
+            // 从底部上滑：锚定键盘底部，顶部留出 topGapPx
+            popup.showAtLocation(keyboardView, android.view.Gravity.BOTTOM or android.view.Gravity.START, 0, 0)
             smartWritingPopup = popup
 
-            // ===== 关闭按钮（底部）=====
-            val btnClose = popupView.findViewById<TextView>(R.id.btn_smart_close_bottom)
-            btnClose.setOnClickListener {
-                smartWritingPopup?.dismiss()
-                smartWritingPopup = null
-            }
         } catch (e: Exception) {
             Log.e("Cesia", "showSmartWritingPopup 异常", e)
         }
@@ -4049,14 +4245,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // 立即显示状态，让用户知道正在处理
         updateStatus("智能写作处理中")
 
-        // 获取剪贴板内容
-        val clipboardText = if (selectedOptions.contains("clipboard")) {
-            if (clipboardItems.isEmpty()) {
-                val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                loadClipboardHistoryToClassMembers(clipboardMgr)
-            }
-            getClipboardFirstItemText()
-        } else ""
+        // 获取剪贴板内容（剪贴板首条开关已移除 2026-08：不再作为默认上下文来源）
+        val clipboardText = ""
+        // 旧逻辑（已禁用）：
+        // val clipboardText = if (selectedOptions.contains("clipboard")) { ... } else ""
         Log.d("Cesia", "executeSmartCommand: clipboardText=${clipboardText.length} chars")
 
         isAiProcessing = true
