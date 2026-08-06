@@ -8524,18 +8524,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.setTextColor(0xFF999999.toInt())
                 tv.textSize = 13f
             } else {
-                // 置顶：主题色描边高亮（与智能写作一致）
+                // 仅置顶项用主题色描边高亮（与智能写作一致），其余用默认背景
                 val display = if (item.text.length > 82) item.text.take(82) + "…" else item.text
                 tv.text = display
                 tv.textSize = 13f
-                val d = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                    cornerRadius = (context.resources.displayMetrics.density * 8f)
-                    setStroke((context.resources.displayMetrics.density * 1.5f).toInt(), accentColor)
-                    val fill = (accentColor and 0x00FFFFFF) or 0x1A000000
-                    setColor(fill)
+                if (item.isPinned) {
+                    val d = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = (context.resources.displayMetrics.density * 8f)
+                        setStroke((context.resources.displayMetrics.density * 1.5f).toInt(), accentColor)
+                        val fill = (accentColor and 0x00FFFFFF) or 0x1A000000
+                        setColor(fill)
+                    }
+                    tv.background = d
+                } else {
+                    tv.background = null
                 }
-                tv.background = d
                 tv.setTextColor(0xFF333333.toInt())
                 tv.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
