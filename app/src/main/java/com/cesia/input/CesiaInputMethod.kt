@@ -3820,14 +3820,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
 
         // ===== 长按：弹出操作菜单（置顶 / 取消置顶 / 删除 / 修改）=====
-        gridView.setOnItemLongClickListener { _, _, position, _ ->
+        gridView.setOnItemLongClickListener { _, view, position, _ ->
             if (currentMagicTab != "常用") return@setOnItemLongClickListener true  // 默认分类指令不可编辑
             if (position < items.size) {
                 val record = items[position]
-                val menu = android.widget.PopupMenu(this@CesiaInputMethod, gridView)
+                val menu = android.widget.PopupMenu(this@CesiaInputMethod, view ?: gridView)
                 val pinned = record.isPinned
                 val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
                 pinItem.isEnabled = true
+                val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
+                delItem.isEnabled = true
                 val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
                 modItem.isEnabled = true
                 menu.setOnMenuItemClickListener { mi ->
@@ -3837,6 +3839,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             rebuildItems()
                             notifyChanged()
                             updateStatus(if (record.isPinned) "↻ 已取消置顶" else "⤒ 已置顶：${record.instruction.take(18)}")
+                        }
+                        2 -> {
+                            mgr.removeRecord(record.id)
+                            rebuildItems()
+                            notifyChanged()
+                            updateStatus("⊗ 已删除：${record.instruction.take(18)}")
                         }
                         3 -> {
                             // 修改：进入内联编辑
@@ -4212,19 +4220,22 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // 长按：弹出操作菜单（置顶 / 删除 / 修改）—— 仅自定义命令
-            gvRecords.setOnItemLongClickListener { _: android.widget.AdapterView<*>?, _: android.view.View?, position: Int, _: Long ->
+            gvRecords.setOnItemLongClickListener { _: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, _: Long ->
                 if (position < entries.size) {
                     val entry = entries[position]
-                    val menu = android.widget.PopupMenu(this@CesiaInputMethod, gvRecords)
+                    val menu = android.widget.PopupMenu(this@CesiaInputMethod, view ?: gvRecords)
                     val pinned = isPinnedUser(entry.instruction)
                     // 置顶项显示「取消置顶」并可点击；非置顶显示「置顶」
                     val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
                     pinItem.isEnabled = true
+                    val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
+                    delItem.isEnabled = true
                     val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
                     modItem.isEnabled = true
                     menu.setOnMenuItemClickListener { mi ->
                         when (mi.itemId) {
                             1 -> { togglePin(entry); updateStatus(if (isPinnedUser(entry.instruction)) "⤒ 已置顶" else "取消置顶：${entry.instruction.take(18)}") }
+                            2 -> { deleteCmd(entry); updateStatus("⊗ 已删除：${entry.instruction.take(18)}") }
                             3 -> { smartWritingPopup?.dismiss(); smartWritingPopup = null; smartEditBuffer.clear(); smartEditBuffer.append(entry.instruction); smartEditMode = true; updateSmartEditStatus() }
                         }
                         true
@@ -8061,10 +8072,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // 长按：弹出操作菜单（置顶 / 取消置顶 / 删除 / 修改）
-            gvClipboard.setOnItemLongClickListener { _, _, position, _ ->
+            gvClipboard.setOnItemLongClickListener { _, view, position, _ ->
                 val item = clipboardFilteredItems.getOrNull(position) ?: return@setOnItemLongClickListener true
                 if (item.isEmpty) return@setOnItemLongClickListener true
-                val menu = android.widget.PopupMenu(this@CesiaInputMethod, gvClipboard)
+                val menu = android.widget.PopupMenu(this@CesiaInputMethod, view ?: gvClipboard)
                 val pinned = item.isPinned
                 val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
                 pinItem.isEnabled = true

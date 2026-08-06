@@ -258,8 +258,7 @@
             android:textSize="14sp"
             android:textColor="#E53935"
             android:paddingHorizontal="12dp"
-            android:background="?attr/selectableItemBackground"
-            android:visibility="gone" />
+            android:background="?attr/selectableItemBackground" />
 
         <TextView
             android:id="@+id/btn_smart_batch_delete_all"
