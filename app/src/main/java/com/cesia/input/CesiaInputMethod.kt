@@ -537,6 +537,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var magicHistoryManager: MagicHistoryManager? = null
     private var currentMagicPrompt: String? = null
 
+    // 智能写作当前激活命令（最近使用/点击执行的命令，排在列表第 1 项，带 ✓）
+    private var currentSmartPrompt: String? = null
+
     // 发送消息历史
     private val sentMessages = mutableListOf<String>()
     private val maxSentMessages = 10
@@ -1143,6 +1146,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
         currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
+        currentSmartPrompt = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
+            .getString("active_instruction", null)
 
         rimeEngine = RimeEngine(this)
         val rimeOk = rimeEngine.initialize()
@@ -3572,6 +3577,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             items.clear()
             items.addAll(all.filter { it.isPinned })
             items.addAll(all.filter { !it.isPinned })
+            // 当前激活命令永远排在最前（第 1 项），置顶从第二项开始
+            val active = currentMagicPrompt
+            if (active != null) {
+                val idx = items.indexOfFirst { it.instruction == active }
+                if (idx > 0) {
+                    val r = items.removeAt(idx)
+                    items.add(0, r)
+                }
+            }
         }
         rebuildItems()
 
@@ -3596,17 +3610,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
             updateMagicBatchCount()
         }
-        // ===== 分类标签：常用(用户记录) + 翻译/语气/长度/格式/内容/特殊/润色(默认指令) =====
+        // 分类标签：常用(用户记录) + 翻译/语气/长度/格式/内容/特殊/润色(默认指令)
         var currentMagicTab = "常用"
         // 默认分类指令条目（点击直接执行 instruction）
         data class DefEntry(val id: String, val name: String, val instruction: String)
         var defEntries: List<DefEntry> = emptyList()
+        // 分类标签内置指令的置顶/删除覆盖（与智能写作的 pinnedSet/deletedBuiltin 对齐）
+        val magicModifyPrefs = getSharedPreferences("cesia_magic_modify", MODE_PRIVATE)
+        var magicModifyPinned = magicModifyPrefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+        var magicModifyDeleted = magicModifyPrefs.getStringSet("deleted_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+        fun saveMagicModifyPrefs() {
+            magicModifyPrefs.edit()
+                .putStringSet("pinned_set", magicModifyPinned)
+                .putStringSet("deleted_set", magicModifyDeleted)
+                .apply()
+        }
+        fun isMagicPinned(instruction: String): Boolean = magicModifyPinned.contains(instruction)
         fun rebuildDefEntries() {
             val ids = if (currentMagicTab == "常用") emptyList()
             else CategorizedCommandMenu.getCommandIdsForTab(this@CesiaInputMethod, false, currentMagicTab)
             defEntries = ids.mapNotNull { id ->
                 CategorizedCommandMenu.getInstruction(id)?.let { DefEntry(id, it.name, it.instruction) }
-            }
+            }.filter { !magicModifyDeleted.contains(it.instruction) }
         }
 
         val btnAdd = popupView.findViewById<TextView>(R.id.btn_magic_add)
@@ -3624,35 +3649,55 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         btnBatchCancel.setOnClickListener { exitMagicBatch() }
         btnBatchAll.setOnClickListener {
             if (currentMagicTab == "常用") for (r in items) selectedMagic.add(r.instruction)
+            else for (e in defEntries) selectedMagic.add(e.instruction)
             (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
             updateMagicBatchCount()
         }
         btnBatchPin.setOnClickListener {
-            val ids = items.filter { selectedMagic.contains(it.instruction) }.map { it.id }.toSet()
-            mgr.setPinned(ids, true)
+            val sel = selectedMagic
+            if (sel.isEmpty()) { updateStatus("请先选择"); return@setOnClickListener }
+            if (currentMagicTab == "常用") {
+                val ids = items.filter { sel.contains(it.instruction) }.map { it.id }.toSet()
+                mgr.setPinned(ids, true)
+            } else {
+                magicModifyPinned.addAll(sel)
+                saveMagicModifyPrefs()
+            }
             selectedMagic.clear()
-            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-            updateStatus("⤒ 已批量置顶 ${ids.size} 条")
+            rebuildItems(); rebuildDefEntries(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⤒ 已批量置顶 ${sel.size} 条")
             exitMagicBatch()
         }
         btnBatchDelete.setOnClickListener {
-            val toDel = items.filter { selectedMagic.contains(it.instruction) }
-            mgr.removeRecords(toDel.map { it.id })
-            val updated = mgr.getRecords()
-            if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                currentMagicPrompt = mgr.getActiveInstruction()
+            val sel = selectedMagic
+            if (sel.isEmpty()) { updateStatus("请先选择"); return@setOnClickListener }
+            if (currentMagicTab == "常用") {
+                val toDel = items.filter { sel.contains(it.instruction) }
+                mgr.removeRecords(toDel.map { it.id })
+                val updated = mgr.getRecords()
+                if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
+                    currentMagicPrompt = mgr.getActiveInstruction()
+                }
+            } else {
+                magicModifyDeleted.addAll(sel)
+                saveMagicModifyPrefs()
             }
             selectedMagic.clear()
-            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-            updateStatus("⊗ 已批量删除 ${toDel.size} 条")
+            rebuildItems(); rebuildDefEntries(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⊗ 已批量删除 ${sel.size} 条")
             exitMagicBatch()
         }
         btnBatchDeleteAll.setOnClickListener {
-            mgr.clearAll()
-            currentMagicPrompt = null
+            if (currentMagicTab == "常用") {
+                mgr.clearAll()
+                currentMagicPrompt = null
+            } else {
+                for (e in defEntries) magicModifyDeleted.add(e.instruction)
+                saveMagicModifyPrefs()
+            }
             selectedMagic.clear()
-            rebuildItems(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
-            updateStatus("⊗ 已清空全部魔法")
+            rebuildItems(); rebuildDefEntries(); (gridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+            updateStatus("⊗ 已清空${if (currentMagicTab == "常用") "全部魔法" else "当前分类"}")
             exitMagicBatch()
         }
 
@@ -3723,10 +3768,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
                 val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_magic_select)
-                val showCb = magicBatchMode && currentMagicTab == "常用"
+                val showCb = magicBatchMode
                 cb.visibility = if (showCb) android.view.View.VISIBLE else android.view.View.GONE
                 if (showCb) {
-                    val inst = if (currentMagicTab == "常用") items[p].instruction else ""
+                    val inst = if (currentMagicTab == "常用") items[p].instruction else defEntries[p].instruction
                     // 先挂监听（引用当前 instruction），再设 isChecked，避免复用旧视图误删已选项
                     cb.setOnCheckedChangeListener { _, checked ->
                         if (checked) selectedMagic.add(inst) else selectedMagic.remove(inst)
@@ -3759,37 +3804,79 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         tv.visibility = View.VISIBLE
                         et.setOnEditorActionListener(null)
                         val isActive = record.instruction == currentMagicPrompt
-                        val prefix = if (isActive) "✓ " else if (record.isPinned) "⤒ " else ""
-                        val displayText = "${prefix}${record.instruction}"
-                        if (record.isPinned && !isActive) {
-                            val spannable = android.text.SpannableString(displayText)
-                            spannable.setSpan(
-                                android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
-                                0, prefix.length,
-                                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                            )
-                            tv.text = spannable
+                        val isPin = record.isPinned
+                        tv.text = record.instruction
+                        tv.textSize = 13f
+                        tv.maxLines = 2
+                        if (isActive) {
+                            // 当前激活命令：主题色描边高亮 + 前缀 ✓ 勾选标志（排第 1 项）
+                            val d = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                cornerRadius = (resources.displayMetrics.density * 8f)
+                                setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                                val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                                setColor(fill)
+                            }
+                            tv.background = d
+                            tv.text = "✓ ${record.instruction}"
+                            tv.setTextColor(themeAccent)
+                            tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                        } else if (isPin) {
+                            // 置顶：主题色描边高亮（与智能写作一致）
+                            val d = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                cornerRadius = (resources.displayMetrics.density * 8f)
+                                setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                                val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                                setColor(fill)
+                            }
+                            tv.background = d
                             tv.setTextColor(0xFF333333.toInt())
                             tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                         } else {
-                            tv.text = displayText
-                            tv.setTextColor(if (isActive) themeAccent else 0xFF333333.toInt())
-                            tv.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                            tv.setBackgroundResource(R.drawable.magic_item_bg)
+                            tv.setTextColor(0xFF333333.toInt())
+                            tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                         }
-                        tv.textSize = 13f
-                        tv.maxLines = 2
                     }
                 } else {
-                    // 默认分类指令：只读，点击执行
+                    // 默认分类指令：只读，点击执行；置顶项用主题色描边高亮（与智能写作一致）
                     et.visibility = View.GONE
                     tv.visibility = View.VISIBLE
                     et.setOnEditorActionListener(null)
                     val entry = defEntries[p]
                     tv.text = entry.name
-                    tv.setTextColor(0xFF333333.toInt())
-                    tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                     tv.textSize = 13f
                     tv.maxLines = 2
+                    val isActive = entry.instruction == currentMagicPrompt
+                    if (isActive) {
+                        val d = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                            cornerRadius = (resources.displayMetrics.density * 8f)
+                            setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                            val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                            setColor(fill)
+                        }
+                        tv.background = d
+                        tv.text = "✓ ${entry.name}"
+                        tv.setTextColor(themeAccent)
+                        tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                    } else if (isMagicPinned(entry.instruction)) {
+                        val d = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                            cornerRadius = (resources.displayMetrics.density * 8f)
+                            setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                            val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                            setColor(fill)
+                        }
+                        tv.background = d
+                        tv.setTextColor(0xFF333333.toInt())
+                        tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                    } else {
+                        tv.setBackgroundResource(R.drawable.magic_item_bg)
+                        tv.setTextColor(0xFF333333.toInt())
+                        tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                    }
                 }
                 return v
             }
@@ -3821,47 +3908,62 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // ===== 长按：弹出操作菜单（置顶 / 取消置顶 / 删除 / 修改）=====
         gridView.setOnItemLongClickListener { _, view, position, _ ->
-            if (currentMagicTab != "常用") return@setOnItemLongClickListener true  // 默认分类指令不可编辑
-            if (position < items.size) {
-                val record = items[position]
-                val menu = android.widget.PopupMenu(this@CesiaInputMethod, view ?: gridView)
-                val pinned = record.isPinned
-                val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
-                pinItem.isEnabled = true
-                val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
-                delItem.isEnabled = true
+            val isCommon = currentMagicTab == "常用"
+            if (isCommon && position >= items.size) return@setOnItemLongClickListener true
+            if (!isCommon && position >= defEntries.size) return@setOnItemLongClickListener true
+            val inst = if (isCommon) items[position].instruction else defEntries[position].instruction
+            val pinned = if (isCommon) items[position].isPinned else isMagicPinned(inst)
+            val menu = android.widget.PopupMenu(this@CesiaInputMethod, view ?: gridView)
+            val pinItem = menu.menu.add(0, 1, 0, if (pinned) "↻ 取消置顶" else "⤒ 置顶")
+            pinItem.isEnabled = true
+            val delItem = menu.menu.add(0, 2, 1, "⊗ 删除")
+            delItem.isEnabled = true
+            // 修改仅对常用标签的用户/历史记录可用（分类内置指令只读）
+            if (isCommon) {
                 val modItem = menu.menu.add(0, 3, 2, "✎ 修改")
                 modItem.isEnabled = true
-                menu.setOnMenuItemClickListener { mi ->
-                    when (mi.itemId) {
-                        1 -> {
-                            mgr.togglePin(record.id)
+            }
+            menu.setOnMenuItemClickListener { mi ->
+                when (mi.itemId) {
+                    1 -> {
+                        if (isCommon) {
+                            mgr.togglePin(items[position].id)
                             rebuildItems()
-                            notifyChanged()
-                            updateStatus(if (record.isPinned) "↻ 已取消置顶" else "⤒ 已置顶：${record.instruction.take(18)}")
+                        } else {
+                            if (pinned) magicModifyPinned.remove(inst) else magicModifyPinned.add(inst)
+                            saveMagicModifyPrefs()
+                            rebuildDefEntries()
                         }
-                        2 -> {
-                            mgr.removeRecord(record.id)
+                        notifyChanged()
+                        updateStatus(if (pinned) "↻ 已取消置顶" else "⤒ 已置顶：${inst.take(18)}")
+                    }
+                    2 -> {
+                        if (isCommon) {
+                            mgr.removeRecord(items[position].id)
                             rebuildItems()
-                            notifyChanged()
-                            updateStatus("⊗ 已删除：${record.instruction.take(18)}")
+                        } else {
+                            magicModifyDeleted.add(inst)
+                            saveMagicModifyPrefs()
+                            rebuildDefEntries()
                         }
-                        3 -> {
-                            // 修改：进入内联编辑
-                            editingPosition = position
-                            hasFocusedEdit = true
-                            notifyChanged()
-                            gridView.post {
-                                val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
-                                val et = child?.findViewById<android.widget.EditText?>(R.id.et_magic_edit)
-                                et?.requestFocus()
-                            }
+                        notifyChanged()
+                        updateStatus("⊗ 已删除：${inst.take(18)}")
+                    }
+                    3 -> {
+                        // 修改：进入内联编辑（仅常用）
+                        editingPosition = position
+                        hasFocusedEdit = true
+                        notifyChanged()
+                        gridView.post {
+                            val child = gridView.getChildAt(position - gridView.firstVisiblePosition)
+                            val et = child?.findViewById<android.widget.EditText?>(R.id.et_magic_edit)
+                            et?.requestFocus()
                         }
                     }
-                    true
                 }
-                menu.show()
+                true
             }
+            menu.show()
             true
         }
 
@@ -4048,8 +4150,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         result.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
                     }
                 }
-                // pinned 排前（按 instruction 命中 pinnedSet）
+                // pinned 排前（按 instruction 命中 pinnedSet），当前激活命令置顶第 1 项
                 result.sortBy { !pinnedSet.contains(it.instruction) }
+                // 激活命令永远排在最前（第 1 项），置顶从第二项开始
+                val active = currentSmartPrompt
+                if (active != null) {
+                    val idx = result.indexOfFirst { it.instruction == active }
+                    if (idx > 0) {
+                        val e = result.removeAt(idx)
+                        result.add(0, e)
+                    }
+                }
                 return result
             }
 
@@ -4078,7 +4189,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
                     val entry = entries[p]
                     tvCommand.text = entry.name
-                    if (pinnedSet.contains(entry.instruction)) {
+                    val isActive = entry.instruction == currentSmartPrompt
+                    if (isActive) {
+                        // 当前激活命令：主题色描边高亮 + 前缀 ✓ 勾选标志（排第 1 项）
+                        val d = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                            cornerRadius = (resources.displayMetrics.density * 8f)
+                            setStroke((resources.displayMetrics.density * 1.5f).toInt(), themeAccent)
+                            val fill = (themeAccent and 0x00FFFFFF) or 0x1A000000
+                            setColor(fill)
+                        }
+                        tvCommand.background = d
+                        tvCommand.text = "✓ ${entry.name}"
+                        tvCommand.setTextColor(themeAccent)
+                        tvCommand.setTypeface(null, android.graphics.Typeface.BOLD)
+                    } else if (pinnedSet.contains(entry.instruction)) {
                         val d = android.graphics.drawable.GradientDrawable().apply {
                             shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                             cornerRadius = (resources.displayMetrics.density * 8f)
@@ -4213,6 +4338,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         return@setOnItemClickListener
                     }
                     if (!entry.isUser) CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
+                    currentSmartPrompt = entry.instruction
+                    getSharedPreferences("cesia_smart_records", MODE_PRIVATE).edit()
+                        .putString("active_instruction", currentSmartPrompt).apply()
                     smartWritingPopup?.dismiss()
                     smartWritingPopup = null
                     executeSmartCommand(entry.instruction)
@@ -8396,12 +8524,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 tv.setTextColor(0xFF999999.toInt())
                 tv.textSize = 13f
             } else {
-                // 置顶标记统一为前缀 ⤒ + 主题色加粗（与智能修改/智能写作一致）
-                val display = if (item.isPinned) "⤒ ${item.text}" else item.text
-                tv.text = if (display.length > 82) display.take(82) + "…" else display
-                tv.setTextColor(if (item.isPinned) accentColor else 0xFF333333.toInt())
-                tv.setTypeface(null, if (item.isPinned) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+                // 置顶：主题色描边高亮（与智能写作一致）
+                val display = if (item.text.length > 82) item.text.take(82) + "…" else item.text
+                tv.text = display
                 tv.textSize = 13f
+                val d = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = (context.resources.displayMetrics.density * 8f)
+                    setStroke((context.resources.displayMetrics.density * 1.5f).toInt(), accentColor)
+                    val fill = (accentColor and 0x00FFFFFF) or 0x1A000000
+                    setColor(fill)
+                }
+                tv.background = d
+                tv.setTextColor(0xFF333333.toInt())
+                tv.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
             return v
         }
