@@ -37,6 +37,7 @@ class SymbolPanel(
     private val prefs: SharedPreferences =
         context.getSharedPreferences("cesia_symbol_freq", Context.MODE_PRIVATE)
     private val gson = Gson()
+    private var isDark = false  // 暗色模式标志，show() 时读取
 
     // 各类符号（源自 rime-ice symbols_v.yaml 实用部分；网络/序号/制表/线条为新增/整合）
     private val allCategories: List<Pair<String, List<String>>> = listOf(
@@ -201,6 +202,10 @@ class SymbolPanel(
             return
         }
         val content = LayoutInflater.from(context).inflate(R.layout.symbol_panel, null)
+        // 暗色模式：将面板浅色表面换深色、深字换浅字
+        isDark = context.getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+            .getInt("theme_mode", 0) == 1
+        if (isDark) applyDarkToView(content)
         // 用 SwipeFrameLayout 包裹，拦截横向滑动切类别（不被内部 RecyclerView 吞手势）
         val view = SwipeFrameLayout(context).apply {
             addView(content, ViewGroup.LayoutParams(
@@ -224,7 +229,8 @@ class SymbolPanel(
             false
         ).apply {
             isOutsideTouchable = true
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(
+                if (isDark) 0xFF1E1E2E.toInt() else Color.WHITE))
             showAtLocation(anchor, Gravity.BOTTOM or Gravity.START, 0, 0)
         }
 
@@ -254,7 +260,7 @@ class SymbolPanel(
                     setTextColor(Color.WHITE)
                     background = makeTabBg(accentColor)
                 } else {
-                    setTextColor(0xFF666666.toInt())
+                    setTextColor(if (isDark) 0xFFB0B0B0.toInt() else 0xFF666666.toInt())
                     background = null
                 }
                 setOnClickListener { selectCategory(idx, cats) }
@@ -289,7 +295,7 @@ class SymbolPanel(
                     t.setTextColor(Color.WHITE)
                     t.background = makeTabBg(accentColor)
                 } else {
-                    t.setTextColor(0xFF666666.toInt())
+                    t.setTextColor(if (isDark) 0xFFB0B0B0.toInt() else 0xFF666666.toInt())
                     t.background = null
                 }
             }
@@ -318,7 +324,7 @@ class SymbolPanel(
                 textSize = 20f
                 gravity = Gravity.CENTER
                 setPadding(dp(4), dp(12), dp(4), dp(12))
-                background = makeKeyBg(0xFFF2F2F2.toInt())
+                background = makeKeyBg(if (isDark) 0xFF2A2A3E.toInt() else 0xFFF2F2F2.toInt())
             }
             return VH(tv)
         }
@@ -344,6 +350,7 @@ class SymbolPanel(
         val isCommon = (currentCatIndex == 0)
         val menuView = LayoutInflater.from(context)
             .inflate(R.layout.symbol_context_menu, null)
+        if (isDark) applyDarkToView(menuView)
         val title = menuView.findViewById<TextView>(R.id.menu_title)
         val action = menuView.findViewById<TextView>(R.id.menu_action)
         title.text = symbol
@@ -355,7 +362,8 @@ class SymbolPanel(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             true
         ).apply {
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE))
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(
+                if (isDark) 0xFF1E1E2E.toInt() else Color.WHITE))
         }
         action.setOnClickListener {
             val freq = loadFreq()
@@ -394,6 +402,44 @@ class SymbolPanel(
             setColor(color)
             cornerRadius = dp(8).toFloat()
         }
+    }
+
+    /** 暗色模式：将 view 树浅色表面换深、文字按实际背景取对比色（与 CesiaInputMethod 同规则） */
+    private fun applyDarkToView(root: android.view.View) {
+        val darkSurface = 0xFF1E1E2E.toInt()
+        val darkSurfaceAlt = 0xFF2A2A3E.toInt()
+        val darkDivider = 0xFF3A3A4E.toInt()
+        val darkText = 0xFFE0E0E0.toInt()
+        val lightText = 0xFF333333.toInt()
+        fun gray(v: Int) = (v shr 16) and 0xFF
+        fun isGrayish(v: Int) = run { val r=(v shr 16) and 0xFF; val g=(v shr 8) and 0xFF; val b=v and 0xFF; r==g && g==b }
+        fun solidColor(d: android.graphics.drawable.Drawable?): Int? {
+            return when (d) {
+                is android.graphics.drawable.ColorDrawable -> d.color
+                is android.graphics.drawable.GradientDrawable -> try { d.color?.defaultColor } catch (_: Exception) { null }
+                else -> null
+            }
+        }
+        fun walk(v: android.view.View) {
+            val sc = solidColor(v.background)
+            if (sc != null && isGrayish(sc)) {
+                val g = gray(sc)
+                when {
+                    g > 235 -> v.setBackgroundColor(darkSurface)
+                    g in 215..235 -> v.setBackgroundColor(darkSurfaceAlt)
+                    g in 195..215 -> v.setBackgroundColor(darkDivider)
+                }
+            }
+            if (v is android.widget.TextView) {
+                val bg = solidColor(v.background) ?: (v.parent as? android.view.View)?.let { solidColor(it.background) }
+                val eff = bg ?: darkSurface
+                v.setTextColor(if (gray(eff) < 128) darkText else lightText)
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(root)
     }
 }
 
@@ -435,3 +481,4 @@ private class SwipeFrameLayout(context: Context) : FrameLayout(context) {
         return false
     }
 }
+

@@ -6,9 +6,18 @@
         <item name="colorPrimary">@color/accent</item>
         <item name="colorPrimaryDark">@color/accent</item>
         <item name="colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/bg_primary</item>
     </style>
 
-    <!-- NoActionBar 专用（透明状态栏适配） -->
+    <!-- 通用：跟随系统日夜模式（SettingsActivity / NewsSourceActivity 等用，避免被强制浅色） -->
+    <style name="Theme.Cesia.DayNight" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg_primary_dark</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/accent</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/bg_primary_dark</item>
+        <item name="android:windowTranslucentStatus">true</item>
+    </style>
     <style name="Theme.Cesia.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="android:windowBackground">@color/bg_primary</item>
         <item name="colorPrimary">@color/accent</item>

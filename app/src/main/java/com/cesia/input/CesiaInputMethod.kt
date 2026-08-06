@@ -177,6 +177,55 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             } catch (_: Exception) {}
         }
     }
+
+    /**
+     * 统一的弹窗暗色化：暗色模式下，把弹窗整棵 view 树里的浅色表面换成深色、
+     * 文字按「实际背景明暗」自动取对比色（深底→浅字，浅底→深字），确保文字永远可见。
+     * 覆盖所有弹窗（主题/智能写作/智能修改/剪贴板/候选长按/符号面板/字符库等）。
+     * 仅在 isDarkTheme 时生效。
+     */
+    private fun applyDarkThemeToViewTree(root: android.view.View) {
+        if (!isDarkTheme) return
+        val darkSurface = 0xFF1E1E2E.toInt()
+        val darkSurfaceAlt = 0xFF2A2A3E.toInt()
+        val darkDivider = 0xFF3A3A4E.toInt()
+        val darkText = 0xFFE0E0E0.toInt()
+        val lightText = 0xFF333333.toInt()
+        fun gray(v: Int) = ((v shr 16) and 0xFF)
+        fun isGrayish(v: Int) = run { val r=(v shr 16) and 0xFF; val g=(v shr 8) and 0xFF; val b=v and 0xFF; r==g && g==b }
+        // 取一个 Drawable 的实色（ColorDrawable / 纯色 GradientDrawable），否则返回 null
+        fun solidColor(d: android.graphics.drawable.Drawable?): Int? {
+            return when (d) {
+                is android.graphics.drawable.ColorDrawable -> d.color
+                is android.graphics.drawable.GradientDrawable -> try { d.color?.defaultColor } catch (_: Exception) { null }
+                else -> null
+            }
+        }
+        fun walk(v: android.view.View) {
+            // 背景：浅灰→深；灰色分割线→暗描边
+            val sc = solidColor(v.background)
+            if (sc != null && isGrayish(sc)) {
+                val g = gray(sc)
+                when {
+                    g > 235 -> v.setBackgroundColor(darkSurface)      // 近白
+                    g in 215..235 -> v.setBackgroundColor(darkSurfaceAlt) // 浅灰
+                    g in 195..215 -> v.setBackgroundColor(darkDivider)   // 灰分割线
+                }
+            }
+            // 文字：按「实际背景明暗」选对比色（避免浅字落在浅底上不可见）
+            if (v is android.widget.TextView) {
+                val def = try { v.textColors?.defaultColor ?: 0 } catch (_: Exception) { 0 }
+                val bg = solidColor(v.background) ?: (v.parent as? android.view.View)?.let { solidColor(it.background) }
+                val eff = bg ?: (if (isDarkTheme) darkSurface else 0xFFFFFFFF.toInt())
+                v.setTextColor(if (gray(eff) < 128) darkText else lightText)
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(root)
+    }
+
     private fun saveThemeColors() {
         getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
             .putInt("theme_accent", themeAccent)
@@ -1624,13 +1673,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         currentKeyBg = keyBg
         val keyBgList = android.content.res.ColorStateList.valueOf(keyBg)
         // 底栏按钮默认背景（与键盘按键同款圆角灰底+描边，保持风格统一）
+        // 注意：主题切换必须无条件刷新所有按钮底色（覆盖语音等待/长按等临时态），
+        // 否则黑白切换时这些按钮底色不跟随变化。
         val keyBgDrawable = makeKeyBgDrawable(keyBg)
-        if (!magicIsWaitingForVoice && !isRecording) {
-            btnMagic.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
-        }
-        if (!magicBookLongPressTriggered) {
-            btnClipboard.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
-        }
+        btnMagic.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
+        btnClipboard.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         if (!sendKeyLongPressTriggered) {
             btnSend.background = keyBgDrawable.constantState?.newDrawable()?.mutate() ?: keyBgDrawable
         }
@@ -1777,6 +1824,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val view = LayoutInflater.from(this).inflate(R.layout.popup_theme, null)
         // 立刻应用当前主题色到弹窗内所有硬编码的蒂芙尼蓝元素
         applyAccentToViewTree(view, themeAccent)
+        // 暗色模式：整棵弹窗树换深色
+        applyDarkThemeToViewTree(view)
         // banner 主题色
         view.findViewById<android.view.View>(R.id.banner_bar)?.setBackgroundColor(themeAccent)
         val popup = PopupWindow(
@@ -2662,10 +2711,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         items.add("关闭")
 
         val menuView = layoutInflater.inflate(R.layout.popup_candidate_menu, null)
+        applyDarkThemeToViewTree(menuView)
+        if (isDarkTheme) menuView.setBackgroundResource(R.drawable.popup_candidate_menu_bg_dark)
         val tvTitle = menuView.findViewById<TextView>(R.id.tv_menu_title)
         val btnClose = menuView.findViewById<ImageButton>(R.id.btn_menu_close)
         val llItems = menuView.findViewById<LinearLayout>(R.id.ll_menu_items)
         tvTitle.text = "候选：$word"
+        tvTitle.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
         // 菜单文字随主题文字大小档位缩放
         val menuSp = when (textThemeSize) {
             0 -> 12f
@@ -2679,11 +2731,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             (200 * resources.displayMetrics.density).toInt(),
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(
-            ContextCompat.getDrawable(ctx, android.R.drawable.dialog_holo_light_frame)
-                ?: GradientDrawable().apply {
-                    setColor(android.graphics.Color.WHITE)
-                    setStroke(1, 0xFFCCCCCC.toInt())
-                }
+            if (isDarkTheme)
+                GradientDrawable().apply { setColor(0xFF1E1E2E.toInt()); setStroke(1, 0xFF3A3A4E.toInt()) }
+            else
+                ContextCompat.getDrawable(ctx, android.R.drawable.dialog_holo_light_frame)
+                    ?: GradientDrawable().apply {
+                        setColor(android.graphics.Color.WHITE)
+                        setStroke(1, 0xFFCCCCCC.toInt())
+                    }
         )
         popup.elevation = 8f
 
@@ -2707,7 +2762,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val row = TextView(ctx).apply {
                 text = item
                 textSize = menuSp
-                setTextColor(0xFF333333.toInt())
+                setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding((16 * resources.displayMetrics.density).toInt(), 0, (16 * resources.displayMetrics.density).toInt(), 0)
                 layoutParams = LinearLayout.LayoutParams(
@@ -3492,6 +3547,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val inflater = android.view.LayoutInflater.from(this)
         val popupView = inflater.inflate(R.layout.popup_magic_menu, null)
         applyAccentToViewTree(popupView, themeAccent)
+        applyDarkThemeToViewTree(popupView)
+        if (isDarkTheme) popupView.setBackgroundResource(R.drawable.sheet_top_rounded_dark)
         val gridView = popupView.findViewById<GridView>(R.id.gv_magic_items)
         // 设置标题（使用个性化设置）
         val bannerBar = popupView.findViewById<android.widget.LinearLayout>(R.id.banner_bar)
@@ -3766,6 +3823,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                 val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
+                val cardBg = if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg
+                tv.setBackgroundResource(cardBg)
+                tv.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
                 val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_magic_select)
                 val showCb = magicBatchMode
@@ -4017,6 +4077,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
             applyAccentToViewTree(popupView, themeAccent)
+            applyDarkThemeToViewTree(popupView)
+            if (isDarkTheme) popupView.setBackgroundResource(R.drawable.sheet_top_rounded_dark)
 
             // 标题
             val titleTv = popupView.findViewById<android.widget.TextView>(R.id.tv_smart_title)
@@ -4185,11 +4247,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                     val v = cv ?: android.view.LayoutInflater.from(this@CesiaInputMethod)
                         .inflate(R.layout.item_smart_command, parent, false)
+                    v.setBackgroundResource(if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg)
                     val tvCommand = v.findViewById<android.widget.TextView>(R.id.tv_smart_command)
                     val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
                     val entry = entries[p]
                     tvCommand.text = entry.name
                     val isActive = entry.instruction == currentSmartPrompt
+                    val cardBg = if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg
                     if (isActive) {
                         // 当前激活命令：主题色描边高亮 + 前缀 ✓ 勾选标志（排第 1 项）
                         val d = android.graphics.drawable.GradientDrawable().apply {
@@ -4212,8 +4276,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             setColor(fill)
                         }
                         tvCommand.background = d
+                        tvCommand.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
+                        tvCommand.setTypeface(null, android.graphics.Typeface.NORMAL)
                     } else {
-                        tvCommand.setBackgroundResource(R.drawable.magic_item_bg)
+                        tvCommand.setBackgroundResource(cardBg)
+                        tvCommand.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
+                        tvCommand.setTypeface(null, android.graphics.Typeface.NORMAL)
                     }
                     cb.visibility = if (batchMode) android.view.View.VISIBLE else android.view.View.GONE
                     // 先挂监听（引用当前 entry），再设置 isChecked，避免复用旧视图时监听器仍指向旧 entry 误删已选项
@@ -7970,6 +8038,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val inflater2 = android.view.LayoutInflater.from(this)
             clipboardPopupView = inflater2.inflate(R.layout.popup_clipboard_manager, null)
             applyAccentToViewTree(clipboardPopupView!!, themeAccent)
+            applyDarkThemeToViewTree(clipboardPopupView!!)
+            if (isDarkTheme) clipboardPopupView!!.setBackgroundResource(R.drawable.sheet_top_rounded_dark)
             val popupView = clipboardPopupView!!
             val gvClipboard = popupView.findViewById<GridView>(R.id.gv_clipboard_items)
             val etSearch = popupView.findViewById<android.widget.EditText>(R.id.et_clipboard_search)
@@ -8503,6 +8573,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         var batchMode = false
         val selectedClip = mutableSetOf<String>()  // 以 text 为 key
         private val accentColor = context.themeAccent
+        private val isDarkTheme = context.isDarkTheme
         override fun getCount() = items.size
         override fun getItem(p: Int) = items[p]
         override fun getItemId(p: Int) = items[p].text.hashCode().toLong()
@@ -8510,6 +8581,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val v = cv ?: inflater.inflate(R.layout.item_clipboard_grid, parent, false)
             val item = items[p]
             val tv = v.findViewById<TextView>(R.id.tv_clipboard_text)
+            val cardBg = if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg
+            tv.setBackgroundResource(cardBg)
+            tv.setTextColor(if (isDarkTheme) 0xFFFFFFFF.toInt() else 0xFF333333.toInt())
             val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_clipboard_select)
             cb.visibility = if (batchMode && !item.isEmpty) android.view.View.VISIBLE else android.view.View.GONE
             if (batchMode && !item.isEmpty) {

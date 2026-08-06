@@ -55,16 +55,22 @@ object ColorUtils {
 
     /**
      * 随手机时间自动变化主题色：根据当前小时(0-23)计算色相。
-     * 一天从早到晚：黎明暖橙(约40°)→上午明黄绿(约90°)→正午青蓝(蒂芙尼180°)→
-     * 黄昏暖紫(约300°)→深夜冷蓝(约220°)，形成从早到晚的渐变循环。
+     * 模拟自然光照：中午阳光偏暖→橙(约40°)，凌晨/傍晚天空偏冷→蓝(约220°)，
+     * 形成与阳光/天空接近的昼夜循环。
+     * 注：原公式峰值会进入粉→紫(约280°~350°)区间，观感偏“娘炮”，故将高于 275° 的
+     * 色相沿 275° 轴对称折回蓝/青一侧(275°~360° → 275°~200°)，渐变不再经过粉紫。
      */
     fun timeBasedHue(): Float {
         val cal = java.util.Calendar.getInstance()
         val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
         val m = cal.get(java.util.Calendar.MINUTE)
         val t = (h * 60 + m) / 1440f // 0.0(00:00) ~ 1.0(24:00)
-        val hue = 180f + 140f * kotlin.math.sin((t - 0.5f) * 2 * Math.PI.toFloat())
+        // 以 130° 为中点：t=0.5(正午)→约40°(暖橙)，t=0/1(凌晨/午夜)→约220°(冷蓝)
+        val hue = 130f - 90f * kotlin.math.sin((t - 0.5f) * 2 * Math.PI.toFloat())
         var hh = hue % 360f
+        if (hh < 0) hh += 360f
+        // 跳过粉→紫区间：高于 275° 折回蓝/青一侧
+        if (hh > 275f) hh = 550f - hh
         if (hh < 0) hh += 360f
         return hh
     }

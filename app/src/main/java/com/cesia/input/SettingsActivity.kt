@@ -186,6 +186,18 @@ class SettingsActivity : AppCompatActivity() {
         themeMode = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
         // 应用深色/浅色主题的文本和背景色
         applyThemeColorsToViewTree(window.decorView)
+        // 兜底：直接强制内容根（SwipeRefreshLayout + ScrollView）为深色，避免白屏
+        if (themeMode == THEME_DARK) {
+            val darkRoot = 0xFF1A1A2E.toInt()
+            val darkCard = 0xFF16213E.toInt()
+            findViewById<android.view.View>(R.id.settings_scroll)?.setBackgroundColor(darkCard)
+            val sw = window.decorView
+            if (sw is android.view.ViewGroup) {
+                for (i in 0 until sw.childCount) {
+                    sw.getChildAt(i).setBackgroundColor(darkRoot)
+                }
+            }
+        }
 
         // 应用动态主题色到所有硬编码的蒂芙尼蓝元素
         accentColor = getSharedPreferences("cesia_settings", MODE_PRIVATE)
@@ -279,6 +291,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun applyTheme() {
         val themeMode = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
+        // 以应用自身的 theme_mode 为准（不依赖系统深浅色）：驱动 AppCompatDelegate 决定日夜
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+            if (themeMode == THEME_DARK) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        )
         if (themeMode == THEME_DARK) {
             setTheme(R.style.Theme_Cesia_Dark)
         } else {
@@ -3219,7 +3236,7 @@ class SettingsActivity : AppCompatActivity() {
             if (bg is android.graphics.drawable.ColorDrawable) {
                 val bgColor = bg.color
                 when (bgColor) {
-                    0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
+                    0xFFFFFFFF.toInt(), 0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
                         // Light backgrounds -> use bgPrimary for root, bgSecondary for cards
                         view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgSecondary else bgPrimary)
                     }
@@ -3245,7 +3262,7 @@ class SettingsActivity : AppCompatActivity() {
             if (bg is android.graphics.drawable.ColorDrawable) {
                 val bgColor = bg.color
                 when (bgColor) {
-                    0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
+                    0xFFFFFFFF.toInt(), 0xFFFAFAFA.toInt(), 0xFFF5F5F5.toInt(), 0xFFF0F0F0.toInt(), 0xFFF8F8F8.toInt(), 0xFFEEEEEE.toInt() -> {
                         view.setBackgroundColor(if (view is android.view.ViewGroup && view.childCount > 0) bgSecondary else bgPrimary)
                     }
                     0xFF0F0F23.toInt(), 0xFF1A1A2E.toInt(), 0xFF16213E.toInt() -> {

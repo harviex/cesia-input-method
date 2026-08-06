@@ -19,6 +19,7 @@ class HistoryActivity : AppCompatActivity() {
     private lateinit var adapter: HistoryAdapter
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
+    private var isDark = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +32,8 @@ class HistoryActivity : AppCompatActivity() {
 
         val accent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt("theme_accent", 0xFF81D8D0.toInt())  // 边框/文字随主题色变化
+        isDark = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_mode", 0) == 1
 
         // 顶部 banner（主题色，随主题色变化）：标题 + 右侧 X 关闭
         val banner = LinearLayout(this).apply {
@@ -85,7 +88,8 @@ class HistoryActivity : AppCompatActivity() {
             btn.ellipsize = android.text.TextUtils.TruncateAt.END
             // 颜色随主题色变化（accent 取自 cesia_settings.theme_accent）
             btn.setTextColor(accent)
-            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            btn.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (isDark) 0xFF2A2A3E.toInt() else 0xFFFFFFFF.toInt())
             btn.strokeColor = android.content.res.ColorStateList.valueOf(accent)
             btn.strokeWidth = (1 * resources.displayMetrics.density).toInt()
             btn.cornerRadius = (10 * resources.displayMetrics.density).toInt()
@@ -150,6 +154,12 @@ class HistoryActivity : AppCompatActivity() {
         setContentView(root)
         setTitle("历史记录管理")
 
+        // 暗色模式：整树浅色表面换深色、深字换浅字
+        if (isDark) {
+            root.setBackgroundColor(0xFF1E1E2E.toInt())
+            applyDarkToView(root)
+        }
+
         refreshData()
     }
 
@@ -161,7 +171,7 @@ class HistoryActivity : AppCompatActivity() {
         } else {
             tvEmpty.visibility = View.GONE
             recyclerView.visibility = View.VISIBLE
-            adapter = HistoryAdapter(records) { index ->
+            adapter = HistoryAdapter(records, { index ->
                 AlertDialog.Builder(this)
                     .setTitle("删除记录")
                     .setMessage("删除这条记录？")
@@ -171,14 +181,15 @@ class HistoryActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("取消", null)
                     .show()
-            }
+            }, isDark = isDark)
             recyclerView.adapter = adapter
         }
     }
 
     class HistoryAdapter(
         private val records: List<com.cesia.input.stats.PolishRecord>,
-        private val onDelete: (Int) -> Unit
+        private val onDelete: (Int) -> Unit,
+        private val isDark: Boolean
     ) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
         // 记录每条是否展开
@@ -202,6 +213,10 @@ class HistoryActivity : AppCompatActivity() {
             val record = records[position]
             val sdf = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
             holder.tvTime.text = sdf.format(Date(record.timestamp))
+            holder.tvTime.setTextColor(if (isDark) 0xFFB0B0B0.toInt() else 0xFF999999.toInt())
+            holder.tvInput.setTextColor(if (isDark) 0xFFB0B0B0.toInt() else 0xFF888888.toInt())
+            holder.tvOutput.setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
+            holder.tvExpandHint.setTextColor(if (isDark) 0xFF81D8D0.toInt() else 0xFF4488FF.toInt())
 
             val isExpanded = expandedPositions.contains(position)
 
@@ -266,5 +281,43 @@ class HistoryActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("关闭", null)
             .show()
+    }
+
+    /** 暗色模式：将 view 树浅色表面换深、文字按实际背景取对比色（与 CesiaInputMethod 同规则） */
+    private fun applyDarkToView(root: android.view.View) {
+        val darkSurface = 0xFF1E1E2E.toInt()
+        val darkSurfaceAlt = 0xFF2A2A3E.toInt()
+        val darkDivider = 0xFF3A3A4E.toInt()
+        val darkText = 0xFFE0E0E0.toInt()
+        val lightText = 0xFF333333.toInt()
+        fun gray(v: Int) = (v shr 16) and 0xFF
+        fun isGrayish(v: Int) = run { val r=(v shr 16) and 0xFF; val g=(v shr 8) and 0xFF; val b=v and 0xFF; r==g && g==b }
+        fun solidColor(d: android.graphics.drawable.Drawable?): Int? {
+            return when (d) {
+                is android.graphics.drawable.ColorDrawable -> d.color
+                is android.graphics.drawable.GradientDrawable -> try { d.color?.defaultColor } catch (_: Exception) { null }
+                else -> null
+            }
+        }
+        fun walk(v: android.view.View) {
+            val sc = solidColor(v.background)
+            if (sc != null && isGrayish(sc)) {
+                val g = gray(sc)
+                when {
+                    g > 235 -> v.setBackgroundColor(darkSurface)
+                    g in 215..235 -> v.setBackgroundColor(darkSurfaceAlt)
+                    g in 195..215 -> v.setBackgroundColor(darkDivider)
+                }
+            }
+            if (v is android.widget.TextView) {
+                val bg = solidColor(v.background) ?: (v.parent as? android.view.View)?.let { solidColor(it.background) }
+                val eff = bg ?: darkSurface
+                v.setTextColor(if (gray(eff) < 128) darkText else lightText)
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(root)
     }
 }

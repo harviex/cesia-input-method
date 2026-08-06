@@ -29,11 +29,21 @@ class NewsSourceActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 以应用自身的 theme_mode 为准（不依赖系统深浅色），驱动 DayNight 主题
+        val isDarkLaunch = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_mode", 0) == 1
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+            if (isDarkLaunch) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        )
         setContentView(R.layout.activity_news_source)
 
         // 读取主题色
         themeAccent = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt("theme_accent", 0xFF81D8D0.toInt())
+        // 读取明暗模式
+        val isDark = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_mode", 0) == 1
 
         // 标题栏背景色用主题色
         val titleBar = findViewById<LinearLayout>(R.id.title_bar)
@@ -49,6 +59,8 @@ class NewsSourceActivity : AppCompatActivity() {
 
         // 应用动态主题色到全树
         applyAccentToViewTree(window.decorView, themeAccent)
+        // 暗色模式：整树浅色表面换深色、深字换浅字
+        if (isDark) applyDarkToView(window.decorView)
 
         // 获取所有源（预置 + 自定义）
         allSources.clear()
@@ -60,7 +72,7 @@ class NewsSourceActivity : AppCompatActivity() {
 
         // RecyclerView
         val rv = findViewById<RecyclerView>(R.id.rv_sources)
-        adapter = SourceAdapter(allSources, selectedUrl, themeAccent) { source, isNowChecked ->
+        adapter = SourceAdapter(allSources, selectedUrl, themeAccent, isDark) { source, isNowChecked ->
             if (isNowChecked) {
                 // 选中：抓取并缓存
                 Toast.makeText(this, "正在抓取：${source.name}...", Toast.LENGTH_SHORT).show()
@@ -142,6 +154,7 @@ class NewsSourceActivity : AppCompatActivity() {
         private val items: List<RssFetchManager.RssSource>,
         internal var selectedUrl: String,
         private val themeAccent: Int,
+        private val isDark: Boolean,
         private val onToggle: (RssFetchManager.RssSource, Boolean) -> Unit
     ) : RecyclerView.Adapter<SourceAdapter.ViewHolder>() {
 
@@ -175,6 +188,7 @@ class NewsSourceActivity : AppCompatActivity() {
                 holder.tvCategory.visibility = View.GONE
             }
             holder.tvName.text = item.name
+            holder.tvName.setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
             // 源地址不展示在列表中（仅用于内部匹配），隐藏 URL 文本
             holder.tvUrl.visibility = View.GONE
 
@@ -230,5 +244,43 @@ class NewsSourceActivity : AppCompatActivity() {
                 }
             } catch (_: Exception) {}
         }
+    }
+
+    /** 暗色模式：将 view 树浅色表面换深、文字按实际背景取对比色（与 CesiaInputMethod 同规则） */
+    private fun applyDarkToView(root: android.view.View) {
+        val darkSurface = 0xFF1E1E2E.toInt()
+        val darkSurfaceAlt = 0xFF2A2A3E.toInt()
+        val darkDivider = 0xFF3A3A4E.toInt()
+        val darkText = 0xFFE0E0E0.toInt()
+        val lightText = 0xFF333333.toInt()
+        fun gray(v: Int) = (v shr 16) and 0xFF
+        fun isGrayish(v: Int) = run { val r=(v shr 16) and 0xFF; val g=(v shr 8) and 0xFF; val b=v and 0xFF; r==g && g==b }
+        fun solidColor(d: android.graphics.drawable.Drawable?): Int? {
+            return when (d) {
+                is android.graphics.drawable.ColorDrawable -> d.color
+                is android.graphics.drawable.GradientDrawable -> try { d.color?.defaultColor } catch (_: Exception) { null }
+                else -> null
+            }
+        }
+        fun walk(v: android.view.View) {
+            val sc = solidColor(v.background)
+            if (sc != null && isGrayish(sc)) {
+                val g = gray(sc)
+                when {
+                    g > 235 -> v.setBackgroundColor(darkSurface)
+                    g in 215..235 -> v.setBackgroundColor(darkSurfaceAlt)
+                    g in 195..215 -> v.setBackgroundColor(darkDivider)
+                }
+            }
+            if (v is android.widget.TextView) {
+                val bg = solidColor(v.background) ?: (v.parent as? android.view.View)?.let { solidColor(it.background) }
+                val eff = bg ?: darkSurface
+                v.setTextColor(if (gray(eff) < 128) darkText else lightText)
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+        }
+        walk(root)
     }
 }
