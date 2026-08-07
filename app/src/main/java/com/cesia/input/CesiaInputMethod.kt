@@ -1901,6 +1901,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 随手机时间自动变化主题色：共用主题色切换条旁的颜色框(tv_hue_preview)，不再单独显示框
         val checkAutoTime = view.findViewById<android.widget.CheckBox>(R.id.check_auto_time_theme)
+        // 复选框勾选色跟随当前主题色：原先未设 tint，回退到 theme 的 colorAccent（写死 Tiffany），
+        // 导致换了主题色后这里仍是 Tiffany 蓝。文字色也跟随暗色模式。
+        checkAutoTime.buttonTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+        checkAutoTime.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
         val tvAutoPreview = tvHue
         checkAutoTime.isChecked = autoTimeTheme
         val refreshAutoPreview = {
@@ -3453,6 +3457,63 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
+    /**
+     * 三大面板（智能写作 / 智能修改 / 剪贴板）左右滑动切换。
+     *
+     * 顺序：智能写作(0) → 智能修改(1) → 剪贴板(2) → 智能写作，左滑前进、右滑后退、循环。
+     *
+     * 实现方式：用 GestureDetector 绑在面板根 View 上，只识别「横向 fling」
+     * （且水平速度明显大于垂直速度），命中后切换面板；其余所有手势（列表纵向滚动、
+     * 手柄上下拖动改高度、下滑关闭）一律不拦截，照常传递。这样不会和已有逻辑抢事件。
+     *
+     * @param root 面板根 View（手势监听绑这里）
+     * @param currentIndex 当前面板序号
+     */
+    private fun attachPanelSwipe(popup: PopupWindow, currentIndex: Int, dismiss: () -> Unit) {
+        val detector = android.view.GestureDetector(this,
+            object : android.view.GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: android.view.MotionEvent): Boolean = true
+                override fun onFling(
+                    e1: android.view.MotionEvent?,
+                    e2: android.view.MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float
+                ): Boolean {
+                    if (e1 == null) return false
+                    val dx = e2.rawX - e1.rawX
+                    val dy = e2.rawY - e1.rawY
+                    // 横向为主、且甩动够快才切换；纵向甩动交给列表/关闭逻辑
+                    if (kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f &&
+                        kotlin.math.abs(velocityX) > 600f &&
+                        kotlin.math.abs(dx) > 40f * resources.displayMetrics.density) {
+                        val next = if (dx < 0) (currentIndex + 1) % 3 else (currentIndex + 2) % 3
+                        dismissAndOpen(dismiss) {
+                            when (next) {
+                                0 -> showSmartWritingPopup()
+                                1 -> showMagicHistoryPopup()
+                                2 -> showClipboardManagerPopup()
+                            }
+                        }
+                        return true
+                    }
+                    return false
+                }
+            })
+        // 用 PopupWindow 的 touch 拦截器：它能拿到派发给整个弹窗的全部触摸事件，
+        // 而 root.setOnTouchListener 只有在没有子 View 消费时才会触发（列表/按钮会消费掉）。
+        // 这里始终返回 false —— 只观察手势，不拦截，列表滚动与点击照常。
+        popup.setTouchInterceptor { _, e ->
+            detector.onTouchEvent(e)
+            false
+        }
+    }
+
+    /** 关闭当前面板并打开目标面板（延后一帧避免 PopupWindow 残留闪烁） */
+    private fun dismissAndOpen(dismiss: () -> Unit, open: () -> Unit) {
+        dismiss()
+        Handler(Looper.getMainLooper()).post(open)
+    }
+
     private fun showMagicHistoryPopup() {
         dlog { "showMagicHistoryPopup: called, mgr=$magicHistoryManager" }
         val mgr = magicHistoryManager ?: run {
@@ -3511,6 +3572,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
         popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         popup.setFocusable(false)
+        // 左右滑动切换面板（智能写作↔智能修改↔剪贴板），绑在根 View 上
+        attachPanelSwipe(popup, 1) { popup.dismiss(); magicHistoryPopup = null }
 
         // 顶部手柄拖动改高度 + 快速下滑关闭
         val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
@@ -3724,7 +3787,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             for (i in 0 until tabContainer.childCount) {
                 val tv = tabContainer.getChildAt(i) as? android.widget.TextView
                 val active = tv?.tag == tab
-                tv?.setTextColor(if (active) themeAccent else 0xFF666666.toInt())
+                // 未选中标签：亮色下深灰、暗色下浅灰（原先硬编码 0xFF666666，暗背景上几乎看不见）
+                tv?.setTextColor(if (active) themeAccent else if (isDarkTheme) 0xFFAAAAAA.toInt() else 0xFF666666.toInt())
                 tv?.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             }
             notifyChanged()
@@ -3755,9 +3819,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 val v = cv ?: inflater.inflate(R.layout.item_magic_grid, parent, false)
                 val tv = v.findViewById<TextView>(R.id.tv_magic_text)
                 val cardBg = if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg
+                // 暗色下的正文色：下面各分支（置顶/未激活）原先硬编码 0xFF333333 深灰，
+                // 在深色卡片上几乎不可见 —— 这是「智能修改菜单黑暗模式仍显示白底深字」的根因。
+                val magicTextColor = if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
                 tv.setBackgroundResource(cardBg)
-                tv.setTextColor(if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt())
+                tv.setTextColor(magicTextColor)
                 val et = v.findViewById<android.widget.EditText>(R.id.et_magic_edit)
+                // 行内编辑框同样跟随暗色，否则编辑时深色卡片上是深色字
+                et.setTextColor(magicTextColor)
+                et.setHintTextColor(if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt())
                 val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_magic_select)
                 val showCb = magicBatchMode
                 cb.visibility = if (showCb) android.view.View.VISIBLE else android.view.View.GONE
@@ -3822,11 +3892,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                 setColor(fill)
                             }
                             tv.background = d
-                            tv.setTextColor(0xFF333333.toInt())
+                            tv.setTextColor(magicTextColor)
                             tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                         } else {
-                            tv.setBackgroundResource(R.drawable.magic_item_bg)
-                            tv.setTextColor(0xFF333333.toInt())
+                            tv.setBackgroundResource(cardBg)
+                            tv.setTextColor(magicTextColor)
                             tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                         }
                     }
@@ -3861,11 +3931,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             setColor(fill)
                         }
                         tv.background = d
-                        tv.setTextColor(0xFF333333.toInt())
+                        tv.setTextColor(magicTextColor)
                         tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                     } else {
-                        tv.setBackgroundResource(R.drawable.magic_item_bg)
-                        tv.setTextColor(0xFF333333.toInt())
+                        tv.setBackgroundResource(cardBg)
+                        tv.setTextColor(magicTextColor)
                         tv.setTypeface(null, android.graphics.Typeface.NORMAL)
                     }
                 }
@@ -4178,7 +4248,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 override fun getView(p: Int, cv: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
                     val v = cv ?: android.view.LayoutInflater.from(this@CesiaInputMethod)
                         .inflate(R.layout.item_smart_command, parent, false)
-                    v.setBackgroundResource(if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg)
+                    // 卡片外框只由内部 tvCommand 绘制（与智能修改/剪贴板一致）。
+                    // 原先容器 v 也设了一层同款背景，形成双层描边，观感与另两个菜单不同。
+                    v.setBackgroundResource(0)
                     val tvCommand = v.findViewById<android.widget.TextView>(R.id.tv_smart_command)
                     val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_smart_select)
                     val entry = entries[p]
@@ -4476,6 +4548,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // ===== 顶部手柄拖动改高度 + 快速下滑关闭 =====
             val density = resources.displayMetrics.density
+            attachPanelSwipe(popup, 0) { smartWritingPopup?.dismiss(); smartWritingPopup = null }  // 智能写作
+
             // 上限放开到整屏（状态栏之下），允许拖到屏幕顶端
             val maxSheetHeightLocal = maxSheetHeight
             val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
@@ -8137,6 +8211,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             popup.setFocusable(false)   // IME 弹窗内保持 false，避免焦点冲突导致 popup dismiss；搜索输入由 Cesia 手写 onKey 分支处理
             clipboardPopup = popup
+            // 左右滑动切换面板（智能写作↔智能修改↔剪贴板），绑在根 View 上
+            attachPanelSwipe(popup, 2) { popup.dismiss(); clipboardPopup = null }
 
             // 顶部手柄拖动改高度 + 快速下滑关闭
             val dragHandle = popupView.findViewById<android.view.View>(R.id.drag_handle)
@@ -8581,8 +8657,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val item = items[p]
             val tv = v.findViewById<TextView>(R.id.tv_clipboard_text)
             val cardBg = if (isDarkTheme) R.drawable.magic_item_bg_dark else R.drawable.magic_item_bg
+            // 暗色正文色：下面「置顶/普通」分支原先硬编码 0xFF333333 深灰，会把这里的浅色覆盖掉，
+            // 导致黑暗模式下剪贴板文字在深底上几乎看不见。
+            val clipTextColor = if (isDarkTheme) 0xFFE0E0E0.toInt() else 0xFF333333.toInt()
             tv.setBackgroundResource(cardBg)
-            tv.setTextColor(if (isDarkTheme) 0xFFFFFFFF.toInt() else 0xFF333333.toInt())
+            tv.setTextColor(clipTextColor)
             val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_clipboard_select)
             cb.visibility = if (batchMode && !item.isEmpty) android.view.View.VISIBLE else android.view.View.GONE
             if (batchMode && !item.isEmpty) {
@@ -8594,7 +8673,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             if (item.isEmpty) {
                 tv.text = item.text
-                tv.setTextColor(0xFF999999.toInt())
+                tv.setTextColor(if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt())
                 tv.textSize = 13f
             } else {
                 // 仅置顶项用主题色描边高亮（与智能写作一致），其余用默认背景
@@ -8611,9 +8690,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     }
                     tv.background = d
                 } else {
-                    tv.background = null
+                    // 与智能写作/智能修改菜单保持一致：普通项也用卡片背景（含描边）。
+                    // 原先亮/暗色都置 null，剪贴板条目没有外框，三个菜单观感不统一。
+                    tv.setBackgroundResource(cardBg)
                 }
-                tv.setTextColor(0xFF333333.toInt())
+                tv.setTextColor(clipTextColor)
                 tv.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
             return v

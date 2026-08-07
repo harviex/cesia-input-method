@@ -3,8 +3,10 @@
     android:color="#444444">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#2A2A3E" />
-            <stroke android:width="0.5dp" android:color="#3A3A4E" />
+            <!-- 卡片底比面板底(#1A1A2E/#0F0F23)明显浅一档，保证卡片轮廓可辨 -->
+            <solid android:color="#2E2E48" />
+            <!-- 描边同步提亮：原 #3A3A4E 与面板底几乎同色，卡片看不出边界 -->
+            <stroke android:width="1dp" android:color="#55556E" />
             <corners android:radius="8dp" />
         </shape>
     </item>

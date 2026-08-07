@@ -203,6 +203,23 @@ class SettingsActivity : AppCompatActivity() {
         accentColor = getSharedPreferences("cesia_settings", MODE_PRIVATE)
             .getInt("theme_accent", 0xFF81D8D0.toInt())
         applyAccentToViewTree(window.decorView, accentColor)
+        // 系统状态栏（顶部时间/电量/信号那条）：黑暗模式下用深底，避免残留 Tiffany 蓝；
+        // 亮色模式下跟随主题色。图标明暗随之切换。
+        try {
+            if (themeMode == THEME_DARK) {
+                window.statusBarColor = 0xFF1A1A2E.toInt()
+                androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+                    .isAppearanceLightStatusBars = false
+            } else {
+                window.statusBarColor = accentColor
+                // 主题色偏亮时用深色图标，偏暗时用浅色图标
+                val lum = (0.299 * android.graphics.Color.red(accentColor) +
+                           0.587 * android.graphics.Color.green(accentColor) +
+                           0.114 * android.graphics.Color.blue(accentColor)) / 255.0
+                androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+                    .isAppearanceLightStatusBars = lum > 0.6
+            }
+        } catch (_: Exception) {}
 
         initViews()
 
@@ -3278,6 +3295,16 @@ class SettingsActivity : AppCompatActivity() {
             }
         } catch (_: Exception) {}
 
+        // Drawable(shape) 背景：统计卡片 / Spinner 等用 @drawable 定义的白底。
+        // 原遍历只处理 ColorDrawable，这类 GradientDrawable 被完全跳过，
+        // 于是暗色下顶部统计卡片、下拉框仍是白底。按 XML 里打的 tag 精确替换为暗色版。
+        if (isDark) {
+            when (view.tag as? String) {
+                "dark_card" -> view.setBackgroundResource(R.drawable.bg_card_tiffany_dark)
+                "dark_spinner" -> view.setBackgroundResource(R.drawable.spinner_bg_white_dark)
+            }
+        }
+
         // Dividers (View with small height/width)
         if (view is android.view.View) {
             val lp = view.layoutParams
@@ -3289,9 +3316,19 @@ class SettingsActivity : AppCompatActivity() {
 
         // MaterialButton text color
         if (view is com.google.android.material.button.MaterialButton) {
-            val currentTextColor = view.currentTextColor
-            if (currentTextColor == 0xFF333333.toInt() || currentTextColor == 0xFFFFFFFF.toInt()) {
-                view.setTextColor(textPrimary)
+            // 新闻源管理 / 历史记录管理：配色为设计意图，整体跳过（含文字色）
+            val keepOriginal = view.id == R.id.btn_news_sources || view.id == R.id.btn_history
+            if (!keepOriginal) {
+                val currentTextColor = view.currentTextColor
+                if (currentTextColor == 0xFF333333.toInt() || currentTextColor == 0xFFFFFFFF.toInt()) {
+                    view.setTextColor(textPrimary)
+                }
+                // Outlined 样式（导出/导入词库）在暗色下仍沿用亮色 surface 填充，呈现浅薄荷色块。
+                // 改为透明填充 + 浅色文字，保留 Tiffany 描边。
+                if (isDark) {
+                    view.backgroundTintList = android.content.res.ColorStateList.valueOf(0x00000000)
+                    view.setTextColor(textPrimary)
+                }
             }
         }
 

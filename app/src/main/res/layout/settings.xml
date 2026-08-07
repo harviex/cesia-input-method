@@ -116,6 +116,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card_tiffany"
+                android:tag="dark_card"
                 android:padding="12dp"
                 android:layout_marginBottom="12dp">
 
@@ -210,6 +211,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card_tiffany"
+                android:tag="dark_card"
                 android:padding="12dp"
                 android:layout_marginBottom="12dp">
 
@@ -336,6 +338,7 @@
                 android:paddingBottom="8dp"
                 android:gravity="center_vertical"
                 android:background="@drawable/spinner_bg_white"
+                android:tag="dark_spinner"
                 android:textSize="13sp"
                 android:maxLines="3"
                 android:textColor="#333333"
@@ -363,6 +366,7 @@
                 android:paddingBottom="8dp"
                 android:gravity="center_vertical"
                 android:background="@drawable/spinner_bg_white"
+                android:tag="dark_spinner"
                 android:textSize="13sp"
                 android:maxLines="3"
                 android:textColor="#333333"
@@ -389,6 +393,7 @@
                 android:paddingBottom="8dp"
                 android:gravity="center_vertical"
                 android:background="@drawable/spinner_bg_white"
+                android:tag="dark_spinner"
                 android:textSize="13sp"
                 android:textColor="#333333"
                 android:text="点击选择或输入"
@@ -489,6 +494,7 @@
                 android:paddingBottom="8dp"
                 android:gravity="center_vertical"
                 android:background="@drawable/spinner_bg_white"
+                android:tag="dark_spinner"
                 android:textSize="13sp"
                 android:textColor="#333333"
                 android:text="点击选择或输入"

@@ -30,11 +30,16 @@
     <!-- 黑暗主题 -->
     <style name="Theme.Cesia.Dark" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:windowBackground">#1A1A2E</item>
-        <item name="colorPrimary">#FF03DAC5</item>
-        <item name="colorPrimaryDark">#FF03DAC5</item>
-        <item name="colorAccent">#FF03DAC5</item>
+        <!-- colorPrimaryDark 决定系统状态栏底色：原为 #FF03DAC5（青绿），
+             导致黑暗模式下顶部时间/电量/信号那条是 Tiffany 蓝。改为与页面同色的深底。 -->
+        <item name="colorPrimary">#1A1A2E</item>
+        <item name="colorPrimaryDark">#1A1A2E</item>
+        <item name="android:statusBarColor">#1A1A2E</item>
+        <item name="colorAccent">@color/accent</item>
         <item name="android:textColorPrimary">#E0E0E0</item>
         <item name="android:textColorSecondary">#AAAAAA</item>
         <item name="android:colorBackground">#1A1A2E</item>
+        <!-- 深底配浅色状态栏图标 -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
