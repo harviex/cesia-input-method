@@ -7377,6 +7377,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun processT9Input() {
         val t0 = System.currentTimeMillis()
+        // 防御：任何路径若把 t9DigitQueue 缩短却没同步 t9ConsumedLen（退格/清空/接龙取消），
+        // 后续 substring(t9ConsumedLen) 会越界崩溃。统一在入口 clamp 一次，兜住所有调用方。
+        if (t9ConsumedLen > t9DigitQueue.length) {
+            t9ConsumedLen = 0
+            t9ComposedSoFar.clear()
+        }
         // 接龙态(t9ConsumedLen>0)不清已组词缓冲；非接龙才清（新组合开始）
         if (t9ConsumedLen == 0) t9ComposedSoFar.clear()
         // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
@@ -7393,7 +7399,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
                 // 接龙态(t9ConsumedLen>0)下只取「未消费后缀」算简拼码，否则候选仍是整串、接龙失败
-                val digits = t9DigitQueue.substring(t9ConsumedLen).map { it.digitToInt() }
+                // ⚠️ t9ConsumedLen 必须 clamp：接龙态下若队列被退格/清空缩短而消费长度没同步，
+                // 直接 substring 会抛 StringIndexOutOfBoundsException（实测崩溃 start 2, end 1, length 1）。
+                val safeConsumed = t9ConsumedLen.coerceIn(0, t9DigitQueue.length)
+                val digits = t9DigitQueue.substring(safeConsumed).map { it.digitToInt() }
                 val feed = if (t9SpellPrefix.isEmpty()) {
                     // 未锁定时：每数字取首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选
                     val firstLetters = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' }.firstOrNull() ?: ' ' }
@@ -7413,7 +7422,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 已锁定字母(t9SpellPrefix 非空)时改用「锁定字母+剩余数字首字母」的精确 feed（同简拼 buildT9SpellFeed），
                 // 让 Rime 直接精确出该音候选（如 9426 锁 zhao → 喂 "zhao"），不再依赖客户端拼音注释过滤
                 // （T9 schema 候选拼音注释是数字态派生串，字母前缀匹配会全失败→回退成全部同键候选，旧版因此出 xian/xiao）。
-                val feed = if (t9SpellPrefix.isNotEmpty()) buildT9SpellFeed() else t9DigitQueue.substring(t9ConsumedLen)
+                // ⚠️ 同上，substring 前必须 clamp t9ConsumedLen —— 这里正是崩溃栈指向的行。
+                val safeConsumed2 = t9ConsumedLen.coerceIn(0, t9DigitQueue.length)
+                val feed = if (t9SpellPrefix.isNotEmpty()) buildT9SpellFeed() else t9DigitQueue.substring(safeConsumed2)
                 val tFeed = System.currentTimeMillis()
                 feedRimeIncrementally(feed)
                 val tGet = System.currentTimeMillis()

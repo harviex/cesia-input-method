@@ -24,6 +24,16 @@ class HistoryActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 以应用自身的 theme_mode 为准（不依赖系统深浅色），驱动 DayNight 主题。
+        // 原先只读了 isDark 用于个别控件配色，却没有设置 NightMode，
+        // 导致亮色模式下整页仍沿用系统/上次的暗色 —— 必须在 setContentView 之前调用。
+        val isDarkLaunch = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getInt("theme_mode", 0) == 1
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+            if (isDarkLaunch) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        )
+
         statsManager = PolishStatsManager(this)
 
         val root = LinearLayout(this).apply {
@@ -36,15 +46,19 @@ class HistoryActivity : AppCompatActivity() {
             .getInt("theme_mode", 0) == 1
 
         // 顶部 banner（主题色，随主题色变化）：标题 + 右侧 X 关闭
+        // ⚠️ Theme.Cesia.DayNight 开了 windowTranslucentStatus=true，内容会绘制到状态栏之下，
+        // 必须给 banner 补状态栏高度的顶部内边距，否则标题与关闭按钮被系统状态栏遮挡。
+        val statusBarH = resources.getIdentifier("status_bar_height", "dimen", "android")
+            .let { if (it > 0) resources.getDimensionPixelSize(it) else 0 }
         val banner = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
             setBackgroundColor(accent)
-            setPadding((16 * resources.displayMetrics.density).toInt(), 0,
+            setPadding((16 * resources.displayMetrics.density).toInt(), statusBarH,
                 (16 * resources.displayMetrics.density).toInt(), 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (48 * resources.displayMetrics.density).toInt()
+                (48 * resources.displayMetrics.density).toInt() + statusBarH
             )
         }
         val bannerTitle = TextView(this).apply {
@@ -158,6 +172,11 @@ class HistoryActivity : AppCompatActivity() {
         if (isDark) {
             root.setBackgroundColor(0xFF1E1E2E.toInt())
             applyDarkToView(root)
+        } else {
+            // ⚠️ 亮色模式必须显式给根布局白底：Theme.Cesia.DayNight 的 windowBackground
+            // 写死为 @color/bg_primary_dark（深色），root 不设背景时是透明的，
+            // 会直接透出深色 windowBackground → 亮色模式下整页仍是暗的。
+            root.setBackgroundColor(0xFFFAFAFA.toInt())
         }
 
         refreshData()

@@ -6,10 +6,14 @@
     android:background="#FAFAFA">
 
     <!-- 标题栏 -->
+    <!-- ⚠️ Theme.Cesia.DayNight 开了 windowTranslucentStatus=true，内容会绘制到状态栏之下。
+         用 fitsSystemWindows 让标题栏自动下移状态栏高度，避免名称与关闭按钮被遮挡。 -->
     <LinearLayout
         android:id="@+id/title_bar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:fitsSystemWindows="true"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="#81D8D0"
