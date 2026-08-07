@@ -2052,6 +2052,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidatePanel.visibility = View.VISIBLE
         btnCandidateExpand.setImageResource(R.drawable.triangle_gray_up)
         updateCandidateBar()
+        // 每次展开都回到顶部：GridView 会复用上次滚动位置，不重置会停在上次滚到的地方
+        gvCandidates.post { gvCandidates.setSelection(0) }
     }
 
     private fun collapseCandidatePanel() {
@@ -2069,7 +2071,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (isAssociationMode && globalIndex < associationCandidates.size) {
             val selectedDisplay = associationCandidates[globalIndex]
             val newPrefix = associationPrefix + selectedDisplay
-            val newAssociations = rimeEngine.getAssociations(newPrefix, 20, 500, 10)
+            val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
 
             // 上屏选中的词（追加到已有前缀后面）
             if (smartEditMode) {
@@ -2082,6 +2084,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 commitCandidateText(selectedDisplay)
             }
             lastT9Feed = null  // 联想选词上屏后重置增量喂标记，防止下个新拼音首键被吞
+
+            // 每步都把当前累积词（≥2字）写入用户词库：无论用户是继续联想还是就此停手，
+            // 组出的词都能被记住。registerUserPhraseCodes 内部去重+累加频次，重复调用安全。
+            addUserPhraseByText(newPrefix)
 
             if (newAssociations.isNotEmpty()) {
                 // 继续联想模式
@@ -2183,7 +2189,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             rimeEngine.clear()
             // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
-            val newAssoc = rimeEngine.getAssociations(clickedWord, 20, 500, 10)
+            val newAssoc = rimeEngine.getAssociations(clickedWord, 100, 500, 10)
             dlog { "T9联想查询[简拼/非接龙]: prefix='$clickedWord', mode=T9, 结果数=${newAssoc.size}, associations=${newAssoc.take(5)}" }
             if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode) {
                 // 清 T9 残留（数字队列/候选音区），避免点击上屏后状态栏和候选音不消失
@@ -2292,7 +2298,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
-            val associations = rimeEngine.getAssociations(selectedWord, 20, 500, 10)
+            val associations = rimeEngine.getAssociations(selectedWord, 100, 500, 10)
             dlog { "T9联想查询: prefix='$selectedWord', mode=${if (keyboardMode == KeyboardMode.NUMBER) "T9" else "QWERTY"}, 结果数=${associations.size}" }
             if (associations.isNotEmpty()) {
                 // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
@@ -2314,7 +2320,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     t9ConsumedLen = 0; t9ComposedSoFar.clear()
                     val pendingPrefix = selectedWord
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        val retry = rimeEngine.getAssociations(pendingPrefix, 20, 500, 10)
+                        val retry = rimeEngine.getAssociations(pendingPrefix, 100, 500, 10)
                         if (retry.isNotEmpty() && !isAssociationMode) {
                             t9SpellPrefix.clear(); t9DigitQueue.clear()
                             isAssociationMode = true
@@ -2593,7 +2599,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (associationPrefix != lastAssocPrefix) return // 前缀变了，不加载
         // 增加 pageWalk 加载下一页
         assocPageWalk += 10
-        val more = rimeEngine.getAssociations(associationPrefix, 20, 500, assocPageWalk)
+        val more = rimeEngine.getAssociations(associationPrefix, 100, 500, assocPageWalk)
         dlog { "联想懒加载[loadMoreAssociations]: prefix='$associationPrefix', pageWalk=$assocPageWalk, 结果数=${more.size}, 总数=${associationCandidates.size}" }
         if (more.isEmpty()) {
             assocPageWalk -= 10
@@ -5469,6 +5475,29 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (!PinyinMap.isReady) rebuildUserPhraseCodesWhenReady()
     }
 
+    /**
+     * 按纯文本登记用户词组（联想组词路径用：无原始数字串，全部码由真实拼音表反推）。
+     * 联想模式逐字选词组出的词（如 谢予希）原先从不写入词库，导致下次输入又要重新拼。
+     * 拼音表未就绪时先记下 phrase 占位（无码），就绪后由 rebuildUserPhraseCodes 补码。
+     */
+    private fun addUserPhraseByText(phrase: String) {
+        if (phrase.length < 2) return
+        val simplex = toSimplified(phrase)
+        val fullCode = toPinyinFull(simplex).let { if (it.isNotEmpty()) pinyinToDigits(it) else "" }
+        val simpCode = toPinyinFirstLetters(simplex).let { if (it.isNotEmpty()) pinyinToDigits(it) else "" }
+        val codes = mutableSetOf(fullCode, simpCode).filter { it.isNotEmpty() }.toSet()
+        dlog { "addUserPhraseByText: '$phrase' full->'$fullCode' simp->'$simpCode' codes=$codes" }
+        if (codes.isNotEmpty()) {
+            registerUserPhraseCodes(phrase, codes, 1)
+        } else {
+            // 拼音表未就绪：先占位（freq=1，无码），就绪后补码
+            if (!userPhrases.containsKey(phrase)) {
+                userPhrases[phrase] = UserPhraseEntry(mutableSetOf(), 1)
+            }
+            rebuildUserPhraseCodesWhenReady()
+        }
+    }
+
     private fun updateTraditionalButton() {
         // 更新按钮视觉状态：移除高亮方框，保留 selectableItemBackgroundBorderless 的圆形脉冲效果，与云端/主题按钮统一
         if (::btnTraditional.isInitialized) {
@@ -7442,7 +7471,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         processT9Input()
         // 如果之前在联想模式，重新查询联想
         if (wasInAssociation && savedPrefix.isNotEmpty()) {
-            val associations = rimeEngine.getAssociations(savedPrefix, 20, 500, 10)
+            val associations = rimeEngine.getAssociations(savedPrefix, 100, 500, 10)
             if (associations.isNotEmpty()) {
                 isAssociationMode = true
                 associationPrefix = savedPrefix
@@ -9037,7 +9066,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         // 联想模式：选择第一个联想词继续联想
                         val selectedWord = associationCandidates[0]
                         val newPrefix = associationPrefix + selectedWord
-                        val newAssociations = rimeEngine.getAssociations(newPrefix, 20, 500, 10)
+                        val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
                         if (newAssociations.isNotEmpty()) {
                             associationPrefix = newPrefix
                             associationCandidates = newAssociations

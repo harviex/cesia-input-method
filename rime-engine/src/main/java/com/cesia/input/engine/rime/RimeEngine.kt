@@ -13,10 +13,15 @@ class RimeEngine(private val context: Context) : InputEngine {
 
     companion object {
         private const val TAG = "RimeEngine"
-        /** 最小权重阈值：只保留 weight >= 50 的词，过滤低频噪音 */
-        private const val MIN_WEIGHT_THRESHOLD = 50
-        /** 每个首字桶最多保留的词条数：只保留权重最高的 300 个 */
-        private const val MAX_ENTRIES_PER_BUCKET = 300
+        /** 最小权重阈值：只保留 weight >= 20 的词（原 50 太严，过滤掉大量可用词组联想） */
+        private const val MIN_WEIGHT_THRESHOLD = 20
+        /** 每个首字桶最多保留的词条数。
+         *  注意：按首字分桶会把整部词库塞进内存，256MB heap 下每桶不能太大（1500 实测约 400-600MB 必 OOM）。
+         *  500 是内存(约130MB)与词组联想覆盖率的折中；更大的覆盖率靠 indexByPrefix2（二字前缀桶）补足。 */
+        private const val MAX_ENTRIES_PER_BUCKET = 500
+        /** 前 2 字桶上限（词组联想）。桶极多但每桶极小（同一二字前缀的长词有限），
+         *  故上限可放宽到 200，覆盖长尾词组。总内存主要由桶数量而非单桶上限决定。 */
+        private const val PREFIX2_BUCKET_CAP = 200
         /** 候选词最多返回数（原 3000 → 800：候选栏+展开面板实际远用不到，翻页收集是主线程开销大头） */
         private const val MAX_CANDIDATE_COUNT = 800
         /** getAllCandidates 翻页步数上限（原 600 → 60：配合懒加载按需增长，避免单次按键上千次 JNI 往返） */
@@ -356,7 +361,13 @@ class RimeEngine(private val context: Context) : InputEngine {
         }.start()
     }
 
-    /** 构建词库索引：按首字分桶，桶内按权重降序，只保留高频词（在后台线程执行，流式处理避免 OOM） */
+    /** 构建词库索引。
+     *  联想的两种场景对索引有不同要求：
+     *   - 单字联想（prefix 1 字，如「谢」→予/谢/意…）：需要以该字开头的 2 字词，桶=首字。
+     *   - 词组联想（prefix ≥2 字，如「谢谢」→你/大家…）：需要以该词开头的更长词，桶=前 2 字。
+     *  原来只按首字分桶：高频 2 字词把桶占满（上限 500），低频的 3/4 字词组全被挤掉，
+     *  于是「词组上屏后无联想、单字却有」。
+     *  现在拆成两张表，各自的桶都很小、可完整保留，总内存反而低于单张大表。 */
     private fun buildDictIndex(): Map<String, List<AssociationEntry>> {
         val rimeDir = java.io.File(context.getExternalFilesDir(null), "rime")
         if (!rimeDir.exists()) return emptyMap()
@@ -365,11 +376,17 @@ class RimeEngine(private val context: Context) : InputEngine {
             .filter { it.isFile && it.name.endsWith(".dict.yaml") }
             .toList()
 
-        // 每个桶用真正的最小堆维护 Top-K：原实现用 ArrayList + minByOrNull().remove()
-        // 是 O(n×K) 线性扫描，大词库下 CPU 长时间打满并撑爆 256MB heap（闪退来源之一）。
-        // PriorityQueue 后 poll 为 O(log K)，整体从 O(n×300) 降到 O(n×log300)。
-        val bucketHeaps = HashMap<String, java.util.PriorityQueue<AssociationEntry>>()
         val byWeight = Comparator<AssociationEntry> { a, b -> a.weight.compareTo(b.weight) }
+        // firstCharHeaps: 首字 → 2 字词 Top-K（供单字联想）
+        val firstCharHeaps = HashMap<String, java.util.PriorityQueue<AssociationEntry>>()
+        // prefix2Heaps: 前 2 字 → ≥3 字词 Top-K（供词组联想）
+        val prefix2Heaps = HashMap<String, java.util.PriorityQueue<AssociationEntry>>()
+
+        fun offer(heaps: HashMap<String, java.util.PriorityQueue<AssociationEntry>>, key: String, cap: Int, e: AssociationEntry) {
+            val heap = heaps.getOrPut(key) { java.util.PriorityQueue(cap + 1, byWeight) }
+            if (heap.size < cap) heap.add(e)
+            else if (e.weight > (heap.peek()?.weight ?: 0)) { heap.poll(); heap.add(e) }
+        }
 
         for (dictFile in dictFiles) {
             try {
@@ -382,20 +399,17 @@ class RimeEngine(private val context: Context) : InputEngine {
                         val parts = trimmed.split("\t")
                         if (parts.size >= 3) {
                             val word = parts[0]
-                            if (word.length < 2) return@forEachLine // 跳过单字词
-                            // 兼容 3 列 (词\t拼音\t权重) 和 4 列 (词\t数字码\t拼音\t权重)
+                            // 联想续写用不到超长词，限制 2..6 字，控制内存
+                            if (word.length < 2 || word.length > 6) return@forEachLine
                             val weight = if (parts.size >= 4) parts[3].toIntOrNull() ?: 0 else parts[2].toIntOrNull() ?: 0
-                            if (weight < MIN_WEIGHT_THRESHOLD) return@forEachLine // 过滤低频词
-                            val bucket = word.substring(0, 1)
-                            val heap = bucketHeaps.getOrPut(bucket) {
-                                java.util.PriorityQueue(MAX_ENTRIES_PER_BUCKET + 1, byWeight)
-                            }
-                            if (heap.size < MAX_ENTRIES_PER_BUCKET) {
-                                heap.add(AssociationEntry(word, "", weight))
-                            } else if (weight > (heap.peek()?.weight ?: 0)) {
-                                // 满了且新词权重更高：换掉堆顶（当前最小），O(log K)
-                                heap.poll()
-                                heap.add(AssociationEntry(word, "", weight))
+                            if (weight < MIN_WEIGHT_THRESHOLD) return@forEachLine
+                            val entry = AssociationEntry(word, "", weight)
+                            if (word.length == 2) {
+                                // 只进首字表（单字联想）
+                                offer(firstCharHeaps, word.substring(0, 1), MAX_ENTRIES_PER_BUCKET, entry)
+                            } else {
+                                // ≥3 字：进前 2 字表（词组联想），桶小故上限可放宽
+                                offer(prefix2Heaps, word.substring(0, 2), PREFIX2_BUCKET_CAP, entry)
                             }
                         }
                     }
@@ -403,23 +417,28 @@ class RimeEngine(private val context: Context) : InputEngine {
             } catch (_: Exception) {}
         }
 
-        // 转换为不可变 Map，每个桶按权重降序
-        val result = HashMap<String, List<AssociationEntry>>(bucketHeaps.size * 2)
+        val result = HashMap<String, List<AssociationEntry>>((firstCharHeaps.size + prefix2Heaps.size) * 2)
         var totalCount = 0
-        bucketHeaps.forEach { (bucket, heap) ->
+        firstCharHeaps.forEach { (k, heap) ->
             val sorted = heap.sortedByDescending { it.weight }
-            result[bucket] = sorted
+            result[k] = sorted
             totalCount += sorted.size
         }
-        bucketHeaps.clear()
+        prefix2Heaps.forEach { (k, heap) ->
+            val sorted = heap.sortedByDescending { it.weight }
+            // 前 2 字 key 与首字 key 不冲突（长度不同），直接放同一 map
+            result[k] = sorted
+            totalCount += sorted.size
+        }
+        firstCharHeaps.clear(); prefix2Heaps.clear()
         Log.d(TAG, "联想索引: ${result.size} 桶, $totalCount 词条, 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
         return result
     }
 
     /**
      * 词语联想：查询以 prefix 为前缀的词语（支持分页加载更多）
-     * 索引未就绪时立即返回空并触发后台构建 —— 绝不在主线程 sleep 等待（原实现最多阻塞
-     * 500ms，是输入卡顿与 ANR 的直接来源）。调用方可用 isAssociationIndexReady() 后补查。
+     * 索引未就绪时立即返回空并触发后台构建 —— 绝不在主线程 sleep 等待。
+     * 桶选择：prefix 为 1 字用首字桶（2 字词），≥2 字用前 2 字桶（更长词组）。
      */
     fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 0, pageWalk: Int = 10): List<String> {
         if (prefix.isEmpty()) return emptyList()
@@ -430,32 +449,24 @@ class RimeEngine(private val context: Context) : InputEngine {
             return emptyList()
         }
 
-        val bucket = prefix.substring(0, 1)
-        val candidates = index[bucket] ?: return emptyList()
+        val bucketKey = if (prefix.length == 1) prefix else prefix.substring(0, 2)
+        val candidates = index[bucketKey] ?: return emptyList()
 
         // 分页：pageWalk 每 +10 翻一页
         val page = ((pageWalk - 10) / 10).coerceAtLeast(0)
         val need = (page + 1) * limit
 
         val seen = HashSet<String>(need * 2)
-        val singleChar = ArrayList<Pair<String, Int>>()
-        val multiChar = ArrayList<Pair<String, Int>>()
+        val matches = ArrayList<Pair<String, Int>>()
         val pLen = prefix.length
         for (entry in candidates) {
             val fw = entry.fullWord
             if (fw.length > pLen && fw.startsWith(prefix)) {
                 val displayWord = fw.substring(pLen)
-                if (seen.add(displayWord)) {
-                    if (displayWord.length == 1) singleChar.add(displayWord to entry.weight)
-                    else multiChar.add(displayWord to entry.weight)
-                }
+                if (seen.add(displayWord)) matches.add(displayWord to entry.weight)
             }
         }
-        // 单字在前、词组在后，各自按权重降序。
-        // 原实现对每个单字都做一次 candidates.firstOrNull{} 全桶线性查找（O(n²)，桶内 300 条时
-        // 每次联想上万次比较），现在权重在收集时已带出，直接排序即可。
-        val allMatches = singleChar.sortedByDescending { it.second }.map { it.first } +
-            multiChar.sortedByDescending { it.second }.map { it.first }
+        val allMatches = matches.sortedByDescending { it.second }.map { it.first }
         val offset = page * limit
         if (offset >= allMatches.size) return emptyList()
         return allMatches.subList(offset, minOf(offset + limit, allMatches.size))
