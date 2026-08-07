@@ -18,8 +18,31 @@ object RimeJni {
 
     private const val TAG = "RimeJni"
 
+    /** 热路径日志开关：release 关闭。按键路径上的 Log.d 会造成大量字符串拼接与 IO，是卡顿主因之一。 */
+    private const val DBG = false
+
     @Volatile
     private var initialized = false
+
+    // ==================== RimeContext 缓存 ====================
+    // getRimeContext() 是跨 JNI 的重量级调用（重建整个 context 对象树）。
+    // 同一输入状态下 getCandidates / getComposingText / getPageCount / getCandidatePinyinList
+    // 会被反复调用，全部走缓存；任何改变 Rime 状态的操作（按键/选词/翻页/清空）后失效。
+    @Volatile
+    private var ctxCache: com.osfans.trime.core.ContextProto? = null
+
+    private fun ctx(): com.osfans.trime.core.ContextProto? {
+        ctxCache?.let { return it }
+        return try {
+            TrimeRime.getRimeContext().also { ctxCache = it }
+        } catch (e: Throwable) {
+            if (DBG) Log.e(TAG, "getRimeContext failed", e)
+            null
+        }
+    }
+
+    /** Rime 状态变更后调用，使 context 缓存失效 */
+    private fun invalidateCtx() { ctxCache = null }
 
     fun isAvailable(): Boolean = initialized
 
@@ -106,13 +129,7 @@ object RimeJni {
 
     fun getComposingText(sessionId: Long): String {
         if (!initialized) return ""
-        return try {
-            val ctx = TrimeRime.getRimeContext()
-            ctx.composition.preedit ?: ""
-        } catch (e: Throwable) {
-            Log.e(TAG, "getComposingText failed", e)
-            ""
-        }
+        return ctx()?.composition?.preedit ?: ""
     }
 
     /**
@@ -121,19 +138,15 @@ object RimeJni {
      */
     fun getCandidates(sessionId: Long): List<String> {
         if (!initialized) return emptyList()
-        return try {
-            val ctx = TrimeRime.getRimeContext()
-            val menu = ctx.menu
-            Log.d(TAG, "getCandidates: menu.candidates.size=${menu.candidates.size}, pageSize=${menu.pageSize}, pageNumber=${menu.pageNumber}, isLastPage=${menu.isLastPage}, composition.preedit=${ctx.composition.preedit}, texts=${menu.candidates.map { it.text }}")
-            if (menu.candidates.isEmpty()) {
-                // 尝试打印 composition 状态帮助诊断
-                Log.d(TAG, "getCandidates: EMPTY - composition=${ctx.composition}, hasMenu=${ctx.menu.candidates.isNotEmpty()}")
-            }
-            menu.candidates.map { it.text }
-        } catch (e: Throwable) {
-            Log.e(TAG, "getCandidates failed", e)
-            emptyList()
-        }
+        val menu = ctx()?.menu ?: return emptyList()
+        if (DBG) Log.d(TAG, "getCandidates: size=${menu.candidates.size} page=${menu.pageNumber} isLast=${menu.isLastPage}")
+        return menu.candidates.map { it.text }
+    }
+
+    /** 轻量判空：避免为了判空而构造整个候选文本列表 */
+    fun hasCandidates(sessionId: Long): Boolean {
+        if (!initialized) return false
+        return (ctx()?.menu?.candidates?.size ?: 0) > 0
     }
 
     /**
@@ -142,15 +155,11 @@ object RimeJni {
      */
     fun getCandidatePinyinList(sessionId: Long): List<String> {
         if (!initialized) return emptyList()
-        return try {
-            val menu = TrimeRime.getRimeContext().menu
-            menu.candidates.map { cand ->
-                // comment 通常形如 "shi shi qiu shi"（带空格的拼音），取每节首字母拼成首字母串
-                val cm = cand.comment?.trim().orEmpty()
-                if (cm.isEmpty()) cand.text else cm
-            }
-        } catch (e: Throwable) {
-            emptyList()
+        val menu = ctx()?.menu ?: return emptyList()
+        return menu.candidates.map { cand ->
+            // comment 通常形如 "shi shi qiu shi"（带空格的拼音），取每节首字母拼成首字母串
+            val cm = cand.comment?.trim().orEmpty()
+            if (cm.isEmpty()) cand.text else cm
         }
     }
 
@@ -159,18 +168,13 @@ object RimeJni {
      */
     fun getPageInfo(sessionId: Long): PageInfo {
         if (!initialized) return PageInfo(0, 0, false, 0)
-        return try {
-            val menu = TrimeRime.getRimeContext().menu
-            val totalCandidates = menu.candidates.size
-            val pageSize = if (menu.pageSize > 0) menu.pageSize else 9
-            val currentPage = menu.pageNumber
-            val isLastPage = menu.isLastPage
-            val totalPages = if (pageSize > 0) (totalCandidates + pageSize - 1) / pageSize else 0
-            PageInfo(pageSize, currentPage, isLastPage, totalPages)
-        } catch (e: Throwable) {
-            Log.e(TAG, "getPageInfo failed", e)
-            PageInfo(0, 0, false, 0)
-        }
+        val menu = ctx()?.menu ?: return PageInfo(0, 0, false, 0)
+        val totalCandidates = menu.candidates.size
+        val pageSize = if (menu.pageSize > 0) menu.pageSize else 9
+        val currentPage = menu.pageNumber
+        val isLastPage = menu.isLastPage
+        val totalPages = if (pageSize > 0) (totalCandidates + pageSize - 1) / pageSize else 0
+        return PageInfo(pageSize, currentPage, isLastPage, totalPages)
     }
 
     // ======================== 按键处理 ========================
@@ -184,10 +188,13 @@ object RimeJni {
         if (!initialized) return false
         return try {
             val keycode = keyToRimeKeyCode(key)
-            TrimeRime.processRimeKey(keycode, 0).also { result ->
-                Log.d(TAG, "processKey key=$key keycode=$keycode result=$result composing=${isComposing()}")
+            invalidateCtx()
+            TrimeRime.processRimeKey(keycode, 0).also {
+                invalidateCtx()
+                if (DBG) Log.d(TAG, "processKey key=$key keycode=$keycode result=$it")
             }
         } catch (e: Throwable) {
+            invalidateCtx()
             Log.e(TAG, "processKey failed: $key", e)
             false
         }
@@ -212,11 +219,13 @@ object RimeJni {
             val selectedText = if (index < cands.size) cands[index] else ""
             // 选中候选（false=不立即commit，剩余拼音保留在composition供逐字组词）
             TrimeRime.selectRimeCandidate(index, false)
+            invalidateCtx()
             // 检查是否有 commit 产生
             val commitText = TrimeRime.getRimeCommit().text ?: ""
             // 如果有 commit 文本，使用 commit 文本；否则使用选中的候选词文本
             commitText.ifEmpty { selectedText }
         } catch (e: Throwable) {
+            invalidateCtx()
             Log.e(TAG, "selectCandidate failed: index=$index", e)
             ""
         }
@@ -230,10 +239,12 @@ object RimeJni {
         if (!initialized) return ""
         return try {
             TrimeRime.commitRimeComposition()
+            invalidateCtx()
             val text = TrimeRime.getRimeCommit().text ?: ""
-            Log.d(TAG, "commitComposition text='$text'")
+            if (DBG) Log.d(TAG, "commitComposition text='$text'")
             text
         } catch (e: Throwable) {
+            invalidateCtx()
             Log.e(TAG, "commitComposition failed", e)
             ""
         }
@@ -242,6 +253,7 @@ object RimeJni {
     fun clearComposition(sessionId: Long) {
         if (!initialized) return
         try { TrimeRime.clearRimeComposition() } catch (_: Throwable) {}
+        invalidateCtx()
     }
 
     // ======================== 模式切换 ========================
@@ -250,7 +262,7 @@ object RimeJni {
         if (!initialized) return
         try {
             TrimeRime.setRimeOption("ascii_mode", ascii)
-            Log.d(TAG, "setAsciiMode: $ascii")
+            invalidateCtx()
         } catch (e: Throwable) {
             Log.e(TAG, "setAsciiMode failed", e)
         }
@@ -261,7 +273,7 @@ object RimeJni {
         if (!initialized) return
         try {
             TrimeRime.setRimeOption(option, value)
-            Log.d(TAG, "setOption: $option = $value")
+            invalidateCtx()
         } catch (e: Throwable) {
             Log.e(TAG, "setOption failed: $option", e)
         }
@@ -272,8 +284,9 @@ object RimeJni {
     fun changePage(sessionId: Long, backward: Boolean): Boolean {
         if (!initialized) return false
         return try {
-            TrimeRime.changeRimeCandidatePage(backward)
+            TrimeRime.changeRimeCandidatePage(backward).also { invalidateCtx() }
         } catch (e: Throwable) {
+            invalidateCtx()
             Log.e(TAG, "changePage failed: backward=$backward", e)
             false
         }
@@ -281,25 +294,24 @@ object RimeJni {
 
     fun getPageCount(sessionId: Long): Int {
         if (!initialized) return 0
-        return try {
-            val menu = TrimeRime.getRimeContext().menu
-            if (menu.pageSize <= 0) 0
-            else {
-                // 计算总页数：用候选词总数 / 每页大小
-                // menu.candidates 是当前页的候选词，不能用来计算总页数
-                // 用 isLastPage 来判断是否还有更多页
-                val currentPage = menu.pageNumber
-                if (menu.isLastPage) currentPage + 1
-                else currentPage + 2 // 至少还有一页
-            }
-        } catch (e: Throwable) { 0 }
+        val menu = ctx()?.menu ?: return 0
+        return if (menu.pageSize <= 0) 0
+        else {
+            // 计算总页数：用 isLastPage 判断是否还有更多页
+            val currentPage = menu.pageNumber
+            if (menu.isLastPage) currentPage + 1 else currentPage + 2
+        }
     }
 
     fun getCurrentPage(sessionId: Long): Int {
         if (!initialized) return 0
-        return try {
-            TrimeRime.getRimeContext().menu.pageNumber
-        } catch (e: Throwable) { 0 }
+        return ctx()?.menu?.pageNumber ?: 0
+    }
+
+    /** 当前页是否为最后一页（供翻页收集提前终止，避免无谓 JNI 往返） */
+    fun isLastPage(sessionId: Long): Boolean {
+        if (!initialized) return true
+        return ctx()?.menu?.isLastPage ?: true
     }
 
     // ======================== 内部方法 ========================

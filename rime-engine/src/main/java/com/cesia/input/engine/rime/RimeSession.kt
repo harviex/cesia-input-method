@@ -30,7 +30,11 @@ class RimeSession(val id: Long) {
     /**
      * 是否有候选词
      */
-    fun hasCandidates(): Boolean = candidates.isNotEmpty()
+    fun hasCandidates(): Boolean = RimeJni.hasCandidates(id)
+
+    /** 当前页是否为最后一页（供翻页收集提前终止） */
+    val isLastPage: Boolean
+        get() = RimeJni.isLastPage(id)
 
     /**
      * 处理按键输入

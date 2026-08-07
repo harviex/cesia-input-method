@@ -17,11 +17,10 @@ class RimeEngine(private val context: Context) : InputEngine {
         private const val MIN_WEIGHT_THRESHOLD = 50
         /** 每个首字桶最多保留的词条数：只保留权重最高的 300 个 */
         private const val MAX_ENTRIES_PER_BUCKET = 300
-        /** 候选词最多返回前 3000 个（词组+单字按权重自然混排；翻页上限防卡顿） */
-        private const val MAX_CANDIDATE_COUNT = 3000
-        /** getAllCandidates 翻页步数上限。Cesia 侧用 candPageWalk 从 10 页(50候选)起按需懒加载，不限制总数量（纯滚动加载）。
-         *  这里给一个足够大的步数上限，配合 MAX_CANDIDATE_COUNT(3000) 让懒加载能一直滚到词库尽头。 */
-        private const val MAX_PAGE_WALK = 600
+        /** 候选词最多返回数（原 3000 → 800：候选栏+展开面板实际远用不到，翻页收集是主线程开销大头） */
+        private const val MAX_CANDIDATE_COUNT = 800
+        /** getAllCandidates 翻页步数上限（原 600 → 60：配合懒加载按需增长，避免单次按键上千次 JNI 往返） */
+        private const val MAX_PAGE_WALK = 60
     }
 
     private var session: RimeSession? = null
@@ -62,16 +61,7 @@ class RimeEngine(private val context: Context) : InputEngine {
             Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
         } else {
             // 后台预构建联想索引，避免首次查询时卡顿
-            Thread {
-                try {
-                    dictIndexBuildTime = System.currentTimeMillis()
-                    dictIndex = buildDictIndex()
-                    dictIndexBuilt = true
-                    Log.d(TAG, "联想索引后台构建完成")
-                } catch (_: Exception) {
-                    Log.e(TAG, "联想索引构建失败")
-                }
-            }.start()
+            startIndexBuildAsync()
         }
         return success
     }
@@ -163,6 +153,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     @Synchronized
     override fun processKey(key: String): Boolean {
         val s = session ?: createSession()
+        invalidateCandCache()
         return s.processKey(key)
     }
 
@@ -172,81 +163,109 @@ class RimeEngine(private val context: Context) : InputEngine {
     @Synchronized
     override fun processKeyCode(keyCode: Int): Boolean {
         val s = session ?: createSession()
+        invalidateCandCache()
         return s.processKeyCode(keyCode)
     }
 
     @Synchronized
     override fun selectCandidate(index: Int): String {
         val s = session ?: return ""
+        invalidateCandCache()
         return s.selectCandidate(index)
     }
 
     @Synchronized
     override fun commit(): String {
         val s = session ?: return ""
+        invalidateCandCache()
         return s.commit()
     }
 
     @Synchronized
     override fun clear() {
+        invalidateCandCache()
         session?.clear()
     }
 
     @Synchronized
     override fun nextPage(): List<String> {
+        invalidateCandCache()
         session?.nextPage()
         return candidates
     }
 
     @Synchronized
     override fun prevPage(): List<String> {
+        invalidateCandCache()
         session?.prevPage()
         return candidates
     }
 
-    /** 获取所有页的候选词（合并）：线性取前 MAX_CANDIDATE_COUNT 个（含词组与单字，按需自然混排） */
+    // ==================== 候选翻页结果缓存 ====================
+    // 每次按键 updateCandidateBar() 都会调 getAllCandidates()，而它内部要把 Rime 游标
+    // 从当前页翻回第 0 页、逐页收集、再翻回来——最坏上千次 JNI 往返，是拼音输入卡顿的头号原因。
+    // 这里按 (composingText + pageWalk) 做缓存：同一输入状态重复查询直接命中，0 次 JNI。
+    private var candCacheKey: String? = null
+    private var candCacheWalk = 0
+    private var candCacheValue: List<String> = emptyList()
+    private var pyCacheKey: String? = null
+    private var pyCacheWalk = 0
+    private var pyCacheValue: List<String> = emptyList()
+
+    /** 输入状态变化后使候选缓存失效 */
+    private fun invalidateCandCache() {
+        candCacheKey = null
+        pyCacheKey = null
+    }
+
+    /** 通用翻页收集：pull 提供每页数据，提前用 isLastPage 终止，避免无谓翻页 */
+    private inline fun collectPages(s: RimeSession, pageWalk: Int, pull: (RimeSession) -> List<String>): List<String> {
+        if (s.pageCount <= 1) return pull(s).take(MAX_CANDIDATE_COUNT)
+        val cap = minOf(pageWalk, MAX_PAGE_WALK)
+        val all = ArrayList<String>(cap * 9)
+        val startPage = s.currentPage
+        // 回到第 0 页（有界，防止极端情况死循环）
+        var guard = 0
+        while (s.currentPage > 0 && guard++ < MAX_PAGE_WALK) { if (!s.prevPage()) break }
+        all.addAll(pull(s))
+        var walked = 0
+        // isLastPage 直接判定终点，比 currentPage < pageCount-1 更准且不会多翻
+        while (!s.isLastPage && all.size < MAX_CANDIDATE_COUNT && walked < cap) {
+            if (!s.nextPage()) break
+            all.addAll(pull(s))
+            walked++
+        }
+        // 回到起始页
+        var back = 0
+        while (s.currentPage < startPage && back++ < MAX_PAGE_WALK) { if (!s.nextPage()) break }
+        while (s.currentPage > startPage && back++ < MAX_PAGE_WALK * 2) { if (!s.prevPage()) break }
+        return if (all.size > MAX_CANDIDATE_COUNT) all.subList(0, MAX_CANDIDATE_COUNT).toList() else all
+    }
+
+    /** 获取所有页的候选词（合并）。同一 composing 状态下走缓存，避免重复翻页。 */
     @Synchronized
     fun getAllCandidates(pageWalk: Int = MAX_PAGE_WALK): List<String> {
         val s = session ?: return emptyList()
-        if (s.pageCount <= 1) return s.candidates.take(MAX_CANDIDATE_COUNT)
-        val all = mutableListOf<String>()
-        val startPage = s.currentPage
-        // 先回到第0页
-        while (s.currentPage > 0) s.prevPage()
-        // 从第0页开始往后收集，但最多收集 MAX_CANDIDATE_COUNT 个（避免翻遍数千页导致卡顿）
-        all.addAll(s.candidates)
-        var pagesWalked = 0
-        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < pageWalk) {
-            if (!s.nextPage()) break
-            all.addAll(s.candidates)
-            pagesWalked++
-        }
-        // 回到起始页（同样限制回翻步数，避免起始页在极远处时卡顿）
-        var back = 0
-        while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
-        while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }
-        return all.take(MAX_CANDIDATE_COUNT)
+        val key = s.composingText
+        if (candCacheKey == key && candCacheWalk >= pageWalk) return candCacheValue
+        val result = collectPages(s, pageWalk) { it.candidates }
+        candCacheKey = key
+        candCacheWalk = pageWalk
+        candCacheValue = result
+        return result
     }
 
-    /** 与 getAllCandidates 对应的拼音列表（按相同页遍历顺序） */
+    /** 与 getAllCandidates 对应的拼音列表（按相同页遍历顺序），同样带缓存 */
     @Synchronized
     fun getAllCandidatePinyins(pageWalk: Int = MAX_PAGE_WALK): List<String> {
         val s = session ?: return emptyList()
-        if (s.pageCount <= 1) return s.candidatePinyins.take(MAX_CANDIDATE_COUNT)
-        val all = mutableListOf<String>()
-        val startPage = s.currentPage
-        while (s.currentPage > 0) s.prevPage()
-        all.addAll(s.candidatePinyins)
-        var pagesWalked = 0
-        while (s.currentPage < s.pageCount - 1 && all.size < MAX_CANDIDATE_COUNT && pagesWalked < pageWalk) {
-            if (!s.nextPage()) break
-            all.addAll(s.candidatePinyins)
-            pagesWalked++
-        }
-        var back = 0
-        while (s.currentPage < startPage && back < MAX_PAGE_WALK) { s.nextPage(); back++ }
-        while (s.currentPage > startPage && back < MAX_PAGE_WALK * 2) { s.prevPage(); back++ }
-        return all.take(MAX_CANDIDATE_COUNT)
+        val key = s.composingText
+        if (pyCacheKey == key && pyCacheWalk >= pageWalk) return pyCacheValue
+        val result = collectPages(s, pageWalk) { it.candidatePinyins }
+        pyCacheKey = key
+        pyCacheWalk = pageWalk
+        pyCacheValue = result
+        return result
     }
 
     // 兼容方法
@@ -289,6 +308,7 @@ class RimeEngine(private val context: Context) : InputEngine {
     @Synchronized
     fun clearSession() {
         session = null
+        invalidateCandCache()
     }
 
     /** 调试：获取 Rime 完整状态 */
@@ -302,22 +322,54 @@ class RimeEngine(private val context: Context) : InputEngine {
     )
 
     // ======================== 词库索引（懒加载，按首字分桶） ========================
+    // @Volatile：索引在后台线程构建、主线程读取，无 volatile 会读到半构建状态导致偶发闪退。
+    @Volatile
     private var dictIndex: Map<String, List<AssociationEntry>>? = null
+    @Volatile
     private var dictIndexBuilt = false
+    @Volatile
+    private var dictIndexBuilding = false
     private var dictIndexBuildTime = 0L
+
+    /** 启动后台索引构建（幂等，避免重复起线程导致内存翻倍 / OOM） */
+    private fun startIndexBuildAsync() {
+        synchronized(this) {
+            if (dictIndexBuilt || dictIndexBuilding) return
+            dictIndexBuilding = true
+        }
+        Thread {
+            try {
+                dictIndexBuildTime = System.currentTimeMillis()
+                val built = buildDictIndex()
+                dictIndex = built
+                dictIndexBuilt = true
+                Log.d(TAG, "联想索引后台构建完成")
+            } catch (e: Throwable) {
+                Log.e(TAG, "联想索引构建失败: ${e.message}")
+            } finally {
+                dictIndexBuilding = false
+            }
+        }.apply {
+            // 降低优先级：索引构建不与输入线程抢 CPU，消除构建期间的输入卡顿
+            priority = Thread.MIN_PRIORITY
+            isDaemon = true
+        }.start()
+    }
 
     /** 构建词库索引：按首字分桶，桶内按权重降序，只保留高频词（在后台线程执行，流式处理避免 OOM） */
     private fun buildDictIndex(): Map<String, List<AssociationEntry>> {
         val rimeDir = java.io.File(context.getExternalFilesDir(null), "rime")
         if (!rimeDir.exists()) return emptyMap()
 
-        // 使用序列流式处理，避免一次性加载所有词条到内存
         val dictFiles = rimeDir.walkTopDown()
             .filter { it.isFile && it.name.endsWith(".dict.yaml") }
             .toList()
 
-        // 每个桶用 PriorityQueue 维护 Top-K，内存占用固定
-        val bucketHeaps = mutableMapOf<String, MutableList<AssociationEntry>>()
+        // 每个桶用真正的最小堆维护 Top-K：原实现用 ArrayList + minByOrNull().remove()
+        // 是 O(n×K) 线性扫描，大词库下 CPU 长时间打满并撑爆 256MB heap（闪退来源之一）。
+        // PriorityQueue 后 poll 为 O(log K)，整体从 O(n×300) 降到 O(n×log300)。
+        val bucketHeaps = HashMap<String, java.util.PriorityQueue<AssociationEntry>>()
+        val byWeight = Comparator<AssociationEntry> { a, b -> a.weight.compareTo(b.weight) }
 
         for (dictFile in dictFiles) {
             try {
@@ -331,16 +383,19 @@ class RimeEngine(private val context: Context) : InputEngine {
                         if (parts.size >= 3) {
                             val word = parts[0]
                             if (word.length < 2) return@forEachLine // 跳过单字词
-                            // 兼容 3 列 (pinyin.dict.yaml: 词\t拼音\t权重) 和 4 列 (t9_pinyin.dict.yaml/rime_ice.dict.yaml: 词\t数字码\t拼音\t权重)
+                            // 兼容 3 列 (词\t拼音\t权重) 和 4 列 (词\t数字码\t拼音\t权重)
                             val weight = if (parts.size >= 4) parts[3].toIntOrNull() ?: 0 else parts[2].toIntOrNull() ?: 0
                             if (weight < MIN_WEIGHT_THRESHOLD) return@forEachLine // 过滤低频词
                             val bucket = word.substring(0, 1)
-                            val entry = AssociationEntry(word, "", weight)
-                            val heap = bucketHeaps.getOrPut(bucket) { mutableListOf() }
-                            heap.add(entry)
-                            // 堆大小超过限制时，移除最小权重的元素
-                            if (heap.size > MAX_ENTRIES_PER_BUCKET) {
-                                heap.minByOrNull { it.weight }?.let { heap.remove(it) }
+                            val heap = bucketHeaps.getOrPut(bucket) {
+                                java.util.PriorityQueue(MAX_ENTRIES_PER_BUCKET + 1, byWeight)
+                            }
+                            if (heap.size < MAX_ENTRIES_PER_BUCKET) {
+                                heap.add(AssociationEntry(word, "", weight))
+                            } else if (weight > (heap.peek()?.weight ?: 0)) {
+                                // 满了且新词权重更高：换掉堆顶（当前最小），O(log K)
+                                heap.poll()
+                                heap.add(AssociationEntry(word, "", weight))
                             }
                         }
                     }
@@ -349,76 +404,61 @@ class RimeEngine(private val context: Context) : InputEngine {
         }
 
         // 转换为不可变 Map，每个桶按权重降序
-        val result = mutableMapOf<String, List<AssociationEntry>>()
+        val result = HashMap<String, List<AssociationEntry>>(bucketHeaps.size * 2)
         var totalCount = 0
         bucketHeaps.forEach { (bucket, heap) ->
-            heap.sortByDescending { it.weight }
-            result[bucket] = heap
-            totalCount += heap.size
+            val sorted = heap.sortedByDescending { it.weight }
+            result[bucket] = sorted
+            totalCount += sorted.size
         }
-        Log.d(TAG, "联想索引: ${result.size} 桶, $totalCount 词条 (每桶限制 $MAX_ENTRIES_PER_BUCKET, 过滤 weight<$MIN_WEIGHT_THRESHOLD), 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
+        bucketHeaps.clear()
+        Log.d(TAG, "联想索引: ${result.size} 桶, $totalCount 词条, 耗时 ${System.currentTimeMillis() - dictIndexBuildTime}ms")
         return result
     }
 
     /**
      * 词语联想：查询以 prefix 为前缀的词语（支持分页加载更多）
-     * @param pageWalk 翻页步数，用于加载更多
-     * @return 去掉前缀后的显示词列表，按权重降序，去重
+     * 索引未就绪时立即返回空并触发后台构建 —— 绝不在主线程 sleep 等待（原实现最多阻塞
+     * 500ms，是输入卡顿与 ANR 的直接来源）。调用方可用 isAssociationIndexReady() 后补查。
      */
-    fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 500, pageWalk: Int = 10): List<String> {
-        if (prefix.isEmpty()) return emptyList() // 允许单字联想
+    fun getAssociations(prefix: String, limit: Int = 20, timeoutMs: Long = 0, pageWalk: Int = 10): List<String> {
+        if (prefix.isEmpty()) return emptyList()
 
-        if (!dictIndexBuilt) {
-            // 索引未完成：触发后台构建（如果尚未启动）
-            if (dictIndex == null) {
-                Thread {
-                    try {
-                        dictIndexBuildTime = System.currentTimeMillis()
-                        dictIndex = buildDictIndex()
-                        dictIndexBuilt = true
-                        Log.d(TAG, "联想索引后台构建完成")
-                    } catch (_: Exception) {
-                        Log.e(TAG, "联想索引后台构建失败")
-                    }
-                }.start()
-            }
-            // 首次查询时短暂等待索引构建（最多 timeoutMs），避免首次选词联想为空
-            var waited = 0L
-            while (!dictIndexBuilt && waited < timeoutMs) {
-                try { Thread.sleep(50) } catch (_: InterruptedException) {}
-                waited += 50
-            }
-            if (!dictIndexBuilt) return emptyList()
+        val index = dictIndex
+        if (!dictIndexBuilt || index == null) {
+            startIndexBuildAsync()
+            return emptyList()
         }
 
-        val index = dictIndex ?: return emptyList()
         val bucket = prefix.substring(0, 1)
         val candidates = index[bucket] ?: return emptyList()
 
-        val seen = mutableSetOf<String>()
-        val singleChar = mutableListOf<String>()
-        val multiChar = mutableListOf<Pair<String, Int>>()
+        // 分页：pageWalk 每 +10 翻一页
+        val page = ((pageWalk - 10) / 10).coerceAtLeast(0)
+        val need = (page + 1) * limit
+
+        val seen = HashSet<String>(need * 2)
+        val singleChar = ArrayList<Pair<String, Int>>()
+        val multiChar = ArrayList<Pair<String, Int>>()
+        val pLen = prefix.length
         for (entry in candidates) {
-            if (entry.fullWord.startsWith(prefix) && entry.fullWord.length > prefix.length) {
-                val displayWord = entry.fullWord.substring(prefix.length)
+            val fw = entry.fullWord
+            if (fw.length > pLen && fw.startsWith(prefix)) {
+                val displayWord = fw.substring(pLen)
                 if (seen.add(displayWord)) {
-                    if (displayWord.length == 1) {
-                        singleChar.add(displayWord)
-                    } else {
-                        multiChar.add(displayWord to entry.weight)
-                    }
+                    if (displayWord.length == 1) singleChar.add(displayWord to entry.weight)
+                    else multiChar.add(displayWord to entry.weight)
                 }
             }
         }
-        val sortedMulti = multiChar.sortedByDescending { it.second }.map { it.first }
-        val allMatches = (singleChar.sortedByDescending { w ->
-            candidates.firstOrNull { it.fullWord == prefix + w && it.fullWord.length == prefix.length + 1 }?.weight ?: 0
-        } + sortedMulti)
-        // 支持分页：pageWalk=10 为第1页，pageWalk=20 为第2页，每页 limit 个
-        // pageWalk 每增加 10 翻一页
-        val page = (pageWalk - 10) / 10
+        // 单字在前、词组在后，各自按权重降序。
+        // 原实现对每个单字都做一次 candidates.firstOrNull{} 全桶线性查找（O(n²)，桶内 300 条时
+        // 每次联想上万次比较），现在权重在收集时已带出，直接排序即可。
+        val allMatches = singleChar.sortedByDescending { it.second }.map { it.first } +
+            multiChar.sortedByDescending { it.second }.map { it.first }
         val offset = page * limit
-        return allMatches.drop(offset).take(limit)
+        if (offset >= allMatches.size) return emptyList()
+        return allMatches.subList(offset, minOf(offset + limit, allMatches.size))
     }
 
     /** 清除索引（词库更新后调用） */

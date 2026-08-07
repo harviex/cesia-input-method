@@ -81,6 +81,16 @@ import kotlinx.coroutines.*
 // region 视图与UI
 class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
+    /**
+     * 调试日志开关（release 关闭）。
+     * 原来按键热路径上的 Log.d 会强制求值 rimeEngine.composingText / candidates 等
+     * 跨 JNI 属性并做字符串拼接，即使日志不输出也照样耗时——用 inline + 常量条件后，
+     * release 编译期直接消除整个调用（含参数求值）。
+     */
+    internal inline fun dlog(msg: () -> String) {
+        if (DEBUG_LOG) Log.d("Cesia", msg())
+    }
+
     // 单线程 Executor，用于串行执行 Rime 引擎操作（防止多线程并发崩溃）
     private val rimeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
@@ -954,6 +964,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
 // region 常量配置
     companion object {
+        /** 调试日志总开关：release 置 false，编译期消除热路径日志与其参数求值 */
+        internal const val DEBUG_LOG = false
+
         const val PREF_API_URL = "api_url"
         const val PREF_MODEL_ID = "model_id"
         const val PREF_THEME_MODE = "theme_mode"
@@ -1143,7 +1156,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             .getBoolean(SYMBOL_FLIP_PREF, false)
         try {
             numberKeyboard = Keyboard(this, R.xml.number)
-            Log.d("Cesia", "number 键盘加载成功")
+            dlog { "number 键盘加载成功" }
         } catch (e: Exception) {
             Log.e("Cesia", "加载数字键盘失败", e)
             numberKeyboard = qwertyKeyboard
@@ -1267,7 +1280,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         val guideMgr = com.cesia.input.stats.GrammarGuideManager(this@CesiaInputMethod)
                         val recordCount = statsManager.getRecords().size
                         if (guideMgr.needsUpdate(recordCount)) {
-                            Log.d("Cesia", "语法大纲自动更新: 当前记录数=$recordCount, 上次更新=${guideMgr.lastRecordCount}")
+                            dlog { "语法大纲自动更新: 当前记录数=$recordCount, 上次更新=${guideMgr.lastRecordCount}" }
                             val records = statsManager.getRecords()
                             val newGuide = guideMgr.generateGuide(records) { text, instruction ->
                                 typelessEngine?.getPolishService()?.polishWithPrompt(text)
@@ -1275,7 +1288,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                             if (!newGuide.isNullOrEmpty()) {
                                 guideMgr.saveGuide(newGuide)
                                 guideMgr.updateRecordCount(recordCount)
-                                Log.d("Cesia", "语法大纲自动更新成功: 版本=${guideMgr.version}, 长度=${newGuide.length}")
+                                dlog { "语法大纲自动更新成功: 版本=${guideMgr.version}, 长度=${newGuide.length}" }
                             }
                         }
                     } catch (e: Exception) {
@@ -1310,7 +1323,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     val text = voiceEngine.convertChineseDigitsToArabic(text)
                     // 魔法模式停止时，直接用 Google 识别结果触发 AI
                     if (magicStopRequested) {
-                        Log.d("Cesia", "onRecognitionComplete: 魔法模式停止中，直接触发 AI")
+                        dlog { "onRecognitionComplete: 魔法模式停止中，直接触发 AI" }
                         magicStopRequested = false
                         if (text.isNotEmpty()) {
                             handleMagicResult(text)
@@ -2276,7 +2289,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             rimeEngine.clear()
             // 造词放宽：选词后查联想(词+词/词+字)，有联想进联想模式继续组词；无则结束
             val newAssoc = rimeEngine.getAssociations(clickedWord, 20, 500, 10)
-            Log.d("Cesia", "T9联想查询[简拼/非接龙]: prefix='$clickedWord', mode=T9, 结果数=${newAssoc.size}, associations=${newAssoc.take(5)}")
+            dlog { "T9联想查询[简拼/非接龙]: prefix='$clickedWord', mode=T9, 结果数=${newAssoc.size}, associations=${newAssoc.take(5)}" }
             if (newAssoc.isNotEmpty() && !smartEditMode && !magicEditMode) {
                 // 清 T9 残留（数字队列/候选音区），避免点击上屏后状态栏和候选音不消失
                 t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
@@ -2385,7 +2398,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             // 查询联想词（限制最高频的 20 个，防止过多导致闪退）
             val associations = rimeEngine.getAssociations(selectedWord, 20, 500, 10)
-            Log.d("Cesia", "T9联想查询: prefix='$selectedWord', mode=${if (keyboardMode == KeyboardMode.NUMBER) "T9" else "QWERTY"}, 结果数=${associations.size}")
+            dlog { "T9联想查询: prefix='$selectedWord', mode=${if (keyboardMode == KeyboardMode.NUMBER) "T9" else "QWERTY"}, 结果数=${associations.size}" }
             if (associations.isNotEmpty()) {
                 // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
                 t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
@@ -2668,7 +2681,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 增加 pageWalk 加载下一页
         assocPageWalk += 10
         val more = rimeEngine.getAssociations(associationPrefix, 20, 500, assocPageWalk)
-        Log.d("Cesia", "联想懒加载[loadMoreAssociations]: prefix='$associationPrefix', pageWalk=$assocPageWalk, 结果数=${more.size}, 总数=${associationCandidates.size}")
+        dlog { "联想懒加载[loadMoreAssociations]: prefix='$associationPrefix', pageWalk=$assocPageWalk, 结果数=${more.size}, 总数=${associationCandidates.size}" }
         if (more.isEmpty()) {
             assocPageWalk -= 10
             return
@@ -3265,7 +3278,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             } catch (e: CancellationException) {
                 // 协程被 cancel：不处理，由 toggleMagicMode 触发
-                Log.d("Cesia", "魔法模式本地录音协程被取消")
+                dlog { "魔法模式本地录音协程被取消" }
             } catch (e: Exception) {
                 Log.e("Cesia", "魔法模式本地识别失败", e)
                 Handler(Looper.getMainLooper()).post {
@@ -3328,7 +3341,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val recognizedText = voiceEngine.convertChineseDigitsToArabic(recognizedText)
         // 防重入：如果 AI 正在处理中，忽略重复触发
         if (isAiProcessing) {
-            Log.d("Cesia", "handleMagicResult: AI 正在处理中，忽略重复触发")
+            dlog { "handleMagicResult: AI 正在处理中，忽略重复触发" }
             return
         }
         magicMode = false
@@ -3349,18 +3362,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 读取剪贴板非置顶首条内容作为语境
         val clipboardContext = getClipboardFirstNonPinned()
-        Log.d("Cesia", "handleMagicResult: instruction='$instruction', original='${magicOriginalText.take(50)}', clipboard='${clipboardContext.take(50)}'")
-
+        dlog { "handleMagicResult: instruction='$instruction', original='${magicOriginalText.take(50)}', clipboard='${clipboardContext.take(50)}'" }
         // 异步执行 AI，避免阻塞主线程
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
                 val prompt = buildMagicPrompt(magicOriginalText, instruction, clipboardContext)
-                Log.d("Cesia", "handleMagicResult: prompt长度=${prompt.length}")
+                dlog { "handleMagicResult: prompt长度=${prompt.length}" }
                 val polishService = typelessEngine?.getPolishService()
-                Log.d("Cesia", "handleMagicResult: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(30) ?: "null"}")
+                dlog { "handleMagicResult: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(30) ?: "null"}" }
                 val result = polishService?.polishWithPrompt(prompt)
-                Log.d("Cesia", "handleMagicResult: result=${result?.take(50) ?: "null"}, isNullOrEmpty=${result.isNullOrEmpty()}")
+                dlog { "handleMagicResult: result=${result?.take(50) ?: "null"}, isNullOrEmpty=${result.isNullOrEmpty()}" }
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
                     if (result != null && result.isNotEmpty()) {
@@ -3408,13 +3420,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     for (i in 0 until clip.itemCount) {
                         val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
                         if (text.isNotEmpty()) {
-                            Log.d("Cesia", "getClipboardFirstNonPinned: 读取到 ${text.length} 字符: ${text.take(50)}")
+                            dlog { "getClipboardFirstNonPinned: 读取到 ${text.length} 字符: ${text.take(50)}" }
                             return text
                         }
                     }
                 }
             }
-            Log.d("Cesia", "getClipboardFirstNonPinned: 系统剪贴板为空")
+            dlog { "getClipboardFirstNonPinned: 系统剪贴板为空" }
             ""
         } catch (e: Exception) {
             Log.e("Cesia", "getClipboardFirstNonPinned: 读取剪贴板失败", e)
@@ -3523,7 +3535,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     private fun showMagicHistoryPopup() {
-        Log.d("Cesia", "showMagicHistoryPopup: called, mgr=$magicHistoryManager")
+        dlog { "showMagicHistoryPopup: called, mgr=$magicHistoryManager" }
         val mgr = magicHistoryManager ?: run {
             Log.e("Cesia", "showMagicHistoryPopup: magicHistoryManager is null!")
             return
@@ -4072,7 +4084,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 显示智能写作设置弹窗 */
     private fun showSmartWritingPopup() {
-        Log.d("Cesia", "showSmartWritingPopup: 弹窗被调用")
+        dlog { "showSmartWritingPopup: 弹窗被调用" }
         try {
             val inflater = android.view.LayoutInflater.from(this)
             val popupView = inflater.inflate(R.layout.popup_smart_writing, null)
@@ -4620,10 +4632,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 执行智能写作命令（点击列表项直接调用AI） */
     private fun executeSmartCommand(command: String) {
-        Log.d("Cesia", "executeSmartCommand: command=$command")
+        dlog { "executeSmartCommand: command=$command" }
         val selectedOptions = getSmartWritingSelection()
-        Log.d("Cesia", "executeSmartCommand: selectedOptions=$selectedOptions")
-
+        dlog { "executeSmartCommand: selectedOptions=$selectedOptions" }
         // 立即显示状态，让用户知道正在处理
         updateStatus("智能写作处理中")
 
@@ -4631,8 +4642,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val clipboardText = ""
         // 旧逻辑（已禁用）：
         // val clipboardText = if (selectedOptions.contains("clipboard")) { ... } else ""
-        Log.d("Cesia", "executeSmartCommand: clipboardText=${clipboardText.length} chars")
-
+        dlog { "executeSmartCommand: clipboardText=${clipboardText.length} chars" }
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
@@ -4676,10 +4686,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     // 搜索时附加日期会导致部分时间点查询搜不到内容，先注释掉日期，仅用原始查询
                     val finalQuery = searchQuery // "$searchQuery $today"
 
-                    Log.d("Cesia", "SearXNG query: $finalQuery")
+                    dlog { "SearXNG query: $finalQuery" }
                     withContext(Dispatchers.Main) { updateStatus("🔍 正在搜索：${finalQuery.take(20)}...") }
                     val tavilyResults = performSearXNGSearch(finalQuery)
-                    Log.d("Cesia", "SearXNG results: ${tavilyResults.length} chars")
+                    dlog { "SearXNG results: ${tavilyResults.length} chars" }
                     if (tavilyResults.isNotEmpty()) {
                         promptParts.add("【网络搜索】\n$tavilyResults")
                     }
@@ -4700,7 +4710,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val libName = libPrefs.getString(FilePickerActivity.RESULT_KEY_FILE_NAME, "")
                     if (libContent != null && libContent.isNotEmpty()) {
                         promptParts.add("【本地文库：$libName】\n${libContent.take(3000)}")
-                        Log.d("Cesia", "LocalLib: loaded $libName (${libContent.length} chars)")
+                        dlog { "LocalLib: loaded $libName (${libContent.length} chars)" }
                     }
                 }
 
@@ -4711,14 +4721,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
                 val fullPrompt = promptParts.joinToString("\n\n") + "\n\n只输出结果："
 
-                Log.d("Cesia", "SmartWriting prompt: ${fullPrompt.take(200)}...")
-
+                dlog { "SmartWriting prompt: ${fullPrompt.take(200)}..." }
                 withContext(Dispatchers.Main) { updateStatus("🤖 AI 正在生成...") }
 
                 // 根据本地/云端模式选择执行路径
                 val useLocal = isLocalPolishMode() && modelManager.hasAiModel()
-                Log.d("Cesia", "executeSmartCommand: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}")
-
+                dlog { "executeSmartCommand: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}" }
                 val result = if (useLocal) {
                     val modelFile = modelManager.getInstalledAiModelFile()
                     if (modelFile != null && modelFile.exists() && !aiEngine.isModelLoaded()) {
@@ -4728,12 +4736,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     aiEngine.polishWithPrompt(fullPrompt)
                 } else {
                     val polishService = typelessEngine?.getPolishService()
-                    Log.d("Cesia", "executeSmartCommand: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}")
+                    dlog { "executeSmartCommand: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}" }
                     polishService?.polishWithPrompt(fullPrompt)
                 }
 
-                Log.d("Cesia", "executeSmartCommand: result=${result?.take(100) ?: "NULL"}, resultIsNull=${result == null}")
-
+                dlog { "executeSmartCommand: result=${result?.take(100) ?: "NULL"}, resultIsNull=${result == null}" }
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
                     if (result != null && result.isNotEmpty() && result != "null") {
@@ -4769,7 +4776,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      *  支持多个 API Key：优先用当前选中的 key，失败后依次尝试历史记录里的其他 key（避免“只能1条/新键顶旧键”）
      */
     private fun performSearXNGSearch(query: String): String {
-        Log.d("Cesia", "TavilySearch: start, query=$query")
+        dlog { "TavilySearch: start, query=$query" }
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         val activeKey = prefs.getString("tavily_api_key", "") ?: ""
         val historyKeys = prefs.getString("tavily_key_history", "")?.split("||")
@@ -4806,7 +4813,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     .build()
                 val response = client.newCall(request).execute()
                 val code = response.code
-                Log.d("Cesia", "TavilySearch[$idx]: HTTP $code")
+                dlog { "TavilySearch[$idx]: HTTP $code" }
                 if (code == 200) {
                     val json = response.body?.string() ?: ""
                     val results = parseTavilyResults(json)
@@ -4827,7 +4834,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 Log.w("Cesia", "TavilySearch[$idx] failed: ${e.message}")
             }
         }
-        Log.d("Cesia", "TavilySearch: all keys failed or empty")
+        dlog { "TavilySearch: all keys failed or empty" }
         return ""
     }
 
@@ -5002,8 +5009,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 短按星星按钮：执行智能写作 */
     private fun executeSmartWriting() {
         val selectedOptions = getSmartWritingSelection()
-        Log.d("Cesia", "executeSmartWriting: selected=${selectedOptions.size}")
-
+        dlog { "executeSmartWriting: selected=${selectedOptions.size}" }
         if (selectedOptions.isEmpty()) {
             updateStatus("请先设置写作选项")
             return
@@ -5014,21 +5020,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         if (selectedOptions.contains("clipboard")) {
             val clipboardText = getClipboardFirstNonPinned()
-            Log.d("Cesia", "executeSmartWriting: clipboard=${clipboardText.length} chars")
+            dlog { "executeSmartWriting: clipboard=${clipboardText.length} chars" }
             if (clipboardText.isNotEmpty()) {
                 contextParts.add("参考内容：\n$clipboardText")
             }
         }
         if (selectedOptions.contains("local_text")) {
             val localTextContent = readLocalTextFile()
-            Log.d("Cesia", "executeSmartWriting: local_text=${localTextContent.length} chars")
+            dlog { "executeSmartWriting: local_text=${localTextContent.length} chars" }
             if (localTextContent.isNotEmpty()) {
                 contextParts.add("本地文本：\n$localTextContent")
             }
         }
         if (selectedOptions.contains("rss_cache")) {
             val rssCache = RssFetchManager.readCache(this@CesiaInputMethod)
-            Log.d("Cesia", "executeSmartWriting: rss_cache=${rssCache.length} chars")
+            dlog { "executeSmartWriting: rss_cache=${rssCache.length} chars" }
             if (rssCache.isNotBlank()) {
                 contextParts.add("RSS缓存：\n$rssCache")
             }
@@ -5052,15 +5058,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val fullContext = contextParts.joinToString("\n\n")
         val prompt = "请基于以下语境进行智能写作：\n\n$fullContext\n\n当前文本：\n$textBefore\n\n请续写或优化："
 
-        Log.d("Cesia", "executeSmartWriting: prompt length=${prompt.length}")
-
+        dlog { "executeSmartWriting: prompt length=${prompt.length}" }
         isAiProcessing = true
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
                 // 根据本地/云端模式选择执行路径
                 val useLocal = isLocalPolishMode() && modelManager.hasAiModel()
-                Log.d("Cesia", "executeSmartWriting: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}")
-
+                dlog { "executeSmartWriting: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}" }
                 val result = if (useLocal) {
                     // 本地 MNN 推理
                     val modelFile = modelManager.getInstalledAiModelFile()
@@ -5072,11 +5076,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 } else {
                     // 云端 OpenRouter
                     val polishService = typelessEngine?.getPolishService()
-                    Log.d("Cesia", "executeSmartWriting: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}")
+                    dlog { "executeSmartWriting: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}" }
                     polishService?.polishWithPrompt(prompt)
                 }
 
-                Log.d("Cesia", "executeSmartWriting: result=${result?.take(80) ?: "null"}, isNullOrEmpty=${result.isNullOrEmpty()}")
+                dlog { "executeSmartWriting: result=${result?.take(80) ?: "null"}, isNullOrEmpty=${result.isNullOrEmpty()}" }
                 withContext(Dispatchers.Main) {
                     isAiProcessing = false
                     if (result != null && result.isNotEmpty()) {
@@ -6297,22 +6301,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun polishRecognizedText(text: String) {
         isProcessingResult = true
         val useLocalPolish = isLocalPolishMode() && modelManager.hasAiModel()
-        Log.d("Cesia", "polishRecognizedText: text='${text.take(50)}', useLocalPolish=$useLocalPolish, cloudMode=$cloudMode, isVoiceLocked=$isVoiceLocked")
-
+        dlog { "polishRecognizedText: text='${text.take(50)}', useLocalPolish=$useLocalPolish, cloudMode=$cloudMode, isVoiceLocked=$isVoiceLocked" }
         if (useLocalPolish) {
-            Log.d("Cesia", "polishRecognizedText: 走本地润色 (MNN)")
+            dlog { "polishRecognizedText: 走本地润色 (MNN)" }
             polishWithLocalAi(text)
         } else if (cloudMode == CloudMode.CLOUD) {
             // 云端润色（OpenRouter）
-            Log.d("Cesia", "polishRecognizedText: 走云端润色 (OpenRouter)")
+            dlog { "polishRecognizedText: 走云端润色 (OpenRouter)" }
             polishWithCloud(text)
         } else {
             // LOCAL 模式但没有安装 MNN 模型 → 尝试 fallback 云端
             if (!modelManager.hasAiModel()) {
-                Log.d("Cesia", "polishRecognizedText: 本地模型未安装，尝试云端 fallback")
+                dlog { "polishRecognizedText: 本地模型未安装，尝试云端 fallback" }
                 polishWithCloud(text)
             } else {
-                Log.d("Cesia", "polishRecognizedText: 走本地润色 (MNN)")
+                dlog { "polishRecognizedText: 走本地润色 (MNN)" }
                 polishWithLocalAi(text)
             }
         }
@@ -6325,7 +6328,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             "$text\n\n[语法纲要]\n$grammarGuide"
         } else text
         typelessEngine?.polishTextAsync(enhancedText) { finalText ->
-            Log.d("Cesia", "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'")
+            dlog { "polishRecognizedText: 云端润色回调 finalText='${finalText.take(50)}'" }
             isProcessingResult = false
             replaceTextWithPolish(text, finalText, aiUsed = true)
         } ?: run {
@@ -6596,7 +6599,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 否则走云端 PolishService(OpenRouter)。修复：以前只看 hasAiModel()，
                 // 而 Zipformer 语音识别模型也让 hasAiModel()=true，导致误走本地 aiEngine 卡死。
                 val useLocal = isLocalPolishMode() && modelManager.hasAiModel()
-                Log.d("Cesia", "polishWithCommandPrompt: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}")
+                dlog { "polishWithCommandPrompt: useLocal=$useLocal, cloudMode=$cloudMode, hasAiModel=${modelManager.hasAiModel()}" }
                 val result = if (useLocal) {
                     val modelFile = modelManager.getInstalledAiModelFile()
                     if (modelFile != null && modelFile.exists() && !aiEngine.isModelLoaded()) {
@@ -6606,11 +6609,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     aiEngine.polishWithPrompt(prompt)
                 } else {
                     val polishService = typelessEngine?.getPolishService()
-                    Log.d("Cesia", "polishWithCommandPrompt: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}")
+                    dlog { "polishWithCommandPrompt: polishService=${polishService != null}, apiUrl=${polishService?.getApiUrl()?.take(50) ?: "null"}" }
                     polishService?.polishWithPrompt(prompt)
                 }
-                Log.d("Cesia", "polishWithCommandPrompt: result=${result?.take(80) ?: "NULL"}")
-
+                dlog { "polishWithCommandPrompt: result=${result?.take(80) ?: "NULL"}" }
                 withContext(Dispatchers.Main) {
                     isProcessingResult = false
                     if (result != null) {
@@ -7706,13 +7708,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 逐键选音：点击候选栏字母区第 letterIndex 个字母（如 9→wxyz 的第0个 w） */
     private fun onT9SpellLetterClick(letterIndex: Int) {
-        Log.d("Cesia", "spellClick in: letter=$letterIndex pre='$t9SpellPrefix' queue='$t9DigitQueue' consumed=$t9ConsumedLen")
+        dlog { "spellClick in: letter=$letterIndex pre='$t9SpellPrefix' queue='$t9DigitQueue' consumed=$t9ConsumedLen" }
         if (t9SpellPrefix.length >= t9DigitQueue.length) return
         val curDigit = t9DigitQueue[t9SpellPrefix.length]
         val letters = t9Map[curDigit.digitToInt()] ?: return
         if (letterIndex >= letters.length) return
         t9SpellPrefix.append(letters[letterIndex])  // 锁定该位字母
-        Log.d("Cesia", "spellClick out: pre='$t9SpellPrefix'")
+        dlog { "spellClick out: pre='$t9SpellPrefix'" }
         processT9Input()                             // 重算（实时收窄候选）
         // 强制刷新状态栏选音进度（复用正常显示逻辑）：避免 sig 去重跳过导致 236 等组合仍显示数字
         if (keyboardMode == KeyboardMode.NUMBER) {
@@ -8095,8 +8097,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
             val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             loadClipboardHistoryToClassMembers(clipboardMgr)
-            Log.d("Cesia", "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}")
-
+            dlog { "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}" }
             // 初始化过滤（搜索回车后重新弹出时保留已输入过滤词）
             if (!clipboardSearchResuming) {
                 clipboardSearchFilter = ""
@@ -8333,13 +8334,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             popup.setOnDismissListener {
                 cancelSendKeyLongPress()
                 clipboardPopup = null
-                Log.d("Cesia", "clipboardPopup dismissed, clipboardItems.size=${clipboardItems.size}")
+                dlog { "clipboardPopup dismissed, clipboardItems.size=${clipboardItems.size}" }
             }
 
             // 持久化保存（弹窗显示后立即保存当前加载状态）
             saveClipboardHistoryFromClassMembers()
-            Log.d("Cesia", "showClipboardManagerPopup: saved to prefs, clipboardItems.size=${clipboardItems.size}")
-
+            dlog { "showClipboardManagerPopup: saved to prefs, clipboardItems.size=${clipboardItems.size}" }
         } catch (e: Exception) {
             updateStatus("操作失败")
         }
@@ -8353,7 +8353,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
             val historyStr = prefs.getString("history", "") ?: ""
             val favStr = prefs.getString("favorites", "") ?: ""
-            Log.d("Cesia", "loadClipboard: historyStr='${historyStr.take(100)}', favStr='${favStr.take(50)}'")
+            dlog { "loadClipboard: historyStr='${historyStr.take(100)}', favStr='${favStr.take(50)}'" }
             val favSet = if (favStr.isNotEmpty()) favStr.split("\n").toSet() else emptySet()
             val historyTexts = if (historyStr.isNotEmpty()) historyStr.split("\n").filter { it.isNotEmpty() }.toSet() else emptySet()
 
@@ -8403,7 +8403,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (clipboardItems.isEmpty()) {
             clipboardItems.add(ClipboardItem(text = "(剪贴板为空)", isPinned = true, isEmpty = true))
         }
-        Log.d("Cesia", "loadClipboard: result size=${clipboardItems.size}, first3=${clipboardItems.take(3).map { it.text.take(20) }}")
+        dlog { "loadClipboard: result size=${clipboardItems.size}, first3=${clipboardItems.take(3).map { it.text.take(20) }}" }
     }
 
     /** 获取输入法剪贴板第一条内容（系统剪贴板优先），智能写作调用此方法替代 getClipboardFirstNonPinned */
@@ -8857,7 +8857,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
         // 空格键调试日志
         if (primaryCode == 32 && keyboardMode != KeyboardMode.NUMBER && !isAsciiMode) {
-            Log.d("Cesia", "空格键: composing=$composing hasCands=$hasCands cands=${cands.size} isAscii=$isAsciiMode mode=$keyboardMode")
+            dlog { "空格键: composing=$composing hasCands=$hasCands cands=${cands.size} isAscii=$isAsciiMode mode=$keyboardMode" }
         }
 
         // 任何新按键（除空格键外）清除联想状态，确保旧联想词不会残留
@@ -8957,7 +8957,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                     val hadComposing = rimeEngine.isComposing
                     exitAssociationMode()
                     val accepted = rimeEngine.processKey(primaryCode.toChar())
-                    Log.d("Cesia", "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'")
+                    dlog { "中英混输调试: key='${primaryCode.toChar()}' hadComposing=$hadComposing accepted=$accepted nowComposing=${rimeEngine.isComposing} composingText='${rimeEngine.composingText}'" }
                     if (accepted) {
                         // 如果之前没有 composing，且输入后 Rime 产生了 composing，说明是拼音输入
                         // 如果之前没有 composing，且输入后也没有 composing，说明是英文输入
@@ -9628,10 +9628,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             loadUserPhrases()  // 加载用户自建词组库
             // 每次输入法激活时更新语音后端并预加载模型
-            Log.d("Cesia", "onStartInputView: step1 updateVoiceBackend")
+            dlog { "onStartInputView: step1 updateVoiceBackend" }
             modelManager.scanExistingModels()
             updateVoiceBackend()
-            Log.d("Cesia", "onStartInputView: step2 preloadModels")
+            dlog { "onStartInputView: step2 preloadModels" }
             preloadWhisperModel()
             preloadAiModel()
 
@@ -9639,10 +9639,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             registerPhoneStateListener()
 
             // RSS 自动抓取：如果缓存不存在或过期（>1h），后台自动刷新
-            Log.d("Cesia", "onStartInputView: step3 autoRefreshRssCache")
+            dlog { "onStartInputView: step3 autoRefreshRssCache" }
             autoRefreshRssCache()
-            Log.d("Cesia", "onStartInputView: step4 done")
-
+            dlog { "onStartInputView: step4 done" }
             // 🎨 主题按钮：始终显示，不依赖 AI 模型是否下载
             btnTheme?.visibility = View.VISIBLE
 
@@ -9697,11 +9696,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } else true
             if (!cacheExpired) return
             val source = RssFetchManager.getSelectedSource(this) ?: return
-            Log.d("Cesia", "autoRefreshRssCache: cache ${if (cacheFile.exists()) "expired" else "missing"}, fetching ${source.name}")
+            dlog { "autoRefreshRssCache: cache ${if (cacheFile.exists()) "expired" else "missing"}, fetching ${source.name}" }
             voiceEngineScope.launch {
                 try {
                     val success = RssFetchManager.fetchAndCache(this@CesiaInputMethod, source)
-                    Log.d("Cesia", "autoRefreshRssCache: ${if (success) "success" else "failed"}")
+                    dlog { "autoRefreshRssCache: ${if (success) "success" else "failed"}" }
                 } catch (e: Throwable) {
                     Log.w("Cesia", "autoRefreshRssCache error: ${e.message}")
                 }
@@ -10191,7 +10190,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private var statusLines = mutableListOf<String>()
 
     private fun updateStatus(msg: String) {
-        Log.d("Cesia", "updateStatus: msg='$msg', isRecording=$isRecording, lines=${statusLines.size}")
+        dlog { "updateStatus: msg='$msg', isRecording=$isRecording, lines=${statusLines.size}" }
         try {
             if (isRecording) {
                 if (msg.startsWith("🎤") || msg.startsWith("⏳") || msg.startsWith("🔄") || msg.startsWith("")) {
