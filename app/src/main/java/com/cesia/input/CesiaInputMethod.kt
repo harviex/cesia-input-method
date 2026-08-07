@@ -64,6 +64,7 @@ import com.cesia.input.voice.VoiceEngine
 import com.cesia.input.voice.SimulTranslateManager
 import com.cesia.input.engine.ai.SherpaOnnxEngine
 import com.cesia.input.engine.PinyinDictManager
+import com.cesia.input.engine.PinyinMap
 import com.cesia.input.model.ModelDownloadManager
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
@@ -643,133 +644,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         if (f.isEmpty()) return true
         // 1. 直接包含匹配（中文、英文、数字）
         if (text.contains(f, ignoreCase = true)) return true
-        // 2. 拼音匹配：将文本转为拼音首字母和全拼进行匹配
-        val pinyinFirst = toPinyinFirstLetters(text)
-        val pinyinFull = toPinyinFull(text)
+        // 2. 拼音匹配：将文本转为拼音首字母和全拼进行匹配（宽松模式：生僻字跳过不影响整体匹配）
+        val pinyinFirst = PinyinMap.toFirstLettersLoose(text)
+        val pinyinFull = PinyinMap.toFullLoose(text)
         return pinyinFirst.contains(f, ignoreCase = true) || pinyinFull.contains(f, ignoreCase = true)
     }
 
-    /** 将中文转为拼音首字母（如：你好 -> nh） */
-    private fun toPinyinFirstLetters(text: String): String {
-        val sb = StringBuilder()
-        for (c in text) {
-            if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
-                sb.append(c.lowercase())
-            } else if (c.toInt() >= 0x4E00 && c.toInt() <= 0x9FFF) { // 基本汉字范围
-                sb.append(getPinyinFirstLetter(c))
-            }
-        }
-        return sb.toString()
-    }
+    /** 将中文转为拼音首字母（如：你好 -> nh）。造词登记用严格模式：有生僻字查不到即返回空串，
+     *  避免登记半截错码污染用户词库。 */
+    private fun toPinyinFirstLetters(text: String): String = PinyinMap.toFirstLetters(text)
 
-    /** 将中文转为全拼（如：你好 -> nihao） */
-    private fun toPinyinFull(text: String): String {
-        val sb = StringBuilder()
-        for (c in text) {
-            if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
-                sb.append(c.lowercase())
-            } else if (c.toInt() >= 0x4E00 && c.toInt() <= 0x9FFF) {
-                sb.append(getPinyinFull(c))
-            }
-        }
-        return sb.toString()
-    }
+    /** 将中文转为全拼（如：孙珺 -> sunjun）。严格模式，理由同上。 */
+    private fun toPinyinFull(text: String): String = PinyinMap.toFull(text)
 
-    /** 获取单个汉字的拼音首字母 */
-    private fun getPinyinFirstLetter(c: Char): String {
-        // 简单的汉字拼音首字母映射（常用字覆盖）
-        return when (c.toInt()) {
-            in 0x4E00..0x4EFF -> "a" // 一丁七... (简化)
-            in 0x4F00..0x4FFF -> "b"
-            in 0x5000..0x50FF -> "c"
-            in 0x5100..0x51FF -> "d"
-            in 0x5200..0x52FF -> "e"
-            in 0x5300..0x53FF -> "f"
-            in 0x5400..0x54FF -> "g"
-            in 0x5500..0x55FF -> "h"
-            in 0x5600..0x56FF -> "j"
-            in 0x5700..0x57FF -> "k"
-            in 0x5800..0x58FF -> "l"
-            in 0x5900..0x59FF -> "m"
-            in 0x5A00..0x5AFF -> "n"
-            in 0x5B00..0x5BFF -> "o"
-            in 0x5C00..0x5CFF -> "p"
-            in 0x5D00..0x5DFF -> "q"
-            in 0x5E00..0x5EFF -> "r"
-            in 0x5F00..0x5FFF -> "s"
-            in 0x6000..0x60FF -> "t"
-            in 0x6100..0x61FF -> "w"
-            in 0x6200..0x62FF -> "x"
-            in 0x6300..0x63FF -> "y"
-            in 0x6400..0x64FF -> "z"
-            in 0x6500..0x65FF -> "a"
-            in 0x6600..0x66FF -> "b"
-            in 0x6700..0x67FF -> "c"
-            in 0x6800..0x68FF -> "d"
-            in 0x6900..0x69FF -> "e"
-            in 0x6A00..0x6AFF -> "f"
-            in 0x6B00..0x6BFF -> "g"
-            in 0x6C00..0x6CFF -> "h"
-            in 0x6D00..0x6DFF -> "j"
-            in 0x6E00..0x6EFF -> "k"
-            in 0x6F00..0x6FFF -> "l"
-            in 0x7000..0x70FF -> "m"
-            in 0x7100..0x71FF -> "n"
-            in 0x7200..0x72FF -> "o"
-            in 0x7300..0x73FF -> "p"
-            in 0x7400..0x74FF -> "q"
-            in 0x7500..0x75FF -> "r"
-            in 0x7600..0x76FF -> "s"
-            in 0x7700..0x77FF -> "t"
-            in 0x7800..0x78FF -> "w"
-            in 0x7900..0x79FF -> "x"
-            in 0x7A00..0x7AFF -> "y"
-            in 0x7B00..0x7BFF -> "z"
-            in 0x7C00..0x7CFF -> "a"
-            in 0x7D00..0x7DFF -> "b"
-            in 0x7E00..0x7EFF -> "c"
-            in 0x7F00..0x7FFF -> "d"
-            in 0x8000..0x80FF -> "e"
-            in 0x8100..0x81FF -> "f"
-            in 0x8200..0x82FF -> "g"
-            in 0x8300..0x83FF -> "h"
-            in 0x8400..0x84FF -> "j"
-            in 0x8500..0x85FF -> "k"
-            in 0x8600..0x86FF -> "l"
-            in 0x8700..0x87FF -> "m"
-            in 0x8800..0x88FF -> "n"
-            in 0x8900..0x89FF -> "o"
-            in 0x8A00..0x8AFF -> "p"
-            in 0x8B00..0x8BFF -> "q"
-            in 0x8C00..0x8CFF -> "r"
-            in 0x8D00..0x8DFF -> "s"
-            in 0x8E00..0x8EFF -> "t"
-            in 0x8F00..0x8FFF -> "w"
-            in 0x9000..0x90FF -> "x"
-            in 0x9100..0x91FF -> "y"
-            in 0x9200..0x92FF -> "z"
-            in 0x9300..0x93FF -> "a"
-            in 0x9400..0x94FF -> "b"
-            in 0x9500..0x95FF -> "c"
-            in 0x9600..0x96FF -> "d"
-            in 0x9700..0x97FF -> "e"
-            in 0x9800..0x98FF -> "f"
-            in 0x9900..0x99FF -> "g"
-            in 0x9A00..0x9AFF -> "h"
-            in 0x9B00..0x9BFF -> "j"
-            in 0x9C00..0x9CFF -> "k"
-            in 0x9D00..0x9DFF -> "l"
-            in 0x9E00..0x9EFF -> "m"
-            0x9FFF -> "n"
-            else -> ""
-        }
-    }
+    /** 获取单个汉字的拼音首字母（真实读音，来自 assets/pinyin_dict.json） */
+    private fun getPinyinFirstLetter(c: Char): String = PinyinMap.firstLetter(c)
 
-    /** 获取单个汉字的全拼（简化版，返回首字母） */
-    private fun getPinyinFull(c: Char): String {
-        // 简化：返回首字母，实际可接入完整拼音库
-        return getPinyinFirstLetter(c)
-    }
+    /** 获取单个汉字的全拼（真实读音，来自 assets/pinyin_dict.json） */
+    private fun getPinyinFull(c: Char): String = PinyinMap.full(c)
 
     // 初始化标志
     private var isViewInitialized = false
@@ -1001,6 +893,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 预加载 OpenCC 简繁映射：命令词检测(正体模式)与候选显示都依赖它，
         // 提前加载避免在语音命令路径里首次调用才懒加载导致的竞态/空映射。
         OpenCCConverter.load(assets)
+        // 预加载真实汉字拼音表（assets/pinyin_dict.json，16472 字）：
+        // 用户造词登记全拼码/简拼码依赖它。后台加载，不阻塞输入法启动。
+        PinyinMap.preload(this)
     }
 
     /** 封测期：未捕获异常写入本地文件（不联网），便于真机崩溃后回收日志 */
@@ -2548,6 +2443,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (matched.isNotEmpty()) {
                     // 按频次插入：遍历 Rime 候选，在合适位置插入用户词（不破坏整体词频序）
                     allCands = mergeByFrequency(allCands, matched)
+                }
+            }
+        } else if (keyboardMode == KeyboardMode.QWERTY && userPhrases.isNotEmpty() && !isAsciiMode) {
+            // QWERTY 全键盘：用户词组原先完全不注入 —— 组好的词在九宫格能召回、切到全键盘却搜不到。
+            // 这里把当前拼音串转成 T9 数字码后走同一套码前缀匹配（sunjun→786586, sj→75），
+            // 与 addUserPhrase 登记的全拼码/简拼码对齐。
+            val comp = pinyin.replace("'", "").replace(" ", "").lowercase()
+            if (comp.length >= 2 && comp.all { it in 'a'..'z' }) {
+                val compDigits = pinyinToDigits(comp)
+                if (compDigits.isNotEmpty()) {
+                    val matched = userPhrases.filter { (_, entry) ->
+                        entry.codes.any { it.startsWith(compDigits) }
+                    }.toList()
+                        .sortedByDescending { it.second.freq }
+                        .map { it.first }
+                    if (matched.isNotEmpty()) {
+                        allCands = mergeByFrequency(allCands, matched)
+                    }
                 }
             }
         }
@@ -5442,25 +5355,79 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 while (it.hasNext()) {
                     val k = it.next()
                     val v = obj.getString(k)
-                    // 兼容旧格式：仅数字串 -> 频次默认 1
+                    // 格式兼容：
+                    //   新版 "码1|码2|码3,频次"
+                    //   旧版 "主码,频次"
+                    //   更旧 "主码"
                     if (v.contains(",")) {
-                        val parts = v.split(",")
-                        userPhrases[k] = UserPhraseEntry(mutableSetOf(parts[0]), parts[1].toIntOrNull() ?: 1)
+                        val idx = v.lastIndexOf(',')
+                        val codesPart = v.substring(0, idx)
+                        val freq = v.substring(idx + 1).toIntOrNull() ?: 1
+                        val codeSet = codesPart.split("|").filter { c -> c.isNotEmpty() }.toMutableSet()
+                        userPhrases[k] = UserPhraseEntry(codeSet, freq)
                     } else {
                         userPhrases[k] = UserPhraseEntry(mutableSetOf(v), 1)
                     }
                 }
             }
         } catch (_: Exception) {}
+        // 持久化只存主码（见 saveUserPhrases），全拼/简拼码必须在加载后用真实拼音表补回，
+        // 否则重启后「孙珺」只剩原始数字码，输入 sj / sunjun 都召不回。
+        // 拼音表是后台异步加载的，这里等它就绪后再补。
+        rebuildUserPhraseCodesWhenReady()
+    }
+
+    /** 拼音表就绪后，用真实读音为所有用户词补齐全拼码/简拼码（幂等，可重复调用） */
+    private fun rebuildUserPhraseCodesWhenReady() {
+        if (userPhrases.isEmpty()) return
+        if (PinyinMap.isReady) {
+            rebuildUserPhraseCodes()
+            return
+        }
+        // 拼音表尚未加载完：后台轮询等待（不阻塞主线程），就绪后回主线程补码
+        Thread {
+            var waited = 0
+            while (!PinyinMap.isReady && waited < 10000) {
+                try { Thread.sleep(200) } catch (_: InterruptedException) { return@Thread }
+                waited += 200
+            }
+            if (PinyinMap.isReady) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post { rebuildUserPhraseCodes() }
+            }
+        }.apply { priority = Thread.MIN_PRIORITY; isDaemon = true }.start()
+    }
+
+    /**
+     * 用真实拼音表重算所有用户词的全拼码/简拼码。
+     * 同时清洗历史脏数据：旧版 getPinyinFull() 是 Unicode 区间假映射（孙珺→"op"→67），
+     * 登记的全拼/简拼码全是错的，这里按真实读音重算后覆盖。
+     * 原始数字码（用户当初实际按出来的那串）始终保留。
+     */
+    private fun rebuildUserPhraseCodes() {
+        var changed = 0
+        for ((phrase, entry) in userPhrases) {
+            val simplex = toSimplified(phrase)
+            val fullCode = toPinyinFull(simplex).let { if (it.isNotEmpty()) pinyinToDigits(it) else "" }
+            val simpCode = toPinyinFirstLetters(simplex).let { if (it.isNotEmpty()) pinyinToDigits(it) else "" }
+            val before = entry.codes.size
+            if (fullCode.isNotEmpty()) entry.codes.add(fullCode)
+            if (simpCode.isNotEmpty()) entry.codes.add(simpCode)
+            if (entry.codes.size != before) changed++
+        }
+        if (changed > 0) {
+            saveUserPhrases()
+            dlog { "用户词库补码完成: $changed/${userPhrases.size} 条新增全拼/简拼码" }
+        }
     }
 
     private fun saveUserPhrases() {
         try {
             val obj = org.json.JSONObject()
             for ((k, v) in userPhrases) {
-                // 存储格式：主码,频次（其余码运行时反推，无需持久化）
-                val mainCode = v.codes.firstOrNull { it.isNotEmpty() } ?: v.codes.firstOrNull() ?: ""
-                obj.put(k, "$mainCode,${v.freq}")
+                // 存储格式：码1|码2|码3,频次
+                // 原先只存主码一个，而 load 时又没有反推其余码，导致重启后全拼/简拼码永久丢失。
+                val allCodes = v.codes.filter { it.isNotEmpty() }.joinToString("|")
+                obj.put(k, "$allCodes,${v.freq}")
             }
             getSharedPreferences("cesia_dict", MODE_PRIVATE).edit()
                 .putString("user_phrases_json", obj.toString()).apply()
@@ -5489,14 +5456,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
      *  使该词在输入全拼/简拼/任意前缀数字串时都能被匹配到。 */
     private fun addUserPhrase(phrase: String, digits: String) {
         if (phrase.length < 2 || digits.isEmpty()) return
-        // 反推全拼码：转简体后逐字取拼音再转 T9 数字（无 Rime 会话依赖）
+        // 反推全拼码：转简体后逐字取拼音再转 T9 数字（真实读音，来自 PinyinMap）
         val simplex = toSimplified(phrase)
-        val fullPy = toPinyinFull(simplex)        // 全拼：youmajiana
+        val fullPy = toPinyinFull(simplex)        // 全拼：sunjun
         val fullCode = if (fullPy.isNotEmpty()) pinyinToDigits(fullPy) else ""
-        val simpPy = toPinyinFirstLetters(simplex) // 简拼首字母：ymjn
+        val simpPy = toPinyinFirstLetters(simplex) // 简拼首字母：sj
         val simpDigits = if (simpPy.isNotEmpty()) pinyinToDigits(simpPy) else ""
         val codes = mutableSetOf(digits, fullCode, simpDigits).filter { it.isNotEmpty() }.toSet()
+        dlog { "addUserPhrase: '$phrase' digits='$digits' fullPy='$fullPy'->'$fullCode' simpPy='$simpPy'->'$simpDigits' codes=$codes" }
         registerUserPhraseCodes(phrase, codes, 1)
+        // 拼音表尚未加载完时只登记到原始数字码，安排就绪后补齐全拼/简拼码
+        if (!PinyinMap.isReady) rebuildUserPhraseCodesWhenReady()
     }
 
     private fun updateTraditionalButton() {
