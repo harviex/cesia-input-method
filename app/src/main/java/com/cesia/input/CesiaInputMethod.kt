@@ -3409,40 +3409,85 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             updateStatus("无输入框连接")
             return
         }
+        // ===== 选区感知：有选中文字则只改选中部分，无选区则改全文 =====
+        // 实测（2026-08-07 logcat 探针）：popup.setFocusable(false) 下编辑器焦点不丢，
+        // 从按下魔法书到点击命令间隔 9 秒，getSelectedText 与 selStart/selEnd 全程稳定，
+        // 因此无需提前缓存选区，执行时实时读取即可。
+        val selText = try { ic.getSelectedText(0)?.toString() } catch (_: Exception) { null }
+        val ex0 = try { ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) } catch (_: Exception) { null }
+        val selStart = ex0?.selectionStart ?: -1
+        val selEnd = ex0?.selectionEnd ?: -1
+        // 选区有效：非空、起止合法且不相等
+        val hasSelection = !selText.isNullOrEmpty() && selStart >= 0 && selEnd > selStart
+
         val textBefore = try { ic.getTextBeforeCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
         val textAfter = try { ic.getTextAfterCursor(10000, 0)?.toString() ?: "" } catch (_: Exception) { "" }
-        val fullText = textBefore + textAfter
+        // 注意：有选区时 before/after 都不含选中内容，全文需把选中部分拼回中间
+        val fullText = if (hasSelection) textBefore + (selText ?: "") + textAfter else textBefore + textAfter
+        // 送 AI 的文本：有选区只送选中部分
+        val targetText = if (hasSelection) (selText ?: "") else fullText
+
+        Log.i("CesiaSel", "智能修改: hasSelection=$hasSelection sel=[$selStart,$selEnd] " +
+            "targetLen=${targetText.length} fullLen=${fullText.length}")
 
         // 生成类魔法允许空文本，修改类魔法要求有文本
-        if (fullText.isEmpty() && !isGenerationMagic(instruction)) {
-            updateStatus("输入框无文字")
+        if (targetText.isEmpty() && !isGenerationMagic(instruction)) {
+            updateStatus(if (hasSelection) "选中内容为空" else "输入框无文字")
             return
         }
 
         isAiProcessing = true
-        updateStatus("AI正在处理中")
+        updateStatus(if (hasSelection) "AI正在修改选中的${targetText.length}个字" else "AI正在处理中")
         setStatusDot("processing")
         // 使用统一润色入口（自动适配本地/云端）
-        executePolish(fullText, instruction) { result, success ->
+        executePolish(targetText, instruction) { result, success ->
             isAiProcessing = false
-            if (success && result.isNotEmpty() && result != fullText) {
+            if (success && result.isNotEmpty() && result != targetText) {
                 magicHistoryManager?.addRecord(instruction)
                 saveUndoHistory(fullText, instruction)
                 try {
                     if (!isInputViewShown) {
                         updateStatus("键盘已收起，结果未上屏")
                         resetToIdle()
+                    } else if (hasSelection) {
+                        // ===== 局部替换：只覆盖选区，未选中的文字原样保留 =====
+                        val ic2 = currentInputConnection
+                        if (ic2 == null) {
+                            updateStatus("上屏失败")
+                        } else {
+                            // ⚠️ AI 是异步的，这几秒内用户可能改动文本，导致 selStart/selEnd 失效。
+                            // 回写前必须校验该区间文字仍是当初选中的那段，否则会替换到错误位置
+                            // （宁可不改，也绝不能改错地方 / 吃掉别的文字）。
+                            val nowText = try {
+                                ic2.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)?.text?.toString()
+                            } catch (_: Exception) { null }
+                            val stillValid = nowText != null &&
+                                selEnd <= nowText.length &&
+                                nowText.substring(selStart, selEnd) == selText
+                            if (stillValid) {
+                                ic2.beginBatchEdit()
+                                ic2.setSelection(selStart, selEnd)   // 重新选中原区间
+                                ic2.commitText(result, 1)            // 有选区时 commitText 直接替换选区
+                                ic2.endBatchEdit()
+                                resetToIdle()
+                            } else {
+                                Log.w("CesiaSel", "选区已失效，放弃替换: sel=[$selStart,$selEnd] nowLen=${nowText?.length}")
+                                updateStatus("原文已变化，未修改")
+                                resetToIdle()
+                            }
+                        }
                     } else {
-                    val ic2 = currentInputConnection
-                    ic2?.performContextMenuAction(android.R.id.selectAll)
-                    ic2?.commitText(result, 1)
-                    resetToIdle()
+                        // ===== 无选区：保持原有全文替换 =====
+                        val ic2 = currentInputConnection
+                        ic2?.performContextMenuAction(android.R.id.selectAll)
+                        ic2?.commitText(result, 1)
+                        resetToIdle()
                     }
                 } catch (e2: Exception) {
                     Log.e("Cesia", "replaceInputText 异常", e2)
                     updateStatus("上屏失败")
                 }
-            } else if (result == fullText) {
+            } else if (result == targetText) {
                 updateStatus("修改结果与原文相同")
             } else {
                 updateStatus("AI未返回有效结果，请重试")
