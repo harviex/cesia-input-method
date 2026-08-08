@@ -246,6 +246,17 @@
                 android:ellipsize="end" />
 
             <ImageButton
+                android:id="@+id/btn_panel_refresh"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_refresh"
+                android:background="?android:attr/selectableItemBackground"
+                android:scaleType="centerInside"
+                android:padding="2dp"
+                android:contentDescription="刷新新闻"
+                android:visibility="gone" />
+
+            <ImageButton
                 android:id="@+id/btn_panel_close"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
