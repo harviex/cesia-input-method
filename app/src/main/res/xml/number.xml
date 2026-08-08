@@ -12,7 +12,7 @@
     android:verticalGap="4dp">
 
     <Row android:keyHeight="52dp">
-        <Key android:codes="65292" android:keyLabel="" android:popupCharacters="&#x201C;" android:keyEdgeFlags="left"
+        <Key android:codes="65292" android:keyLabel="" android:popupCharacters="&#x201C;&#x201D;" android:keyEdgeFlags="left"
             android:keyWidth="20%p" />
         <Key android:codes="49" android:keyLabel="" android:popupCharacters="1" />
         <Key android:codes="50" android:keyLabel="" android:popupCharacters="2" />

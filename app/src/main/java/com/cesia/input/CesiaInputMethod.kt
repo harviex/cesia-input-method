@@ -282,9 +282,27 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var candidatePanel: LinearLayout
     private lateinit var tvPanelComposing: TextView
     private lateinit var btnPanelClose: ImageButton
-    private lateinit var gvCandidates: GridView
-    private var panelAdapter: ArrayAdapter<String>? = null
+    private lateinit var flCandidates: CesiaFlowLayout
+    private var panelChips: MutableList<TextView> = mutableListOf()
     private var isPanelExpanded = false
+
+    // ===== 候选面板新闻模式（空输入时把下拉面板变成 RSS 阅读器）=====
+    // 设计原则：默认关闭；仅在「面板展开 且 完全无输入」时显示；一有拼音输入立刻切回候选词；
+    // 按需刷新（展开时缓存过期才抓），绝不后台定时轮询，零耗电零流量。
+    /** 当前面板是否处于新闻模式（决定点击行为与列数） */
+    private var isNewsMode = false
+    /** 新闻列表：标题 + 链接 */
+    private var newsItems: List<RssFetchManager.NewsItem> = emptyList()
+    /** 顶栏是否正处于新闻首条展示态（区别于拼音候选，决定点击行为） */
+    private var newsBarActive = false
+    /** 顶栏新闻滚动位置（每次重新进入新闻态推进一条，循环浏览） */
+    private var newsBarIndex = 0
+    /** 上一次 updateCandidateBar 是否处于新闻态（用于判定「切回新闻态」以推进滚动） */
+    private var wasNewsMode = false
+    /** 正在抓取，避免重复请求 */
+    private var isNewsFetching = false
+    /** 缓存有效期：30 分钟内不重复抓取 */
+    private val newsCacheTtlMs = 30 * 60 * 1000L
 
     // ---- HSL 工具函数 ----
     private fun hslOf(color: Int): FloatArray {
@@ -997,6 +1015,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         candidateAdapter = CandidateAdapter(
             onItemClick = { index, _ ->
+                // 新闻态：顶栏首条新闻点击 → 直接打开浏览器
+                if (newsBarActive) { openNewsLink(0); return@CandidateAdapter }
                 if (rimeEngine.hasCandidates || isAssociationMode) {
                     selectCandidateByGlobalIndex(index)
                     // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
@@ -1006,8 +1026,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             },
             onItemLongClick = { view, index, word ->
-                showCandidateLongPressMenu(word, view, index)
-                true
+                if (newsBarActive) { showNewsItemMenu(view, 0); true }
+                else { showCandidateLongPressMenu(word, view, index); true }
             }
         )
         rvCandidates?.adapter = candidateAdapter
@@ -1036,7 +1056,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidatePanel = view.findViewById(R.id.candidate_panel)
         tvPanelComposing = view.findViewById(R.id.tv_panel_composing)
         btnPanelClose = view.findViewById(R.id.btn_panel_close)
-        gvCandidates = view.findViewById(R.id.gv_candidates)
+        flCandidates = view.findViewById(R.id.fl_candidates)
 
         // 初始化键盘
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
@@ -1701,8 +1721,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.textGrayScale = scale
         }
 
-        // 候选栏展开面板（GridView）刷新大小和颜色
-        panelAdapter?.notifyDataSetChanged()
+        // 候选栏展开面板刷新大小和颜色
+        flCandidates.invalidate()
 
         // 底栏按钮图标颜色（深色模式用主题色，避免过亮）
         val iconColor = if (isDarkTheme) themeAccent else scaleGray(baseColor, scale)
@@ -1963,91 +1983,279 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     }
 
     private fun setupCandidatePanel() {
-        // GridView 适配器 — 文字自动缩小以适应格子宽度
-        panelAdapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, mutableListOf()) {
-            // 缓存列宽，首次测量后固定
-            private var columnWidthPx = 0
-            private val minTextSp = 10f
-
-// endregion 主题
-
-// region 候选栏
-            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
-                val tv = super.getView(position, convertView, parent) as TextView
-                tv.gravity = Gravity.CENTER
-                tv.setPadding(2, 6, 2, 6)
-                tv.maxLines = 1
-                tv.ellipsize = android.text.TextUtils.TruncateAt.END
-
-                // 测量列宽
-                if (columnWidthPx == 0) {
-                    val grid = parent as? GridView
-                    columnWidthPx = if (grid != null && grid.numColumns > 0) {
-                        (grid.width - grid.paddingLeft - grid.paddingRight -
-                            (grid.numColumns - 1) * grid.horizontalSpacing) / grid.numColumns
-                    } else {
-                        // 默认按屏幕宽度/5估算
-                        val dm = resources.displayMetrics
-                        (dm.widthPixels * 0.9f / 5).toInt()
-                    }
-                }
-
-                // 基础字号由文字大小档位决定
-                val baseSp = when (textThemeSize) {
-                    0 -> 12f
-                    2 -> 16f
-                    3 -> 18f
-                    else -> 14f
-                }
-                // 自动缩小字号：如果文字宽度超过列宽，按比例缩小
-                val text = getItem(position) ?: ""
-                var size = baseSp
-                if (text.isNotEmpty() && columnWidthPx > 0) {
-                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-                    val paint = tv.paint
-                    while (size > minTextSp && paint.measureText(text) > columnWidthPx) {
-                        size -= 0.5f
-                        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-                    }
-                } else {
-                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-                }
-                tv.setTextColor(scaleGray(unifiedTextColor, textGrayScale))
-
-                return tv
-            }
-        }
-        gvCandidates.adapter = panelAdapter
-
-        // 候选面板纵向懒加载：滚到底部附近时拉下一批 50 候选
-        gvCandidates.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
-            override fun onScroll(view: android.widget.AbsListView?, firstVisible: Int, visible: Int, total: Int) {
-                if (total <= 0) return
-                if (firstVisible + visible >= total - 3) {
-                    if (isAssociationMode) {
-                        loadMoreAssociations()
-                    } else {
-                        loadMoreCandidates()
-                    }
-                }
-            }
-            override fun onScrollStateChanged(view: android.widget.AbsListView?, state: Int) {}
-        })
-
-        // GridView 点击选候选词
-        gvCandidates.setOnItemClickListener { _, _, position, _ ->
-            selectCandidateByGlobalIndex(position)
-            // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
-            if (keyboardMode == KeyboardMode.QWERTY) {
-                rimeEngine.clear()
-            }
-            // 选中后候选面板滚动回顶部（高频词），避免停在当前滚动位置
-            gvCandidates.post { gvCandidates.setSelection(0) }
-        }
+        // 候选面板用流式布局渲染 chip：每个候选词一个 chip，宽随词长自适应（优先格子适配字词），
+        // 长词占更宽格子、短词占窄格子，一行能放几个放几个；文字字号与顶部候选条一致。
 
         // 收起按钮
         btnPanelClose.setOnClickListener {
             collapseCandidatePanel()
+        }
+    }
+
+    /** 字号档位 → 候选面板/顶栏统一基础字号（与 CandidateAdapter 的 15f*scale 对齐） */
+    private fun panelBaseSp(): Float {
+        return when (textThemeSize) {
+            0 -> 13f
+            2 -> 17f
+            3 -> 19f
+            else -> 15f
+        }
+    }
+
+    /** 新建一个候选 chip TextView（流式布局里的一个格子） */
+    private fun makeChip(text: String, fullWidth: Boolean, position: Int, isNews: Boolean): TextView {
+        val dp = resources.displayMetrics.density
+        val tv = TextView(this).apply {
+            layoutParams = ViewGroup.MarginLayoutParams(
+                if (fullWidth) ViewGroup.LayoutParams.MATCH_PARENT
+                else ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            gravity = if (isNews || fullWidth) (Gravity.CENTER_VERTICAL or Gravity.START)
+                      else Gravity.CENTER
+            setPadding((10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt())
+            maxLines = if (isNews || fullWidth) 2 else 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, panelBaseSp())
+            setTextColor(scaleGray(unifiedTextColor, textGrayScale))
+            background = ContextCompat.getDrawable(this@CesiaInputMethod,
+                android.R.drawable.btn_default_small)?.mutate()?.apply {
+                // 浅灰描边底，区分每个候选
+            } ?: null
+            val pad = (4 * dp).toInt()
+            setPadding(pad, (6 * dp).toInt(), pad, (6 * dp).toInt())
+            this.text = text
+            isClickable = true
+            isFocusable = true
+            val ctx = this
+            setOnClickListener {
+                if (isNews) openNewsLink(position)
+                else {
+                    selectCandidateByGlobalIndex(position)
+                    if (keyboardMode == KeyboardMode.QWERTY) rimeEngine.clear()
+                }
+            }
+            setOnLongClickListener {
+                if (isNews) showNewsItemMenu(ctx, position)
+                false
+            }
+        }
+        return tv
+    }
+
+    /** 把候选词列表渲染进面板（流式 chip，宽随词长） */
+    private fun renderCandidatesToPanel(words: List<String>) {
+        flCandidates.removeAllViews()
+        panelChips.clear()
+        val ctx = this
+        words.forEachIndexed { idx, w ->
+            val chip = makeChip(w, fullWidth = false, position = idx, isNews = false)
+            flCandidates.addView(chip)
+            panelChips.add(chip)
+        }
+        // 单条太宽放不进一行时自动缩字（仅在整行只放得下它本身时触发，优先格子适配）
+        postShrinkChipsIfNeeded()
+    }
+
+    /** 当某个 chip 自身宽度就超过一行可容纳宽度时，按比例缩小该 chip 文字（最后手段） */
+    private fun postShrinkChipsIfNeeded() {
+        flCandidates.post {
+            val avail = flCandidates.width - flCandidates.paddingLeft - flCandidates.paddingRight
+            if (avail <= 0) return@post
+            for (chip in panelChips) {
+                val w = chip.measuredWidth
+                if (w > avail && w > 0) {
+                    val ratio = avail.toFloat() / w
+                    val cur = chip.textSize
+                    val target = cur * ratio * 0.96f
+                    chip.setTextSize(TypedValue.COMPLEX_UNIT_PX, target.coerceAtLeast(10f * resources.displayMetrics.density))
+                    chip.maxLines = 1
+                }
+            }
+        }
+    }
+
+    /** 新闻列表渲染进面板（每条独占一行，字号与候选条一致） */
+    private fun renderNewsList() {
+        if (newsItems.isEmpty()) return
+        flCandidates.removeAllViews()
+        panelChips.clear()
+        newsItems.forEachIndexed { idx, item ->
+            val chip = makeChip("${idx + 1}. ${item.title}", fullWidth = true, position = idx, isNews = true)
+            flCandidates.addView(chip)
+            panelChips.add(chip)
+        }
+    }
+
+    // ===================== 候选面板新闻模式 =====================
+
+    /** 新闻模式总开关（设置页控制，默认关闭 —— 输入法联网属敏感操作，须用户主动开启） */
+    private fun isNewsPanelEnabled(): Boolean =
+        getSharedPreferences("cesia_settings", MODE_PRIVATE).getBoolean("news_panel_enabled", false)
+
+    /** 读取 RSS 缓存中的新闻条目 */
+    private fun readCachedNews(): List<RssFetchManager.NewsItem> {
+        return try {
+            val prefs = getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+            val json = prefs.getString("cached_items", "") ?: ""
+            if (json.isEmpty()) return emptyList()
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val t = o.optString("title", "")
+                val l = o.optString("link", "")
+                if (t.isEmpty()) null else RssFetchManager.NewsItem(t, l)
+            }
+        } catch (e: Exception) {
+            Log.w("CesiaNews", "读取新闻缓存失败: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * 进入新闻模式并展示。按需刷新：缓存超过 TTL 才联网抓取，否则直接用缓存。
+     * 绝不后台定时轮询 —— 只有用户展开面板且无输入时才可能触发一次网络请求。
+     */
+    private fun showNewsInPanel() {
+        isNewsMode = true
+        newsItems = readCachedNews()
+        renderNewsList()
+
+        // 缓存过期（或为空）才抓取
+        val prefs = getSharedPreferences("cesia_rss_sources", MODE_PRIVATE)
+        val cachedTime = prefs.getLong("cached_time", 0L)
+        val expired = System.currentTimeMillis() - cachedTime > newsCacheTtlMs
+        if ((newsItems.isEmpty() || expired) && !isNewsFetching) {
+            fetchNewsAsync()
+        }
+    }
+
+    /** 后台抓取 RSS，完成后回主线程刷新（仍在新闻模式才刷，避免用户已开始打字被打断） */
+    private fun fetchNewsAsync() {
+        val source = RssFetchManager.getSelectedSource(this)
+        if (source == null) {
+            if (newsItems.isEmpty()) {
+                flCandidates.removeAllViews()
+                panelChips.clear()
+                val chip = makeChip("未选择新闻源，请到设置 → 新闻源管理选择", fullWidth = true, position = 0, isNews = true)
+                flCandidates.addView(chip)
+                panelChips.add(chip)
+            }
+            return
+        }
+        isNewsFetching = true
+        if (newsItems.isEmpty()) {
+            flCandidates.removeAllViews()
+            panelChips.clear()
+            val chip = makeChip("正在加载 ${source.name} …", fullWidth = true, position = 0, isNews = true)
+            flCandidates.addView(chip)
+            panelChips.add(chip)
+        }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val ok = try {
+                RssFetchManager.fetchAndCache(this@CesiaInputMethod, source)
+            } catch (e: Exception) {
+                Log.w("CesiaNews", "抓取失败: ${e.message}"); false
+            }
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                isNewsFetching = false
+                // 用户可能已经开始打字（isNewsMode=false），此时不要抢占候选栏
+                if (!isNewsMode) return@withContext
+                if (ok) {
+                    newsItems = readCachedNews()
+                    renderNewsList()
+                    // 抓到后同步刷新顶栏首条（若当前仍处于无输入新闻态）
+                    if (!rimeEngine.isComposing && rimeEngine.composingText.isEmpty()) renderNewsToBar()
+                } else if (newsItems.isEmpty()) {
+                    flCandidates.removeAllViews()
+                    panelChips.clear()
+                    val chip = makeChip("加载失败，请检查网络后重新展开", fullWidth = true, position = 0, isNews = true)
+                    flCandidates.addView(chip)
+                    panelChips.add(chip)
+                }
+            }
+        }
+    }
+
+    /** 退出新闻模式，恢复候选词的流式布局 */
+    private fun exitNewsMode() {
+        if (!isNewsMode) return
+        isNewsMode = false
+        // 退出时清掉顶栏可能残留的新闻首条，交回候选词渲染
+        if (rvCandidates != null && newsBarActive) {
+            candidateAdapter?.updateData(emptyList())
+            newsBarActive = false
+        }
+    }
+
+    /** 把新闻渲染到顶部候选条（横向条），点击即打开浏览器。
+     *  滚动展示：每次「从无输入新闻态之外切回新闻态」时推进一条，循环浏览全部新闻。 */
+    private fun renderNewsToBar() {
+        if (rvCandidates == null || candidateAdapter == null) return
+        // 延迟读缓存（首次进可能缓存还在抓，fetchNewsAsync 完成后会再次 updateCandidateBar → 这里也会再被调用）
+        if (newsItems.isEmpty()) newsItems = readCachedNews()
+        val first = newsItems.firstOrNull()
+        if (first == null) {
+            // 还没抓到：先显示「正在加载」，抓到后 fetch 回调会再次刷新
+            if (!newsBarActive) {
+                candidateAdapter?.updateData(listOf("正在加载新闻…"))
+                newsBarActive = true
+            }
+            return
+        }
+        val item = newsItems[newsBarIndex % newsItems.size]
+        candidateAdapter?.updateData(listOf(item.title))
+        newsBarActive = true
+    }
+
+    /** 推进顶栏新闻滚动位置（循环），供每次重新进入新闻态时调用 */
+    private fun advanceNewsBarIndex() {
+        if (newsItems.isNotEmpty()) newsBarIndex = (newsBarIndex + 1) % newsItems.size
+    }
+
+    /** 顶部候选条点击（新闻态）：打开第一条新闻链接 */
+    private fun openNewsLink(position: Int) {
+        val item = newsItems.getOrNull(position) ?: return
+        if (item.link.isEmpty()) { updateStatus("该条目无链接"); return }
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(item.link)).apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)   // IME 无 Activity 栈，必须加
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("CesiaNews", "打开链接失败: ${e.message}")
+            updateStatus("无法打开链接")
+        }
+    }
+
+    /** 新闻条目长按：复制标题 / 复制链接 / 标题上屏 */
+    private fun showNewsItemMenu(anchor: android.view.View, position: Int) {
+        val item = newsItems.getOrNull(position) ?: return
+        val menu = android.widget.PopupMenu(this, anchor)
+        menu.menu.add(0, 0, 0, "复制标题")
+        menu.menu.add(0, 1, 1, "复制链接")
+        menu.menu.add(0, 2, 2, "标题上屏")
+        menu.setOnMenuItemClickListener { mi ->
+            when (mi.itemId) {
+                0 -> { copyToClipboard(item.title); updateStatus("已复制标题") }
+                1 -> {
+                    if (item.link.isEmpty()) updateStatus("该条目无链接")
+                    else { copyToClipboard(item.link); updateStatus("已复制链接") }
+                }
+                2 -> currentInputConnection?.commitText(item.title, 1)
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun copyToClipboard(text: String) {
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("cesia", text))
+        } catch (e: Exception) {
+            Log.w("CesiaNews", "复制失败: ${e.message}")
         }
     }
 
@@ -2056,14 +2264,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidatePanel.visibility = View.VISIBLE
         btnCandidateExpand.setImageResource(R.drawable.triangle_gray_up)
         updateCandidateBar()
-        // 每次展开都回到顶部：GridView 会复用上次滚动位置，不重置会停在上次滚到的地方
-        gvCandidates.post { gvCandidates.setSelection(0) }
+        // 每次展开都回到顶部：滚动到面板顶部
+        flCandidates.scrollTo(0, 0)
     }
 
     private fun collapseCandidatePanel() {
         isPanelExpanded = false
         candidatePanel.visibility = View.GONE
         btnCandidateExpand.setImageResource(R.drawable.triangle_gray_down)
+        exitNewsMode()   // 收起面板即退出新闻模式，避免下次展开时列数/点击行为串台
     }
 
     /** 通过全局索引选择候选词（自动翻页选中） */
@@ -2351,7 +2560,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         updateSpellBar()
                         // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
                         updateCandidateBar()
-                        gvCandidates?.setSelection(0)
+                        flCandidates.scrollTo(0, 0)
                     }
                 }
             }
@@ -2414,7 +2623,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateBarKeep = false
         candidateAdapter?.updateData(emptyList())
         rvCandidates?.scrollToPosition(0)
-        if (isPanelExpanded) collapseCandidatePanel()
+        // 新闻开关打开且面板已展开：保留面板（新闻模式），不要收起。
+        // 否则每次 updateCandidateBar() 都会走到无输入分支并调 clearCandidateContent()，
+        // 它又强制 collapse → 刚展开的面板被立刻收起，showNewsInPanel() 永远拿不到 isPanelExpanded=true。
+        if (isPanelExpanded && !isNewsPanelEnabled()) collapseCandidatePanel()
         candidateBar.visibility = View.VISIBLE
         updateStatus(statusIdleText)
     }
@@ -2490,7 +2702,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val sig = ((composing.hashCode() * 31 + pinyin.hashCode()) * 31 + allCands.hashCode()) xor
             ((t9SpellPrefix.hashCode() * 31 + isTraditional.hashCode() * 31
                 + isPanelExpanded.hashCode() * 31 + isAssociationMode.hashCode() * 31
-                + associationCandidates.hashCode()))
+                + associationCandidates.hashCode() + isNewsMode.hashCode()))
         if (sig == lastCandSig) return
         lastCandSig = sig
 
@@ -2507,8 +2719,30 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             if (!candidateBarKeep) {
                 clearCandidateContent()
             }
+            if (isNewsPanelEnabled()) {
+                // 新闻模式：面板展开则面板显示全部新闻（单列）；顶栏始终显示一条（可点击开浏览器）
+                // 显式把候选条置为可见：绕过 candidateBarKeep（否则此前"默认不显示候选栏"的偏好
+                // 会让 clearCandidateContent 跳过、条一直是 GONE，新闻首条永远不显示）。
+                // 仅当「上一次不是新闻态」时推进滚动索引：打字→清空、联想结束等每一次切回都换一条，循环浏览。
+                if (!wasNewsMode) advanceNewsBarIndex()
+                wasNewsMode = true
+                isNewsMode = true
+                candidateBar.visibility = View.VISIBLE
+                if (isPanelExpanded) showNewsInPanel()
+                renderNewsToBar()
+                btnCandidateExpand?.visibility = View.VISIBLE
+            } else {
+                wasNewsMode = false
+                exitNewsMode()
+                btnCandidateExpand?.visibility = View.GONE
+            }
             return
         }
+
+        // 有输入 → 立刻退出新闻模式，候选词优先（输入法本职不能被新闻干扰）
+        exitNewsMode()
+        // 打字时展开按钮交给候选数逻辑（下方 count 分支），这里先隐藏避免残留新闻态按钮
+        if (!isPanelExpanded) btnCandidateExpand?.visibility = View.GONE
 
         // 有输入时
         setCandidateBarVisible(true)
@@ -2535,10 +2769,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             btnCandidateExpand.visibility = if (associationCandidates.size > 4) View.VISIBLE else View.GONE
             if (isPanelExpanded) {
                 tvPanelComposing.text = "💡$associationPrefix"
-                val displayPanel = displayCands
-                panelAdapter?.clear()
-                panelAdapter?.addAll(displayPanel)
-                panelAdapter?.notifyDataSetChanged()
+                renderCandidatesToPanel(displayCands)
             }
             return
         }
@@ -2565,9 +2796,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val filteredPanel = allCands
             val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
             val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
-            panelAdapter?.clear()
-            panelAdapter?.addAll(reorderedPanel)
-            panelAdapter?.notifyDataSetChanged()
+            renderCandidatesToPanel(reorderedPanel)
         }
     }
 
@@ -2591,9 +2820,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 面板 reorder 用简体 key（与点击反查一致），仅显示层转繁
             val reorderedPanel = CandidatePrefs.reorder(this, merged)
             val displayPanel = if (isTraditional) reorderedPanel.map { toTraditional(it) } else reorderedPanel
-            panelAdapter?.clear()
-            panelAdapter?.addAll(displayPanel)
-            panelAdapter?.notifyDataSetChanged()
+            renderCandidatesToPanel(displayPanel)
         }
     }
 
@@ -2618,9 +2845,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         candidateAdapter?.updateData(displayCands)
         if (isPanelExpanded) {
             tvPanelComposing.text = "💡$associationPrefix"
-            panelAdapter?.clear()
-            panelAdapter?.addAll(displayCands)
-            panelAdapter?.notifyDataSetChanged()
+            renderCandidatesToPanel(displayCands)
         }
     }
 
@@ -7147,7 +7372,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     private fun toggleSymbolKeyboard() {
         if (keyboardMode == KeyboardMode.SYMBOL_CN) {
-            switchToKeyboard(KeyboardMode.QWERTY)
+            // 从符号键盘返回：回到进入符号键盘前的键盘（T9 或全键盘），而非固定回全键盘
+            switchToKeyboard(prevKeyboardMode)
+            if (prevKeyboardMode == KeyboardMode.NUMBER) resetNumberKeyboardState()
         } else { switchToKeyboard(KeyboardMode.SYMBOL_CN) }
     }
 

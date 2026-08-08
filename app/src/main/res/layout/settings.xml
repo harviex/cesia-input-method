@@ -523,6 +523,23 @@
                     android:text="今天的中国新闻" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- 候选栏新闻阅读（默认关闭：输入法联网属敏感操作，须用户主动开启） -->
+            <CheckBox
+                android:id="@+id/check_news_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:textSize="13sp"
+                android:text="候选栏下拉显示新闻（无输入时）" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:textSize="11sp"
+                android:textColor="#888888"
+                android:text="开启后，未输入文字时展开候选栏即显示所选新闻源标题；单击用浏览器打开，长按可复制或上屏。仅在展开时按需联网（30分钟内用缓存），不会后台定时刷新。" />
+
             <!-- 新闻源管理（左） + 历史记录（右） -->
             <LinearLayout
                 android:layout_width="match_parent"

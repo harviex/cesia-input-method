@@ -371,6 +371,16 @@ class SettingsActivity : AppCompatActivity() {
             btnNewsSources = findViewById(R.id.btn_news_sources)
         } catch (_: Exception) {}
 
+        // 候选栏新闻阅读开关（默认关闭 —— 输入法联网敏感，须用户主动开启）
+        try {
+            val cbNews = findViewById<android.widget.CheckBox>(R.id.check_news_panel)
+            val sp = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            cbNews?.isChecked = sp.getBoolean("news_panel_enabled", false)
+            cbNews?.setOnCheckedChangeListener { _, checked ->
+                sp.edit().putBoolean("news_panel_enabled", checked).apply()
+            }
+        } catch (_: Exception) {}
+
         // 可编辑标题
         try {
             etSettingsTitle = findViewById(R.id.et_settings_title)

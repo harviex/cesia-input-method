@@ -256,20 +256,14 @@
                 android:contentDescription="收起" />
         </LinearLayout>
 
-        <!-- 候选词网格 5列，超出可滚动，文字自动缩小 -->
-        <GridView
-            android:id="@+id/gv_candidates"
+        <!-- 候选词流式布局：按词宽自动换行，长词占更宽格子，优先格子适配字词 -->
+        <com.cesia.input.CesiaFlowLayout
+            android:id="@+id/fl_candidates"
             android:layout_width="match_parent"
             android:layout_height="180dp"
-            android:numColumns="5"
-            android:verticalSpacing="2dp"
-            android:horizontalSpacing="2dp"
-            android:padding="4dp"
-            android:stretchMode="columnWidth"
-            android:gravity="center"
-            android:listSelector="?android:attr/selectableItemBackground"
+            android:padding="6dp"
             android:scrollbars="vertical"
-            android:fastScrollEnabled="false" />
+            android:fadeScrollbars="false" />
     </LinearLayout>
 
     <!-- 键盘区域（FrameLayout 包装，供候选音覆盖层叠加） -->
