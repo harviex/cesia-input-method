@@ -1037,6 +1037,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 else { showCandidateLongPressMenu(word, view, index); true }
             }
         )
+        candidateAdapter?.onInteract = { stopNewsMarquee() }   // 顶栏点击/长按即停止新闻滚动
         rvCandidates?.adapter = candidateAdapter
         rvCandidates?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
             this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
@@ -1648,6 +1649,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 候选栏文字色（字/词）保持原固定色，不随主题变（仅候选音随主题变）
 
+        // 若候选下拉菜单正展开，立即按最新主题/灰度重建（背景灰度、按键灰度、文字灰度、字号、主题色同步生效）
+        if (::candidatePanel.isInitialized && candidatePanel.visibility == View.VISIBLE) {
+            if (isNewsMode) renderNewsList() else updateCandidateBar()
+        }
+
         // 持久化
         saveThemeColors()
     }
@@ -1692,11 +1698,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.updateTextColor(isDarkTheme)
         }
 
-        // 候选面板（下拉菜单）背景 + 滚动容器 + 拼音标题色，跟随暗色/亮色
-        val panelBg = if (isDarkTheme) 0xFF1E2024.toInt() else 0xFFF8F8F8.toInt()
+        // 候选面板（下拉菜单）背景 + 滚动容器 + 拼音标题色，分别跟随背景灰度 / 主题色
+        val panelBg = if (isDarkTheme) 0xFF1A1A2E.toInt() else colorGray(themeBgGrayBase)
         candidatePanel.setBackgroundColor(panelBg)
         scrollCandidates.setBackgroundColor(panelBg)
-        tvPanelComposing.setTextColor(if (isDarkTheme) 0xFF81D8D0.toInt() else 0xFF4488FF.toInt())
+        tvPanelComposing.setTextColor(themeAccent)
     }
 
     /** 将文字灰阶缩放应用到各 UI 组件（统一基准颜色） */
@@ -1735,10 +1741,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.textGrayScale = scale
         }
 
-        // 候选栏展开面板刷新大小和颜色
-        flCandidates.invalidate()
-        scrollCandidates.invalidate()
-        // 主题/暗色切换后重建 chip：让边框描边色(主题色)与填充(暗/亮)即时刷新
+        // 候选栏展开面板：直接遍历现有 chip 实时改文字色与背景填充（不依赖重建，做到像背景灰度一样实时）
+        if (::flCandidates.isInitialized) {
+            val chipTextColor = scaleGray(baseColor, scale)
+            val chipFill = if (isDarkTheme) 0xFF2A2C30.toInt() else currentKeyBg
+            for (chip in panelChips) {
+                chip.setTextColor(chipTextColor)
+                val bg = chip.background
+                if (bg is GradientDrawable) {
+                    bg.setColor(chipFill)
+                    bg.setStroke((1 * resources.displayMetrics.density).toInt(), themeAccent)
+                }
+            }
+            flCandidates.invalidate()
+            scrollCandidates.invalidate()
+        }
+        // 主题/暗色切换后重建 chip：让边框描边色(主题色)与填充(暗/亮)即时刷新（兜底）
         if (candidatePanel.visibility == View.VISIBLE) {
             if (isNewsMode) renderNewsList() else updateCandidateBar()
         }
@@ -2024,12 +2042,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 新建一个候选 chip TextView（流式布局里的一个格子） */
     private fun makeChip(text: String, fullWidth: Boolean, position: Int, isNews: Boolean): TextView {
         val dp = resources.displayMetrics.density
-        // 动态生成 chip 背景：跟随暗色模式 + 主题色描边，圆角小一些
+        // 动态生成 chip 背景：填充跟随按键灰度，描边跟随主题色
+        val chipFill = if (isDarkTheme) 0xFF2A2C30.toInt() else currentKeyBg
         val chipBg = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 6f * dp   // 圆角缩小（之前 14dp 太圆）
-            // 填充：暗色模式用深灰，亮色模式用浅灰
-            setColor(if (isDarkTheme) 0xFF2A2C30.toInt() else 0xFFF2F3F5.toInt())
+            // 填充：跟随按键灰度（与键盘按键同款灰），让候选格背景受按键灰度控制
+            setColor(chipFill)
             // 描边：跟随主题色（Tiffany 等），让边框随主体色变换
             setStroke((1 * dp).toInt(), themeAccent)
         }
@@ -2055,7 +2074,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             isClickable = true
             isFocusable = true
             val ctx = this
+            var longPressed = false
             setOnClickListener {
+                if (longPressed) { longPressed = false; return@setOnClickListener }  // 长按已处理，吞掉紧随的单击
                 if (isNews) openNewsLink(position)
                 else {
                     selectCandidateByGlobalIndex(position)
@@ -2063,8 +2084,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             }
             setOnLongClickListener {
-                if (isNews) showNewsItemMenu(ctx, position)
-                false
+                if (isNews) { showNewsItemMenu(ctx, position); longPressed = true }
+                true   // 消费长按，阻止后续单击触发打开链接
             }
         }
         return tv
@@ -2258,7 +2279,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     return
                 }
                 val shown = newsMarqueeTitle.substring(newsMarqueeOffset)
-                candidateAdapter?.updateData(listOf(shown))
+                candidateAdapter?.setCurrentText(shown)   // 直接改文本，不重绑，保留长按状态
                 newsMarqueeOffset++
                 newsMarqueeHandler.postDelayed(this, 220)
             }

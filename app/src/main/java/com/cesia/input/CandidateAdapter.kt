@@ -21,6 +21,10 @@ class CandidateAdapter(
     var textScaleFactor: Float = 1f
     var textColor: Int = Color.parseColor("#333333")
     var newsMode: Boolean = false   // 新闻态：顶栏标题过长时跑马灯滚动
+    // 当前绑定到的 TextView 引用，供 marquee 直接改文本（不重绑，保留 longPressed 状态）
+    private var lastBoundView: TextView? = null
+    // 当前展示文本（marquee 滚动中可能被截短），供点击回调取真实文字
+    private var currentText: String = ""
 
     inner class ViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
 
@@ -60,13 +64,23 @@ class CandidateAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val text = items[position]
+        currentText = text
+        lastBoundView = holder.textView
         holder.textView.text = text
         holder.textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * textScaleFactor)
         holder.textView.setTextColor(textColor)
-        holder.textView.setOnClickListener { onItemClick(position, text) }
+        var longPressed = false
+        holder.textView.setOnClickListener {
+            if (longPressed) { longPressed = false; return@setOnClickListener }
+            onInteract?.invoke()   // 交互即停止 marquee 滚动
+            onItemClick(position, currentText)
+        }
         if (onItemLongClick != null) {
             holder.textView.setOnLongClickListener {
-                onItemLongClick.invoke(holder.textView, position, text)
+                onInteract?.invoke()   // 交互即停止 marquee 滚动
+                val consumed = onItemLongClick.invoke(holder.textView, position, currentText)
+                if (consumed) longPressed = true
+                consumed
             }
         } else {
             holder.textView.setOnLongClickListener(null)
@@ -80,4 +94,13 @@ class CandidateAdapter(
         items.addAll(newItems)
         notifyDataSetChanged()
     }
+
+    /** marquee 滚动时直接改文本（不 notifyDataSetChanged，避免重绑重置 longPressed 状态） */
+    fun setCurrentText(text: String) {
+        currentText = text
+        lastBoundView?.text = text
+    }
+
+    /** 点击/长按触发时回调，用于停止 marquee 滚动（由宿主设置） */
+    var onInteract: (() -> Unit)? = null
 }
