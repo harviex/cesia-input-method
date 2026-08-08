@@ -2,7 +2,8 @@ package com.cesia.input
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.drawable.Drawable
+import android.text.TextUtils
+import android.text.TextUtils.TruncateAt
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -19,6 +20,7 @@ class CandidateAdapter(
     private val items = mutableListOf<String>()
     var textScaleFactor: Float = 1f
     var textColor: Int = Color.parseColor("#333333")
+    var newsMode: Boolean = false   // 新闻态：顶栏标题过长时跑马灯滚动
 
     inner class ViewHolder(val textView: TextView) : RecyclerView.ViewHolder(textView)
 
@@ -26,7 +28,8 @@ class CandidateAdapter(
         val ctx = parent.context
         val tv = TextView(ctx).apply {
             layoutParams = RecyclerView.LayoutParams(
-                RecyclerView.LayoutParams.WRAP_CONTENT,
+                if (newsMode) RecyclerView.LayoutParams.MATCH_PARENT
+                else RecyclerView.LayoutParams.WRAP_CONTENT,
                 RecyclerView.LayoutParams.MATCH_PARENT
             )
             gravity = Gravity.CENTER_VERTICAL
@@ -46,6 +49,11 @@ class CandidateAdapter(
             isSingleLine = true
             isClickable = true
             isFocusable = true
+            if (newsMode) {
+                ellipsize = TextUtils.TruncateAt.MARQUEE
+                marqueeRepeatLimit = -1   // 无限循环
+                isSelected = true
+            }
         }
         return ViewHolder(tv)
     }

@@ -45,6 +45,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import android.text.TextUtils
@@ -283,6 +284,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var tvPanelComposing: TextView
     private lateinit var btnPanelClose: ImageButton
     private lateinit var flCandidates: CesiaFlowLayout
+    private lateinit var scrollCandidates: ScrollView
     private var panelChips: MutableList<TextView> = mutableListOf()
     private var isPanelExpanded = false
 
@@ -299,6 +301,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var newsBarIndex = 0
     /** 上一次 updateCandidateBar 是否处于新闻态（用于判定「切回新闻态」以推进滚动） */
     private var wasNewsMode = false
+    /** 顶栏新闻「逐字左删」跑马灯：从左侧逐字删，删空后回到完整标题循环 */
+    private val newsMarqueeHandler = Handler(Looper.getMainLooper())
+    private var newsMarqueeRunnable: Runnable? = null
+    private var newsMarqueeTitle = ""      // 当前新闻完整标题
+    private var newsMarqueeOffset = 0      // 已从左删除的字符数
     /** 正在抓取，避免重复请求 */
     private var isNewsFetching = false
     /** 缓存有效期：30 分钟内不重复抓取 */
@@ -1015,8 +1022,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         candidateAdapter = CandidateAdapter(
             onItemClick = { index, _ ->
-                // 新闻态：顶栏首条新闻点击 → 直接打开浏览器
-                if (newsBarActive) { openNewsLink(0); return@CandidateAdapter }
+                // 新闻态：顶栏当前新闻（随切换滚动）点击 → 直接打开浏览器
+                if (newsBarActive) { openNewsLink(newsBarIndex % maxOf(newsItems.size, 1)); return@CandidateAdapter }
                 if (rimeEngine.hasCandidates || isAssociationMode) {
                     selectCandidateByGlobalIndex(index)
                     // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
@@ -1026,7 +1033,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             },
             onItemLongClick = { view, index, word ->
-                if (newsBarActive) { showNewsItemMenu(view, 0); true }
+                if (newsBarActive) { showNewsItemMenu(view, newsBarIndex % maxOf(newsItems.size, 1)); true }
                 else { showCandidateLongPressMenu(word, view, index); true }
             }
         )
@@ -1057,6 +1064,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         tvPanelComposing = view.findViewById(R.id.tv_panel_composing)
         btnPanelClose = view.findViewById(R.id.btn_panel_close)
         flCandidates = view.findViewById(R.id.fl_candidates)
+        scrollCandidates = view.findViewById(R.id.scroll_candidates)
 
         // 初始化键盘
         qwertyKeyboard = Keyboard(this, R.xml.qwerty)
@@ -1683,6 +1691,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardView.unifiedKeyColor = textColor
             keyboardView.updateTextColor(isDarkTheme)
         }
+
+        // 候选面板（下拉菜单）背景 + 滚动容器 + 拼音标题色，跟随暗色/亮色
+        val panelBg = if (isDarkTheme) 0xFF1E2024.toInt() else 0xFFF8F8F8.toInt()
+        candidatePanel.setBackgroundColor(panelBg)
+        scrollCandidates.setBackgroundColor(panelBg)
+        tvPanelComposing.setTextColor(if (isDarkTheme) 0xFF81D8D0.toInt() else 0xFF4488FF.toInt())
     }
 
     /** 将文字灰阶缩放应用到各 UI 组件（统一基准颜色） */
@@ -1723,6 +1737,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 候选栏展开面板刷新大小和颜色
         flCandidates.invalidate()
+        scrollCandidates.invalidate()
+        // 主题/暗色切换后重建 chip：让边框描边色(主题色)与填充(暗/亮)即时刷新
+        if (candidatePanel.visibility == View.VISIBLE) {
+            if (isNewsMode) renderNewsList() else updateCandidateBar()
+        }
 
         // 底栏按钮图标颜色（深色模式用主题色，避免过亮）
         val iconColor = if (isDarkTheme) themeAccent else scaleGray(baseColor, scale)
@@ -1992,38 +2011,46 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    /** 字号档位 → 候选面板/顶栏统一基础字号（与 CandidateAdapter 的 15f*scale 对齐） */
+    /** 字号档位 → 候选面板/顶栏统一基础字号（与 CandidateAdapter 的 15f*scale 对齐；用户要求再大一些） */
     private fun panelBaseSp(): Float {
         return when (textThemeSize) {
-            0 -> 13f
-            2 -> 17f
-            3 -> 19f
-            else -> 15f
+            0 -> 15f
+            2 -> 19f
+            3 -> 21f
+            else -> 17f
         }
     }
 
     /** 新建一个候选 chip TextView（流式布局里的一个格子） */
     private fun makeChip(text: String, fullWidth: Boolean, position: Int, isNews: Boolean): TextView {
         val dp = resources.displayMetrics.density
+        // 动态生成 chip 背景：跟随暗色模式 + 主题色描边，圆角小一些
+        val chipBg = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 6f * dp   // 圆角缩小（之前 14dp 太圆）
+            // 填充：暗色模式用深灰，亮色模式用浅灰
+            setColor(if (isDarkTheme) 0xFF2A2C30.toInt() else 0xFFF2F3F5.toInt())
+            // 描边：跟随主题色（Tiffany 等），让边框随主体色变换
+            setStroke((1 * dp).toInt(), themeAccent)
+        }
         val tv = TextView(this).apply {
             layoutParams = ViewGroup.MarginLayoutParams(
                 if (fullWidth) ViewGroup.LayoutParams.MATCH_PARENT
                 else ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                // 横向间距收窄：单行字能一行排下最多约 7 个；纵向留一点呼吸
+                setMargins((2 * dp).toInt(), (3 * dp).toInt(), (2 * dp).toInt(), (3 * dp).toInt())
+            }
             gravity = if (isNews || fullWidth) (Gravity.CENTER_VERTICAL or Gravity.START)
                       else Gravity.CENTER
-            setPadding((10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt())
+            // 内边距：横向收窄让单字更紧凑，纵向保留舒展
+            setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
             maxLines = if (isNews || fullWidth) 2 else 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             setTextSize(TypedValue.COMPLEX_UNIT_SP, panelBaseSp())
             setTextColor(scaleGray(unifiedTextColor, textGrayScale))
-            background = ContextCompat.getDrawable(this@CesiaInputMethod,
-                android.R.drawable.btn_default_small)?.mutate()?.apply {
-                // 浅灰描边底，区分每个候选
-            } ?: null
-            val pad = (4 * dp).toInt()
-            setPadding(pad, (6 * dp).toInt(), pad, (6 * dp).toInt())
+            background = chipBg
             this.text = text
             isClickable = true
             isFocusable = true
@@ -2181,8 +2208,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun exitNewsMode() {
         if (!isNewsMode) return
         isNewsMode = false
+        wasNewsMode = false   // 标记「现在处于非新闻态」：下次切回新闻态时才会推进滚动索引
+        stopNewsMarquee()
         // 退出时清掉顶栏可能残留的新闻首条，交回候选词渲染
         if (rvCandidates != null && newsBarActive) {
+            candidateAdapter?.newsMode = false
             candidateAdapter?.updateData(emptyList())
             newsBarActive = false
         }
@@ -2192,11 +2222,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      *  滚动展示：每次「从无输入新闻态之外切回新闻态」时推进一条，循环浏览全部新闻。 */
     private fun renderNewsToBar() {
         if (rvCandidates == null || candidateAdapter == null) return
+        candidateAdapter?.newsMode = true   // 顶栏新闻：逐字左删跑马灯
         // 延迟读缓存（首次进可能缓存还在抓，fetchNewsAsync 完成后会再次 updateCandidateBar → 这里也会再被调用）
         if (newsItems.isEmpty()) newsItems = readCachedNews()
         val first = newsItems.firstOrNull()
         if (first == null) {
             // 还没抓到：先显示「正在加载」，抓到后 fetch 回调会再次刷新
+            stopNewsMarquee()
             if (!newsBarActive) {
                 candidateAdapter?.updateData(listOf("正在加载新闻…"))
                 newsBarActive = true
@@ -2206,6 +2238,38 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val item = newsItems[newsBarIndex % newsItems.size]
         candidateAdapter?.updateData(listOf(item.title))
         newsBarActive = true
+        startNewsMarquee(item.title)   // 进入即开始逐字左删滚动
+    }
+
+    /** 启动顶栏新闻「逐字左删」滚动：从完整标题开始，每隔一步删左侧一个字，
+     *  删空后恢复到完整标题并停止（不再循环），方便此时复制 / 标题上屏。 */
+    private fun startNewsMarquee(title: String) {
+        stopNewsMarquee()
+        newsMarqueeTitle = title
+        newsMarqueeOffset = 0
+        newsMarqueeRunnable = object : Runnable {
+            override fun run() {
+                if (!newsBarActive) return
+                // 已删到空（offset == 长度）→ 恢复到完整标题后停止，不再滚动
+                if (newsMarqueeOffset >= newsMarqueeTitle.length) {
+                    candidateAdapter?.updateData(listOf(newsMarqueeTitle))
+                    newsMarqueeRunnable?.let { newsMarqueeHandler.removeCallbacks(it) }
+                    newsMarqueeRunnable = null
+                    return
+                }
+                val shown = newsMarqueeTitle.substring(newsMarqueeOffset)
+                candidateAdapter?.updateData(listOf(shown))
+                newsMarqueeOffset++
+                newsMarqueeHandler.postDelayed(this, 220)
+            }
+        }
+        newsMarqueeHandler.postDelayed(newsMarqueeRunnable!!, 220)
+    }
+
+    /** 停止跑马灯（打字 / 退出新闻 / 离开顶栏时） */
+    private fun stopNewsMarquee() {
+        newsMarqueeRunnable?.let { newsMarqueeHandler.removeCallbacks(it) }
+        newsMarqueeRunnable = null
     }
 
     /** 推进顶栏新闻滚动位置（循环），供每次重新进入新闻态时调用 */
@@ -2265,7 +2329,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnCandidateExpand.setImageResource(R.drawable.triangle_gray_up)
         updateCandidateBar()
         // 每次展开都回到顶部：滚动到面板顶部
-        flCandidates.scrollTo(0, 0)
+        scrollCandidates.scrollTo(0, 0)
     }
 
     private fun collapseCandidatePanel() {
@@ -2560,7 +2624,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                         updateSpellBar()
                         // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
                         updateCandidateBar()
-                        flCandidates.scrollTo(0, 0)
+                        scrollCandidates.scrollTo(0, 0)
                     }
                 }
             }

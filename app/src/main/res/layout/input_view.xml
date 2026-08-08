@@ -257,13 +257,19 @@
         </LinearLayout>
 
         <!-- 候选词流式布局：按词宽自动换行，长词占更宽格子，优先格子适配字词 -->
-        <com.cesia.input.CesiaFlowLayout
-            android:id="@+id/fl_candidates"
+        <ScrollView
+            android:id="@+id/scroll_candidates"
             android:layout_width="match_parent"
             android:layout_height="180dp"
-            android:padding="6dp"
-            android:scrollbars="vertical"
-            android:fadeScrollbars="false" />
+            android:fillViewport="true"
+            android:scrollbars="vertical">
+
+            <com.cesia.input.CesiaFlowLayout
+                android:id="@+id/fl_candidates"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </ScrollView>
     </LinearLayout>
 
     <!-- 键盘区域（FrameLayout 包装，供候选音覆盖层叠加） -->
