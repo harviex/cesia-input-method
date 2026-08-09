@@ -92,10 +92,13 @@ speller:
     - derive/([qjlxn])iang$/$1inag/
     - derive/([rtysdghklzxc])uan$/$1aun/
     - derive/([nlyjqx])ue$/$1eu/
-    - derive/([rtsdghkzc])o(u|ng)$/$1o/
-    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
-    - derive/([tl])eng$/$1en/
-    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+    # ⚠️ 已移除「删字母」型纠错 derive（原 -o(u|ng)→-o、-Vng→-ng、-eng→-en）：
+    # 它们会缩短音节码，与其它音节撞码，产生完全不相干的候选。
+    # 实例：抽 chou --[zh/ch/sh 换位 derive]--> hcou --[o(u|ng)→o]--> hco = 426 = hao，
+    # 于是输入 426426(好好) 会冒出「抽抽」。删掉这几条后 T9 只匹配真实拼音码。
+    # - derive/([rtsdghkzc])o(u|ng)$/$1o/
+    # - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/
+    # - derive/([tl])eng$/$1en/
 
     # ===== 模糊音（双向 derive，可能扩大候选）=====
     - derive/^l/n/                      # l/n 不分（南方口音）
@@ -126,8 +129,8 @@ translator:
   # 关闭补全：enable_completion 在长数字码上会枚举海量补全候选，是 qlen17+ 卡死的主因之一。
   # T9 简拼候选靠 max_homophones 仍有一定候选填满下拉，关掉 completion 换流畅度。
   enable_completion: false
-  # 关闭整句联想续写：否则逐字造词时(如六/牛/柳)，后续音节候选会冒出"六牛柳"
-  # 整词续写，误点导致重复上屏(六牛+六牛柳)。逐字造词场景更干净。
+  # 关闭整句联想续写：逐音节独立候选，由上层按音节逐字驱动（避免 enable_sentence 把整串抢写成词，
+  # 导致「选单字祈却上屏戚戚/琪琪」这类整词续写与逐字挑选冲突）。音节切分交给 Rime 的拼音 hint。
   enable_sentence: false
   enable_user_dict: true
   # 限制同音/补全候选总数（简拼单键会爆几百候选，限 500 缓解卡顿，同时允许更多候选填满下拉）

@@ -64,6 +64,10 @@ class CandidateAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val text = items[position]
+        // 注意：currentText 是整适配器共享字段，会在每次 bind 时被覆盖；
+        // 点击/长按回调必须捕获「本项绑定的 text」(boundText)，不能用共享的 currentText，
+        // 否则横向列表里后绑定的项(约第10个可见项)会覆盖 currentText，导致长按菜单作用在错误词条上。
+        val boundText = text
         currentText = text
         lastBoundView = holder.textView
         holder.textView.text = text
@@ -73,12 +77,12 @@ class CandidateAdapter(
         holder.textView.setOnClickListener {
             if (longPressed) { longPressed = false; return@setOnClickListener }
             onInteract?.invoke()   // 交互即停止 marquee 滚动
-            onItemClick(position, currentText)
+            onItemClick(position, boundText)
         }
         if (onItemLongClick != null) {
             holder.textView.setOnLongClickListener {
                 onInteract?.invoke()   // 交互即停止 marquee 滚动
-                val consumed = onItemLongClick.invoke(holder.textView, position, currentText)
+                val consumed = onItemLongClick.invoke(holder.textView, position, boundText)
                 if (consumed) longPressed = true
                 consumed
             }
