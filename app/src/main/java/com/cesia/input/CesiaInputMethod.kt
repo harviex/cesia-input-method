@@ -512,20 +512,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9FenCiMerged: List<String> = emptyList()  // 简拼模式合并后的候选（分词符串 + 字母组合交叉），供 UI/点击使用
     // 单键单字：枚举该键所有字母(a/b/c)取单字候选合并，供 UI/点击使用（跟随选音锁定字母变化）
     private var t9SingleKeyCands: List<String> = emptyList()
-    // ===== 逐音节出单字（单字专区）=====
-    // 整串输入切分出的音节列表（如 2247474 → [cai, qi, qi]），权威来源 = Rime preedit 按 ' 拆分。
-    private var t9Syllables: List<String> = emptyList()
-    // 已逐字拼出的音节数（每选一个单字 +1）；当前待出单字音节 = t9Syllables[t9CurSyl]。
-    private var t9CurSyl: Int = 0
-    // 当前待出单字的音节拼音（如 cai）；手动选音(t9SpellPrefix)非空时以其为准，覆盖自动切分。
-    private var t9SylSyllable: String = ""
-    // 单字专区懒加载：已扫页数（每页≈5候选），滚到面板底部 +4 页
-    private var t9SylPageWalk = 4
-    // 单字专区当前渲染出的单字（用于点击/去重）
-    private var t9SylChars: List<String> = emptyList()
-    // 递归防护：refreshSyllableChars 在 finally 里重喂主会话会触发 updateCandidateBar，
-    // 用此标记避免 updateCandidateBar 再次进入刷新造成无限递归（StackOverflow）。仅作递归闸，不控制进度。
-    private var t9SylBusy = false
+    // ===== 逐音节接龙消费（数字段 → 单字/词）=====
+    // 已消费的数字位数（从 t9DigitQueue 头部）：选中单字/词按「该词真实读音反推的数字码」消费对应位数，
+    // 剩余 tail = substring(t9ConsumedLen) 才是还没确定的部分。只有 tail 为空才结束本次组合，
+    // 从而「所有数字用过才结束」，不再出现「选第一个字就直接上屏结束」的早退 bug。
+    private var t9ConsumedLen = 0
+    // 当前待定段数字（如选 cai 后 tail=7474，Rime 首音节 qi 反推 74 → 待定段=74）。
+    // 单字枚举就针对这一段：列出 74 能拼的全部合法拼音(pi/qi/ri/si)各自单字(皮起思日…)。
+    private var t9PendingSeg: String = ""
+    // 当前待定段已枚举出的单字（注入主候选流、可懒加载翻页），跟随选音锁定(t9SpellPrefix)收窄。
+    private var t9PendingChars: MutableList<String> = mutableListOf()
+    private var t9PendingPageWalk = 4
+    private var t9PendingBusy = false
+    // 待定段+选音锁定签名：变化时整段重拉单字，避免旧段单字(皮日思)残留。
+    private var lastPendingSig: String = ""
+    // 单字回归主候选流：词在上、待定段单字在下，同处一个流、拖拽懒加载走 loadMoreCandidates()。
     // 上次喂给 Rime 会话的 feed 串（增量喂判断依据）：新 feed 以其为前缀→只增量喂新增部分，
     // 否则（退格/切简拼全拼/提交后队列变化）整串重放。避免每键重放“整个数字队列”导致长码 O(n²) 卡顿。
     private var lastT9Feed: String? = null
@@ -1092,21 +1093,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         btnPanelRefresh = view.findViewById(R.id.btn_panel_refresh)
         flCandidates = view.findViewById(R.id.fl_candidates)
         scrollCandidates = view.findViewById(R.id.scroll_candidates)
-        // 面板滚动到底部附近：单字专区懒加载（词组沿用 loadMoreCandidates）
+        // 面板滚动到底部附近：主候选流懒加载（单字与词同源，拖动即继续翻页出更多单字/词）。
+        // 不再有独立「单字专区」段——单字就在主候选流里，由 loadMoreCandidates() 统一增量翻页。
         scrollCandidates.viewTreeObserver.addOnScrollChangedListener {
             val sv = scrollCandidates
             val child = sv.getChildAt(0) ?: return@addOnScrollChangedListener
             val diff = child.bottom - (sv.height + sv.scrollY)
-            if (diff <= sv.height / 2 && keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn
-                && t9SylChars.isNotEmpty() && currentSyllablePinyin().isNotEmpty()) {
-                // 还有更多单字可拉：增量翻页后只重渲染单字专区（不重算词组，避免抖动）
-                if (t9SylBusy) return@addOnScrollChangedListener
-                t9SylBusy = true
-                val before = t9SylChars.size
-                t9SylPageWalk += 6
-                refreshSyllableChars(reset = false)
-                t9SylBusy = false
-                if (t9SylChars.size > before && isPanelExpanded) renderPanelWithSyllableZone()
+            if (diff <= sv.height / 2 && !isAssociationMode) {
+                if (scrollCandidates.tag == "busy") return@addOnScrollChangedListener
+                scrollCandidates.tag = "busy"
+                loadMoreCandidates()
+                scrollCandidates.tag = null
             }
         }
 
@@ -2152,111 +2149,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         return tv
     }
 
-    /** 把拼音串按 ' 拆成音节列表（如 "cai'qi'qi" → [cai, qi, qi]）。 */
-    private fun splitIntoSyllables(s: String): List<String> {
-        if (s.isEmpty()) return emptyList()
-        return s.split("'").map { it.trim() }.filter { it.isNotEmpty() }
-    }
-
-    /** 从当前输入推导整串音节列表。权威来源 = Rime 候选拼音（拼音串 cai'qi'qi），
-     *  绝不能用数字 preedit（22'474'74），否则把数字段当拼音喂 Rime 出「22单字」、且第三字音字不匹配。 */
-    private fun computeSyllablesFromInput() {
-        if (keyboardMode != KeyboardMode.NUMBER || t9FenCiOn || t9DigitQueue.length <= 1) {
-            t9Syllables = emptyList(); return
-        }
-        val top = rimeEngine.getAllCandidatePinyins(1).firstOrNull() ?: ""
-        t9Syllables = if (top.isNotEmpty()) splitIntoSyllables(top) else emptyList()
-    }
-
-    /** 当前待出单字的音节拼音：手动选音(t9SpellPrefix)优先，否则取切分列表第 t9CurSyl 个。 */
-    private fun currentSyllablePinyin(): String {
-        if (t9SpellPrefix.isNotEmpty()) return t9SpellPrefix.toString()
-        return t9Syllables.getOrNull(t9CurSyl) ?: ""
-    }
-
-    /** 查当前音节拼音的全部单字（length==1 的汉字），用独立临时 Rime 会话避免污染主会话。 */
-    private fun refreshSyllableChars(reset: Boolean) {
-        val syl = currentSyllablePinyin()
-        if (syl.isEmpty()) { t9SylChars = emptyList(); return }
-        if (reset) t9SylPageWalk = 4
-        try {
-            rimeEngine.clear(); rimeEngine.createSession()
-            for (ch in syl) rimeEngine.processKey(ch.toString())
-            val all = rimeEngine.getAllCandidates(t9SylPageWalk)
-            // 只保留真·汉字单字（过滤数字/字母/符号，杜绝「22单字」之类脏候选）
-            t9SylChars = all.filter { it.length == 1 && it[0] in '\u4E00'..'\u9FFF' }.distinct()
-        } catch (_: Exception) {
-            t9SylChars = emptyList()
-        } finally {
-            // 恢复主会话：重喂当前数字队列（含选音前缀）
-            processT9Input()
-        }
-    }
-
-    /** 选了单字专区的一个字：上屏、推进到下一音节、刷新单字专区（杜绝「蔡奇/霸市」污染）。 */
-    private fun onSyllableCharPicked(char: String) {
-        if (char.isEmpty()) return
-        commitCandidateText(char)
-        t9ComposedSoFar.append(char)
-        // 关键：选单字后立即清主会话，下一音节独立查询，绝不留「蔡」去和剩余 qi 拼成蔡奇/霸市
-        rimeEngine.clear()
-        t9CurSyl += 1
-        t9SpellPrefix.clear()
-        updateSpellBar()
-        val moreSyllables = t9CurSyl < t9Syllables.size
-        if (moreSyllables) {
-            // 推进到下一音节：重算当前音节、刷新单字专区与候选栏（词组仍由 Rime 给）
-            processT9Input()
-            refreshSyllableChars(reset = true)
-            updateCandidateBar()
-            if (isPanelExpanded) renderPanelWithSyllableZone()
-        } else {
-            // 整串音节拼完：写用户词库、清 T9 状态
-            if (t9DigitQueue.isNotEmpty()) addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
-            t9ComposedSoFar.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-            t9Syllables = emptyList(); t9CurSyl = 0; t9SylChars = emptyList()
-            lastT9Feed = null
-            updateCandidateBar()
-            if (isPanelExpanded) collapseCandidatePanel()
-            updateSpellBar(); updateStatus(statusIdleText)
-        }
-    }
-
-    /** 渲染「词组在上、当前音节单字在下」的面板。词组=words，单字专区=t9SylChars。 */
-    private fun renderPanelWithSyllableZone() {
-        flCandidates.removeAllViews()
-        panelChips.clear()
-        val ctx = this
-        words@ for ((idx, w) in lastDisplayedCands.withIndex()) {
-            val chip = makeChip(w, fullWidth = false, position = idx, isNews = false)
-            flCandidates.addView(chip)
-            panelChips.add(chip)
-        }
-        // 单字专区：当前音节单字（如 cai → 蔡/才/采/菜/财…），可滚动懒加载
-        val syl = currentSyllablePinyin()
-        if (syl.isNotEmpty() && t9SylChars.isNotEmpty()) {
-            // 分隔提示 chip
-            val sep = makeChip("· ${syl} 单字 ·", fullWidth = false, position = -1, isNews = false).apply {
-                isClickable = false; isFocusable = false
-            }
-            flCandidates.addView(sep); panelChips.add(sep)
-            for (c in t9SylChars) {
-                val chip = makeChip(c, fullWidth = false, position = -1, isNews = false)
-                chip.setOnClickListener {
-                    if (it is android.widget.TextView) onSyllableCharPicked(it.text.toString())
-                }
-                flCandidates.addView(chip); panelChips.add(chip)
-            }
-        }
-        postShrinkChipsIfNeeded()
-    }
-
-    /** 把候选词列表渲染进面板（流式 chip，宽随词长） */
+    /** 把候选词列表渲染进面板（流式 chip，宽随词长）。单字与词同处主候选流，拖拽懒加载走 loadMoreCandidates()。 */
     private fun renderCandidatesToPanel(words: List<String>) {
-        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9SylChars.isNotEmpty()) {
-            renderPanelWithSyllableZone()
-            return
-        }
         flCandidates.removeAllViews()
         panelChips.clear()
         val ctx = this
@@ -2531,8 +2425,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 通过全局索引选择候选词（自动翻页选中） */
     private fun selectCandidateByGlobalIndex(globalIndex: Int) {
         if (globalIndex < 0) return
-        // 选了整词/词组 → 结束逐音节拼词流程（单字走 onSyllableCharPicked，不会到这里），重置单字专区进度
-        t9CurSyl = 0; t9Syllables = emptyList(); t9SylChars = emptyList()
+        // 选了整词/词组/单字 → 交给 Rime 原生续写或结束；单字已并入主候选流，无独立「单字专区」进度需重置。
 
         try {
         // 联想模式：点击的是联想候选词
@@ -2684,25 +2577,37 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.clear()
             }
             if (keyboardMode == KeyboardMode.NUMBER && !smartEditMode && !magicEditMode) {
-                // T9 选词后：数字已转成字，清显示缓存
+                // T9 选词后：把已消费的数字从队列头部切掉（2247474 → 7474），
+                // 让 Rime 从剩余串续写（不再退回初始 224 候选）。只有队列清空才结束。
                 t9InputBuffer.clear()
-                // Rime 仍在 composing → 整串还没用完（sentence 模式下 Rime 自动续写下一音节）：
-                // 不清数字队列、不进联想，仅清选音前缀（下一音节的逐键选音从头开始），
-                // 候选栏交给 updateCandidateBar 从 Rime 取原生续写候选。
-                if (rimeEngine.isComposing) {
-                    t9SpellPrefix.clear()
+                // 保留已锁定拼音前缀(t9SpellPrefix)：选词只消费数字，已选定的拼音(如 caiqiqi)不应被清空，
+                // 否则切到剩余串后续写时丢失已选音、被迫重新选（忽略用户已锁定的 qiqi）。
+                // 仅下一音节的「逐位选音光标」由 t9SpellCursor 自动基于队列尾部推算，无需手动清 prefix。
+                // 已消费位数：已组词(t9ComposedSoFar)真实读音反推的数字码长，不超过队列长
+                val consumed = (if (t9ComposedSoFar.isNotEmpty()) {
+                    val py = try { PinyinMap.toFull(t9ComposedSoFar.toString()) } catch (_: Exception) { "" }
+                    if (py.isNotEmpty()) pinyinToDigits(py) else ""
+                } else "").length.coerceAtMost(t9DigitQueue.length)
+                if (consumed > 0) t9DigitQueue.delete(0, consumed)   // 切掉已消费部分，队列=剩余待定串（拼音前缀保留）
+                t9ComposedSoFar.clear()   // 已上屏，清掉让选音光标归零（状态栏显示剩余串首位）
+                t9ConsumedLen = 0
+                if (t9DigitQueue.isNotEmpty()) {
+                    // 仍有数字未用 → 续写剩余串：轻量重喂剩余队列，交给 updateCandidateBar 重算待定段
+                    // （用 processT9InputLight 而非 processT9Input，避免后者因 isComposing=false 清掉 t9ComposedSoFar）
+                    processT9InputLight()
                     updateSpellBar()
                     updateCandidateBar()
                     scrollCandidates.scrollTo(0, 0)
                     return
                 }
-                // Rime 整串已消费完：把整串写入用户词库，清 T9 状态，随后统一走词后联想
-                if (t9ComposedSoFar.isNotEmpty() && t9DigitQueue.isNotEmpty()) {
-                    addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
+                // 数字全部用完：整串写入用户词库，清 T9 状态，随后统一走词后联想
+                if (t9ComposedSoFar.isNotEmpty() && t9DigitQueue.isEmpty()) {
+                    addUserPhrase(t9ComposedSoFar.toString(), "")
                 }
                 rimeEngine.clear()
-                t9ComposedSoFar.clear()
+                t9ComposedSoFar.clear(); t9ConsumedLen = 0
                 t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                t9PendingSeg = ""; t9PendingChars.clear()
                 lastT9Feed = null
                 updateSpellBar(); updateStatus(statusIdleText)
             }
@@ -2839,20 +2744,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val composing = rimeEngine.isComposing
         val pinyin = rimeEngine.composingText
 
-        // ===== 逐音节出单字：每键重算整串音节切分 + 当前音节(cai/qi/qi)单字 =====
-        // 进度 t9CurSyl 由选单字(onSyllableCharPicked)推进，这里不重置，避免选字后回退到首音节。
-        // 音节来源用候选拼音（cai'qi'qi），不用数字 preedit，保证第三字音字匹配且无「22单字」。
-        if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length > 1 && !t9SylBusy) {
-            computeSyllablesFromInput()
-            val syl = currentSyllablePinyin()
-            if (syl.isNotEmpty()) {
-                t9SylBusy = true
-                refreshSyllableChars(reset = t9SylChars.isEmpty())
-                t9SylBusy = false
-            } else {
-                t9SylChars = emptyList()
-            }
-        }
+        // 候选音锁定(t9SpellPrefix)由下方 filterCandsByFullPinyinPrefix 收窄；
+        // 待定段单字不再自研伪造列表注入（曾导致点击错位/锁音失效），完全信任 Rime 主候选流——
+        // 未锁定时 Rime 整串已含全合法拼音单字（pi/qi/ri/si）随主流懒加载，锁定后 Rime 自然只剩该音系。
+        t9ConsumedLen = 0; t9PendingSeg = ""; t9PendingChars.clear()
 
         // 简拼模式：仅 T9 数字键盘下用合并候选（分词字符串 + 字母组合交叉）；单键单字用枚举候选(跟随选音)；全键盘始终走自身 pinyin 候选
         val rimeAllCands = when {
@@ -2861,6 +2756,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
         var allCands = rimeAllCands
+        // 注：待定段单字已改为完全信任 Rime 主候选流（不再自研 t9PendingChars 注入），避免点击错位/锁音失效。
         // 注入用户自建词组：按频次降序融入候选（不强行置顶），保持整体词频顺序。
         // 匹配规则：该词的任一登记码（原始数字串/全拼码/简拼码）以当前输入为前缀即命中，
         // 从而使全拼、简拼、任意前缀数字串都能找到该词。单键(length==1)不注入（避免挤掉单字）。
@@ -7645,6 +7541,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         rimeEngine.clear()
         lastT9Feed = null             // 重置增量喂标记：上屏/清状态后下次输入从头喂
         t9ComposedSoFar.clear()       // 重置已组词累积
+        t9ConsumedLen = 0
+        t9PendingSeg = ""; t9PendingChars.clear(); t9PendingPageWalk = 4
+        lastPendingSig = ""
         t9ShiftTemp = false
         // qwertyShiftLocked 不在此处清除，各键盘状态独立
         updateCandidateBar()
@@ -8088,7 +7987,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         return out.toList()
     }
 
-     /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
+    /** 轻量重喂：只恢复 Rime 主会话到当前数字队列态，不递归触发 updateCandidateBar（避免刷新死循环）。 */
+    private fun processT9InputLight() {
+        if (t9DigitQueue.isEmpty()) { rimeEngine.clear(); rimeEngine.createSession(); lastT9Feed = null; return }
+        val feed = t9DigitQueue.toString()
+        rimeEngine.clear(); rimeEngine.createSession()
+        for (ch in feed) rimeEngine.processKey(ch.toString())
+        lastT9Feed = feed
+    }
+
+      /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
     private fun buildT9SpellFeed(): String {
         if (t9DigitQueue.isEmpty()) return ""
         val sb = StringBuilder(t9SpellPrefix)
@@ -8241,6 +8149,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         if (letterIndex >= letters.length) return
         t9SpellPrefix.append(letters[letterIndex])  // 锁定该位字母
         dlog { "spellClick out: pre='$t9SpellPrefix'" }
+        // 选音锁定变化：清空旧的待定段单字缓存，让 refreshPendingChars 按新锁定拼音(如 qi)重拉，
+        // 避免残留未锁定时的皮/脾气等无关单字。
+        t9PendingChars.clear(); t9PendingPageWalk = 4; lastPendingSig = ""
         processT9Input()                             // 重算（实时收窄候选）
         // 强制刷新状态栏选音进度（复用正常显示逻辑）：避免 sig 去重跳过导致 236 等组合仍显示数字
         if (keyboardMode == KeyboardMode.NUMBER) {

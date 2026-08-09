@@ -33,6 +33,13 @@ object PinyinMap {
     @Volatile
     private var loading = false
 
+    /** 全部合法拼音集合（无声调，ü 归一为 v），用于 T9 数字段「合法拼音」静态查表。
+     *  避免每键枚举候选时反复开 Rime 会话验证，根除长数字串卡顿。 */
+    @Volatile
+    private var allPinyins: Set<String> = emptySet()
+
+    fun allPinyins(): Set<String> = allPinyins
+
     val isReady: Boolean get() = loaded
 
     /** 后台加载（幂等）。应用/IME 启动时调用一次。 */
@@ -60,7 +67,17 @@ object PinyinMap {
                 }
                 charToPinyin = map
                 loaded = true
-                Log.i(TAG, "拼音表加载完成: ${map.size} 字, 耗时 ${System.currentTimeMillis() - t0}ms")
+                // 构建全拼音集合（无声调，ü→v 归一），供 T9 段「合法拼音」静态查表。
+                // json 中 ü 存储形式可能是 v 或 u，统一归一为 v 后入库，避免查表漏匹配。
+                val pySet = HashSet<String>(400)
+                for (py in map.values) {
+                    val norm = py.lowercase().replace('ü', 'v').replace("u:", "v")
+                    pySet.add(norm)
+                    // 同时容纳两种写法：若原拼含 v（ü），也登记其 u 写法，容错
+                    if ('v' in norm) pySet.add(norm.replace('v', 'u'))
+                }
+                allPinyins = pySet
+                Log.i(TAG, "拼音表加载完成: ${map.size} 字, 合法拼音 ${pySet.size} 个, 耗时 ${System.currentTimeMillis() - t0}ms")
             } catch (e: Throwable) {
                 Log.e(TAG, "拼音表加载失败: ${e.message}")
             } finally {
