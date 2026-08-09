@@ -477,6 +477,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var t9InputBuffer = StringBuilder()  // T9 数字输入缓冲
     // 本次组合已上屏的文本累积（逐字组词时用于去除最后一步整串返回的重复前缀）
     private var t9ComposedSoFar = StringBuilder()
+    // 逐词组词时累积的「整串短语」（跨选词不清），仅用于数字全部用完时整体写入用户词库；
+    // 不参与任何显示/候选逻辑，故不影响拼音对应。
+    private var t9FullPhrase = StringBuilder()
+    // 用户词组召回：当前数字码前缀匹配到的存词（仅显示用，点击走直接上屏语义）
+    private var t9RecalledPhrase: String? = null
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
     private var t9DigitQueue = StringBuilder()    // 已按数字顺序，如 "97"
     // 注：自研「接龙消费计数(t9ConsumedLen)」已删除。多音节切分/续写全部交给 Rime 原生
@@ -532,8 +537,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var lastT9Feed: String? = null
     private var pendingEnglish = ""               // 英文模式下已直接上屏的连续英文字母缓冲（按数字时连同数字一起上屏）
 
-    // = 号计算器（复刻 Rime 原生 =expr 求值）：calcExpr 非空即处于计算模式，缓存 = 开头的算式
     private var calcExpr = StringBuilder()
+    // 用户词表重新部署的防抖 Runnable（接龙整词写入 cesia_user.dict.yaml 后触发）
     private fun isCalcActive() = calcExpr.isNotEmpty()
     private var llT9Spell: android.widget.LinearLayout? = null          // 候选栏最左 4 字母点选区
     private var t9SpellTVs: List<android.widget.TextView>? = null        // 4 个字母 TextView
@@ -2557,6 +2562,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             // 此处把前面已上屏的前缀去掉，只上屏新增的尾巴(柳)，避免重复。
             val toCommit = stripDuplicatePrefix(selectedWord)
             t9ComposedSoFar.append(selectedWord)
+            t9FullPhrase.append(selectedWord)   // 累积整串短语，末尾整体存 Rime 词表（不参与显示）
             if (smartEditMode) {
                 // 智能写作编辑模式：写入 buffer 而不是上屏
                 smartEditBuffer.append(toCommit)
@@ -2590,6 +2596,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 } else "").length.coerceAtMost(t9DigitQueue.length)
                 if (consumed > 0) t9DigitQueue.delete(0, consumed)   // 切掉已消费部分，队列=剩余待定串（拼音前缀保留）
                 t9ComposedSoFar.clear()   // 已上屏，清掉让选音光标归零（状态栏显示剩余串首位）
+                t9SpellPrefix.clear()     // 选词后拼音前缀一并清空：续写由 Rime 重喂剩余数字自然出下个音节（如 qiqi），
+                                          // 不清会导致用旧前缀(caiqiqi)过滤剩余串候选→错位出 p/r/s 词
                 t9ConsumedLen = 0
                 if (t9DigitQueue.isNotEmpty()) {
                     // 仍有数字未用 → 续写剩余串：轻量重喂剩余队列，交给 updateCandidateBar 重算待定段
@@ -2600,9 +2608,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     scrollCandidates.scrollTo(0, 0)
                     return
                 }
-                // 数字全部用完：整串写入用户词库，清 T9 状态，随后统一走词后联想
-                if (t9ComposedSoFar.isNotEmpty() && t9DigitQueue.isEmpty()) {
-                    addUserPhrase(t9ComposedSoFar.toString(), "")
+                // 数字全部用完：整串写入 Rime 用户词表（cesia_user.dict.yaml），Rime 原生加载召回
+                if (t9FullPhrase.isNotEmpty()) {
+                    addUserPhrase(t9FullPhrase.toString(), "")
+                    t9FullPhrase.clear()   // 存完即清，避免下次组合继续 append 产生「蔡祈琪蔡祈琪」垃圾词条
                 }
                 rimeEngine.clear()
                 t9ComposedSoFar.clear(); t9ConsumedLen = 0
@@ -2756,45 +2765,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
         var allCands = rimeAllCands
-        // 注：待定段单字已改为完全信任 Rime 主候选流（不再自研 t9PendingChars 注入），避免点击错位/锁音失效。
-        // 注入用户自建词组：按频次降序融入候选（不强行置顶），保持整体词频顺序。
-        // 匹配规则：该词的任一登记码（原始数字串/全拼码/简拼码）以当前输入为前缀即命中，
-        // 从而使全拼、简拼、任意前缀数字串都能找到该词。单键(length==1)不注入（避免挤掉单字）。
-        if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length != 1 && userPhrases.isNotEmpty()) {
-            val curDigits = t9DigitQueue.toString()
-            if (curDigits.isNotEmpty()) {
-                val matched = userPhrases.filter { (_, entry) ->
-                    entry.codes.any { it.startsWith(curDigits) }
-                }.toList()
-                    .sortedByDescending { it.second.freq }
-                    .map { it.first } // phrase
-                if (matched.isNotEmpty()) {
-                    // 按频次插入：遍历 Rime 候选，在合适位置插入用户词（不破坏整体词频序）
-                    allCands = mergeByFrequency(allCands, matched)
-                }
-            }
-        } else if (keyboardMode == KeyboardMode.QWERTY && userPhrases.isNotEmpty() && !isAsciiMode) {
-            // QWERTY 全键盘：用户词组原先完全不注入 —— 组好的词在九宫格能召回、切到全键盘却搜不到。
-            // 这里把当前拼音串转成 T9 数字码后走同一套码前缀匹配（sunjun→786586, sj→75），
-            // 与 addUserPhrase 登记的全拼码/简拼码对齐。
-            val comp = pinyin.replace("'", "").replace(" ", "").lowercase()
-            if (comp.length >= 2 && comp.all { it in 'a'..'z' }) {
-                val compDigits = pinyinToDigits(comp)
-                if (compDigits.isNotEmpty()) {
-                    val matched = userPhrases.filter { (_, entry) ->
-                        entry.codes.any { it.startsWith(compDigits) }
-                    }.toList()
-                        .sortedByDescending { it.second.freq }
-                        .map { it.first }
-                    if (matched.isNotEmpty()) {
-                        allCands = mergeByFrequency(allCands, matched)
-                    }
-                }
-            }
+        // 用户词组召回：若当前数字码前缀匹配某存词（如 2247474→蔡祈琪），把该词插入候选前列。
+        // 仅显示用（不进 lastAllCands），点击时走「直接上屏语义」(见 selectCandidateByGlobalIndex 特判)，
+        // 不走 Rime 索引反查 → 不会错位（区别于早期 mergeByFrequency 注入 bug）。
+        val curDigits = t9DigitQueue.toString()
+        val recalled = if (keyboardMode == KeyboardMode.NUMBER && curDigits.length >= 2 && userPhrases.isNotEmpty()) {
+            userPhrases.filter { (_, e) -> e.codes.any { it == curDigits || it.startsWith(curDigits) } }
+                .maxByOrNull { it.value.freq }?.key
+        } else null
+        t9RecalledPhrase = recalled
+        if (recalled != null && recalled !in allCands) {
+            allCands = listOf(recalled) + allCands
         }
-        // 快照未过滤的原始 Rime 候选列表（供点击反查真实全局索引）；用户词组不纳入，避免位置错位
+        // 快照未过滤的原始 Rime 候选列表（供点击反查真实全局索引）。召回词不纳入，避免位置错位
         lastAllCands = rimeAllCands
-        // 懒加载：记录首屏已拉取的 Rime 候选数（纯 Rime，不含用户词组注入），供滚动到底 drop 取新增
+        // 懒加载：记录首屏已拉取的 Rime 候选数（纯 Rime），供滚动到底 drop 取新增
         candTotalLoaded = rimeAllCands.size
 
         // 逐键选音：已选字母前缀非空时，按候选拼音完整前缀过滤（全拼模式用；简拼模式已由 buildT9SpellFeed 精确出候选，跳过）
@@ -5933,28 +5918,25 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
         saveUserPhrases()
     }
-    /** 写入用户词组（接龙上屏时调用）：把「原始数字串 + 全拼反推码 + 简拼首字母反推码」全部登记，
-     *  使该词在输入全拼/简拼/任意前缀数字串时都能被匹配到。 */
+    /** 写入用户词组（接龙整词上屏时调用）：
+     *  把「整词 + 数字码」登记进 Cesia 自研词库 userPhrases（持久化到 cesia_dict）。
+     *  召回方式：updateCandidateBar 把存词插入候选前列，点击时走「直接上屏语义」(commitCandidateText)，
+     *  不走 Rime 索引反查，故不会错位（区别于早期注入 bug）。 */
     private fun addUserPhrase(phrase: String, digits: String) {
-        if (phrase.length < 2 || digits.isEmpty()) return
-        // 反推全拼码：转简体后逐字取拼音再转 T9 数字（真实读音，来自 PinyinMap）
-        val simplex = toSimplified(phrase)
-        val fullPy = toPinyinFull(simplex)        // 全拼：sunjun
-        val fullCode = if (fullPy.isNotEmpty()) pinyinToDigits(fullPy) else ""
-        val simpPy = toPinyinFirstLetters(simplex) // 简拼首字母：sj
-        val simpDigits = if (simpPy.isNotEmpty()) pinyinToDigits(simpPy) else ""
-        val codes = mutableSetOf(digits, fullCode, simpDigits).filter { it.isNotEmpty() }.toSet()
-        dlog { "addUserPhrase: '$phrase' digits='$digits' fullPy='$fullPy'->'$fullCode' simpPy='$simpPy'->'$simpDigits' codes=$codes" }
-        registerUserPhraseCodes(phrase, codes, 1)
-        // 拼音表尚未加载完时只登记到原始数字码，安排就绪后补齐全拼/简拼码
+        if (phrase.length < 2) return
+        // 数字码优先用上层传入的「当次输入数字串」；为空时（联想组词路径）用真实读音反推
+        val code = if (digits.isNotEmpty()) digits else {
+            val simplex = toSimplified(phrase)
+            val fullPy = toPinyinFull(simplex)
+            if (fullPy.isNotEmpty()) pinyinToDigits(fullPy) else ""
+        }
+        if (code.isEmpty()) return
+        dlog { "addUserPhrase: '$phrase' code='$code'" }
+        registerUserPhraseCodes(phrase, setOf(code), 1)
         if (!PinyinMap.isReady) rebuildUserPhraseCodesWhenReady()
     }
 
-    /**
-     * 按纯文本登记用户词组（联想组词路径用：无原始数字串，全部码由真实拼音表反推）。
-     * 联想模式逐字选词组出的词（如 谢予希）原先从不写入词库，导致下次输入又要重新拼。
-     * 拼音表未就绪时先记下 phrase 占位（无码），就绪后由 rebuildUserPhraseCodes 补码。
-     */
+    /** 联想组词路径按纯文本登记（无原始数字串，码由真实拼音表反推），复用 registerUserPhraseCodes。 */
     private fun addUserPhraseByText(phrase: String) {
         if (phrase.length < 2) return
         val simplex = toSimplified(phrase)
@@ -7541,6 +7523,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         rimeEngine.clear()
         lastT9Feed = null             // 重置增量喂标记：上屏/清状态后下次输入从头喂
         t9ComposedSoFar.clear()       // 重置已组词累积
+        t9FullPhrase.clear()          // 重置整串短语累积
         t9ConsumedLen = 0
         t9PendingSeg = ""; t9PendingChars.clear(); t9PendingPageWalk = 4
         lastPendingSig = ""

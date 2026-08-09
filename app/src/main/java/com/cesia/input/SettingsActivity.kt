@@ -857,7 +857,7 @@ class SettingsActivity : AppCompatActivity() {
         btnInstallVoice?.setOnLongClickListener { showUninstallMenu(true); true }
         // 手机AI模型的长按卸载入口已移除（卸载请到版本号菜单）。重新下载是卸载后的事。
 
-        // 用户词组库：导出/导入（接龙组词备份）
+        // 用户词组库：导出/导入（接龙组词备份，备份 Cesia 自研词库 JSON）
         findViewById<Button>(R.id.btn_export_phrases)?.setOnClickListener {
             val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             exportLauncher.launch("CesiaUserPhrases_$time.json")
@@ -867,7 +867,9 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ======================== 用户词组库导出/导入 ========================
+    // ======================== 用户词组库导出/导入（cesia_dict 词库 JSON） =======================
+    // 接龙整词存在 Cesia 自研词库(cesia_dict SP 的 user_phrases_json)，由输入法自身召回（直接上屏语义，不注入 Rime）。
+    // 导出：复制 JSON 到用户选定位置(/sdcard/Documents 等)；导入：合并回 cesia_dict。
     private fun exportUserPhrases(uri: Uri) {
         try {
             val json = getSharedPreferences("cesia_dict", MODE_PRIVATE).getString("user_phrases_json", "") ?: ""
@@ -876,9 +878,7 @@ class SettingsActivity : AppCompatActivity() {
                 appendLog("导出词库：为空")
                 return
             }
-            contentResolver.openOutputStream(uri)?.use { os ->
-                os.write(json.toByteArray(Charsets.UTF_8))
-            }
+            contentResolver.openOutputStream(uri)?.use { os -> os.write(json.toByteArray(Charsets.UTF_8)) }
             Toast.makeText(this, "词库已导出", Toast.LENGTH_SHORT).show()
             appendLog("导出词库成功: $uri")
         } catch (e: Exception) {
@@ -889,9 +889,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun importUserPhrases(uri: Uri) {
         try {
-            val json = contentResolver.openInputStream(uri)?.use { iss ->
-                iss.bufferedReader().readText()
-            } ?: ""
+            val json = contentResolver.openInputStream(uri)?.use { iss -> iss.bufferedReader().readText() } ?: ""
             if (json.isEmpty()) {
                 Toast.makeText(this, "文件为空", Toast.LENGTH_SHORT).show()
                 return

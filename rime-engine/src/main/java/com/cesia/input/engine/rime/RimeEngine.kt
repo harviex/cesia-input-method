@@ -142,6 +142,15 @@ class RimeEngine(private val context: Context) : InputEngine {
         RimeJni.initialize(context)
     }
 
+    /** 仅重新部署用户词表(cesia_user.dict.yaml)，不重编译主词典，开销小，使新增接龙词即时生效。 */
+    fun deployUserDict() {
+        try {
+            Rime.deployRimeConfigFile("cesia_user.dict.yaml", "user_dict")
+        } catch (e: Exception) {
+            Log.w("RimeEngine", "deployUserDict failed: ${e.message}")
+        }
+    }
+
     @Synchronized
     override fun createSession(): RimeSession {
         val s = RimeJni.createSession()
