@@ -2148,6 +2148,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             }
             setOnLongClickListener {
                 if (isNews) { showNewsItemMenu(ctx, position); longPressed = true }
+                else { showCandidateLongPressMenu(text.toString(), ctx, position); longPressed = true }
                 true   // 消费长按，阻止后续单击触发打开链接
             }
         }
@@ -3068,14 +3069,34 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         btnClose.setOnClickListener { popup.dismiss() }
 
-        // 定位到候选栏底部（紧邻，不跳动）
-        val rv = rvCandidates ?: return
-        popup.showAtLocation(rv, android.view.Gravity.NO_GRAVITY, 0, 0)
-        rv.post {
-            val loc = IntArray(2)
-            rv.getLocationOnScreen(loc)
-            // 菜单显示在候选栏底部 +2px
-            popup.update(loc[0], loc[1] + rv.height + 2, -1, -1)
+        // 定位到被长按的词附近（anchorView 即长按的候选 TextView），而非固定在候选栏底部
+        val anchor = anchorView
+        if (anchor != null) {
+            popup.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, 0, 0)
+            anchor.post {
+                val loc = IntArray(2)
+                anchor.getLocationOnScreen(loc)
+                val menuW = popup.contentView?.measuredWidth ?: 0
+                val menuH = popup.contentView?.measuredHeight ?: 0
+                // 优先显示在词正下方；若超出屏幕底部则翻到词上方
+                val screenH = resources.displayMetrics.heightPixels
+                val y = if (loc[1] + anchor.height + menuH + 2 <= screenH)
+                    loc[1] + anchor.height + 2
+                else
+                    (loc[1] - menuH - 2).coerceAtLeast(0)
+                // 水平居中于该词，避免超出屏幕右缘
+                val x = (loc[0] + anchor.width / 2 - menuW / 2).coerceIn(0, (resources.displayMetrics.widthPixels - menuW).coerceAtLeast(0))
+                popup.update(x, y, -1, -1)
+            }
+        } else {
+            // 无 anchor 兜底：贴候选栏底部
+            val rv = rvCandidates ?: return
+            popup.showAtLocation(rv, android.view.Gravity.NO_GRAVITY, 0, 0)
+            rv.post {
+                val loc = IntArray(2)
+                rv.getLocationOnScreen(loc)
+                popup.update(loc[0], loc[1] + rv.height + 2, -1, -1)
+            }
         }
     }
 
