@@ -2479,23 +2479,35 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 这样无论降频还是选音过滤，点到的词 = 上屏的词（点频上频、点管字上管字）。
         if (globalIndex >= lastDisplayedCands.size) return
         val clickedWord = lastDisplayedCands[globalIndex]
+        // 调频修复（精准版）：若该词既在 userPhrases（被联想态误登记）又在 Rime 候选(lastAllCands，说明是 Rime 原生词)，
+        // 且处于「NUMBER 多键、非简拼」场景（此时 Rime 会话与 lastAllCands 对齐，selectCandidate 安全），
+        // 则放行到下方 selectCandidate 原生调频路径，让词频前移。
+        // 注意：单键/简拼分支保持原样（无条件直出），绝不 fall through，避免会话错位导致选词与显示不一致。
+        val inRime = lastAllCands.contains(clickedWord) || lastAllCands.contains(toSimplified(clickedWord))
+        val shouldUseRimeFreq = userPhrases.containsKey(clickedWord) && inRime
+            && keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn && t9DigitQueue.length > 1
         // 用户自建词组：独立点击路径，支持接龙组词（有剩余数字则继续，无剩余则上屏）
         if (userPhrases.containsKey(clickedWord)) {
-            if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
-                // Rime 原生主导：用户词组直接上屏，不再自研消费位数/重喂剩余数字。
-                // 该词整串即用户当次输入的目标，上屏后一律结束本次 T9 组合。
-                t9ComposedSoFar.append(clickedWord)
-                commitCandidateText(clickedWord)
-                addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
-                t9ComposedSoFar.clear()
-                rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
-                lastT9Feed = null
-                updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
+            if (shouldUseRimeFreq) {
+                // 好啦类：Rime 原生词被误登记，不在此直出，落到下方 selectCandidate 调频（多键场景会话有效）。
+                // 空处理，继续往下走统一路径。
             } else {
-                // 非接龙场景：直接上屏该词
-                commitCandidateText(clickedWord)
+                if (keyboardMode == KeyboardMode.NUMBER && !t9FenCiOn) {
+                    // Rime 原生主导：用户词组直接上屏，不再自研消费位数/重喂剩余数字。
+                    // 该词整串即用户当次输入的目标，上屏后一律结束本次 T9 组合。
+                    t9ComposedSoFar.append(clickedWord)
+                    commitCandidateText(clickedWord)
+                    addUserPhrase(t9ComposedSoFar.toString(), t9DigitQueue.toString())
+                    t9ComposedSoFar.clear()
+                    rimeEngine.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear()
+                    lastT9Feed = null
+                    updateCandidateBar(); updateSpellBar(); updateStatus(statusIdleText)
+                } else {
+                    // 非接龙场景：直接上屏该词
+                    commitCandidateText(clickedWord)
+                }
+                return
             }
-            return
         }
         // 单键枚举候选（t9SingleKeyCands）：显示列表来自「逐字母枚举合并」，与 Rime 当前 t9 模糊态会话
         // 的候选顺序/集合不对齐（如输入3显示「的」、Rime会话第0是「饿」）。若在此走下方 Rime 翻页选中，
