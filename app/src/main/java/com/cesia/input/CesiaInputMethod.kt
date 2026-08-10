@@ -8545,9 +8545,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 } else false
             }
 
-            // 加载剪贴板历史（持久化 + 系统剪贴板 + 收藏）
-            val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            loadClipboardHistoryToClassMembers(clipboardMgr)
+            // 加载剪贴板历史：仅在内存列表为空时（首次/初始化）从持久化+系统剪贴板加载一次，
+            // 之后依赖后台 addPrimaryClipChangedListener 实时追加，不再每次打开弹窗重建（避免快速复制丢失/排序混乱）。
+            if (clipboardItems.isEmpty()) {
+                val clipboardMgr = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                loadClipboardHistoryToClassMembers(clipboardMgr)
+                registerClipboardListener()
+            }
             dlog { "showClipboardManagerPopup: clipboardItems.size=${clipboardItems.size}, items=${clipboardItems.take(3).map { it.text.take(20) }}" }
             // 初始化过滤（搜索回车后重新弹出时保留已输入过滤词）
             if (!clipboardSearchResuming) {
@@ -8738,9 +8742,10 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 menu.setOnMenuItemClickListener { mi ->
                     when (mi.itemId) {
                         1 -> {
-                            clipboardItems.remove(item)
-                            val toggled = item.copy(isPinned = !item.isPinned)
-                            if (toggled.isPinned) clipboardItems.add(0, toggled) else clipboardItems.add(toggled)
+                            clipboardItems.removeAll { it.text == item.text }
+                            val toggled = item.copy(isPinned = !item.isPinned, timestamp = System.currentTimeMillis())
+                            clipboardItems.add(toggled)
+                            resortClipboard()  // 置顶→最前；取消置顶→按时间归位（不再压到末尾）
                             updateClipboardFavorites(); saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
                             updateStatus(if (item.isPinned) "↻ 已取消置顶" else "⤒ 已置顶：${item.text.take(18)}")
                         }
@@ -8748,13 +8753,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             clipboardItems.removeAll { it.text == item.text }
                             clipboardDeleted.add(item.text); saveClipboardDeleted()
                             saveClipboardHistoryFromClassMembers(); applyClipboardFilter()
-                            try {
-                                val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                if (clipboardMgr?.hasPrimaryClip() == true) {
-                                    val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                    if (clipText == item.text) clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                }
-                            } catch (_: Exception) {}
                             updateStatus("⊗ 已删除")
                         }
                         3 -> {
@@ -8817,7 +8815,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 if (clip != null) {
                     for (i in 0 until clip.itemCount) {
                         val text = clip.getItemAt(i).text?.toString()?.trim() ?: ""
-                        if (text.isNotEmpty() && text.length <= 500 && text !in clipboardDeleted) {
+                        if (text.isNotEmpty() && text.length <= 20000) {
                             sysClipTexts.add(text)
                         }
                     }
@@ -8829,7 +8827,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val sysInHistory = mutableListOf<String>()
             for (text in sysClipTexts) {
                 if (text !in historyTexts) {
-                    clipboardItems.add(ClipboardItem(text = text, isPinned = false))
+                    clipboardItems.add(ClipboardItem(text = text, isPinned = false, timestamp = System.currentTimeMillis()))
                 } else {
                     sysInHistory.add(text)
                 }
@@ -8840,16 +8838,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 再加载其余条目（跳过已在第0位处理过的）
             if (historyStr.isNotEmpty()) {
                 val historyList = historyStr.split("\n").filter { it.isNotEmpty() }
-                for (text in sysInHistory) {
-                    clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text)))
-                }
-                for (text in historyList) {
-                    if (text !in sysClipTexts && text !in clipboardDeleted) {
-                        clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text)))
+                // 按历史列表顺序赋递增 timestamp（列表越靠后=越新），保证排序稳定
+                historyList.forEachIndexed { idx, text ->
+                    val ts = 1000L + idx
+                    if (text in sysInHistory) {
+                        clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text), timestamp = ts))
+                    } else if (text !in sysClipTexts && text !in clipboardDeleted) {
+                        clipboardItems.add(ClipboardItem(text = text, isPinned = favSet.contains(text), timestamp = ts))
                     }
                 }
             }
 
+            // 统一排序：置顶项最前，其余按 timestamp 倒序（最新在前）
+            resortClipboard()
             // 顺序稳定：sysClipTexts（不在历史的）→ sysInHistory → 其余历史
             // 每次加载顺序一致，不会因系统剪贴板变化而产生循环闪烁
         } catch (_: Exception) {}
@@ -9016,7 +9017,53 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 // endregion 剪贴板搜索
 
 // region 剪贴板适配器
-    data class ClipboardItem(val text: String, val isPinned: Boolean = false, val isEmpty: Boolean = false)
+    data class ClipboardItem(val text: String, val isPinned: Boolean = false, val isEmpty: Boolean = false, val timestamp: Long = 0L)
+
+    // 剪贴板后台监听是否已注册（避免重复注册）
+    private var clipboardListenerRegistered = false
+
+    /** 统一入口：将文本加入剪贴板列表（去重 + 置顶优先 + 按时间倒序），并持久化 */
+    private fun addClipboardText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty() || t.length > 20000) return
+        // 去重：若已存在相同文本，更新其时间戳并保留置顶状态
+        val existing = clipboardItems.find { it.text == t }
+        if (existing != null) {
+            clipboardItems.remove(existing)
+            clipboardItems.add(existing.copy(timestamp = System.currentTimeMillis()))
+        } else {
+            clipboardItems.add(ClipboardItem(text = t, isPinned = clipboardFavorites[t] == true, timestamp = System.currentTimeMillis()))
+        }
+        resortClipboard()
+        saveClipboardHistoryFromClassMembers()
+        applyClipboardFilter()
+    }
+
+    /** 排序规则：置顶项永远最前（保持原有置顶顺序），其余按复制时间倒序（最新在前） */
+    private fun resortClipboard() {
+        val pinned = clipboardItems.filter { it.isPinned && !it.isEmpty }.toMutableList()
+        val normal = clipboardItems.filter { !it.isPinned && !it.isEmpty }
+            .sortedByDescending { it.timestamp }
+            .toMutableList()
+        clipboardItems.clear()
+        clipboardItems.addAll(pinned)
+        clipboardItems.addAll(normal)
+    }
+
+    private fun registerClipboardListener() {
+        if (clipboardListenerRegistered) return
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return
+            cm.addPrimaryClipChangedListener {
+                val clip = cm.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val text = clip.getItemAt(0).text?.toString()?.trim() ?: ""
+                    if (text.isNotEmpty()) addClipboardText(text)
+                }
+            }
+            clipboardListenerRegistered = true
+        } catch (_: Exception) {}
+    }
 
     private class ClipboardAdapter(
         private val inflater: android.view.LayoutInflater,
