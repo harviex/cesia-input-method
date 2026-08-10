@@ -9704,6 +9704,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 配对类（长度>1且非「——」「……」等重复符号）上屏后光标停在中间
                 val caret = if (out.length > 1) 1 else out.length
                 currentInputConnection?.commitText(out, caret)
+                // 符号上屏后自动退回进入符号键盘前的键盘（T9/QWERTY），符合「点符号即返回」的交互预期
+                switchToDefaultKeyboard()
             }
 
             // ======================== 其他按键（标点等）=======================
