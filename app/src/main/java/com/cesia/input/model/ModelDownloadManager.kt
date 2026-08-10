@@ -32,6 +32,24 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
+    // 进度单调不降：多文件串行下载时，各文件实际大小与预估 grandTotal 有出入，
+    // 跨文件累加的 overallDownloaded 可能回退导致百分比反复跳跃。此处记录上次上报值，新值低于它则保留。
+    @Volatile
+    private var lastReportedPct = 0.0
+
+    /** 单调上报进度（只增不减），替换所有 onProgress?.invoke 调用。 */
+    private fun emitProgress(
+        onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)?,
+        fileName: String,
+        percent: Double,
+        downloadedBytes: Long,
+        totalBytes: Long
+    ) {
+        val shown = if (percent > lastReportedPct) percent else lastReportedPct
+        lastReportedPct = shown
+        onProgress?.invoke(fileName, shown, downloadedBytes, totalBytes)
+    }
+
     sealed class DownloadState {
         data class Progress(val percent: Int, val downloadedBytes: Long, val totalBytes: Long) : DownloadState()
         data class Completed(val file: File) : DownloadState()
@@ -234,7 +252,7 @@ class ModelDownloadManager(private val context: Context) {
                                     val now = System.currentTimeMillis()
                                     if (now - lastCallbackTime > 200) {
                                         lastCallbackTime = now
-                                        onProgress?.invoke(spec.localName, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
+                                        emitProgress(onProgress, spec.localName, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
                                     }
                                 }
                             }
@@ -244,7 +262,7 @@ class ModelDownloadManager(private val context: Context) {
                         tempFile.renameTo(spec.destFile)
                         downloadedBytes += spec.destFile.length()
                         val filePct = if (grandTotal > 0) (downloadedBytes.toDouble() / grandTotal * 100).coerceAtMost(100.0) else 100.0
-                        onProgress?.invoke(spec.localName, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
+                        emitProgress(onProgress, spec.localName, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
                         success = true
                         Log.i(TAG, "Zipformer file downloaded: ${spec.localName} (${spec.destFile.length()} bytes)")
                         break
@@ -376,7 +394,7 @@ class ModelDownloadManager(private val context: Context) {
                             output.write(buf, 0, n)
                             downloaded += n
                             val pct = if (total > 0) (downloaded.toDouble() / total * 100) else 0.0
-                            onProgress?.invoke(destFile.name, pct, downloaded, total)
+                            emitProgress(onProgress, destFile.name, pct, downloaded, total)
                         }
                     }
                 }
@@ -494,7 +512,7 @@ class ModelDownloadManager(private val context: Context) {
                                     val now = System.currentTimeMillis()
                                     if (now - lastCallbackTime > 200) {
                                         lastCallbackTime = now
-                                        onProgress?.invoke(spec.name, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
+                                        emitProgress(onProgress, spec.name, Math.round(pct * 10.0) / 10.0, overallDownloaded, grandTotal)
                                     }
                                 }
                             }
@@ -505,7 +523,7 @@ class ModelDownloadManager(private val context: Context) {
                         downloadedBytes += spec.destFile.length()
                         // 文件完成时强制回调一次
                         val filePct = if (grandTotal > 0) (downloadedBytes.toDouble() / grandTotal * 100).coerceAtMost(100.0) else 100.0
-                        onProgress?.invoke(spec.name, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
+                        emitProgress(onProgress, spec.name, Math.round(filePct * 10.0) / 10.0, downloadedBytes, grandTotal)
                         success = true
                         Log.i(TAG, "MNN file downloaded: ${spec.name} (${spec.destFile.length()} bytes)")
                         break

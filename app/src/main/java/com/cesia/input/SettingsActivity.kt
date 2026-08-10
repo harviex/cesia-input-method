@@ -1787,8 +1787,10 @@ class SettingsActivity : AppCompatActivity() {
         if (success) {
             til.error = null
             til.boxStrokeColor = accent
-            // 闪烁结束后恢复为原本的字体颜色（深色，清晰可读），而非定格主题色
-            val originalColor = (ed.textColors?.defaultColor ?: 0xFF222222.toInt())
+            // 闪烁结束后恢复为原本的字体颜色（深色，清晰可读），而非定格主题色。
+            // 注意：不能用 ed.textColors?.defaultColor —— 失败分支已把 ed 设成红色，
+            // 此时读到的 defaultColor 是红色，会导致成功时又恢复成红。改用固定常量。
+            val normalColor = 0xFF222222.toInt()
             // 闪烁：主题色 <-> 白色 交替几次后恢复原本颜色
             val white = 0xFFFFFFFF.toInt()
             val handler = android.os.Handler(mainLooper)
@@ -1801,7 +1803,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (count <= total) {
                         handler.postDelayed(this, 160)
                     } else {
-                        ed.setTextColor(originalColor)
+                        ed.setTextColor(normalColor)
                     }
                 }
             }
@@ -2780,15 +2782,30 @@ class SettingsActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun confirmDownloadPhoneAi() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("下载本地AI模型")
+            .setMessage("手机AI模型（约 1.2GB）尚未安装，是否现在下载？\n下载完成后将自动进行测试。")
+            .setPositiveButton("下载") { _, _ -> downloadAiModel() }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
     private fun selectModelSource(src: String) {
         prefs.edit().putBoolean("api_url_configured", true).apply()
         when (src) {
             SRC_PHONE_AI -> {
                 tvApiUrl.text = "手机AI模型"
                 prefs.edit().putString(PREF_API_URL, "phone_ai_local").apply()
-                appendLog("模型来源：手机AI模型（自动下载并测试）")
-                // 手机AI：唯一模型，无需 Key，直接下载并自动测试
-                downloadAiModel()
+                if (modelManager.hasAiModel()) {
+                    // 已安装：无需下载，直接跑自测点亮
+                    appendLog("模型来源：手机AI模型（已安装，直接测试）")
+                    downloadAiModel()
+                } else {
+                    // 未安装：先弹确认框，确认后才下载（避免选择来源即静默下载 1.2G）
+                    appendLog("模型来源：手机AI模型（待确认下载）")
+                    confirmDownloadPhoneAi()
+                }
             }
             SRC_OLlama -> {
                 promptOllamaAddress()

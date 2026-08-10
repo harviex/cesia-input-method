@@ -344,6 +344,22 @@ class RimeEngine(private val context: Context) : InputEngine {
     @Volatile
     private var dictIndexBuilding = false
     private var dictIndexBuildTime = 0L
+    // 索引未就绪期间登记的「就绪后自动重查」回调：key=prefix, value=就绪后回调(在主线程执行)。
+    // 解决早期选词(索引未构建)返回的假阴性永久失联问题——索引就绪后自动重查并刷新 UI。
+    private val pendingAssocCallbacks = mutableMapOf<String, MutableList<() -> Unit>>()
+
+    /** 查询联想：若索引未就绪，登记 onReady 回调，索引构建完成后自动重查前缀并触发回调（不依赖一次性延时重试）。 */
+    fun getAssociationsWhenReady(prefix: String, limit: Int = 20, pageWalk: Int = 10, onReady: () -> Unit) {
+        if (prefix.isEmpty()) return
+        if (dictIndexBuilt) {
+            onReady()
+            return
+        }
+        synchronized(pendingAssocCallbacks) {
+            pendingAssocCallbacks.getOrPut(prefix) { mutableListOf() }.add(onReady)
+        }
+        startIndexBuildAsync()
+    }
 
     /** 启动后台索引构建（幂等，避免重复起线程导致内存翻倍 / OOM） */
     private fun startIndexBuildAsync() {
@@ -358,14 +374,29 @@ class RimeEngine(private val context: Context) : InputEngine {
                 dictIndex = built
                 dictIndexBuilt = true
                 Log.d(TAG, "联想索引后台构建完成")
+                // 索引就绪：触发所有等待中的联想重查回调（主线程执行，安全刷新 UI）
+                val pending = synchronized(pendingAssocCallbacks) {
+                    val map = pendingAssocCallbacks.toMap()
+                    pendingAssocCallbacks.clear()
+                    map
+                }
+                if (pending.isNotEmpty()) {
+                    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                    for ((prefix, callbacks) in pending) {
+                        val retry = getAssociations(prefix, 100, 500, 10)
+                        if (retry.isNotEmpty()) {
+                            for (cb in callbacks) mainHandler.post { cb() }
+                        }
+                    }
+                }
             } catch (e: Throwable) {
                 Log.e(TAG, "联想索引构建失败: ${e.message}")
             } finally {
                 dictIndexBuilding = false
             }
         }.apply {
-            // 降低优先级：索引构建不与输入线程抢 CPU，消除构建期间的输入卡顿
-            priority = Thread.MIN_PRIORITY
+            // 后台优先级：比 MIN_PRIORITY 快，缩短首查空窗（仍是后台线程，不抢 UI 渲染）
+            priority = android.os.Process.THREAD_PRIORITY_BACKGROUND
             isDaemon = true
         }.start()
     }
@@ -485,5 +516,6 @@ class RimeEngine(private val context: Context) : InputEngine {
     fun clearAssociationIndex() {
         dictIndex = null
         dictIndexBuilt = false
+        synchronized(pendingAssocCallbacks) { pendingAssocCallbacks.clear() }
     }
 }
