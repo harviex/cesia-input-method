@@ -2895,14 +2895,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         rvCandidates?.scrollToPosition(0)
         btnCandidateExpand.visibility = if (reordered.size > 4) View.VISIBLE else View.GONE
 
-        // 更新展开面板
+        // 更新展开面板：直接复用顶栏已重排好的 lastDisplayedCands（与横向候选栏完全同一份列表），
+        // 严禁再独立 reorder（旧代码用 allCands 重新 reorder 得到 reorderedPanel，与 lastDisplayedCands 不等价，
+        // 导致面板点击经 lastAllCands.indexOf(词) 反查时位置错配 → 点甲上乙）。
+        // 现在面板与顶栏共用同一列表 + 同一点击路径（显示序号 → lastDisplayedCands[序号] → lastAllCands.indexOf），
+        // 彻底消除错位，且不影响横向候选栏。
         if (isPanelExpanded) {
             tvPanelComposing.text = pinyin
-            // 展开面板直接复用已获取的 allCands（候选栏已按选音前缀过滤过），避免再调一次 getAllCandidates
-            val filteredPanel = allCands
-            val displayPanel = if (isTraditional) filteredPanel.map { toTraditional(it) } else filteredPanel
-            val reorderedPanel = CandidatePrefs.reorder(this, displayPanel)
-            renderCandidatesToPanel(reorderedPanel)
+            val displayPanel = if (isTraditional) lastDisplayedCands.map { toTraditional(it) } else lastDisplayedCands
+            renderCandidatesToPanel(displayPanel)
         }
     }
 
@@ -2931,9 +2932,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val displayMerged = if (isTraditional) merged.map { toTraditional(it) } else merged
         candidateAdapter?.updateData(displayMerged)
         if (isPanelExpanded) {
-            // 面板 reorder 用简体 key（与点击反查一致），仅显示层转繁
-            val reorderedPanel = CandidatePrefs.reorder(this, merged)
-            val displayPanel = if (isTraditional) reorderedPanel.map { toTraditional(it) } else reorderedPanel
+            // 面板严格复用顶栏同一份 lastDisplayedCands（含懒加载新词），不再独立 reorder，
+            // 与 updateCandidateBar 面板逻辑一致，消除错位。
+            val displayPanel = if (isTraditional) lastDisplayedCands.map { toTraditional(it) } else lastDisplayedCands
             renderCandidatesToPanel(displayPanel)
         }
     }
