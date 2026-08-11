@@ -2597,6 +2597,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 commitCandidateText(selectedDisplay)
             }
             lastT9Feed = null  // 联想选词上屏后重置增量喂标记，防止下个新拼音首键被吞
+            // 清理 T9 数字态残留：首词若用部分码(如 94/943 选「这个」)上屏，t9DigitQueue/t9SpellPrefix 可能未清空，
+            // 残留会传染到联想态导致候选栏卡死。联想上屏不依赖 T9 输入队列，此处强制清空。
+            t9DigitQueue.clear(); t9SpellPrefix.clear(); t9ComposedSoFar.clear(); t9FenCiMerged = emptyList()
+            t9PendingSeg = ""; t9PendingChars.clear(); t9InputBuffer.clear()
+            rimeEngine.clear()
 
             // 每步都把当前累积词（≥2字）写入用户词库：无论用户是继续联想还是就此停手，
             // 组出的词都能被记住。registerUserPhraseCodes 内部去重+累加频次，重复调用安全。
