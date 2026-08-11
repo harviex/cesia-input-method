@@ -13,7 +13,7 @@ schema:
 # 开关
 switches:
   - name: ascii_mode
-    reset: 1
+    reset: 0
     states: [ 中, Ａ ]
 
 # 输入引擎

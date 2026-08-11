@@ -310,10 +310,13 @@ class RimeEngine(private val context: Context) : InputEngine {
         RimeJni.setOption("traditional", trad)
     }
 
-    /** 切换 Rime schema */
+    /** 调试：获取当前 schema id */
+    fun getSchemaIdDebug(): String = try { Rime.getCurrentRimeSchema() } catch (_: Throwable) { "ERR" }
+
+    /** 切换 Rime schema（用单数 API，与初始化时 selectRimeSchema 一致，真正切换当前 schema） */
     @Synchronized
     fun selectSchema(schemaId: String): Boolean {
-        val ok = Rime.selectRimeSchemas(arrayOf(schemaId))
+        val ok = Rime.selectRimeSchema(schemaId)
         if (ok) clearSession()
         return ok
     }

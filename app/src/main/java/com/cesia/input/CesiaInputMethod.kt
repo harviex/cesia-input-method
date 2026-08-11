@@ -440,8 +440,13 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
-    // 英文拼写方案模式（双击空格切换，持久化）：true=读 Rime 英文方案(en/t9_en)，false=中文(pinyin/t9_pinyin)
+    // 英文拼写方案模式（双击空格切换，持久化）：true=英文输入（Cesia 自主词库），false=中文
     private var isEnglishMode = false
+    // === Cesia 自主英文词库（不依赖 Rime en schema）===
+    private var englishDict: com.cesia.input.engine.EnglishDictLoader? = null
+    private var enBuffer = StringBuilder()          // 当前英文输入串（QWERTY 字母 / T9 数字）
+    private var enCandidates = emptyList<String>() // 当前英文候选词
+    private var enMode: KeyboardMode? = null        // 进入英文时的键盘模式（区分 QWERTY/T9 匹配方式）
     private var lastSpaceTapTime = 0L  // 空格双击检测时间戳
     private var spaceDoubleTapPending = false
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
@@ -1204,6 +1209,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         modelManager = ModelManager(this)
         downloadManager = ModelDownloadManager(this)
         dictManager = PinyinDictManager(this)
+        // 加载英文词库（Cesia 自主，不依赖 Rime en schema）：解析 en_dicts/en.dict.yaml
+        try {
+            val enPath = java.io.File(dictManager.getRimeDir(), "en_dicts/en.dict.yaml").absolutePath
+            englishDict = com.cesia.input.engine.EnglishDictLoader().loadFromFile(enPath)
+            Log.i("Cesia", "英文词库加载: size=${englishDict?.size()}")
+        } catch (e: Throwable) {
+            Log.e("Cesia", "英文词库加载失败: ${e.message}")
+        }
         voiceEngine = VoiceEngine(this)
         aiEngine = AIEngine(this)
 
@@ -2446,6 +2459,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 通过全局索引选择候选词（自动翻页选中） */
     private fun selectCandidateByGlobalIndex(globalIndex: Int) {
         if (globalIndex < 0) return
+        // 英文自主词库通道：点击候选直接上屏对应英文词，不走 Rime
+        if (isEnglishMode && enCandidates.isNotEmpty()) {
+            val word = enCandidates.getOrNull(globalIndex) ?: enCandidates.firstOrNull() ?: return
+            currentInputConnection?.commitText(word, 1)
+            enBuffer.clear()
+            enCandidates = emptyList()
+            updateCandidateBar()
+            return
+        }
         // 选了整词/词组/单字 → 交给 Rime 原生续写或结束；单字已并入主候选流，无独立「单字专区」进度需重置。
 
         try {
@@ -2782,7 +2804,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
-        var allCands = rimeAllCands
+        var allCands: List<String>
+        if (isEnglishMode) {
+            // 英文自主词库通道：候选直接来自 enCandidates，不经过 Rime
+            allCands = if (enBuffer.isEmpty()) emptyList() else enCandidates
+            lastAllCands = allCands
+            candTotalLoaded = allCands.size
+        } else {
+        var allCandsZh = rimeAllCands
         // 用户词组召回：若当前数字码前缀匹配某存词（如 2247474→蔡祈琪），把该词插入候选前列。
         // 仅显示用（不进 lastAllCands），点击时走「直接上屏语义」(见 selectCandidateByGlobalIndex 特判)，
         // 不走 Rime 索引反查 → 不会错位（区别于早期 mergeByFrequency 注入 bug）。
@@ -2792,8 +2821,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 .maxByOrNull { it.value.freq }?.key
         } else null
         t9RecalledPhrase = recalled
-        if (recalled != null && recalled !in allCands) {
-            allCands = listOf(recalled) + allCands
+        if (recalled != null && recalled !in allCandsZh) {
+            allCandsZh = listOf(recalled) + allCandsZh
+        }
+        allCands = allCandsZh
         }
         // 快照未过滤的原始 Rime 候选列表（供点击反查真实全局索引）。召回词不纳入，避免位置错位
         lastAllCands = rimeAllCands
@@ -2818,7 +2849,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
         // 智能写作/魔法编辑模式下不恢复初始状态（避免"已就绪"覆盖编辑中的命令）
-        if (!composing && pinyin.isEmpty() && !isAssociationMode && !smartEditMode && !magicEditMode) {
+        if (!composing && pinyin.isEmpty() && !isAssociationMode && !smartEditMode && !magicEditMode && !isEnglishMode) {
             if (isAssociationMode) {
                 isAssociationMode = false
                 associationPrefix = ""
@@ -3492,7 +3523,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
 // endregion 语音键处理
 
-    // 英文拼写方案模式切换（双击空格触发）：true=读 Rime 英文方案(en/t9_en)，false=中文(pinyin/t9_pinyin)
+    // 英文拼写方案模式切换（双击空格触发）：true=英文输入（Cesia 自主词库），false=中文
     // 持久化到 cesia_settings（english_mode），切后台/重启不丢。未下载词库时拒绝切换并提示。
     private fun toggleEnglishMode() {
         if (!dictManager.hasDownloadedDict()) {
@@ -3507,33 +3538,115 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         updateStatus(if (isEnglishMode) "已切换到英文输入" else "已切换到中文输入")
     }
 
-    // 应用当前英文模式到 Rime：选对应 schema，关 ascii_mode（让 en/t9_en 真正接管拼写联想）
+    // 应用当前英文模式：Cesia 自主英文通道（不切 Rime en schema，因其部署未编译词典）。
+    // 进入英文：记录键盘模式、清 buffer、Rime 切回中文 schema（英文走 Cesia 词库，不经 Rime）。
+    // 退出英文：Rime 切回对应中文 schema，清 buffer。
     private fun applyEnglishMode(isRestart: Boolean) {
+        enMode = if (isEnglishMode) keyboardMode else null
+        enBuffer.clear()
+        enCandidates = emptyList()
         val target = if (isEnglishMode) {
-            if (keyboardMode == KeyboardMode.NUMBER) "t9_en" else "en"
+            if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin"
         } else {
             if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin"
         }
-        rimeEngine.setAsciiMode(false)
-        var ok = rimeEngine.selectSchema(target)
-        // 兜底：若 selectSchema 失败（Rime 仍持旧 schema_list，多见于刚更新 default.yaml 首切），
-        // 重新部署让 Rime 读取新 schema_list 后重试一次
-        if (!ok) {
-            rimeEngine.redeploy()
-            ok = rimeEngine.selectSchema(target)
+        try {
+            rimeEngine.setAsciiMode(false)
+            rimeEngine.selectSchema(target)
+        } catch (_: Throwable) {}
+        if (!isRestart) {
+            rimeEngine.clear()
+            updateCandidateBar()
         }
-        if (!isRestart) rimeEngine.clear()
     }
 
+    // 英文输入：处理单个按键（Cesia 自主词库通道，完全不经过 Rime）
+    private fun handleEnglishKey(primaryCode: Int) {
+        val dict = englishDict
+        if (dict == null) {
+            // 词库未加载（极端情况），退回中文逻辑
+            isEnglishMode = false
+            return
+        }
+        when {
+            // 退格
+            primaryCode == -5 -> {
+                if (enBuffer.isNotEmpty()) {
+                    enBuffer.deleteAt(enBuffer.length - 1)
+                    refreshEnglishCandidates()
+                } else {
+                    // buffer 空时退格删已上屏文本前的字符
+                    currentInputConnection?.deleteSurroundingText(1, 0)
+                }
+            }
+            // 空格：上屏首候选（若有）或当前 buffer 字母
+            primaryCode == 32 -> {
+                val commit = enCandidates.firstOrNull() ?: enBuffer.toString()
+                if (commit.isNotEmpty()) {
+                    currentInputConnection?.commitText(commit, 1)
+                    enBuffer.clear()
+                    enCandidates = emptyList()
+                    updateCandidateBar()
+                }
+            }
+            // 回车
+            primaryCode == 10 -> {
+                val commit = enCandidates.firstOrNull() ?: enBuffer.toString()
+                if (commit.isNotEmpty()) {
+                    currentInputConnection?.commitText(commit, 1)
+                    enBuffer.clear()
+                    enCandidates = emptyList()
+                    updateCandidateBar()
+                }
+            }
+            // QWERTY 字母键
+            primaryCode in 97..122 -> {
+                enBuffer.append(primaryCode.toChar())
+                refreshEnglishCandidates()
+            }
+            // T9 数字键（2-9）：作为 t9 数字序列累积
+            primaryCode in 50..57 -> {
+                enBuffer.append(primaryCode.toChar())
+                refreshEnglishCandidates()
+            }
+            // 标点等：上屏当前首选并提交标点（简单处理：先上屏首选，再上屏标点字符）
+            primaryCode in 44..47 || primaryCode == 63 || primaryCode == 33 -> {
+                val commit = enCandidates.firstOrNull() ?: enBuffer.toString()
+                if (commit.isNotEmpty()) {
+                    currentInputConnection?.commitText(commit, 1)
+                    enBuffer.clear()
+                    enCandidates = emptyList()
+                }
+                currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                updateCandidateBar()
+            }
+            // 其他键忽略（如 shift/符号切换），保持英文输入态
+        }
+    }
+
+    // 根据当前 buffer 刷新英文候选
+    private fun refreshEnglishCandidates() {
+        val dict = englishDict ?: return
+        enCandidates = if (enMode == KeyboardMode.NUMBER) {
+            dict.t9Match(enBuffer.toString())
+        } else {
+            dict.prefixMatch(enBuffer.toString())
+        }
+        updateCandidateBar()
+    }
     // 输入模式角标（空格键左上方，运行时定位）：中文时「中」随主题色高亮、英文灰度；英文时反之。
     // 语音键对应 中英/纯中 由 updateMicModeBar 负责。暗色跟随 isDarkTheme + themeAccent。
     private fun updateInputMode() {
-        if (!::tvModeCn.isInitialized) return
-        val accent = themeAccent
-        val gray = if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt()
-        tvModeCn.setTextColor(if (!isEnglishMode) accent else gray)
-        tvModeEn.setTextColor(if (isEnglishMode) accent else gray)
-        positionSpaceBadge()
+        try {
+            if (!::tvModeCn.isInitialized) return
+            val accent = themeAccent
+            val gray = if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt()
+            tvModeCn.setTextColor(if (!isEnglishMode) accent else gray)
+            tvModeEn.setTextColor(if (isEnglishMode) accent else gray)
+            positionSpaceBadge()
+        } catch (_: Exception) {
+            // 防御：视图未就绪或定位异常时不闪退，仅跳过角标更新
+        }
     }
 
     // 将中/英角标定位到当前键盘空格键的左上角（键盘布局完成后调用）
@@ -3548,7 +3661,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         modeBadgeContainer.visibility = View.VISIBLE
-        val params = modeBadgeContainer.layoutParams as FrameLayout.LayoutParams
+        val params = modeBadgeContainer.layoutParams as? FrameLayout.LayoutParams ?: return
         params.leftMargin = spaceKey.x + (spaceKey.width * 0.03f).toInt()
         params.topMargin = spaceKey.y + (spaceKey.height * 0.04f).toInt()
         modeBadgeContainer.layoutParams = params
@@ -7535,11 +7648,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         keyboardView.keyboard = currentKeyboard
         if (mode == KeyboardMode.SYMBOL_CN) applySymbolFlip()
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
-        // 切换键盘后恢复英文模式：若处于英文方案且词库已下载，覆盖上面分支的 pinyin/t9_pinyin 选择
+        // 切换键盘后恢复英文模式（全局状态）：保留英文输入，更新 enMode，清 buffer
         if (isEnglishMode && dictManager.hasDownloadedDict()
             && (mode == KeyboardMode.NUMBER || mode == KeyboardMode.QWERTY)) {
-            rimeEngine.setAsciiMode(false)
-            rimeEngine.selectSchema(if (mode == KeyboardMode.NUMBER) "t9_en" else "en")
+            enMode = mode
+            enBuffer.clear()
+            enCandidates = emptyList()
+            // Rime 仍保持中文 schema（英文走 Cesia 词库，不经 Rime）
+            try {
+                rimeEngine.setAsciiMode(false)
+                rimeEngine.selectSchema(if (mode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin")
+            } catch (_: Throwable) {}
             rimeEngine.clear()
         }
         updateInputMode()
@@ -9275,6 +9394,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         cancelAllLongPressActions()
         if (wasLongPressed) {
             return  // 上一次按键的长按被消耗，跳过本次短按
+        }
+
+        // ======================== 英文输入模式拦截（Cesia 自主词库，独立于 Rime） ========================
+        if (isEnglishMode) {
+            handleEnglishKey(primaryCode)
+            return
         }
 
         // ======================== 剪贴板搜索编辑：复用 smartEditMode 输入法（见下方智能写作编辑模式拦截） ========================
