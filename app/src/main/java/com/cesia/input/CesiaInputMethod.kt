@@ -9769,7 +9769,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // ======================== 其他按键（标点等）=======================
             else -> {
-                // 如果当前 composing 是纯英文（如输入llama后按.），直接上屏英文+标点
+                // T9 模式：按标点符号时，先把候选栏第 0 个（自研顺序显示的那个词/字）上屏，再上屏标点。
+                // 避免走 rimeEngine.commit() 取「原生第 0」导致与自研重排后的显示第 0 错位（点甲上乙类回归，
+                // 表现为「看到的是拼音、上屏的却是奇」）。
+                if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
+                    val word = lastDisplayedCands.firstOrNull()
+                    if (!word.isNullOrEmpty()) {
+                        commitCandidateText(if (isTraditional) toTraditional(word) else word)
+                    }
+                    rimeEngine.clear()
+                    val c = when (primaryCode) {
+                        44 -> '，'; 46 -> '。'; 47 -> '？'
+                        65292 -> '，'; 12290 -> '。'; 65307 -> '；'; 65281 -> '！'; 65311 -> '？'
+                        65288 -> '（'; 65289 -> '）'
+                        else -> primaryCode.toChar()
+                    }
+                    if (c != '\u0000') ic?.commitText(c.toString(), 1)
+                    t9DigitQueue.clear(); t9SpellPrefix.clear(); t9InputBuffer.clear()
+                    lastT9Feed = null  // 重置增量喂标记，下次输入从头喂（防首个音被吃）
+                    updateStatus(statusIdleText); updateCandidateBar()
+                    return
+                }
+                // 如果当前 composing 是纯英文（如输入llama后按.），直接上屏英文原文 + 标点
                 val composingText = rimeEngine.composingText
                 val isPureEnglish = !isAsciiMode && composing && composingText.isNotEmpty() &&
                     composingText.all { it in 'a'..'z' }
