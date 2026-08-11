@@ -10110,24 +10110,19 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    // 空格键：双击切换中/英文，单击延迟执行原空格逻辑（防误触）
+    // 空格键：双击切换中/英文，单击立即执行（无延迟，避免中文输入卡顿）
     private fun handleSpaceDoubleTap() {
         val now = System.currentTimeMillis()
         if (now - lastSpaceTapTime < 250) {
-            // 双击命中：取消单击待执行，切换中/英文
+            // 双击命中：撤销第一击产生的字符（空格/上屏词末字符），切换中/英文
             lastSpaceTapTime = 0
             spaceDoubleTapPending = false
+            currentInputConnection?.deleteSurroundingText(1, 0)
             toggleEnglishMode()
             return
         }
         lastSpaceTapTime = now
-        spaceDoubleTapPending = true
-        Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (spaceDoubleTapPending) {
-                spaceDoubleTapPending = false
-                handleSpaceKey()
-            }
-        }, 250)
+        handleSpaceKey()  // 单击立即执行
     }
 
     // 原空格键逻辑（单击）

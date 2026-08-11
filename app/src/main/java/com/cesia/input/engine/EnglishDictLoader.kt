@@ -16,6 +16,8 @@ class EnglishDictLoader {
 
     // 排序词表（去重、全小写）
     private var words: List<String> = emptyList()
+    // 与 words 一一对应的 t9 数字串（加载时预计算，避免每次匹配实时转换 2 万词）
+    private var t9List: List<String> = emptyList()
 
     // 字母 -> T9 数字映射（用于九键英文：把单词转成数字串做前缀匹配）
     private val t9Map = mapOf(
@@ -50,6 +52,8 @@ class EnglishDictLoader {
             }
         }
         words = set.toList()
+        // 预计算 t9 数字串（加载时一次，约 2 万词，毫秒级），供 t9Match 直接前缀匹配
+        t9List = words.map { wordToT9(it) }
         return this
     }
 
@@ -72,8 +76,8 @@ class EnglishDictLoader {
         val d = digits.filter { it in '2'..'9' }
         if (d.isEmpty()) return emptyList()
         val out = mutableListOf<String>()
-        for (w in words) {
-            if (wordToT9(w).startsWith(d) && out.size < limit) out.add(w)
+        for (i in words.indices) {
+            if (t9List[i].startsWith(d) && out.size < limit) out.add(words[i])
         }
         return out
     }
