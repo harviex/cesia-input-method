@@ -2748,7 +2748,23 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 且重喂前 t9ComposedSoFar.clear() 让 t9SpellCursor 回退到 0，已消费位彻底失效。
                 t9InputBuffer.clear()
                 if (rimeEngine.isComposing) {
-                    // Rime 仍在 composing → 整串没用完，候选栏交给 Rime 原生续写下一音节（已选字的音已被 Rime 吃掉）
+                    // Rime 仍在 composing（拼音未输完整）：先查该词联想。
+                    // 有联想则进入联想模式（清 Rime composing，显示续词），否则交还 Rime 续写下一音节。
+                    // 修复：原逻辑直接 return 跳过 getAssociations，导致部分码选词（如 936 选"问题"）无联想，
+                    // 而全码（93684）因 isComposing=false 能联想——同一词行为不一致。
+                    val earlyAssoc = rimeEngine.getAssociations(selectedWord, 100, 500, 10)
+                    if (earlyAssoc.isNotEmpty()) {
+                        rimeEngine.clear()
+                        t9ComposedSoFar.clear()
+                        t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+                        t9PendingSeg = ""; t9PendingChars.clear(); lastT9Feed = null
+                        updateSpellBar(); updateStatus(statusIdleText)
+                        isAssociationMode = true
+                        associationPrefix = selectedWord
+                        associationCandidates = earlyAssoc
+                        showAssociationCandidates()
+                        return
+                    }
                     t9SpellPrefix.clear()
                     updateSpellBar()
                     updateCandidateBar()
