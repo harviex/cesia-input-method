@@ -2467,7 +2467,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         enMode = if (isEnglishMode) keyboardMode else null
         enBuffer.clear()
         enCandidates = emptyList()
-        if (!isEnglishMode) {
+        if (isEnglishMode) {
+            // 进入英文：清空 Rime 中文 composing，避免候选栏残留中文词（像 T9 那样）
+            try { rimeEngine.clear() } catch (_: Throwable) {}
+        } else {
             // 切回中文：重置 Rime 到当前键盘对应 schema，避免候选栏只显示一个词
             try {
                 rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin")
@@ -2507,10 +2510,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 enBuffer.append(primaryCode.toChar())
                 refreshEnglishCandidates()
             }
-            else -> {  // 其余键（标点/数字/符号）：先上屏英文词，再上屏该键字符
+            else -> {  // 其余键（标点/数字/符号）：先上屏英文词，再上屏该键字符（标点后补空格）
                 commitEnglishTop()
                 if (primaryCode in 32..126) {
-                    currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                    val ch = primaryCode.toChar()
+                    val suffix = if (ch.isLetterOrDigit()) "" else " "
+                    currentInputConnection?.commitText("$ch$suffix", 1)
                 }
             }
         }
@@ -10200,6 +10205,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     override fun onText(text: CharSequence?) {
         cancelLongPress()
+        // 英文模式：符号键（如问号）经 onText 发送，先上屏当前英文词再上屏符号并补空格
+        if (isEnglishMode && text != null) {
+            commitEnglishTop()
+            currentInputConnection?.commitText("$text ", 1)
+            enBuffer.clear()
+            enCandidates = emptyList()
+            updateCandidateBar()
+            return
+        }
         if (magicEditMode && text != null) {
             // 魔法编辑模式：如果 Rime 正在 composing，追加选词到缓冲区并清空 Rime
             if (rimeEngine.isComposing) {
