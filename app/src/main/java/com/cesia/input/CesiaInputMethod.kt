@@ -2653,6 +2653,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     // 非接龙场景：直接上屏该词
                     commitCandidateText(clickedWord)
                 }
+                // 用户词组直出也查联想：修复组过的词/部分码选词因提前 return 失联想
+                // （如反复全码输「问题」后被登记进 userPhrases，部分码 9368 选「问题」走此分支直接 return）
+                val upAssoc = rimeEngine.getAssociations(clickedWord, 100, 500, 10)
+                if (upAssoc.isNotEmpty()) {
+                    isAssociationMode = true
+                    associationPrefix = clickedWord
+                    associationCandidates = upAssoc
+                    showAssociationCandidates()
+                }
                 return
             }
         }
