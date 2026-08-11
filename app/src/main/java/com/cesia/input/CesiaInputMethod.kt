@@ -2468,8 +2468,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         enBuffer.clear()
         enCandidates = emptyList()
         if (isEnglishMode) {
-            // 进入英文：清空 Rime 中文 composing，避免候选栏残留中文词（像 T9 那样）
+            // 进入英文：清空 Rime 中文 composing + 联想态，避免候选栏残留中文词/联想词（像 T9 那样）
             try { rimeEngine.clear() } catch (_: Throwable) {}
+            isAssociationMode = false
+            associationPrefix = ""
+            associationCandidates = emptyList()
         } else {
             // 切回中文：重置 Rime 到当前键盘对应 schema，避免候选栏只显示一个词
             try {
@@ -2487,7 +2490,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun handleEnglishKey(primaryCode: Int) {
         val dict = englishDict ?: run { isEnglishMode = false; updateEnModeButton(); return }
         val lower = if (primaryCode in 65..90) primaryCode + 32 else primaryCode
+        // 符号面板负码 / 全键盘问号特殊码 → 对应英文标点（先上屏英文词再上屏符号+空格）
+        val punctMap = mapOf(
+            -310 to ',', -320 to '.', -329 to '!', -330 to '?',
+            65311 to '?', 33 to '!', 63 to '?', 44 to ',', 46 to '.'
+        )
+        val punct = punctMap[primaryCode]
         when {
+            punct != null -> {  // 标点符号：先上屏英文词，再上屏英文标点+空格
+                commitEnglishTop()
+                currentInputConnection?.commitText("$punct ", 1)
+                enBuffer.clear()
+                enCandidates = emptyList()
+                updateCandidateBar()
+            }
             primaryCode == -5 -> {  // 退格
                 if (enBuffer.isNotEmpty()) {
                     enBuffer.deleteAt(enBuffer.length - 1)
