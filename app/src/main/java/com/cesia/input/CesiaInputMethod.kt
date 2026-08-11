@@ -2596,35 +2596,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 rimeEngine.clear()
             }
             if (keyboardMode == KeyboardMode.NUMBER && !smartEditMode && !magicEditMode) {
-                // T9 选词后续写修复：保留完整数字队列不切短，用 processT9InputLight 重喂完整串(如 96894)，
-                // 让 Rime 从完整上下文反解 youxi → 候选栏出下一音节 xi 系（而非切短喂 94 退化为 wg 首字母）。
-                // 注：方向A(不重喂)会导致候选栏卡在选词态，故保留重喂机制，但喂完整串修复 wg bug。
+                // 回归 Rime 原生续写：selectCandidate 已吃掉已选字的音并推进 composition，
+                // 不再自研「选词后重喂完整队列 + t9SpellCursor 跳过」。b9962c9 在 selectCandidate 之后
+                // 又 processT9InputLight 重喂完整 96894，等于把已选字那部分重新拉回 → 已选的字对应的音没被吃掉；
+                // 且重喂前 t9ComposedSoFar.clear() 让 t9SpellCursor 回退到 0，已消费位彻底失效。
                 t9InputBuffer.clear()
-                // 已消费位数：已选词(t9ComposedSoFar 清空前)真实读音反推的数字码长
-                val consumedPy = if (t9ComposedSoFar.isNotEmpty()) {
-                    try { PinyinMap.toFull(t9ComposedSoFar.toString()) } catch (_: Exception) { "" }
-                } else ""
-                val consumed = (if (consumedPy.isNotEmpty()) pinyinToDigits(consumedPy) else "").length.coerceAtMost(t9DigitQueue.length)
-                t9ComposedSoFar.clear()   // 已上屏，清掉让选音光标归零（状态栏显示剩余串首位）
-                t9SpellPrefix.clear()     // 选词后拼音前缀清空：下一音节由 Rime 当前 composition 自然续写
-                t9ConsumedLen = 0
-                // 不物理切短 t9DigitQueue：保留完整串供 processT9InputLight 重喂(96894→youxi)，
-                // 已消费位仅用于「数字用完」判断与状态栏剩余显示(t9SpellCursor=composedDigitLen 自动跳过)。
-                if (consumed < t9DigitQueue.length) {
-                    // 仍有剩余音节 → 重喂完整队列，Rime 反解后候选栏出 xi 系
-                    processT9InputLight()
+                if (rimeEngine.isComposing) {
+                    // Rime 仍在 composing → 整串没用完，候选栏交给 Rime 原生续写下一音节（已选字的音已被 Rime 吃掉）
+                    t9SpellPrefix.clear()
                     updateSpellBar()
                     updateCandidateBar()
                     scrollCandidates.scrollTo(0, 0)
                     return
                 }
-                // 数字全部用完（已消费位覆盖整个队列）：整串写入 Rime 用户词表（cesia_user.dict.yaml），Rime 原生加载召回
+                // Rime 整串已消费完：整串写入 Rime 用户词表（cesia_user.dict.yaml），清 T9 状态，随后统一走词后联想
                 if (t9FullPhrase.isNotEmpty()) {
                     addUserPhrase(t9FullPhrase.toString(), "")
                     t9FullPhrase.clear()   // 存完即清，避免下次组合继续 append 产生「蔡祈琪蔡祈琪」垃圾词条
                 }
                 rimeEngine.clear()
-                t9ComposedSoFar.clear(); t9ConsumedLen = 0
+                t9ComposedSoFar.clear()
                 t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
                 t9PendingSeg = ""; t9PendingChars.clear()
                 lastT9Feed = null
