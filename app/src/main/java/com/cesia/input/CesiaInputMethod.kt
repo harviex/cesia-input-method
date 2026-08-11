@@ -2490,10 +2490,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun handleEnglishKey(primaryCode: Int) {
         val dict = englishDict ?: run { isEnglishMode = false; updateEnModeButton(); return }
         val lower = if (primaryCode in 65..90) primaryCode + 32 else primaryCode
-        // 符号面板负码 / 全键盘问号特殊码 → 对应英文标点（先上屏英文词再上屏符号+空格）
+        // 符号面板负码 / 全键盘问号 / T9主键盘中文标点码点 → 对应英文标点（先上屏英文词再上屏符号+空格）
         val punctMap = mapOf(
             -310 to ',', -320 to '.', -329 to '!', -330 to '?',
-            65311 to '?', 33 to '!', 63 to '?', 44 to ',', 46 to '.'
+            65311 to '?', 33 to '!', 63 to '?', 44 to ',', 46 to '.',
+            65292 to ',', 12290 to '.', 65281 to '!'
         )
         val punct = punctMap[primaryCode]
         when {
