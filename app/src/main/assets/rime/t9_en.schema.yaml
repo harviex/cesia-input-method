@@ -1,0 +1,88 @@
+# Rime schema — Cesia T9 九键英文
+# 原生 T9 英文方案：speller 通过 derive 将字母映射到数字（2=abc 3=def ...），
+# 按 T9 数字键 → Rime 反解出英文候选词（如 228 → cat/bat/act ...）。
+# 英文词库复用 en.dict.yaml 的 import en_dicts/en（雾凇英文词库，需下载 full.zip）。
+schema:
+  schema_id: t9_en
+  name: 英文九键
+  version: "1.0.0"
+  author:
+    - Cesia
+  description: |
+    T9 九键英文输入 - 2=abc 3=def 4=ghi 5=jkl 6=mno 7=pqrs 8=tuv 9=wxyz
+    基于雾凇英文词库，按数字键出英文单词候选
+
+# 开关
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中, Ａ ]
+
+# 输入引擎
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - table_translator@english
+  filters:
+    - uniquifier
+
+# 英文词典翻译器（复用 en.dict.yaml 的 english 段）
+english:
+  dictionary: en
+  enable_completion: true
+  enable_sentence: false
+  enable_user_dict: false
+  initial_quality: 1
+
+# T9 数字拼写器：字母↔数字双向 derive
+speller:
+  alphabet: "abcdefghijklmnopqrstuvwxyz0123456789"
+  delimiter: " '"
+  auto_select: false
+  auto_clear: manual
+  algebra:
+    # 字母 → T9 数字映射（核心）
+    - derive/[abc]/2/
+    - derive/[def]/3/
+    - derive/[ghi]/4/
+    - derive/[jkl]/5/
+    - derive/[mno]/6/
+    - derive/[pqrs]/7/
+    - derive/[tuv]/8/
+    - derive/[wxyz]/9/
+
+# 标点 - 英文标点
+punctuator:
+  import_preset: default
+  half_shape:
+    ' ' : { commit: ' ' }
+    ',' : { commit: ',' }
+    '.' : { commit: '.' }
+    '?' : { commit: '?' }
+    '!' : { commit: '!' }
+
+# 翻页
+key_binder:
+  bindings:
+    - { when: has_menu, accept: minus, send: Page_Up }
+    - { when: has_menu, accept: equal, send: Page_Down }
+    - { when: paging, accept: comma, send: Page_Up }
+    - { when: has_menu, accept: period, send: Page_Down }
+
+recognizer:
+  patterns:
+    t9: "^[2-9]+$"

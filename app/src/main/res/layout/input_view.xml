@@ -283,6 +283,84 @@
         </ScrollView>
     </LinearLayout>
 
+    <!-- 输入模式指示条：键盘上方常驻，空格对应区显示 中/英，语音键对应区显示 中英/纯中。
+         中文/中英 选中时随主题色高亮（语音键因底已是主题色则显示白色），未选中灰度。不塞进键盘行。 -->
+    <LinearLayout
+        android:id="@+id/input_mode_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@android:color/transparent">
+
+        <!-- 空格对应：中 / 英（中文时中高亮，英文时英高亮） -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_mode_cn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="中"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/tv_mode_en"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="英"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="4dp"
+                android:paddingEnd="8dp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="14dp"
+            android:background="#CCCCCC"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- 语音键对应：中英 / 纯中（选中时白色，未选中灰度；因语音键底已是主题色） -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_mic_mode_bi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="中英"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/tv_mic_mode_zh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="纯中"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="4dp"
+                android:paddingEnd="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- 键盘区域（FrameLayout 包装，供候选音覆盖层叠加） -->
     <FrameLayout
         android:id="@+id/fl_keyboard_wrapper"

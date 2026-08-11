@@ -107,7 +107,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
-    private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（仅纯中文模式显示）
+    private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（保留兼容，现改由模式条取代）
+    private lateinit var tvModeCn: TextView           // 模式条：中（空格对应）
+    private lateinit var tvModeEn: TextView           // 模式条：英（空格对应）
+    private lateinit var tvMicModeBi: TextView        // 模式条：中英（语音键对应）
+    private lateinit var tvMicModeZh: TextView        // 模式条：纯中（语音键对应）
     private lateinit var micWrapper: FrameLayout     // 包裹麦克风键，承载“中”标记；分列时需隐藏以恢复原始双按钮布局
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
@@ -145,6 +149,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         textGrayScale = prefs.getFloat("text_gray_scale", 0.5f)
         autoTimeTheme = prefs.getBoolean("auto_time_theme", false)
         t9FenCiLock = prefs.getBoolean("t9_fenci_lock", false)
+        isEnglishMode = prefs.getBoolean("english_mode", false)
     }
 
     /**
@@ -434,6 +439,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
+    // 英文拼写方案模式（双击空格切换，持久化）：true=读 Rime 英文方案(en/t9_en)，false=中文(pinyin/t9_pinyin)
+    private var isEnglishMode = false
+    private var lastSpaceTapTime = 0L  // 空格双击检测时间戳
+    private var spaceDoubleTapPending = false
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     // === 词语联想 ===
     private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
@@ -1016,6 +1025,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         micButtonContainer = view.findViewById(R.id.mic_button_container)
         micWrapper = view.findViewById(R.id.mic_wrapper)
         tvMicZh = view.findViewById(R.id.tv_mic_zh)
+        tvModeCn = view.findViewById(R.id.tv_mode_cn)
+        tvModeEn = view.findViewById(R.id.tv_mode_en)
+        tvMicModeBi = view.findViewById(R.id.tv_mic_mode_bi)
+        tvMicModeZh = view.findViewById(R.id.tv_mic_mode_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
         btnSettings = view.findViewById(R.id.btn_settings)
@@ -1598,7 +1611,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun applyThemeColors() {
         // ① 背景灰度
         applyKeyboardTheme()
-        updateMicZhLabel()   // 刷新语音键“中”副字符（随模式显示/隐藏）
+        updateMicModeBar()   // 刷新语音键模式条（中英/纯中）
 
         // ② 主题色 —— 所有高亮元素
         val accent = themeAccent
@@ -3117,7 +3130,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 android.view.MotionEvent.ACTION_UP -> {
                     cancelMicLongPressDetection()
                     if (!micLongPressTriggered) {
-                        // 双击检测（350ms 窗口）：未录音时双击切换中英混/纯中文模型
+                        // 双击检测（350ms 窗口）：未录音时双击切换中英 / 纯中 模式
                         val now = System.currentTimeMillis()
                         if (now - lastMicTapTime <= 350) {
                             micDoubleTapPending = false
@@ -3477,7 +3490,99 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
 // endregion 语音键处理
 
-    // 语音键双击：未录音时切换中英混 / 纯中文 识别模型（不影响中英混模型本身）
+    // 英文拼写方案模式切换（双击空格触发）：true=读 Rime 英文方案(en/t9_en)，false=中文(pinyin/t9_pinyin)
+    // 持久化到 cesia_settings（english_mode），切后台/重启不丢。未下载词库时拒绝切换并提示。
+    private fun toggleEnglishMode() {
+        if (!dictManager.hasDownloadedDict()) {
+            updateStatus("请先下载词库后使用英文输入")
+            return
+        }
+        isEnglishMode = !isEnglishMode
+        val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+        prefs.edit().putBoolean("english_mode", isEnglishMode).apply()
+        applyEnglishMode(isRestart = false)
+        updateInputModeBar()
+        updateStatus(if (isEnglishMode) "已切换到英文输入" else "已切换到中文输入")
+    }
+
+    // 应用当前英文模式到 Rime：选对应 schema，关 ascii_mode（让 en/t9_en 真正接管拼写联想）
+    private fun applyEnglishMode(isRestart: Boolean) {
+        if (isEnglishMode) {
+            rimeEngine.setAsciiMode(false)
+            rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_en" else "en")
+        } else {
+            rimeEngine.setAsciiMode(false)
+            rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin")
+        }
+        if (!isRestart) rimeEngine.clear()
+    }
+
+    // 输入模式条（键盘上方常驻）：空格对应 中/英。中文时「中」随主题色高亮、英文灰度；英文时反之。
+    // 语音键对应 中英/纯中 由 updateMicModeBar 负责。暗色跟随 isDarkTheme + themeAccent。
+    private fun updateInputModeBar() {
+        if (!::tvModeCn.isInitialized) return
+        val accent = themeAccent
+        val gray = if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt()
+        tvModeCn.setTextColor(if (!isEnglishMode) accent else gray)
+        tvModeEn.setTextColor(if (isEnglishMode) accent else gray)
+    }
+    // 单击空格的原本行为（双击检测未命中时延迟调用）：选首候选上屏 / 上屏空格
+    private fun handleSingleSpace() {
+        val ic = currentInputConnection
+        if (keyboardMode == KeyboardMode.NUMBER) {
+            // 数字键盘空格：shift模式下输出0，否则正常空格
+            if (t9ShiftTemp || t9ShiftLocked) {
+                ic?.commitText("0", 1)
+                if (!t9ShiftLocked) {
+                    t9ShiftTemp = false
+                    updateShiftIndicator()
+                }
+            } else if (t9DigitQueue.isNotEmpty()) {
+                val cands = rimeEngine.candidates
+                if (cands.isNotEmpty()) {
+                    selectCandidateByGlobalIndex(0)
+                    if (!isAssociationMode) resetT9State()
+                } else {
+                    ic?.commitText(" ", 1)
+                    resetT9State()
+                }
+            } else {
+                ic?.commitText(" ", 1)
+            }
+        } else if (isAsciiMode) {
+            if (pendingEnglish.isNotEmpty()) {
+                ic?.commitText(pendingEnglish, 1)
+                pendingEnglish = ""
+            }
+            ic?.commitText(" ", 1)
+        } else {
+            if (isAssociationMode && associationCandidates.isNotEmpty()) {
+                val selectedWord = associationCandidates[0]
+                val newPrefix = associationPrefix + selectedWord
+                val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
+                if (newAssociations.isNotEmpty()) {
+                    associationPrefix = newPrefix
+                    associationCandidates = newAssociations
+                    commitCandidateText(selectedWord)
+                    showAssociationCandidates()
+                } else {
+                    isAssociationMode = false
+                    associationPrefix = ""
+                    associationCandidates = emptyList()
+                    commitCandidateText(selectedWord)
+                    updateCandidateBar()
+                }
+            } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
+                selectCandidateByGlobalIndex(0)
+                if (keyboardMode == KeyboardMode.QWERTY) rimeEngine.clear()
+            } else {
+                ic?.commitText(" ", 1)
+            }
+        }
+        if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
+    }
+
+    // 语音键双击：未录音时切换中英 / 纯中 识别模式（不影响中英模式本身）
     private fun handleMicDoubleTap() {
         if (isRecording || isWaitingForChoice) {
             updateStatus("录音中不可切换")
@@ -3488,28 +3593,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             return
         }
         val mode = voiceEngine.switchVoiceMode()
-        updateMicZhLabel()
+        updateMicModeBar()
         // 切换后立即在后台预热新模型的识别器，使下次点击语音键无需在线重建（消除切换后首次识别的卡顿）
         voiceEngine.warmupRecognizer()
-        if (mode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE) {
-            updateStatus("已切换到中文精准模型")
+        if (mode == com.cesia.input.voice.VoiceEngine.VoiceMode.ZH_ONLY) {
+            updateStatus("已切换到纯中语音模型")
         } else {
             updateStatus("已切换到中英语音模型")
         }
     }
 
-    // 语音键右上角“中”副字符：仅纯中文模式显示，字号随主题文字档，颜色固定白
-    private fun updateMicZhLabel() {
-        if (!::tvMicZh.isInitialized) return
-        val isZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
-                && voiceEngine.hasChineseModel()
-        tvMicZh.visibility = if (isZh) View.VISIBLE else View.GONE
-        if (isZh) {
-            tvMicZh.text = "中"
-            tvMicZh.setTextColor(0xFFFFFFFF.toInt())
-            tvMicZh.textSize = (10 + textThemeSize * 2).toFloat()
-            tvMicZh.requestLayout()
-        }
+    // 语音键模式条：中英 / 纯中。选中项显示白色（语音键底已是主题色），未选中灰度；旧右上角 tv_mic_zh 隐藏
+    private fun updateMicModeBar() {
+        if (!::tvMicModeBi.isInitialized) return
+        tvMicZh.visibility = View.GONE
+        val isBi = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.BILINGUAL
+        val gray = if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt()
+        // 选中 = 白色（按键底为主题色，白色才清晰）；未选中 = 灰度
+        tvMicModeBi.setTextColor(if (isBi) 0xFFFFFFFF.toInt() else gray)
+        tvMicModeZh.setTextColor(if (!isBi) 0xFFFFFFFF.toInt() else gray)
     }
 
 // region 智能写作（星星按钮：短按语音写作，长按设置弹窗）
@@ -7406,6 +7508,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         keyboardView.keyboard = currentKeyboard
         if (mode == KeyboardMode.SYMBOL_CN) applySymbolFlip()
         keyboardView.isT9Mode = (mode == KeyboardMode.NUMBER)
+        // 切换键盘后恢复英文模式：若处于英文方案且词库已下载，覆盖上面分支的 pinyin/t9_pinyin 选择
+        if (isEnglishMode && dictManager.hasDownloadedDict()
+            && (mode == KeyboardMode.NUMBER || mode == KeyboardMode.QWERTY)) {
+            rimeEngine.setAsciiMode(false)
+            rimeEngine.selectSchema(if (mode == KeyboardMode.NUMBER) "t9_en" else "en")
+            rimeEngine.clear()
+        }
+        updateInputModeBar()
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
         if (mode == KeyboardMode.NUMBER) {
             // 进入 T9：只操作 T9 相关状态
@@ -9525,71 +9635,26 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // ======================== 空格键 ========================
             32 -> {
-                if (keyboardMode == KeyboardMode.NUMBER) {
-                    // 数字键盘空格：shift模式下输出0，否则正常空格
-                    if (t9ShiftTemp || t9ShiftLocked) {
-                        // Shift模式：输出 0
-                        ic?.commitText("0", 1)
-                        // 临时shift：自动退回；锁定shift：保持
-                        if (!t9ShiftLocked) {
-                            t9ShiftTemp = false
-                            updateShiftIndicator()
-                        }
-                    } else if (t9DigitQueue.isNotEmpty()) {
-                        // T9模式：空格 = 选择首候选上屏（与点击候选一致，尊重用户词组置顶/重排顺序）
-                        val cands = rimeEngine.candidates
-                        if (cands.isNotEmpty()) {
-                            selectCandidateByGlobalIndex(0)
-                            // 如果进入了联想模式，不重置 T9 状态（保留联想）
-                            if (!isAssociationMode) {
-                                resetT9State()
-                            }
-                        } else {
-                            ic?.commitText(" ", 1)
-                            resetT9State()
-                        }
-                    } else {
-                        ic?.commitText(" ", 1)
-                    }
-                } else if (isAsciiMode) {
-                    if (pendingEnglish.isNotEmpty()) {
-                        ic?.commitText(pendingEnglish, 1)
-                        pendingEnglish = ""
-                    }
-                    ic?.commitText(" ", 1)
+                // 双击空格：切换英文拼写方案模式（中文↔英文）；单击保持原空格行为
+                val nowSpace = System.currentTimeMillis()
+                if (nowSpace - lastSpaceTapTime <= 350) {
+                    spaceDoubleTapPending = false
+                    lastSpaceTapTime = 0L
+                    toggleEnglishMode()
+                    return
                 } else {
-                    // 全键盘中文模式：参照 T9 空格键逻辑，直接检查 candidates
-                    if (isAssociationMode && associationCandidates.isNotEmpty()) {
-                        // 联想模式：选择第一个联想词继续联想
-                        val selectedWord = associationCandidates[0]
-                        val newPrefix = associationPrefix + selectedWord
-                        val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
-                        if (newAssociations.isNotEmpty()) {
-                            associationPrefix = newPrefix
-                            associationCandidates = newAssociations
-                            commitCandidateText(selectedWord)
-                            showAssociationCandidates()
-                        } else {
-                            isAssociationMode = false
-                            associationPrefix = ""
-                            associationCandidates = emptyList()
-                            commitCandidateText(selectedWord)
-                            updateCandidateBar()
+                    lastSpaceTapTime = nowSpace
+                    spaceDoubleTapPending = true
+                    // 延迟 350ms 后若无第二次点击，按单次空格处理（走下方原逻辑）
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (spaceDoubleTapPending) {
+                            spaceDoubleTapPending = false
+                            handleSingleSpace()
                         }
-                    } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
-                        // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
-                        selectCandidateByGlobalIndex(0)
-                        // 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
-                        if (keyboardMode == KeyboardMode.QWERTY) {
-                            rimeEngine.clear()
-                        }
-                    } else {
-                        // 无拼音、无候选：直接输出空格
-                        ic?.commitText(" ", 1)
-                    }
+                    }, 350)
                 }
-                if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
             }
+
 
             // ======================== 退格键 ========================
             -5, Keyboard.KEYCODE_DELETE -> {

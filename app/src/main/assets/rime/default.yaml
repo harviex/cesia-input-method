@@ -6,6 +6,8 @@ schema_list:
   - schema: pinyin
   - schema: t9_pinyin
   - schema: t9_spell
+  - schema: en
+  - schema: t9_en
 
 # 开关选项
 switches:
