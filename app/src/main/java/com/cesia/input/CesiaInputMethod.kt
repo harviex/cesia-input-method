@@ -436,14 +436,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
-    // === 英文拼写模式（双击空格 / 状态栏中/英按钮切换，持久化）===
+    // === 英文拼写模式（状态栏中/英按钮切换，持久化）===
     private var isEnglishMode = false
     private var englishDict: com.cesia.input.engine.EnglishDictLoader? = null
     private var enBuffer = StringBuilder()          // 当前英文输入串（QWERTY 字母 / T9 数字）
     private var enCandidates = emptyList<String>() // 当前英文候选词
     private var enMode: KeyboardMode? = null        // 进入英文时的键盘模式（区分 QWERTY/T9 匹配方式）
-    private var lastSpaceTapTime = 0L               // 空格双击检测时间戳
-    private var spaceDoubleTapPending = false
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     // === 词语联想 ===
     private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
@@ -1070,10 +1068,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             onItemClick = { index, _ ->
                 // 新闻态：顶栏当前新闻（随切换滚动）点击 → 直接打开浏览器
                 if (newsBarActive) { openNewsLink(newsBarIndex % maxOf(newsItems.size, 1)); return@CandidateAdapter }
-                if (rimeEngine.hasCandidates || isAssociationMode) {
+                if (rimeEngine.hasCandidates || isAssociationMode || isEnglishMode) {
                     selectCandidateByGlobalIndex(index)
                     // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
-                    if (keyboardMode == KeyboardMode.QWERTY) {
+                    if (keyboardMode == KeyboardMode.QWERTY && !isEnglishMode) {
                         rimeEngine.clear()
                     }
                 }
@@ -2470,7 +2468,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         enBuffer.clear()
         enCandidates = emptyList()
         if (!isEnglishMode) {
-            try { rimeEngine.clear() } catch (_: Throwable) {}
+            // 切回中文：重置 Rime 到当前键盘对应 schema，避免候选栏只显示一个词
+            try {
+                rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin")
+                rimeEngine.reload()
+                rimeEngine.clear()
+            } catch (_: Throwable) {}
         }
         updateEnModeButton()
         updateCandidateBar()
@@ -2482,7 +2485,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val dict = englishDict ?: run { isEnglishMode = false; updateEnModeButton(); return }
         val lower = if (primaryCode in 65..90) primaryCode + 32 else primaryCode
         when {
-            primaryCode == -5 -> {
+            primaryCode == -5 -> {  // 退格
                 if (enBuffer.isNotEmpty()) {
                     enBuffer.deleteAt(enBuffer.length - 1)
                     refreshEnglishCandidates()
@@ -2490,20 +2493,25 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                     currentInputConnection?.deleteSurroundingText(1, 0)
                 }
             }
-            primaryCode == 32 -> commitEnglishTop()
-            primaryCode == 10 -> commitEnglishTop()
-            lower in 97..122 -> {
+            primaryCode == 10 -> commitEnglishTop()  // 回车：上屏英文词（无则忽略）
+            primaryCode == 32 -> {  // 空格：有英文上屏词，无则上屏空格
+                val had = enBuffer.isNotEmpty() || enCandidates.isNotEmpty()
+                commitEnglishTop()
+                if (!had) currentInputConnection?.commitText(" ", 1)
+            }
+            lower in 97..122 -> {  // 字母：累积
                 enBuffer.append(lower.toChar())
                 refreshEnglishCandidates()
             }
-            primaryCode in 50..57 -> {
+            enMode == KeyboardMode.NUMBER && primaryCode in 50..57 -> {  // T9 数字键：作为 t9 数字序列
                 enBuffer.append(primaryCode.toChar())
                 refreshEnglishCandidates()
             }
-            primaryCode in 44..47 || primaryCode == 63 || primaryCode == 33 -> {
+            else -> {  // 其余键（标点/数字/符号）：先上屏英文词，再上屏该键字符
                 commitEnglishTop()
-                currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
-                updateCandidateBar()
+                if (primaryCode in 32..126) {
+                    currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                }
             }
         }
     }
@@ -9664,7 +9672,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // ======================== 空格键 ========================
-            32 -> { handleSpaceDoubleTap() }
+            32 -> { handleSpaceKey() }
 
             // ======================== 退格键 ========================
             -5, Keyboard.KEYCODE_DELETE -> {
@@ -10110,22 +10118,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
-    // 空格键：双击切换中/英文，单击立即执行（无延迟，避免中文输入卡顿）
-    private fun handleSpaceDoubleTap() {
-        val now = System.currentTimeMillis()
-        if (now - lastSpaceTapTime < 250) {
-            // 双击命中：撤销第一击产生的字符（空格/上屏词末字符），切换中/英文
-            lastSpaceTapTime = 0
-            spaceDoubleTapPending = false
-            currentInputConnection?.deleteSurroundingText(1, 0)
-            toggleEnglishMode()
-            return
-        }
-        lastSpaceTapTime = now
-        handleSpaceKey()  // 单击立即执行
-    }
-
-    // 原空格键逻辑（单击）
+    // 空格键逻辑（单击直接执行）
     private fun handleSpaceKey() {
         val ic = currentInputConnection
         if (keyboardMode == KeyboardMode.NUMBER) {
