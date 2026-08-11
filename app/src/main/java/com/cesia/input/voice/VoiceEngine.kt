@@ -112,8 +112,16 @@ class VoiceEngine(private val context: Context) {
     private val prefs = context.getSharedPreferences("cesia_voice", Context.MODE_PRIVATE)
 
     // 语音识别模式（中英混 / 纯中文），持久化；默认中英混，不改动原有行为
+    // 兼容旧版持久化值（BILINGUAL/ZH_ONLY/ENGLISH 等）：统一映射回 MIXED/CHINESE，避免 valueOf 崩溃
     var voiceMode: VoiceMode
-        get() = VoiceMode.valueOf(prefs.getString("voice_mode", VoiceMode.MIXED.name) ?: VoiceMode.MIXED.name)
+        get() {
+            val raw = prefs.getString("voice_mode", VoiceMode.MIXED.name) ?: VoiceMode.MIXED.name
+            return try {
+                VoiceMode.valueOf(raw)
+            } catch (_: IllegalArgumentException) {
+                if (raw.contains("ZH", ignoreCase = true)) VoiceMode.CHINESE else VoiceMode.MIXED
+            }
+        }
         set(value) {
             prefs.edit().putString("voice_mode", value.name).apply()
             Log.i(TAG, "voiceMode -> ${value.name}")
