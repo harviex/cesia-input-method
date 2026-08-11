@@ -2618,6 +2618,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 associationPrefix = ""
                 associationCandidates = emptyList()
                 if (isPanelExpanded) collapseCandidatePanel()
+                // 强制刷新候选栏：updateCandidateBar 有 sig 短路（输入态未变则跳过重建），
+                // 部分码进联想时状态已被 earlyAssoc 清空，导致退出时 sig 与上次相同而不刷新，
+                // 候选栏残留上一词（表现为「卡住」）。这里显式清栏 + 作废 sig 绕过短路。
+                lastCandSig = -1
+                clearCandidateContent()
                 updateCandidateBar()
             }
             return
