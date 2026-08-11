@@ -108,6 +108,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（仅纯中文模式显示）
+    private lateinit var tvMicModeBi: TextView        // 语音键左上角「中英」
+    private lateinit var tvMicModeZh: TextView        // 语音键左上角「纯中」
     private lateinit var micWrapper: FrameLayout     // 包裹麦克风键，承载“中”标记；分列时需隐藏以恢复原始双按钮布局
     private lateinit var btnSettings: ImageButton
     private lateinit var btnDelete: ImageButton
@@ -434,6 +436,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var isAsciiMode = false  // 与 Rime ascii_mode 对应
+    // === 英文拼写模式（双击空格 / 状态栏中/英按钮切换，持久化）===
+    private var isEnglishMode = false
+    private var englishDict: com.cesia.input.engine.EnglishDictLoader? = null
+    private var enBuffer = StringBuilder()          // 当前英文输入串（QWERTY 字母 / T9 数字）
+    private var enCandidates = emptyList<String>() // 当前英文候选词
+    private var enMode: KeyboardMode? = null        // 进入英文时的键盘模式（区分 QWERTY/T9 匹配方式）
+    private var lastSpaceTapTime = 0L               // 空格双击检测时间戳
+    private var spaceDoubleTapPending = false
     private var shortPressHandled = false  // 当前按键是否已处理短按（防止长按重复触发）
     // === 词语联想 ===
     private var associationPrefix = ""      // 当前联想前缀（如 "这个"）
@@ -752,6 +762,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // ======================== 简繁切换 ========================
     private var isTraditional = false
     private lateinit var btnTraditional: TextView
+    private lateinit var btnEnMode: TextView       // 状态栏中/英切换按钮（双击空格等价）
 
     // 功能键长按映射（参考 Trime preset_keys）
     private fun getFunctionalLongAction(primaryCode: Int): (() -> Unit)? {
@@ -1016,6 +1027,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         micButtonContainer = view.findViewById(R.id.mic_button_container)
         micWrapper = view.findViewById(R.id.mic_wrapper)
         tvMicZh = view.findViewById(R.id.tv_mic_zh)
+        tvMicModeBi = view.findViewById(R.id.tv_mic_mode_bi)
+        tvMicModeZh = view.findViewById(R.id.tv_mic_mode_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
         btnMicNoAi = view.findViewById(R.id.btn_mic_noai)
         btnSettings = view.findViewById(R.id.btn_settings)
@@ -1028,6 +1041,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         statusText = view.findViewById(R.id.tv_status)
         voiceWave = view.findViewById(R.id.v_voice_wave)
         btnTheme = view.findViewById(R.id.btn_theme)
+        btnEnMode = view.findViewById(R.id.btn_en_mode)
+        btnEnMode.setOnClickListener { toggleEnglishMode() }
 
         // 本地/云端模式切换已移除，统一使用长按语音键切换
 
@@ -2421,6 +2436,98 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         scrollCandidates.scrollTo(0, 0)
     }
 
+    // ======================== 英文拼写模式（Cesia 自主词库，独立于 Rime） ========================
+    // 初始化：加载英文词库（仅一次）+ 恢复持久化的中/英文状态
+    private fun initEnglishMode() {
+        if (englishDict == null) {
+            try {
+                val enPath = java.io.File(dictManager.getRimeDir(), "en_dicts/en.dict.yaml").absolutePath
+                englishDict = com.cesia.input.engine.EnglishDictLoader().loadFromFile(enPath)
+                Log.i("Cesia", "英文词库加载: size=${englishDict?.size()}")
+            } catch (e: Throwable) {
+                Log.e("Cesia", "英文词库加载失败: ${e.message}")
+            }
+        }
+        isEnglishMode = getSharedPreferences("cesia_settings", MODE_PRIVATE)
+            .getBoolean("english_mode", false)
+    }
+
+    // 状态栏中/英按钮动效（参考简繁）：当前模式文字高亮（主题色），另一字灰色
+    private fun updateEnModeButton() {
+        if (!::btnEnMode.isInitialized) return
+        val accent = themeAccent
+        val gray = 0xFF888888.toInt()
+        btnEnMode.text = if (isEnglishMode) "英" else "中"
+        btnEnMode.setTextColor(if (isEnglishMode) accent else gray)
+    }
+
+    // 中/英切换（双击空格 / 状态栏按钮，等价）
+    private fun toggleEnglishMode() {
+        isEnglishMode = !isEnglishMode
+        getSharedPreferences("cesia_settings", MODE_PRIVATE).edit()
+            .putBoolean("english_mode", isEnglishMode).apply()
+        enMode = if (isEnglishMode) keyboardMode else null
+        enBuffer.clear()
+        enCandidates = emptyList()
+        if (!isEnglishMode) {
+            try { rimeEngine.clear() } catch (_: Throwable) {}
+        }
+        updateEnModeButton()
+        updateCandidateBar()
+        updateStatus(if (isEnglishMode) "已切换到英文输入" else "已切换到中文输入")
+    }
+
+    // 英文输入：处理单个按键（完全不经过 Rime）
+    private fun handleEnglishKey(primaryCode: Int) {
+        val dict = englishDict ?: run { isEnglishMode = false; updateEnModeButton(); return }
+        val lower = if (primaryCode in 65..90) primaryCode + 32 else primaryCode
+        when {
+            primaryCode == -5 -> {
+                if (enBuffer.isNotEmpty()) {
+                    enBuffer.deleteAt(enBuffer.length - 1)
+                    refreshEnglishCandidates()
+                } else {
+                    currentInputConnection?.deleteSurroundingText(1, 0)
+                }
+            }
+            primaryCode == 32 -> commitEnglishTop()
+            primaryCode == 10 -> commitEnglishTop()
+            lower in 97..122 -> {
+                enBuffer.append(lower.toChar())
+                refreshEnglishCandidates()
+            }
+            primaryCode in 50..57 -> {
+                enBuffer.append(primaryCode.toChar())
+                refreshEnglishCandidates()
+            }
+            primaryCode in 44..47 || primaryCode == 63 || primaryCode == 33 -> {
+                commitEnglishTop()
+                currentInputConnection?.commitText(primaryCode.toChar().toString(), 1)
+                updateCandidateBar()
+            }
+        }
+    }
+
+    private fun commitEnglishTop() {
+        val commit = enCandidates.firstOrNull() ?: enBuffer.toString()
+        if (commit.isNotEmpty()) {
+            currentInputConnection?.commitText(commit, 1)
+        }
+        enBuffer.clear()
+        enCandidates = emptyList()
+        updateCandidateBar()
+    }
+
+    private fun refreshEnglishCandidates() {
+        val dict = englishDict ?: return
+        enCandidates = if (enMode == KeyboardMode.NUMBER) {
+            dict.t9Match(enBuffer.toString())
+        } else {
+            dict.prefixMatch(enBuffer.toString())
+        }
+        updateCandidateBar()
+    }
+
     private fun collapseCandidatePanel() {
         isPanelExpanded = false
         candidatePanel.visibility = View.GONE
@@ -2431,6 +2538,15 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     /** 通过全局索引选择候选词（自动翻页选中） */
     private fun selectCandidateByGlobalIndex(globalIndex: Int) {
         if (globalIndex < 0) return
+        // 英文自主词库通道：点击候选直接上屏对应英文词，不走 Rime
+        if (isEnglishMode && enCandidates.isNotEmpty()) {
+            val word = enCandidates.getOrNull(globalIndex) ?: enCandidates.firstOrNull() ?: return
+            currentInputConnection?.commitText(word, 1)
+            enBuffer.clear()
+            enCandidates = emptyList()
+            updateCandidateBar()
+            return
+        }
         // 选了整词/词组/单字 → 交给 Rime 原生续写或结束；单字已并入主候选流，无独立「单字专区」进度需重置。
 
         try {
@@ -2767,7 +2883,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.length == 1 && t9SingleKeyCands.isNotEmpty() -> t9SingleKeyCands
             else -> rimeEngine.getAllCandidates(candPageWalk)
         }
-        var allCands = rimeAllCands
+        var allCands: List<String>
+        if (isEnglishMode) {
+            // 英文自主词库通道：候选直接来自 enCandidates，不经 Rime
+            allCands = if (enBuffer.isEmpty()) emptyList() else enCandidates
+            lastAllCands = allCands
+            candTotalLoaded = allCands.size
+        } else {
+        var allCandsZh = rimeAllCands
         // 用户词组召回：若当前数字码前缀匹配某存词（如 2247474→蔡祈琪），把该词插入候选前列。
         // 仅显示用（不进 lastAllCands），点击时走「直接上屏语义」(见 selectCandidateByGlobalIndex 特判)，
         // 不走 Rime 索引反查 → 不会错位（区别于早期 mergeByFrequency 注入 bug）。
@@ -2777,8 +2900,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 .maxByOrNull { it.value.freq }?.key
         } else null
         t9RecalledPhrase = recalled
-        if (recalled != null && recalled !in allCands) {
-            allCands = listOf(recalled) + allCands
+        if (recalled != null && recalled !in allCandsZh) {
+            allCandsZh = listOf(recalled) + allCandsZh
+        }
+        allCands = allCandsZh
         }
         // 快照未过滤的原始 Rime 候选列表（供点击反查真实全局索引）。召回词不纳入，避免位置错位
         lastAllCands = rimeAllCands
@@ -2803,7 +2928,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 没有输入时退出联想模式并恢复初始状态
         // 但联想模式下有联想词时不退出（联想词已上屏，Rime composing 已结束）
         // 智能写作/魔法编辑模式下不恢复初始状态（避免"已就绪"覆盖编辑中的命令）
-        if (!composing && pinyin.isEmpty() && !isAssociationMode && !smartEditMode && !magicEditMode) {
+        if (!composing && pinyin.isEmpty() && !isAssociationMode && !smartEditMode && !magicEditMode && !isEnglishMode) {
             if (isAssociationMode) {
                 isAssociationMode = false
                 associationPrefix = ""
@@ -3498,17 +3623,26 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // 语音键右上角“中”副字符：仅纯中文模式显示，字号随主题文字档，颜色固定白
+    // 语音键标记：右上角“中”（仅纯中文模式）+ 左上角「中英/纯中」选中高亮
     private fun updateMicZhLabel() {
-        if (!::tvMicZh.isInitialized) return
         val isZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
                 && voiceEngine.hasChineseModel()
-        tvMicZh.visibility = if (isZh) View.VISIBLE else View.GONE
-        if (isZh) {
-            tvMicZh.text = "中"
-            tvMicZh.setTextColor(0xFFFFFFFF.toInt())
-            tvMicZh.textSize = (10 + textThemeSize * 2).toFloat()
-            tvMicZh.requestLayout()
+        if (::tvMicZh.isInitialized) {
+            tvMicZh.visibility = if (isZh) View.VISIBLE else View.GONE
+            if (isZh) {
+                tvMicZh.text = "中"
+                tvMicZh.setTextColor(0xFFFFFFFF.toInt())
+                tvMicZh.textSize = (10 + textThemeSize * 2).toFloat()
+                tvMicZh.requestLayout()
+            }
+        }
+        // 左上角「中英/纯中」：纯中模式高亮"纯中"，否则高亮"中英"
+        if (::tvMicModeBi.isInitialized && ::tvMicModeZh.isInitialized) {
+            val pureZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
+            val white = 0xFFFFFFFF.toInt()
+            val gray = 0xFF888888.toInt()
+            tvMicModeBi.setTextColor(if (pureZh) gray else white)
+            tvMicModeZh.setTextColor(if (pureZh) white else gray)
         }
     }
 
@@ -9140,6 +9274,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             return  // 上一次按键的长按被消耗，跳过本次短按
         }
 
+        // ======================== 英文输入模式拦截（Cesia 自主词库，独立于 Rime） ========================
+        if (isEnglishMode) {
+            handleEnglishKey(primaryCode)
+            return
+        }
+
         // ======================== 剪贴板搜索编辑：复用 smartEditMode 输入法（见下方智能写作编辑模式拦截） ========================
 
         // ======================== 智能写作命令编辑模式拦截 ========================
@@ -9524,72 +9664,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
 
             // ======================== 空格键 ========================
-            32 -> {
-                if (keyboardMode == KeyboardMode.NUMBER) {
-                    // 数字键盘空格：shift模式下输出0，否则正常空格
-                    if (t9ShiftTemp || t9ShiftLocked) {
-                        // Shift模式：输出 0
-                        ic?.commitText("0", 1)
-                        // 临时shift：自动退回；锁定shift：保持
-                        if (!t9ShiftLocked) {
-                            t9ShiftTemp = false
-                            updateShiftIndicator()
-                        }
-                    } else if (t9DigitQueue.isNotEmpty()) {
-                        // T9模式：空格 = 选择首候选上屏（与点击候选一致，尊重用户词组置顶/重排顺序）
-                        val cands = rimeEngine.candidates
-                        if (cands.isNotEmpty()) {
-                            selectCandidateByGlobalIndex(0)
-                            // 如果进入了联想模式，不重置 T9 状态（保留联想）
-                            if (!isAssociationMode) {
-                                resetT9State()
-                            }
-                        } else {
-                            ic?.commitText(" ", 1)
-                            resetT9State()
-                        }
-                    } else {
-                        ic?.commitText(" ", 1)
-                    }
-                } else if (isAsciiMode) {
-                    if (pendingEnglish.isNotEmpty()) {
-                        ic?.commitText(pendingEnglish, 1)
-                        pendingEnglish = ""
-                    }
-                    ic?.commitText(" ", 1)
-                } else {
-                    // 全键盘中文模式：参照 T9 空格键逻辑，直接检查 candidates
-                    if (isAssociationMode && associationCandidates.isNotEmpty()) {
-                        // 联想模式：选择第一个联想词继续联想
-                        val selectedWord = associationCandidates[0]
-                        val newPrefix = associationPrefix + selectedWord
-                        val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
-                        if (newAssociations.isNotEmpty()) {
-                            associationPrefix = newPrefix
-                            associationCandidates = newAssociations
-                            commitCandidateText(selectedWord)
-                            showAssociationCandidates()
-                        } else {
-                            isAssociationMode = false
-                            associationPrefix = ""
-                            associationCandidates = emptyList()
-                            commitCandidateText(selectedWord)
-                            updateCandidateBar()
-                        }
-                    } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
-                        // 有拼音输入或有候选：选择首候选上屏（与点击候选完全一致）
-                        selectCandidateByGlobalIndex(0)
-                        // 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
-                        if (keyboardMode == KeyboardMode.QWERTY) {
-                            rimeEngine.clear()
-                        }
-                    } else {
-                        // 无拼音、无候选：直接输出空格
-                        ic?.commitText(" ", 1)
-                    }
-                }
-                if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
-            }
+            32 -> { handleSpaceDoubleTap() }
 
             // ======================== 退格键 ========================
             -5, Keyboard.KEYCODE_DELETE -> {
@@ -10035,6 +10110,81 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         }
     }
 
+    // 空格键：双击切换中/英文，单击延迟执行原空格逻辑（防误触）
+    private fun handleSpaceDoubleTap() {
+        val now = System.currentTimeMillis()
+        if (now - lastSpaceTapTime < 250) {
+            // 双击命中：取消单击待执行，切换中/英文
+            lastSpaceTapTime = 0
+            spaceDoubleTapPending = false
+            toggleEnglishMode()
+            return
+        }
+        lastSpaceTapTime = now
+        spaceDoubleTapPending = true
+        Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (spaceDoubleTapPending) {
+                spaceDoubleTapPending = false
+                handleSpaceKey()
+            }
+        }, 250)
+    }
+
+    // 原空格键逻辑（单击）
+    private fun handleSpaceKey() {
+        val ic = currentInputConnection
+        if (keyboardMode == KeyboardMode.NUMBER) {
+            if (t9ShiftTemp || t9ShiftLocked) {
+                ic?.commitText("0", 1)
+                if (!t9ShiftLocked) {
+                    t9ShiftTemp = false
+                    updateShiftIndicator()
+                }
+            } else if (t9DigitQueue.isNotEmpty()) {
+                val cands = rimeEngine.candidates
+                if (cands.isNotEmpty()) {
+                    selectCandidateByGlobalIndex(0)
+                    if (!isAssociationMode) resetT9State()
+                } else {
+                    ic?.commitText(" ", 1)
+                    resetT9State()
+                }
+            } else {
+                ic?.commitText(" ", 1)
+            }
+        } else if (isAsciiMode) {
+            if (pendingEnglish.isNotEmpty()) {
+                ic?.commitText(pendingEnglish, 1)
+                pendingEnglish = ""
+            }
+            ic?.commitText(" ", 1)
+        } else {
+            if (isAssociationMode && associationCandidates.isNotEmpty()) {
+                val selectedWord = associationCandidates[0]
+                val newPrefix = associationPrefix + selectedWord
+                val newAssociations = rimeEngine.getAssociations(newPrefix, 100, 500, 10)
+                if (newAssociations.isNotEmpty()) {
+                    associationPrefix = newPrefix
+                    associationCandidates = newAssociations
+                    commitCandidateText(selectedWord)
+                    showAssociationCandidates()
+                } else {
+                    isAssociationMode = false
+                    associationPrefix = ""
+                    associationCandidates = emptyList()
+                    commitCandidateText(selectedWord)
+                    updateCandidateBar()
+                }
+            } else if (rimeEngine.isComposing || rimeEngine.candidates.isNotEmpty()) {
+                selectCandidateByGlobalIndex(0)
+                if (keyboardMode == KeyboardMode.QWERTY) rimeEngine.clear()
+            } else {
+                ic?.commitText(" ", 1)
+            }
+        }
+        if (keyboardMode != KeyboardMode.NUMBER) clearCandidateContent()
+    }
+
     override fun onRelease(primaryCode: Int) {
         cancelLongPress()
         functionalLongPressRunnables[primaryCode]?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
@@ -10125,9 +10275,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 rimeEngine.selectSchema("t9_pinyin")
                 rimeEngine.reload()
             } else if (keyboardMode == KeyboardMode.QWERTY) {
-                rimeEngine.selectSchema(if (qwertyShiftLocked || qwertyShiftTemp) "en" else "pinyin")
+                rimeEngine.selectSchema("pinyin")
                 rimeEngine.reload()
             }
+            // 英文拼写模式：加载自主词库 + 恢复持久化的中/英文状态
+            initEnglishMode()
+            updateEnModeButton()
             aiReplyStyle = getSharedPreferences("cesia_settings", MODE_PRIVATE)
                 .getString(PREF_AI_STYLE, "自然") ?: "自然"
             // 外部词库下载后需要重新部署 Rime
