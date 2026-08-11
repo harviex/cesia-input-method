@@ -71,7 +71,7 @@ object RimeJni {
             val rimeDirFiles = rimeDir.listFiles()?.map { "${it.name}(${it.length()})" }?.joinToString(", ") ?: "(空)"
             Log.i(TAG, "STEP2: rime 目录内容: $rimeDirFiles")
 
-            TrimeRime.startupRime(sharedDir, userDir, "1.0.0", true)
+            TrimeRime.startupRime(sharedDir, userDir, "1.0.1", true)
             Log.i(TAG, "STEP3: startupRime 完成")
 
             // 确保选中 pinyin schema

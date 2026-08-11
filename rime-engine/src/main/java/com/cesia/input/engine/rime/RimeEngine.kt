@@ -102,10 +102,10 @@ class RimeEngine(private val context: Context) : InputEngine {
                 }
 
                 // schema 配置（.yaml）：总是从 APK 复制（APK 更新时同步最新配置）
-                // 但保留用户可能修改过的 schema 文件（如 default.yaml、installation.yaml）
-                if (fileName == "default.yaml" || fileName == "installation.yaml") {
+                // 保留 Rime 部署生成的 installation.yaml（记录部署状态，覆盖会触发无谓重部署）
+                if (fileName == "installation.yaml") {
                     if (outFile.exists()) {
-                        Log.i(TAG, "保留用户配置: $fileName")
+                        Log.i(TAG, "保留部署状态: $fileName")
                         continue
                     }
                 }

@@ -108,8 +108,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
     private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（保留兼容，现改由模式条取代）
-    private lateinit var tvModeCn: TextView           // 模式条：中（空格对应）
+    private lateinit var tvModeCn: TextView           // 模式条：中（空格对应，运行时定位到空格键左上）
     private lateinit var tvModeEn: TextView           // 模式条：英（空格对应）
+    private lateinit var modeBadgeContainer: FrameLayout  // 空格键左上角标容器（含 tv_mode_cn/en）
     private lateinit var tvMicModeBi: TextView        // 模式条：中英（语音键对应）
     private lateinit var tvMicModeZh: TextView        // 模式条：纯中（语音键对应）
     private lateinit var micWrapper: FrameLayout     // 包裹麦克风键，承载“中”标记；分列时需隐藏以恢复原始双按钮布局
@@ -1027,6 +1028,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         tvMicZh = view.findViewById(R.id.tv_mic_zh)
         tvModeCn = view.findViewById(R.id.tv_mode_cn)
         tvModeEn = view.findViewById(R.id.tv_mode_en)
+        modeBadgeContainer = view.findViewById(R.id.mode_badge_container)
         tvMicModeBi = view.findViewById(R.id.tv_mic_mode_bi)
         tvMicModeZh = view.findViewById(R.id.tv_mic_mode_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
@@ -3501,30 +3503,55 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         val prefs = getSharedPreferences("cesia_settings", MODE_PRIVATE)
         prefs.edit().putBoolean("english_mode", isEnglishMode).apply()
         applyEnglishMode(isRestart = false)
-        updateInputModeBar()
+        updateInputMode()
         updateStatus(if (isEnglishMode) "已切换到英文输入" else "已切换到中文输入")
     }
 
     // 应用当前英文模式到 Rime：选对应 schema，关 ascii_mode（让 en/t9_en 真正接管拼写联想）
     private fun applyEnglishMode(isRestart: Boolean) {
-        if (isEnglishMode) {
-            rimeEngine.setAsciiMode(false)
-            rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_en" else "en")
+        val target = if (isEnglishMode) {
+            if (keyboardMode == KeyboardMode.NUMBER) "t9_en" else "en"
         } else {
-            rimeEngine.setAsciiMode(false)
-            rimeEngine.selectSchema(if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin")
+            if (keyboardMode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin"
+        }
+        rimeEngine.setAsciiMode(false)
+        var ok = rimeEngine.selectSchema(target)
+        // 兜底：若 selectSchema 失败（Rime 仍持旧 schema_list，多见于刚更新 default.yaml 首切），
+        // 重新部署让 Rime 读取新 schema_list 后重试一次
+        if (!ok) {
+            rimeEngine.redeploy()
+            ok = rimeEngine.selectSchema(target)
         }
         if (!isRestart) rimeEngine.clear()
     }
 
-    // 输入模式条（键盘上方常驻）：空格对应 中/英。中文时「中」随主题色高亮、英文灰度；英文时反之。
+    // 输入模式角标（空格键左上方，运行时定位）：中文时「中」随主题色高亮、英文灰度；英文时反之。
     // 语音键对应 中英/纯中 由 updateMicModeBar 负责。暗色跟随 isDarkTheme + themeAccent。
-    private fun updateInputModeBar() {
+    private fun updateInputMode() {
         if (!::tvModeCn.isInitialized) return
         val accent = themeAccent
         val gray = if (isDarkTheme) 0xFF888888.toInt() else 0xFF999999.toInt()
         tvModeCn.setTextColor(if (!isEnglishMode) accent else gray)
         tvModeEn.setTextColor(if (isEnglishMode) accent else gray)
+        positionSpaceBadge()
+    }
+
+    // 将中/英角标定位到当前键盘空格键的左上角（键盘布局完成后调用）
+    private fun positionSpaceBadge() {
+        if (!::modeBadgeContainer.isInitialized || !::keyboardView.isInitialized) return
+        val kb = keyboardView.keyboard ?: run {
+            modeBadgeContainer.visibility = View.GONE
+            return
+        }
+        val spaceKey = kb.keys.firstOrNull { it.codes.contains(32) } ?: run {
+            modeBadgeContainer.visibility = View.GONE
+            return
+        }
+        modeBadgeContainer.visibility = View.VISIBLE
+        val params = modeBadgeContainer.layoutParams as FrameLayout.LayoutParams
+        params.leftMargin = spaceKey.x + (spaceKey.width * 0.03f).toInt()
+        params.topMargin = spaceKey.y + (spaceKey.height * 0.04f).toInt()
+        modeBadgeContainer.layoutParams = params
     }
     // 单击空格的原本行为（双击检测未命中时延迟调用）：选首候选上屏 / 上屏空格
     private fun handleSingleSpace() {
@@ -7515,7 +7542,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             rimeEngine.selectSchema(if (mode == KeyboardMode.NUMBER) "t9_en" else "en")
             rimeEngine.clear()
         }
-        updateInputModeBar()
+        updateInputMode()
         // 切换键盘时，各键盘的 shift 状态完全独立，互不影响
         if (mode == KeyboardMode.NUMBER) {
             // 进入 T9：只操作 T9 相关状态
