@@ -685,11 +685,11 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun loadClipboardDeleted() {
         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
         val s = prefs.getString("deleted", "") ?: ""
-        clipboardDeleted = if (s.isNotEmpty()) s.split("\n").toSet().toMutableSet() else mutableSetOf()
+        clipboardDeleted = if (s.isNotEmpty()) s.split("\u0000").toSet().toMutableSet() else mutableSetOf()
     }
     private fun saveClipboardDeleted() {
         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
-        prefs.edit().putString("deleted", clipboardDeleted.joinToString("\n")).apply()
+        prefs.edit().putString("deleted", clipboardDeleted.joinToString("\u0000")).apply()
     }
     private fun applyClipboardFilter() {
         clipboardFilteredItems.clear()
@@ -9068,8 +9068,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val historyStr = prefs.getString("history", "") ?: ""
             val favStr = prefs.getString("favorites", "") ?: ""
             dlog { "loadClipboard: historyStr='${historyStr.take(100)}', favStr='${favStr.take(50)}'" }
-            val favSet = if (favStr.isNotEmpty()) favStr.split("\n").toSet() else emptySet()
-            val historyTexts = if (historyStr.isNotEmpty()) historyStr.split("\n").filter { it.isNotEmpty() }.toSet() else emptySet()
+            val favSet = if (favStr.isNotEmpty()) favStr.split("\u0000").toSet() else emptySet()
+            val historyTexts = if (historyStr.isNotEmpty()) historyStr.split("\u0000").filter { it.isNotEmpty() }.toSet() else emptySet()
 
             // 2. 获取系统剪贴板内容
             val sysClipTexts = mutableListOf<String>()
@@ -9100,7 +9100,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             // 先加载 sysInHistory 中的条目（系统剪贴板中已在持久化历史的），保持 sysClipTexts 顺序
             // 再加载其余条目（跳过已在第0位处理过的）
             if (historyStr.isNotEmpty()) {
-                val historyList = historyStr.split("\n").filter { it.isNotEmpty() }
+                val historyList = historyStr.split("\u0000").filter { it.isNotEmpty() }
                 // 按历史列表顺序赋递增 timestamp（列表越靠后=越新），保证排序稳定
                 historyList.forEachIndexed { idx, text ->
                     val ts = 1000L + idx
@@ -9147,8 +9147,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         val allTexts = capped.map { it.text }
         val favTexts = capped.filter { it.isPinned }.map { it.text }
         prefs.edit()
-            .putString("history", allTexts.joinToString("\n"))
-            .putString("favorites", favTexts.joinToString("\n"))
+            // 用 NUL(\u0000) 作分隔符，避免含换行的长文本在加载时被 split("\n") 误拆成多条
+            .putString("history", allTexts.joinToString("\u0000"))
+            .putString("favorites", favTexts.joinToString("\u0000"))
             .apply()
         // 同步裁剪内存列表，避免无限增长
         clipboardItems.removeAll { item -> !item.isEmpty && capped.none { it.text == item.text } }
@@ -9353,11 +9354,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             val cb = v.findViewById<android.widget.CheckBox>(R.id.cb_clipboard_select)
             cb.visibility = if (batchMode && !item.isEmpty) android.view.View.VISIBLE else android.view.View.GONE
             if (batchMode && !item.isEmpty) {
+                // 先清除旧 listener（避免 GridView convertView 复用时串台：旧 item 的 listener 误改 selectedClip），
+                // 再设值（此时无 listener，不会触发），最后挂新 listener。
+                cb.setOnCheckedChangeListener(null)
+                cb.isChecked = selectedClip.contains(item.text)
+                cb.buttonTintList = android.content.res.ColorStateList.valueOf(accentColor)
                 cb.setOnCheckedChangeListener { _, checked ->
                     if (checked) selectedClip.add(item.text) else selectedClip.remove(item.text)
                 }
-                cb.buttonTintList = android.content.res.ColorStateList.valueOf(accentColor)
-                cb.isChecked = selectedClip.contains(item.text)
+            } else {
+                cb.setOnCheckedChangeListener(null)
+                cb.isChecked = false
             }
             if (item.isEmpty) {
                 tv.text = item.text
