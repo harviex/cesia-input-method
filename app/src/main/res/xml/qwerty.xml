@@ -22,8 +22,8 @@
         <Key android:codes="54" android:keyLabel="6" android:popupCharacters="^" />
         <Key android:codes="55" android:keyLabel="7" android:popupCharacters="&amp;" />
         <Key android:codes="56" android:keyLabel="8" android:popupCharacters="*" />
-        <Key android:codes="57" android:keyLabel="9" android:popupCharacters="(" />
-        <Key android:codes="48" android:keyLabel="0" android:popupCharacters=")" android:keyEdgeFlags="right" />
+        <Key android:codes="57" android:keyLabel="9" android:popupCharacters="()" />
+        <Key android:codes="48" android:keyLabel="0" android:popupCharacters="'" android:keyEdgeFlags="right" />
     </Row>
 
     <!-- ===== 第1行：QWERTY 上排字母（副字符=数学符号） ===== -->

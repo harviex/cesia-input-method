@@ -3380,19 +3380,24 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 updateSpellBar()
                 return@setOnClickListener
             }
-            // 仅在候选栏已显示（有输入内容）时清空并保留候选栏；否则不弹出候选栏
-            val candBarWasVisible = candidateBar.visibility == View.VISIBLE
-            if (candBarWasVisible) {
-                // 清空键：清除候选栏内容（保持可见），并结束语音保持模式
+            // 中文模式：两段式清空
+            // 1) 候选栏/状态栏还有输入内容时，只清输入法内部态（拼音/选音/Rime composing），不动文本框；
+            // 2) 全部清空（无输入内容）后，再次按清空才删除文本框光标前文字。
+            val hasInput = rimeEngine.isComposing
+                    || t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty()
+                    || t9PendingChars.isNotEmpty() || isAssociationMode
+                    || rimeEngine.hasCandidates
+            if (hasInput) {
+                t9DigitQueue.clear(); t9SpellPrefix.clear(); t9PendingChars.clear()
+                isAssociationMode = false; associationPrefix = ""; associationCandidates = emptyList()
+                try { rimeEngine.clear() } catch (_: Throwable) {}
                 clearCandidateContent()
+                if (newsBarActive) showNewsInPanel()
+                updateSpellBar()
+                updateStatus(statusIdleText)
+                return@setOnClickListener
             }
-            // 中文模式：一并清空数字输入缓冲与 Rime composing（状态栏/候选音区显示的 t9DigitQueue 残留会
-            // 导致「看似清空、再输入接在旧字符后」）。有新闻则恢复显示。
-            t9DigitQueue.clear(); t9SpellPrefix.clear(); t9PendingChars.clear()
-            try { rimeEngine.clear() } catch (_: Throwable) {}
-            if (newsBarActive) showNewsInPanel()
-            updateSpellBar()
-            // 清空文本框光标前文字（保留选区逻辑）
+            // 无输入内容：清空文本框光标前文字（保留选区逻辑）
             try {
                 val ic = currentInputConnection ?: return@setOnClickListener
                 val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
@@ -8544,7 +8549,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         if (sel.isNotEmpty()) commitCandidateText(sel)
                     }
                 }
-                currentInputConnection?.commitText(symbol, 1)
+                val ic = currentInputConnection
+                ic?.commitText(symbol, symbol.length)
+                // 前后配对符号（两字符且不同，如 （） <> “”）光标移入中间（如 （|））
+                if (symbol.length == 2 && symbol[0] != symbol[1]) {
+                    val before = ic?.getTextBeforeCursor(1000, 0)?.length ?: 0
+                    ic?.setSelection(before - 1, before - 1)
+                }
                 resetT9State()
                 keyboardView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                 longPressTriggered = true
@@ -9962,9 +9973,14 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 shortPressHandled = true
                 val pair = symbolPairMap[primaryCode] ?: return
                 val out = if (symbolFlipped) pair.second else pair.first
-                // 配对类（长度>1且非「——」「……」等重复符号）上屏后光标停在中间
-                val caret = if (out.length > 1) 1 else out.length
-                currentInputConnection?.commitText(out, caret)
+                // 真正的「前后配对」符号（两字符且不同，如 （） 《》 “”）上屏后光标移入中间（如 《|》）；
+                // 重复符号（—— ……）及单符号不移动光标。
+                val ic = currentInputConnection ?: return
+                ic.commitText(out, out.length)
+                if (out.length == 2 && out[0] != out[1]) {
+                    val before = ic.getTextBeforeCursor(1000, 0)?.length ?: 0
+                    ic.setSelection(before - 1, before - 1)
+                }
                 // 符号上屏后自动退回进入符号键盘前的键盘（T9/QWERTY），符合「点符号即返回」的交互预期
                 switchToDefaultKeyboard()
             }
