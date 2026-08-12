@@ -107,7 +107,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private lateinit var micButtonContainer: LinearLayout
     private lateinit var btnMicAi: MaterialButton
     private lateinit var btnMicNoAi: MaterialButton
-    private lateinit var tvMicZh: TextView          // 语音键右上角“中”副字符（仅纯中文模式显示）
     private lateinit var tvMicModeBi: TextView        // 语音键左上角「中英」
     private lateinit var tvMicModeZh: TextView        // 语音键左上角「纯中」
     private lateinit var micWrapper: FrameLayout     // 包裹麦克风键，承载“中”标记；分列时需隐藏以恢复原始双按钮布局
@@ -1025,7 +1024,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         micButton = view.findViewById(R.id.btn_mic)
         micButtonContainer = view.findViewById(R.id.mic_button_container)
         micWrapper = view.findViewById(R.id.mic_wrapper)
-        tvMicZh = view.findViewById(R.id.tv_mic_zh)
         tvMicModeBi = view.findViewById(R.id.tv_mic_mode_bi)
         tvMicModeZh = view.findViewById(R.id.tv_mic_mode_zh)
         btnMicAi = view.findViewById(R.id.btn_mic_ai)
@@ -3725,24 +3723,12 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
     }
 
-    // 语音键标记：右上角“中”（仅纯中文模式）+ 左上角「中英/纯中」选中高亮
+    // 语音键标记：左上角「中英/纯中」选中高亮（纯中文模式高亮"纯中"）
     private fun updateMicZhLabel() {
-        val isZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
-                && voiceEngine.hasChineseModel()
-        if (::tvMicZh.isInitialized) {
-            tvMicZh.visibility = if (isZh) View.VISIBLE else View.GONE
-            if (isZh) {
-                tvMicZh.text = "中"
-                tvMicZh.setTextColor(0xFFFFFFFF.toInt())
-                tvMicZh.textSize = (10 + textThemeSize * 2).toFloat()
-                tvMicZh.requestLayout()
-            }
-        }
-        // 左上角「中英/纯中」：纯中模式高亮"纯中"，否则高亮"中英"
+        val pureZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
+        val white = 0xFFFFFFFF.toInt()
+        val gray = 0xFF888888.toInt()
         if (::tvMicModeBi.isInitialized && ::tvMicModeZh.isInitialized) {
-            val pureZh = voiceEngine.voiceMode == com.cesia.input.voice.VoiceEngine.VoiceMode.CHINESE
-            val white = 0xFFFFFFFF.toInt()
-            val gray = 0xFF888888.toInt()
             tvMicModeBi.setTextColor(if (pureZh) gray else white)
             tvMicModeZh.setTextColor(if (pureZh) white else gray)
         }
@@ -10926,15 +10912,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     private fun updateMicButtonLockedState() {
         micButton?.let { btn ->
             if (isVoiceLocked) {
-                // 锁定状态：高亮显示 + 脉冲发光动画
-                btn.background = makeKeyBgDrawable(themeAccent)
+                // 锁定状态：高亮显示 + 脉冲发光动画（用 backgroundTintList 保留 XML 的 10dp 圆角，避免手动设 background 丢圆角变矩形）
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                btn.strokeWidth = 2
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
                 btn.setTextColor(0xFFFFFFFF.toInt())
                 btn.elevation = 6f
                 btn.translationZ = 12f // 置于所有层之上
                 startMicButtonGlow()
             } else {
-                // 正常状态：恢复主题背景 + 最高层级
-                btn.background = makeKeyBgDrawable(currentKeyBg)
+                // 正常状态：恢复语音键绿色主题背景 + 最高层级（用 tint 保圆角；语音键常态为绿色，不能用 currentKeyBg 灰底否则键“消失”）
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(themeAccent)
+                btn.strokeWidth = 0
                 btn.setTextColor(unifiedTextColor)
                 btn.elevation = 4f
                 btn.translationZ = 8f // 在功能键层之上

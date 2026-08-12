@@ -6,17 +6,39 @@
     android:paddingHorizontal="12dp"
     android:paddingVertical="4dp">
 
-    <!-- 分类标题 -->
-    <TextView
-        android:id="@+id/tv_category"
+    <!-- 分类标题行（含该分类下的「+」添加按钮） -->
+    <LinearLayout
+        android:id="@+id/layout_category"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        android:paddingVertical="4dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/tv_category"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:paddingVertical="4dp" />
+
+        <TextView
+            android:id="@+id/btn_cat_add"
+            android:layout_width="32dp"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="+"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="在本分类下添加" />
+    </LinearLayout>
 
     <!-- 源信息行 -->
     <LinearLayout
+        android:id="@+id/layout_source"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -45,10 +67,12 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- 单选框：普通模式显示（选中新闻源），批量模式隐藏 -->
         <RadioButton
             android:id="@+id/cb_source"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
     </LinearLayout>
 
     <View

@@ -6,8 +6,6 @@
     android:background="#FAFAFA">
 
     <!-- 标题栏 -->
-    <!-- ⚠️ Theme.Cesia.DayNight 开了 windowTranslucentStatus=true，内容会绘制到状态栏之下。
-         用 fitsSystemWindows 让标题栏自动下移状态栏高度，避免名称与关闭按钮被遮挡。 -->
     <LinearLayout
         android:id="@+id/title_bar"
         android:layout_width="match_parent"
@@ -28,7 +26,6 @@
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
-        <!-- 关闭按钮 -->
         <TextView
             android:id="@+id/btn_close"
             android:layout_width="48dp"
@@ -42,7 +39,82 @@
 
     </LinearLayout>
 
-    <!-- 添加自定义源按钮 -->
+    <!-- 列表（分类 + 源），URL 默认隐藏，点「显示 URL」按钮切换整页显隐 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_sources"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp" />
+
+    <!-- 底部批量栏（默认隐藏，点「批量管理」后显示）：取消 / 全选 / 置顶 / 删除 / 已选 N -->
+    <LinearLayout
+        android:id="@+id/action_bar_batch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btn_batch_cancel"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_batch_all"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="全选"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_batch_pin"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="置顶"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/btn_batch_delete"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="删除"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:background="?attr/selectableItemBackground" />
+
+        <TextView
+            android:id="@+id/tv_batch_count"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="已选 0"
+            android:textSize="13sp"
+            android:textColor="#81D8D0"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <!-- 底部操作栏：添加 / 显示URL / 批量管理 并列（在菜单/列表下方） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -55,20 +127,43 @@
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
+            android:layout_marginEnd="6dp"
             android:gravity="center"
-            android:text="+ 添加自定义 RSS"
+            android:text="+ 添加 RSS"
             android:textSize="14sp"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="添加自定义 RSS 源" />
 
-    </LinearLayout>
+        <TextView
+            android:id="@+id/btn_show_url"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="3dp"
+            android:gravity="center"
+            android:text="显示 URL"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="显示/隐藏所有 RSS 地址" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_sources"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="8dp" />
+        <TextView
+            android:id="@+id/btn_batch_manage"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:gravity="center"
+            android:text="批量管理"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="进入批量管理" />
+
+    </LinearLayout>
 
 </LinearLayout>

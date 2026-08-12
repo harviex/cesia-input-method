@@ -24,6 +24,7 @@ object RssFetchManager {
     private const val TAG = "RssFetchManager"
     private const val PREFS_NAME = "cesia_rss_sources"
     private const val KEY_CUSTOM_SOURCES = "custom_sources"
+    private const val KEY_CUSTOM_PINNED = "custom_pinned"
     private const val KEY_SELECTED_SOURCE = "selected_source"
     private const val MAX_ITEMS = 30
     private const val FETCH_TIMEOUT_SECONDS = 15L
@@ -293,10 +294,11 @@ object RssFetchManager {
             val array = org.json.JSONArray(json)
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
+                val cat = if (obj.has("category")) obj.optString("category", "自定义") else "自定义"
                 list.add(RssSource(
                     obj.getString("name"),
                     obj.getString("url"),
-                    "自定义"
+                    cat
                 ))
             }
         } catch (e: Exception) {
@@ -305,8 +307,8 @@ object RssFetchManager {
         return list
     }
 
-    /** 添加自定义源（去重） */
-    fun addCustomSource(context: Context, name: String, url: String): Boolean {
+    /** 添加自定义源（去重）；category 默认「自定义」，可在指定分类下添加 */
+    fun addCustomSource(context: Context, name: String, url: String, category: String = "自定义"): Boolean {
         if (name.isBlank() || url.isBlank()) return false
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val current = getCustomSources(context).toMutableList()
@@ -314,12 +316,12 @@ object RssFetchManager {
         // 去重：同名或同 URL 不重复添加
         if (current.any { it.name == name || it.url == url }) return false
 
-        current.add(RssSource(name, url, "自定义"))
+        current.add(RssSource(name, url, category))
         val json = StringBuilder().apply {
             append("[")
             current.forEachIndexed { index, s ->
                 if (index > 0) append(",")
-                append("{\"name\":\"${s.name.replace("\"", "\\\"")}\",\"url\":\"${s.url.replace("\"", "\\\"")}\"}")
+                append("{\"name\":\"${s.name.replace("\"", "\\\"")}\",\"url\":\"${s.url.replace("\"", "\\\"")}\",\"category\":\"${s.category.replace("\"", "\\\"")}\"}")
             }
             append("]")
         }.toString()
@@ -344,16 +346,44 @@ object RssFetchManager {
 
     /** 获取所有源（预置 + 自定义），新闻类置顶 */
     fun getAllSources(context: Context): List<RssSource> {
+        val pinned = getCustomPinned(context)
         val all = mutableListOf<RssSource>()
         all.addAll(PRESET_SOURCES)
         all.addAll(getCustomSources(context))
-        
-        // 排序：新闻类(新闻/综合)置顶，其次按分类首字母排序，自定义在最后
+
+        // 排序：新闻类(新闻/综合)置顶，其次按分类首字母排序，自定义在最后；
+        // 自定义源内「置顶」的排在非置顶自定义源之前（批量置顶生效）
         return all.sortedWith(compareByDescending<RssSource> { it.category == "新闻" }
             .thenByDescending { it.category == "综合" }
             .thenBy { it.category }
+            .thenByDescending { it.category == "自定义" && it.url in pinned }
             .thenBy { it.name }
         )
+    }
+
+    /** 读取置顶的自定义源 URL 集合 */
+    fun getCustomPinned(context: Context): Set<String> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val s = prefs.getString(KEY_CUSTOM_PINNED, "") ?: ""
+        return if (s.isNotEmpty()) s.split("\u0000").toSet() else emptySet()
+    }
+
+    /** 批量置顶：把给定 URL 列表中的自定义源标记为置顶（合并进已有置顶集合） */
+    fun pinCustomSources(context: Context, urls: List<String>) {
+        if (urls.isEmpty()) return
+        val pinned = getCustomPinned(context).toMutableSet()
+        pinned.addAll(urls)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_CUSTOM_PINNED, pinned.joinToString("\u0000")).apply()
+    }
+
+    /** 取消置顶（可选，暂未直接暴露 UI） */
+    fun unpinCustomSources(context: Context, urls: List<String>) {
+        if (urls.isEmpty()) return
+        val pinned = getCustomPinned(context).toMutableSet()
+        pinned.removeAll(urls.toSet())
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_CUSTOM_PINNED, pinned.joinToString("\u0000")).apply()
     }
 
     /** 按分类分组获取源 */
