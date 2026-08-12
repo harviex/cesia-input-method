@@ -506,7 +506,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 连续按键数上限（单击数字键计数，非中文字数）：到达后提示上限、不再累积新键。
     // 配合 schema max_code_length=8，Rime 只解码末 ≤8 位，25 键内不卡（含退格）。
     private val MAX_T9_KEYS = 25
-    private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"
+    private var t9SpellPrefix = StringBuilder()   // 已选字母，如 "ws"（中文逐键选音；英文 T9 选音锁定时复用）
+    private var enSpellLocked = false   // T9 英文：用户是否手动点选音区锁定过字母（true=精确锁定前缀，false=笛卡尔积出全部组合）
     // 候选音区(逐键选音)当前指向的数字串位置 = 已组词对应的数字位数 + 当前音节已选字母数。
     // 已组词位数由 t9ComposedSoFar 的真实读音反推（PinyinMap→T9 数字码），替代已删除的 t9ConsumedLen 消费语义，
     // 使选完一个音节(如 946→辛)后候选音区仍能推进到下一音节的数字键。PinyinMap 未加载时回退 0（候选音区从头，可接受）。
@@ -2467,6 +2468,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         enMode = if (isEnglishMode) keyboardMode else null
         enBuffer.clear()
         enCandidates = emptyList()
+        // 清空英文选音态（复用中文 t9 系列变量），避免残留
+        t9DigitQueue.clear(); t9SpellPrefix.clear(); enSpellLocked = false
         if (isEnglishMode) {
             // 进入英文：清空 Rime 中文 composing + 联想态，避免候选栏残留中文词/联想词（像 T9 那样）
             try { rimeEngine.clear() } catch (_: Throwable) {}
@@ -2488,6 +2491,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     // 英文输入：处理单个按键（完全不经过 Rime）
     private fun handleEnglishKey(primaryCode: Int) {
+        dlog { "英文键: primaryCode=$primaryCode, enMode=$enMode, keyboardMode=$keyboardMode, enBuffer='$enBuffer'" }
         val dict = englishDict ?: run { isEnglishMode = false; updateEnModeButton(); return }
         val lower = if (primaryCode in 65..90) primaryCode + 32 else primaryCode
         // 符号面板负码 / 全键盘问号 / T9主键盘中文标点码点 → 对应英文标点（先上屏英文词再上屏符号+空格）
@@ -2509,6 +2513,16 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (enBuffer.isNotEmpty()) {
                     enBuffer.deleteAt(enBuffer.length - 1)
                     refreshEnglishCandidates()
+                } else if (t9DigitQueue.isNotEmpty()) {
+                    // T9 英文退格：删最后按的数字键及其对应选音字母
+                    t9DigitQueue.deleteAt(t9DigitQueue.length - 1)
+                    if (enSpellLocked && t9SpellPrefix.isNotEmpty()
+                        && t9SpellPrefix.length >= t9DigitQueue.length) {
+                        t9SpellPrefix.deleteAt(t9SpellPrefix.length - 1)
+                    }
+                    if (t9DigitQueue.isEmpty()) enSpellLocked = false
+                    refreshEnglishCandidates()
+                    updateSpellBar()
                 } else {
                     currentInputConnection?.deleteSurroundingText(1, 0)
                 }
@@ -2523,9 +2537,17 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 enBuffer.append(lower.toChar())
                 refreshEnglishCandidates()
             }
-            enMode == KeyboardMode.NUMBER && primaryCode in 50..57 -> {  // T9 数字键：作为 t9 数字序列
-                enBuffer.append(primaryCode.toChar())
+            enMode == KeyboardMode.NUMBER && primaryCode in 50..57 -> {  // T9 数字键：英文选音（复用中文 t9DigitQueue/t9SpellPrefix 选音机制）
+                val digit = mainToSub[primaryCode] ?: (primaryCode - 48)
+                t9DigitQueue.append(digit.digitToChar())
+                // 锁定态(enSpellLocked)下新按的键用该键首字母默认填充锁定前缀（用户可点选音区再改）；
+                // 未锁定则保持笛卡尔积（t9SpellPrefix 不动，refreshEnglishCandidates 走 t9Match 全组合）。
+                if (enSpellLocked && t9SpellPrefix.length < t9DigitQueue.length) {
+                    val firstLetter = t9Map[digit]?.firstOrNull() ?: ' '
+                    if (firstLetter != ' ') t9SpellPrefix.append(firstLetter)
+                }
                 refreshEnglishCandidates()
+                updateSpellBar()  // 显示/刷新英文候选音区
             }
             else -> {  // 其余键（标点/数字/符号）：先上屏英文词，再上屏该键字符（标点后补空格）
                 commitEnglishTop()
@@ -2551,9 +2573,20 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     private fun refreshEnglishCandidates() {
         val dict = englishDict ?: return
         enCandidates = if (enMode == KeyboardMode.NUMBER) {
-            dict.t9Match(enBuffer.toString())
+            // T9 英文：默认笛卡尔积（t9Match 枚举所有字母组合，如 36→dm/dn/do/em/en/eo 全部有词的词）；
+            // 若用户点选音区锁定过字母(enSpellLocked)，则在该锁定前缀下继续笛卡尔积（过滤只留前缀匹配）。
+            val raw = dict.t9Match(t9DigitQueue.toString(), 400)
+            if (enSpellLocked && t9SpellPrefix.isNotEmpty()) {
+                raw.filter { it.startsWith(t9SpellPrefix.toString()) }
+            } else {
+                raw
+            }
         } else {
             dict.prefixMatch(enBuffer.toString())
+        }
+        // 英文态：状态栏显示当前已输入的英文（QWERTY 用 enBuffer，T9 用选音前缀）
+        if (isEnglishMode) {
+            updateStatus(if (enMode == KeyboardMode.NUMBER) t9SpellPrefix.toString() else enBuffer.toString())
         }
         updateCandidateBar()
     }
@@ -2574,6 +2607,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             currentInputConnection?.commitText(word, 1)
             enBuffer.clear()
             enCandidates = emptyList()
+            t9DigitQueue.clear(); t9SpellPrefix.clear()  // 清空英文选音态
+            enSpellLocked = false
+            updateSpellBar()
+            updateStatus("")  // 上屏后清空英文状态栏
             updateCandidateBar()
             return
         }
@@ -2767,23 +2804,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 且重喂前 t9ComposedSoFar.clear() 让 t9SpellCursor 回退到 0，已消费位彻底失效。
                 t9InputBuffer.clear()
                 if (rimeEngine.isComposing) {
-                    // Rime 仍在 composing（拼音未输完整）：先查该词联想。
-                    // 有联想则进入联想模式（清 Rime composing，显示续词），否则交还 Rime 续写下一音节。
-                    // 修复：原逻辑直接 return 跳过 getAssociations，导致部分码选词（如 936 选"问题"）无联想，
-                    // 而全码（93684）因 isComposing=false 能联想——同一词行为不一致。
-                    val earlyAssoc = rimeEngine.getAssociations(selectedWord, 100, 500, 10)
-                    if (earlyAssoc.isNotEmpty()) {
-                        rimeEngine.clear()
-                        t9ComposedSoFar.clear()
-                        t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-                        t9PendingSeg = ""; t9PendingChars.clear(); lastT9Feed = null
-                        updateSpellBar(); updateStatus(statusIdleText)
-                        isAssociationMode = true
-                        associationPrefix = selectedWord
-                        associationCandidates = earlyAssoc
-                        showAssociationCandidates()
-                        return
-                    }
+                    // Rime 仍在 composing（拼音未输完整/多音节中途选字）：交还 Rime 续写下一音节，
+                    // 不进联想。否则会掐断拼音组词（如 943 选「谢」后续 9664484 续拼 yonghui 被截断进联想态）。
+                    // 联想仅在该词完整上屏后（isComposing=false 的 2770 路径 / userPhrases 直出 / 全码）触发。
                     t9SpellPrefix.clear()
                     updateSpellBar()
                     updateCandidateBar()
@@ -2950,8 +2973,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         var allCands: List<String>
         if (isEnglishMode) {
-            // 英文自主词库通道：候选直接来自 enCandidates，不经 Rime
-            allCands = if (enBuffer.isEmpty()) emptyList() else enCandidates
+            // 英文自主词库通道：候选直接来自 enCandidates，不经 Rime。
+            // T9 英文用 t9SpellPrefix（enBuffer 为空），QWERTY 英文用 enBuffer，二者都汇入 enCandidates。
+            allCands = enCandidates
             lastAllCands = allCands
             candTotalLoaded = allCands.size
         } else {
@@ -3347,37 +3371,45 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnDelete.setOnClickListener {
             maybeShowButtonHint("clear", "清空")
+            // 英文模式：清空键清除英文输入态（候选音区/候选栏），有新闻则恢复显示
+            if (isEnglishMode) {
+                enBuffer.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); enSpellLocked = false
+                enCandidates = emptyList()
+                clearCandidateContent()
+                if (newsBarActive) showNewsInPanel()
+                updateSpellBar()
+                return@setOnClickListener
+            }
             // 仅在候选栏已显示（有输入内容）时清空并保留候选栏；否则不弹出候选栏
             val candBarWasVisible = candidateBar.visibility == View.VISIBLE
             if (candBarWasVisible) {
                 // 清空键：清除候选栏内容（保持可见），并结束语音保持模式
                 clearCandidateContent()
             }
-            if (rimeEngine.isComposing) {
-                rimeEngine.processKey("BackSpace")
-                updateCandidateBar()
-            } else {
-                try {
-                    // Android IME 框架对单次 deleteSurroundingText 有限制，循环删除直到清空
-                    val ic = currentInputConnection ?: return@setOnClickListener
-                    // 先删除选中文字（如果有选区）
-                    val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
-                    val selStart = extracted?.selectionStart ?: -1
-                    val selEnd = extracted?.selectionEnd ?: -1
-                    if (selStart >= 0 && selEnd >= 0 && selStart != selEnd) {
-                        ic.commitText("", 1)
-                    } else {
-                        // 删除光标前全部文字
-                        while (true) {
-                            val before = ic.getTextBeforeCursor(1000, 0)
-                            if (before.isNullOrEmpty()) break
-                            val len = before.length
-                            ic.deleteSurroundingText(len, 0)
-                            if (len < 1000) break // 已删完
-                        }
+            // 中文模式：一并清空数字输入缓冲与 Rime composing（状态栏/候选音区显示的 t9DigitQueue 残留会
+            // 导致「看似清空、再输入接在旧字符后」）。有新闻则恢复显示。
+            t9DigitQueue.clear(); t9SpellPrefix.clear(); t9PendingChars.clear()
+            try { rimeEngine.clear() } catch (_: Throwable) {}
+            if (newsBarActive) showNewsInPanel()
+            updateSpellBar()
+            // 清空文本框光标前文字（保留选区逻辑）
+            try {
+                val ic = currentInputConnection ?: return@setOnClickListener
+                val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
+                val selStart = extracted?.selectionStart ?: -1
+                val selEnd = extracted?.selectionEnd ?: -1
+                if (selStart >= 0 && selEnd >= 0 && selStart != selEnd) {
+                    ic.commitText("", 1)
+                } else {
+                    while (true) {
+                        val before = ic.getTextBeforeCursor(1000, 0)
+                        if (before.isNullOrEmpty()) break
+                        val len = before.length
+                        ic.deleteSurroundingText(len, 0)
+                        if (len < 1000) break
                     }
-                } catch (_: Exception) { /* 安全忽略 */ }
-            }
+                }
+            } catch (_: Exception) { /* 安全忽略 */ }
         }
         // 清空键：长按高亮动态效果（无锁定，手指移开解除）
         btnDelete.setOnTouchListener { v, event ->
@@ -7597,6 +7629,17 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             prevKeyboardMode = keyboardMode
         }
         keyboardMode = mode
+        // 英文模式下同步 enMode 与选音态：避免 T9 英文切全键盘后 enMode 仍=NUMBER 导致候选栏空白，
+        // 以及残留 t9 选音态污染全键盘英文输入。
+        if (isEnglishMode) { enMode = mode; t9DigitQueue.clear(); t9SpellPrefix.clear(); enSpellLocked = false }
+        // 中文模式切换键盘布局时同步 Rime schema：否则从全键盘(pinyin)切回 T9 时 Rime 仍用旧 schema，
+        // 候选栏只显示单字/首词，需切中英一次才恢复。
+        if (!isEnglishMode && (mode == KeyboardMode.NUMBER || mode == KeyboardMode.QWERTY)) {
+            // 中文在 T9/全键盘间切换时同步 Rime schema：从全键盘(pinyin)切回 T9 时 Rime 仍用旧 schema
+            // 会导致候选栏只显示单字/首词，需切中英一次才恢复。符号键盘不触发 schema 切换（保持原行为）。
+            val want = if (mode == KeyboardMode.NUMBER) "t9_pinyin" else "pinyin"
+            try { rimeEngine.selectSchema(want); rimeEngine.reload() } catch (_: Throwable) {}
+        }
         currentKeyboard = when (mode) {
             KeyboardMode.QWERTY -> qwertyKeyboard
             KeyboardMode.SYMBOL_CN -> symbolKeyboardCn
@@ -8349,10 +8392,27 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 逐键选音：点击候选栏字母区第 letterIndex 个字母（如 9→wxyz 的第0个 w） */
     private fun onT9SpellLetterClick(letterIndex: Int) {
         dlog { "spellClick in: letter=$letterIndex pre='$t9SpellPrefix' queue='$t9DigitQueue' cursor=$t9SpellCursor" }
-        if (t9SpellCursor >= t9DigitQueue.length) return
-        val curDigit = t9DigitQueue[t9SpellCursor]
-        val letters = t9Map[curDigit.digitToInt()] ?: return
+        // 中文：选音区只显示「下一待选键」(t9SpellCursor < 队列长才有效)；
+        // 英文：选音区显示「最后按的键」，每键已 append 默认字母，t9SpellCursor==队列长，需跳过此 return。
+        if (!isEnglishMode && t9SpellCursor >= t9DigitQueue.length) return
+        // 英文取最后按的键；中文取下一待选键
+        val curDigit = if (isEnglishMode) t9DigitQueue.last().digitToInt() else t9DigitQueue[t9SpellCursor].digitToInt()
+        val letters = t9Map[curDigit] ?: return
         if (letterIndex >= letters.length) return
+        if (isEnglishMode) {
+            // 英文 T9 选音：锁定「最后按的键」所选字母（候选栏从笛卡尔积收窄到该组合）。
+            // 前面未锁定位用各键首字母补齐（保留已锁定的位），增量更新避免丢失前面锁定。
+            enSpellLocked = true
+            while (t9SpellPrefix.length < t9DigitQueue.length - 1) {
+                val d = t9DigitQueue[t9SpellPrefix.length].digitToInt()
+                t9SpellPrefix.append(t9Map[d]?.firstOrNull() ?: ' ')
+            }
+            if (t9SpellPrefix.length < t9DigitQueue.length) t9SpellPrefix.append(letters[letterIndex])
+            else t9SpellPrefix.setCharAt(t9SpellPrefix.length - 1, letters[letterIndex])
+            refreshEnglishCandidates()
+            updateSpellBar()
+            return
+        }
         t9SpellPrefix.append(letters[letterIndex])  // 锁定该位字母
         dlog { "spellClick out: pre='$t9SpellPrefix'" }
         // 选音锁定变化：清空旧的待定段单字缓存，让 refreshPendingChars 按新锁定拼音(如 qi)重拉，
@@ -8369,9 +8429,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 刷新候选音：驱动候选栏最左 4 字母点选区。
      *  全选完 / 候选区空 / 非T9模式 时同步隐藏。 */
     private fun updateSpellBar() {
+        // 中文：选音区显示「下一待选键」(t9SpellCursor < 队列长才显示)；英文：显示「最后按的键」(队列非空即显示)
         val showSpell = keyboardMode == KeyboardMode.NUMBER
-                && t9SpellCursor < t9DigitQueue.length
-                && rimeEngine.hasCandidates
+                && (if (isEnglishMode) t9DigitQueue.isNotEmpty()
+                    else t9SpellCursor < t9DigitQueue.length)
+                && (rimeEngine.hasCandidates || isEnglishMode)
         val spellZone = llT9Spell
         val spellTVs = t9SpellTVs
         if (spellZone == null || spellTVs == null || !showSpell) {
@@ -8379,8 +8441,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             return
         }
         spellZone.visibility = android.view.View.VISIBLE
-        val curDigit = t9DigitQueue[t9SpellCursor]
-        val letters = t9Map[curDigit.digitToInt()] ?: ""
+        val curDigit = if (isEnglishMode) t9DigitQueue.last().digitToInt() else t9DigitQueue[t9SpellCursor].digitToInt()
+        val letters = t9Map[curDigit] ?: ""
         for (i in 0..3) {
             val tv = spellTVs.getOrNull(i) ?: continue
             if (i < letters.length) {
