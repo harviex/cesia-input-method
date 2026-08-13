@@ -26,6 +26,7 @@ object RssFetchManager {
     private const val KEY_CUSTOM_SOURCES = "custom_sources"
     private const val KEY_CUSTOM_PINNED = "custom_pinned"
     private const val KEY_SELECTED_SOURCE = "selected_source"
+    private const val KEY_DELETED_PRESETS = "deleted_preset_sources"  // 已删除的预置源黑名单
     private const val MAX_ITEMS = 30
     private const val FETCH_TIMEOUT_SECONDS = 15L
 
@@ -36,86 +37,41 @@ object RssFetchManager {
 
     // ===== 预置国内可访问 RSS 源（按分类组织，已验证可用性，去重、去除需翻墙、平衡分类） =====
 
-    data class RssSource(val name: String, val url: String, val category: String)
+    data class RssSource(val name: String, val url: String, val category: String, val isCustom: Boolean = false)
 
     val PRESET_SOURCES: List<RssSource> = listOf(
-        // ===== 官方主流媒体 =====
+        // ===== 官方主流媒体（均为高产出源，anyfeeder 非微信代理） =====
         RssSource("人民日报", "https://plink.anyfeeder.com/people-daily", "官方主流媒体"),
-        RssSource("人民网", "https://plink.anyfeeder.com/weixin/people_rmw", "官方主流媒体"),
-        RssSource("人民网-国内新闻", "https://plink.anyfeeder.com/people/politics", "官方主流媒体"),
-        RssSource("人民网-国际新闻", "https://plink.anyfeeder.com/people/world", "官方主流媒体"),
-        RssSource("人民网-英语新闻", "https://plink.anyfeeder.com/people/english", "官方主流媒体"),
         RssSource("新华社新闻_新华网", "https://plink.anyfeeder.com/newscn/whxw", "官方主流媒体"),
-        RssSource("新华网", "https://plink.anyfeeder.com/weixin/newsxinhua", "官方主流媒体"),
-        RssSource("中国日报: 专栏", "https://plink.anyfeeder.com/chinadaily/column", "官方主流媒体"),
-        RssSource("中国日报: 双语新闻", "https://plink.anyfeeder.com/chinadaily/dual", "官方主流媒体"),
-        RssSource("中国日报: 财经", "https://plink.anyfeeder.com/chinadaily/caijing", "官方主流媒体"),
-        RssSource("中国日报: 资讯", "https://plink.anyfeeder.com/chinadaily/world", "官方主流媒体"),
-        RssSource("侠客岛", "https://plink.anyfeeder.com/weixin/xiake_island", "官方主流媒体"),
         RssSource("光明日报", "https://plink.anyfeeder.com/guangmingribao", "官方主流媒体"),
-        RssSource("半月谈", "https://plink.anyfeeder.com/weixin/banyuetan-weixin", "官方主流媒体"),
-        RssSource("参考消息", "https://plink.anyfeeder.com/weixin/ckxxwx", "官方主流媒体"),
-        RssSource("央视新闻", "https://plink.anyfeeder.com/weixin/cctvnewscenter", "官方主流媒体"),
-        RssSource("央视财经", "https://plink.anyfeeder.com/weixin/cctvyscj", "官方主流媒体"),
         RssSource("头条 - 求是网", "https://plink.anyfeeder.com/qstheory", "官方主流媒体"),
-        RssSource("新京报书评周刊", "https://plink.anyfeeder.com/weixin/ibookreview", "官方主流媒体"),
-        RssSource("环球时报", "https://plink.anyfeeder.com/weixin/hqsbwx", "官方主流媒体"),
-        RssSource("经济观察报", "https://plink.anyfeeder.com/weixin/eeo-com-cn", "官方主流媒体"),
-        RssSource("财新网", "https://plink.anyfeeder.com/weixin/caixinwang", "官方主流媒体"),
-        RssSource("界面新闻: 新闻", "https://plink.anyfeeder.com/jiemian/news", "官方主流媒体"),
 
         // ===== 军事国防 =====
         RssSource("解放军报", "https://plink.anyfeeder.com/jiefangjunbao", "军事国防"),
 
         // ===== 商业财经媒体 =====
-        RssSource("21世纪经济报道", "https://plink.anyfeeder.com/weixin/jjbd21", "商业财经媒体"),
-        RssSource("哈佛商业评论", "https://plink.anyfeeder.com/weixin/hbrchinese", "商业财经媒体"),
-        RssSource("界面新闻: 商业", "https://plink.anyfeeder.com/jiemian/business", "商业财经媒体"),
-        RssSource("界面新闻: 财经", "https://plink.anyfeeder.com/jiemian/finance", "商业财经媒体"),
-        RssSource("新财富", "https://plink.anyfeeder.com/weixin/newfortune", "商业财经媒体"),
         RssSource("财富中文网", "https://plink.anyfeeder.com/fortunechina", "商业财经媒体"),
         RssSource("人人都是产品经理", "https://www.woshipm.com/feed", "商业财经媒体"),
 
         // ===== 教育考试 =====
         RssSource("InfoQ 推荐", "https://plink.anyfeeder.com/infoq/recommend", "教育考试"),
-        RssSource("MOOC", "https://plink.anyfeeder.com/weixin/mooc", "教育考试"),
-        RssSource("三节课", "https://plink.anyfeeder.com/weixin/sanjieke01", "教育考试"),
-        RssSource("罗辑思维", "https://plink.anyfeeder.com/weixin/luojisw", "教育考试"),
 
         // ===== 人文历史读物 =====
-        RssSource("三联生活周刊", "https://plink.anyfeeder.com/weixin/lifeweek", "人文历史读物"),
-        RssSource("人物", "https://plink.anyfeeder.com/weixin/renwumag1980", "人文历史读物"),
-        RssSource("单读", "https://plink.anyfeeder.com/weixin/dandureading", "人文历史读物"),
-        RssSource("南方周末", "https://plink.anyfeeder.com/weixin/nanfangzhoumo", "人文历史读物"),
         RssSource("南方周末-推荐", "https://plink.anyfeeder.com/infzm/recommends", "人文历史读物"),
         RssSource("南方周末-新闻", "https://plink.anyfeeder.com/infzm/news", "人文历史读物"),
-        RssSource("历史研习社", "https://plink.anyfeeder.com/weixin/mingqinghistory", "人文历史读物"),
-        RssSource("国家人文历史", "https://plink.anyfeeder.com/weixin/gjrwls", "人文历史读物"),
-        RssSource("简书", "https://plink.anyfeeder.com/weixin/jianshuio", "人文历史读物"),
-        RssSource("简书首页", "https://plink.anyfeeder.com/jianshu/home", "人文历史读物"),
-        RssSource("观止·每日一文", "https://plink.anyfeeder.com/meiriyiwen", "人文历史读物"),
-        RssSource("读库小报", "https://plink.anyfeeder.com/weixin/dukuxiaobao", "人文历史读物"),
-        RssSource("青年文摘", "https://plink.anyfeeder.com/weixin/qnwzwx", "人文历史读物"),
 
-        // ===== 科技互联网媒体 =====
-        RssSource("36氪", "https://36kr.com/feed", "科技互联网媒体"),
-        RssSource("IT之家", "https://www.ithome.com/rss/", "科技互联网媒体"),
-        RssSource("奇客Solidot", "https://www.solidot.org/index.rss", "科技互联网媒体"),
-        RssSource("少数派", "https://sspai.com/feed", "科技互联网媒体"),
-        RssSource("新智元", "https://plink.anyfeeder.com/weixin/AI_era", "科技互联网媒体"),
-        RssSource("爱范儿", "https://www.ifanr.com/feed", "科技互联网媒体"),
-        RssSource("腾讯科技", "https://plink.anyfeeder.com/weixin/qqtech", "科技互联网媒体"),
+        // ===== 科技互联网媒体（直连 feed + 高产出代理） =====
         RssSource("虎嗅", "https://rss.huxiu.com/", "科技互联网媒体"),
+        RssSource("IT之家", "https://www.ithome.com/rss/", "科技互联网媒体"),
+        RssSource("爱范儿", "https://www.ifanr.com/feed", "科技互联网媒体"),
+        RssSource("奇客Solidot", "https://www.solidot.org/index.rss", "科技互联网媒体"),
         RssSource("钛媒体", "https://www.tmtpost.com/feed", "科技互联网媒体"),
+        RssSource("少数派", "https://sspai.com/feed", "科技互联网媒体"),
 
-        // ===== 科学科普 =====
-        RssSource("果壳网", "https://plink.anyfeeder.com/weixin/Guokr42", "科学科普"),
-        RssSource("中国国家地理", "https://plink.anyfeeder.com/weixin/dili360", "科学科普"),
-        RssSource("地球知识局", "https://plink.anyfeeder.com/weixin/diqiuzhishiju", "科学科普"),
-        RssSource("物种日历", "https://plink.anyfeeder.com/weixin/guokrpac", "科学科普"),
+        // ===== 科学科普（仅 anyfeeder 微信代理可用，保留代表源） =====
         RssSource("环球科学", "https://plink.anyfeeder.com/weixin/ScientificAmerican", "科学科普"),
 
-        // ===== 体育运动 =====
+        // ===== 体育运动（仅 anyfeeder 微信代理可用，保留代表源） =====
         RssSource("新浪体育", "https://plink.anyfeeder.com/weixin/sports_sina", "体育运动")
     )
 
@@ -162,6 +118,8 @@ object RssFetchManager {
 
             var title = ""
             var link = ""
+            var guid = ""
+            var channelLink = ""
             var inItem = false
             var inEntry = false
             var currentText = ""
@@ -173,12 +131,13 @@ object RssFetchManager {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
                         when (tag) {
-                            "item" -> { inItem = true; title = ""; link = "" }
-                            "entry" -> { inEntry = true; title = ""; link = "" }
+                            "item" -> { inItem = true; title = ""; link = ""; guid = "" }
+                            "entry" -> { inEntry = true; title = ""; link = ""; guid = "" }
                             "link" -> {
                                 linkHref = parser.getAttributeValue(null, "href") ?: ""
                                 currentText = ""
                             }
+                            "guid" -> { currentText = "" }
                             "title" -> { currentText = "" }
                         }
                     }
@@ -194,14 +153,20 @@ object RssFetchManager {
                             "link" -> {
                                 if (inItem && link.isEmpty()) {
                                     link = currentText.trim().ifEmpty { linkHref }
-                                }
-                                if (inEntry && linkHref.isNotEmpty()) {
+                                } else if (inEntry && linkHref.isNotEmpty()) {
                                     link = linkHref
+                                } else if (!inItem && !inEntry) {
+                                    channelLink = currentText.trim().ifEmpty { linkHref }
                                 }
                             }
+                            "guid" -> {
+                                if (inItem || inEntry) guid = currentText.trim()
+                            }
                             "item", "entry" -> {
-                                if (title.isNotEmpty() && link.isNotEmpty()) {
-                                    items.add(NewsItem(title, link))
+                                // link 可选：无 link 时用 guid / channelLink 兜底，确保无 link 的源（如 X Timeline RSS）也能收录
+                                val finalLink = link.ifEmpty { guid.ifEmpty { channelLink } }
+                                if (title.isNotEmpty()) {
+                                    items.add(NewsItem(title, finalLink))
                                 }
                                 inItem = false
                                 inEntry = false
@@ -298,7 +263,8 @@ object RssFetchManager {
                 list.add(RssSource(
                     obj.getString("name"),
                     obj.getString("url"),
-                    cat
+                    cat,
+                    isCustom = true
                 ))
             }
         } catch (e: Exception) {
@@ -329,27 +295,59 @@ object RssFetchManager {
         return true
     }
 
-    /** 删除自定义源 */
+    /** 删除源（所有源都可删：自定义源从列表移除，预置源加入删除黑名单） */
     fun removeCustomSource(context: Context, name: String, url: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val current = getCustomSources(context).filterNot { it.name == name && it.url == url }.toMutableList()
+        // 自定义源：从 custom_sources 移除
+        val custom = getCustomSources(context).filterNot { it.name == name && it.url == url }
         val json = StringBuilder().apply {
             append("[")
-            current.forEachIndexed { index, s ->
+            custom.forEachIndexed { index, s ->
                 if (index > 0) append(",")
                 append("{\"name\":\"${s.name.replace("\"", "\\\"")}\",\"url\":\"${s.url.replace("\"", "\\\"")}\"}")
             }
             append("]")
         }.toString()
         prefs.edit().putString(KEY_CUSTOM_SOURCES, json).apply()
+        // 预置源：若有同名同 URL 的预置源，加入删除黑名单（不再展示，但可恢复）
+        val preset = PRESET_SOURCES.find { it.name == name && it.url == url }
+        if (preset != null) {
+            val deleted = getDeletedPresets(context).toMutableSet()
+            deleted.add(name to url)
+            prefs.edit().putString(KEY_DELETED_PRESETS,
+                deleted.joinToString("\u0000") { "${it.first}\u0001${it.second}" }).apply()
+        }
+        // 若删除的是当前选中源，清空选中态
+        val sel = getSelectedSource(context)
+        if (sel != null && sel.name == name && sel.url == url) clearSelectedSource(context)
     }
 
-    /** 获取所有源（预置 + 自定义），新闻类置顶 */
+    /** 读取已删除的预置源黑名单（name,url 对集合） */
+    fun getDeletedPresets(context: Context): Set<Pair<String, String>> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val s = prefs.getString(KEY_DELETED_PRESETS, "") ?: ""
+        if (s.isEmpty()) return emptySet()
+        return s.split("\u0000").mapNotNull { part ->
+            val kv = part.split("\u0001")
+            if (kv.size == 2) kv[0] to kv[1] else null
+        }.toSet()
+    }
+
+    /** 恢复全部预置源（清空删除黑名单） */
+    fun restoreAllPresets(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().remove(KEY_DELETED_PRESETS).apply()
+    }
+
+    /** 获取所有源（预置 + 自定义），新闻类置顶。已删除的预置源从黑名单中剔除不再展示 */
     fun getAllSources(context: Context): List<RssSource> {
         val pinned = getCustomPinned(context)
+        val deletedPresets = getDeletedPresets(context)
         val all = mutableListOf<RssSource>()
-        all.addAll(PRESET_SOURCES)
-        all.addAll(getCustomSources(context))
+        // 预置源剔除已删除黑名单（通过 name+url 唯一标识）
+        all.addAll(PRESET_SOURCES.filterNot { deletedPresets.contains(it.name to it.url) })
+        // 自定义源标记为可删
+        all.addAll(getCustomSources(context).map { it.copy(isCustom = true) })
 
         // 排序：新闻类(新闻/综合)置顶，其次按分类首字母排序，自定义在最后；
         // 自定义源内「置顶」的排在非置顶自定义源之前（批量置顶生效）

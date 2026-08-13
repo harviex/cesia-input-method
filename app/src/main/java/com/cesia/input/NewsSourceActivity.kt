@@ -69,6 +69,14 @@ class NewsSourceActivity : AppCompatActivity() {
             setBackgroundColor(themeAccent)
             setOnClickListener { enterBatchMode() }
         }
+        findViewById<TextView>(R.id.btn_restore_presets).apply {
+            setBackgroundColor(themeAccent)
+            setOnClickListener {
+                RssFetchManager.restoreAllPresets(this@NewsSourceActivity)
+                buildRows(); adapter.setData(rows); adapter.notifyDataSetChanged()
+                Toast.makeText(this@NewsSourceActivity, "已恢复全部预置源", Toast.LENGTH_SHORT).show()
+            }
+        }
 
         applyAccentToViewTree(window.decorView, themeAccent)
         if (isDark) applyDarkToView(window.decorView)
@@ -85,7 +93,7 @@ class NewsSourceActivity : AppCompatActivity() {
             updateBatchCount()
         }
         findViewById<TextView>(R.id.btn_batch_pin).setOnClickListener {
-            val customSel = selectedBatch.filter { url -> rows.any { it is Row.Source && (it as Row.Source).src.url == url && (it as Row.Source).src.category == "自定义" } }
+            val customSel = selectedBatch.filter { url -> rows.any { it is Row.Source && (it as Row.Source).src.url == url && (it as Row.Source).src.isCustom } }
             if (customSel.isEmpty()) {
                 Toast.makeText(this, "置顶仅对自定义源生效", Toast.LENGTH_SHORT).show()
             } else {
@@ -96,12 +104,13 @@ class NewsSourceActivity : AppCompatActivity() {
             exitBatchMode()
         }
         findViewById<TextView>(R.id.btn_batch_delete).setOnClickListener {
-            val customSel = selectedBatch.filter { url -> rows.any { it is Row.Source && (it as Row.Source).src.url == url && (it as Row.Source).src.category == "自定义" } }
-            if (customSel.isEmpty()) {
-                Toast.makeText(this, "仅自定义源可删除（预置源不可删）", Toast.LENGTH_SHORT).show()
+            // 所有源都可删：自定义源从列表移除，预置源加入删除黑名单
+            val sel = selectedBatch.toList()
+            if (sel.isEmpty()) {
+                Toast.makeText(this, "请先勾选要删除的源", Toast.LENGTH_SHORT).show()
             } else {
                 var removed = 0
-                for (url in customSel) {
+                for (url in sel) {
                     val s = (rows.find { it is Row.Source && (it as Row.Source).src.url == url } as? Row.Source)?.src ?: continue
                     RssFetchManager.removeCustomSource(this, s.name, url)
                     removed++

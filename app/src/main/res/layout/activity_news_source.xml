@@ -164,6 +164,20 @@
             android:background="?attr/selectableItemBackground"
             android:contentDescription="进入批量管理" />
 
+        <TextView
+            android:id="@+id/btn_restore_presets"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:gravity="center"
+            android:text="恢复预置"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="恢复已删除的预置源" />
+
     </LinearLayout>
 
 </LinearLayout>

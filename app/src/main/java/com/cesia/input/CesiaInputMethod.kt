@@ -1188,7 +1188,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 初始化引擎
         statsManager = PolishStatsManager(this)
         magicHistoryManager = MagicHistoryManager(this)
-        currentMagicPrompt = magicHistoryManager?.getActiveInstruction()
+        // 智能修改激活态：与智能写作一致，使用持久化 active_instruction（空串/无=未激活）
+        currentMagicPrompt = getSharedPreferences("cesia_magic_modify", MODE_PRIVATE)
+            .getString("active_instruction", "")?.ifEmpty { null }
         currentSmartPrompt = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
             .getString("active_instruction", null)
 
@@ -3369,14 +3371,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         btnDelete.setOnClickListener {
             maybeShowButtonHint("clear", "清空")
-            // 英文模式：清空键清除英文输入态（候选音区/候选栏），有新闻则恢复显示
+            // 英文模式：两段式清空（与中文对称）
+            // 1) 有英文输入态（候选/选音/ buffer）时，只清输入法内部态，不动文本框；
+            // 2) 全部清空（无输入内容）后，再次按清空才删除文本框光标前文字。
             if (isEnglishMode) {
-                enBuffer.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); enSpellLocked = false
-                enCandidates = emptyList()
-                clearCandidateContent()
-                if (newsBarActive) showNewsInPanel()
-                updateSpellBar()
-                return@setOnClickListener
+                val hasEnInput = enBuffer.isNotEmpty() || enCandidates.isNotEmpty()
+                        || t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty() || enSpellLocked
+                if (hasEnInput) {
+                    enBuffer.clear(); t9DigitQueue.clear(); t9SpellPrefix.clear(); enSpellLocked = false
+                    enCandidates = emptyList()
+                    clearCandidateContent()
+                    if (newsBarActive) showNewsInPanel()
+                    updateSpellBar()
+                    return@setOnClickListener
+                }
+                // 无英文输入内容：fall through 到下方「清空文本框光标前文字」
             }
             // 中文模式：两段式清空
             // 1) 候选栏/状态栏还有输入内容时，只清输入法内部态（拼音/选音/Rime composing），不动文本框；
@@ -4062,10 +4071,18 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                             }
                         }
                     } else {
-                        // ===== 无选区：保持原有全文替换 =====
+                        // ===== 无选区：全文替换（显式全选，不依赖编辑器 selectAll 菜单，避免部分 App 不生效） =====
                         val ic2 = currentInputConnection
-                        ic2?.performContextMenuAction(android.R.id.selectAll)
-                        ic2?.commitText(result, 1)
+                        if (ic2 != null) {
+                            val ex = try {
+                                ic2.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)
+                            } catch (_: Exception) { null }
+                            val fullLen = ex?.text?.length ?: 0
+                            ic2.beginBatchEdit()
+                            if (fullLen > 0) ic2.setSelection(0, fullLen)  // 显式选中全文
+                            ic2.commitText(result, 1)                       // 替换选区（即全文）
+                            ic2.endBatchEdit()
+                        }
                         resetToIdle()
                     }
                 } catch (e2: Exception) {
@@ -4357,7 +4374,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 mgr.removeRecords(toDel.map { it.id })
                 val updated = mgr.getRecords()
                 if (currentMagicPrompt != null && updated.none { it.instruction == currentMagicPrompt }) {
-                    currentMagicPrompt = mgr.getActiveInstruction()
+                    currentMagicPrompt = getSharedPreferences("cesia_magic_modify", MODE_PRIVATE)
+                        .getString("active_instruction", "")?.ifEmpty { null }
                 }
             } else {
                 magicModifyDeleted.addAll(sel)
@@ -4372,6 +4390,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (currentMagicTab == "常用") {
                 mgr.clearAll()
                 currentMagicPrompt = null
+                getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                    .remove("active_instruction").apply()
             } else {
                 for (e in defEntries) magicModifyDeleted.add(e.instruction)
                 saveMagicModifyPrefs()
@@ -4585,15 +4605,34 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             }
             if (currentMagicTab == "常用") {
                 val record = items[position]
-                currentMagicPrompt = record.instruction
+                val wasActive = (currentMagicPrompt == record.instruction)
                 popup.dismiss()
                 executeSelectedMagic(record.instruction)
+                // 点击已激活（置顶）的临时命令 → 释放激活态；否则设为新的激活态（排第1位）
+                val magicEdit = getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                if (wasActive) {
+                    currentMagicPrompt = null
+                    magicEdit.remove("active_instruction")
+                } else {
+                    currentMagicPrompt = record.instruction
+                    magicEdit.putString("active_instruction", record.instruction)
+                }
+                magicEdit.apply()
             } else {
                 val entry = defEntries[position]
                 CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
-                currentMagicPrompt = entry.instruction
+                val wasActive = (currentMagicPrompt == entry.instruction)
                 popup.dismiss()
                 executeSelectedMagic(entry.instruction)
+                val magicEdit = getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                if (wasActive) {
+                    currentMagicPrompt = null
+                    magicEdit.remove("active_instruction")
+                } else {
+                    currentMagicPrompt = entry.instruction
+                    magicEdit.putString("active_instruction", entry.instruction)
+                }
+                magicEdit.apply()
             }
         }
 
@@ -4843,8 +4882,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         result.add(CmdEntry("user_${rec.hashCode()}", rec.take(20), rec, true))
                     }
                 }
-                // pinned 排前（按 instruction 命中 pinnedSet），当前激活命令置顶第 1 项
-                result.sortBy { !pinnedSet.contains(it.instruction) }
+                // 时间顺序：records_json（userRecords）头部为最近运行的命令，下标越小越新
+                val orderMap = userRecords.mapIndexed { i, s -> s to i }.toMap()
+                // 三档排序：①持久置顶命令 ②最近运行/语音命令（按时间倒序，新的在前）③其余普通命令
+                result.sortWith(compareBy(
+                    { !pinnedSet.contains(it.instruction) },              // pinned 优先
+                    { orderMap[it.instruction] ?: Int.MAX_VALUE }         // 非置顶内按时间倒序
+                ))
                 // 激活命令永远排在最前（第 1 项），置顶从第二项开始
                 val active = currentSmartPrompt
                 if (active != null) {
@@ -5039,12 +5083,21 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         return@setOnItemClickListener
                     }
                     if (!entry.isUser) CategorizedCommandMenu.recordUsage(this@CesiaInputMethod, entry.id)
-                    currentSmartPrompt = entry.instruction
-                    getSharedPreferences("cesia_smart_records", MODE_PRIVATE).edit()
-                        .putString("active_instruction", currentSmartPrompt).apply()
+                    val wasActive = (currentSmartPrompt == entry.instruction)
                     smartWritingPopup?.dismiss()
                     smartWritingPopup = null
                     executeSmartCommand(entry.instruction)
+                    // 点击已激活（置顶）的临时命令 → 释放激活态（清空），退到所有置顶命令之后；
+                    // 点击其他命令 → 设为新的激活态（排第1位）。
+                    val recEdit = getSharedPreferences("cesia_smart_records", MODE_PRIVATE).edit()
+                    if (wasActive) {
+                        currentSmartPrompt = ""
+                        recEdit.remove("active_instruction")
+                    } else {
+                        currentSmartPrompt = entry.instruction
+                        recEdit.putString("active_instruction", currentSmartPrompt)
+                    }
+                    recEdit.apply()
                 }
             }
 
@@ -5498,23 +5551,27 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         try {
             val prefs = getSharedPreferences("cesia_smart_records", MODE_PRIVATE)
             val recordsJson = prefs.getString("records_json", "") ?: ""
-            val pinnedSet = prefs.getStringSet("pinned_set", emptySet())?.toMutableSet() ?: mutableSetOf<String>()
             if (recordsJson.isNotEmpty()) {
                 list.clear()
                 val arr = org.json.JSONArray(recordsJson)
-                val pinnedItems = mutableListOf<String>()
-                val normalItems = mutableListOf<String>()
+                val stored = mutableListOf<String>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
                     val instruction = obj.getString("instruction")
-                    if (pinnedSet.contains(instruction)) {
-                        pinnedItems.add(instruction)
-                    } else {
-                        normalItems.add(instruction)
-                    }
+                    if (instruction.isNotBlank()) stored.add(instruction)
                 }
-                list.addAll(pinnedItems)
-                list.addAll(normalItems)
+                // 自愈：按 stored（records_json）的真实时间顺序输出（头部=最近运行），
+                // 去重并丢弃空白脏条目，使非置顶组内按时间倒序排列——
+                // 最近运行/语音写作的命令靠前，未运行过的普通命令靠后。
+                val seen = mutableSetOf<String>()
+                val ordered = mutableListOf<String>()
+                for (name in stored) {
+                    if (name in seen) continue
+                    seen.add(name)
+                    ordered.add(name)
+                }
+                list.clear()
+                list.addAll(ordered)
             } else {
                 // 首次使用：注入生成类标准指令
                 list.clear()
@@ -5811,6 +5868,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             if (text.isNotEmpty()) {
                 magicEditMgr!!.addRecord(text)
                 currentMagicPrompt = text
+                getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                    .putString("active_instruction", text).apply()
                 updateStatus(" 已保存魔法：${text.take(20)}")
             }
         } else {
@@ -5888,6 +5947,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 空槽输入了新内容 → 新增魔法 + 自动追加空槽（由 rebuildItems 完成）
                 mgr.addRecord(text)
                 currentMagicPrompt = text
+                getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                    .putString("active_instruction", text).apply()
                 updateStatus(" 已新增魔法：${text.take(20)}")
             } else {
                 // 编辑已有魔法
@@ -6743,6 +6804,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                                     } else {
                                         Log.i("Cesia", "语音写作命令: '$fullText'")
                                         updateStatus("AI正在处理中")
+                                        // 语音运行后：将该命令临时置顶为激活态（排菜单第1位，带 ✓），
+                                        // 用户日后在菜单里点它运行一次即释放（退到置顶命令之后）。
+                                        currentSmartPrompt = fullText
+                                        getSharedPreferences("cesia_smart_records", MODE_PRIVATE).edit()
+                                            .putString("active_instruction", fullText).apply()
                                         val keptSnapshot = voiceKeptText
                                         // 延迟1秒执行，让用户看到状态提示
                                         CoroutineScope(Dispatchers.Main).launch {
@@ -7064,6 +7130,13 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } catch (_: Exception) {}
         }
         val duration = if (voiceStartTime > 0) System.currentTimeMillis() - voiceStartTime else 0
+        // 语音润色（"ai" 命令词）执行成功：写入智能修改菜单（与智能写作一致），并临时置顶激活态
+        if (polishedText.isNotEmpty()) {
+            magicHistoryManager?.addRecord("润色优化表达")
+            currentMagicPrompt = "润色优化表达"
+            getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                .putString("active_instruction", "润色优化表达").apply()
+        }
         // 语音历史：仅当历史记录模式开启（非 off）时写入；记录语音原文↔最终发出文字对比
         val historyMode = getSharedPreferences("cesia_polish_history", MODE_PRIVATE)
             .getString("history_mode", "off") ?: "off"
@@ -7337,6 +7410,11 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         updateStatus(" 已执行：$cmdLabel")
                         // 将指令加入魔法书历史第1位
                         magicHistoryManager?.addRecord(cmdLabel)
+                        // 与智能写作一致：运行后将该命令临时置顶为激活态（排菜单第1位，带 ✓），
+                        // 用户日后在菜单里点它运行一次即释放（退到置顶命令之后、按时间序排）。
+                        currentMagicPrompt = cmdLabel
+                        getSharedPreferences("cesia_magic_modify", MODE_PRIVATE).edit()
+                            .putString("active_instruction", cmdLabel).apply()
                     } else {
                         updateStatus("执行失败，已保留原文")
                     }
