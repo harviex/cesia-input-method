@@ -2103,6 +2103,72 @@ class SettingsActivity : AppCompatActivity() {
         // 检测上次下载是否被系统终止（Activity 后台时被 kill）
         checkInterruptedDownloads()
         // 新手引导横幅保持常驻显示（由 checkFirstLaunchOnboarding 统一控制），不在 onResume 隐藏
+        // 首次打开设置页 → 弹出语音套件欢迎提示（仅首次，之后不再显示）
+        checkFirstVoiceWelcome()
+    }
+
+    // ======================== 首次语音套件欢迎提示 ========================
+
+    /** 仅首次打开设置页时弹出：介绍输入平台功能 + 提示需下载语音套件。此后不再显示。 */
+    private fun checkFirstVoiceWelcome() {
+        val prefs = getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("voice_welcome_shown", false)) return
+        // 已经安装完整套件就不弹了（重装/升级场景）
+        val voiceInstalled = modelManager.getInstalledVoiceModelFile() != null
+        val zhInstalled = java.io.File(filesDir, "local_models/zipformer-zh-2025/encoder.onnx").exists()
+        val dictInstalled = dictManager.hasDownloadedDict()
+        if (voiceInstalled && zhInstalled && dictInstalled) {
+            prefs.edit().putBoolean("voice_welcome_shown", true).apply()
+            return
+        }
+        showVoiceWelcomeDialog()
+    }
+
+    private fun showVoiceWelcomeDialog() {
+        try {
+            // 用蒂芙尼蓝主题色做标题强调色
+            val accent = accentColor
+            val title = android.text.SpannableString("欢迎使用 Cesia 输入法")
+            title.setSpan(
+                android.text.style.ForegroundColorSpan(accent),
+                0, title.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+
+            // 正文文案（占位示例，后续可替换为正式文案）
+            val body = buildString {
+                appendLine("Cesia 是一套本地优先的智能中文输入平台，核心能力：")
+                appendLine()
+                appendLine("· 语音输入：长按语音键说话即出文字，支持中英混流与纯中文高精度模型（双击切换）")
+                appendLine("· 智能写作：语音说「写作 + 主题」，AI 自动生成邮件 / 周报 / 文案 / 代码")
+                appendLine("· 智能修改：选中文字，语音指令「改得更正式 / 更简洁 / 翻译」原地重写")
+                appendLine("· 雾凇词库：内置高质量开源词库，候选更准更全")
+                appendLine()
+                appendLine("首次使用需下载「语音文字输入套件」（约 416MB，含双语模型 + 纯中文模型 + 词库）。")
+                appendLine("建议保持前台与 WiFi，下载进度会实时滚动显示。")
+            }
+
+            val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(body)
+                .setCancelable(false)
+                .setNegativeButton("稍后再说") { d, _ ->
+                    // 仅关闭，不下载；仍记录已展示，避免反复打扰
+                    getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+                        .edit().putBoolean("voice_welcome_shown", true).apply()
+                    d.dismiss()
+                }
+                .setPositiveButton("立即下载") { d, _ ->
+                    getSharedPreferences("cesia_settings", Context.MODE_PRIVATE)
+                        .edit().putBoolean("voice_welcome_shown", true).apply()
+                    d.dismiss()
+                    // 直接进入套件下载流程
+                    downloadVoiceModel()
+                }
+                .create()
+            dialog.show()
+        } catch (e: Exception) {
+            Log.w("SettingsActivity", "语音欢迎弹窗显示失败: ${e.message}")
+        }
     }
 
     /**

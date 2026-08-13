@@ -169,6 +169,9 @@ class ModelDownloadManager(private val context: Context) {
     suspend fun downloadZipformer(
         onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
+        // 修复：每个独立下载任务开始时重置单调进度基准，避免上一个任务(如纯中文模型)
+        // 把实例级 lastReportedPct 推到 100 后，污染后续任务(如双语模型)的真实进度。
+        lastReportedPct = 0.0
         try {
             val zipformerDir = File(modelsDir, "zipformer")
             zipformerDir.mkdirs()
@@ -297,6 +300,8 @@ class ModelDownloadManager(private val context: Context) {
         modelId: String,
         onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
+        // 修复：每个独立下载任务开始时重置单调进度基准
+        lastReportedPct = 0.0
         try {
             val info = ModelRegistry.getById(modelId)
                 ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
@@ -421,6 +426,8 @@ class ModelDownloadManager(private val context: Context) {
         modelId: String = "qwen35-2b-mnn",
         onProgress: ((fileName: String, percent: Double, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<File> = withContext(Dispatchers.IO) {
+        // 修复：每个独立下载任务开始时重置单调进度基准
+        lastReportedPct = 0.0
         try {
             val modelInfo = ModelRegistry.getById(modelId)
                 ?: return@withContext Result.failure(Exception("未知模型: $modelId"))
