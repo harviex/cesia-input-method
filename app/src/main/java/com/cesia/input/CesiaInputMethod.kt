@@ -1065,18 +1065,22 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         }
         candidateAdapter = CandidateAdapter(
             onItemClick = { index, _ ->
-                // 新闻态：顶栏当前新闻（随切换滚动）点击 → 直接打开浏览器
-                if (newsBarActive) { openNewsLink(newsBarIndex % maxOf(newsItems.size, 1)); return@CandidateAdapter }
+                // 输入/候选态：优先选词，绝不被残留的新闻首条态拦截（newsBarActive 可能因 sig 短路残留）
                 if (rimeEngine.hasCandidates || isAssociationMode || isEnglishMode) {
                     selectCandidateByGlobalIndex(index)
                     // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
                     if (keyboardMode == KeyboardMode.QWERTY && !isEnglishMode) {
                         rimeEngine.clear()
                     }
+                    return@CandidateAdapter
                 }
+                // 真正的新闻首条态（无候选）：点击开浏览器
+                if (newsBarActive) { openNewsLink(newsBarIndex % maxOf(newsItems.size, 1)); return@CandidateAdapter }
             },
             onItemLongClick = { view, index, word ->
-                if (newsBarActive) { showNewsItemMenu(view, newsBarIndex % maxOf(newsItems.size, 1)); true }
+                if (rimeEngine.hasCandidates || isAssociationMode || isEnglishMode) {
+                    showCandidateLongPressMenu(word, view, index); true
+                } else if (newsBarActive) { showNewsItemMenu(view, newsBarIndex % maxOf(newsItems.size, 1)); true }
                 else { showCandidateLongPressMenu(word, view, index); true }
             }
         )
@@ -3007,11 +3011,21 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 去重：输入状态( composing/拼音/选音前缀/繁体/面板/联想/候选集 )未变则跳过整轮重建，
         // 避免每次按键无谓的 adapter 重排与 notifyDataSetChanged（影响跟手速度）。
+        // 注：不含 isNewsMode —— 新闻态只决定「无输入时顶栏显示新闻」，绝不参与候选重建判定，
+        // 否则新闻模式开启/关闭的翻转会误触发 sig 短路或改变候选渲染路径，干扰出词。
         val sig = ((composing.hashCode() * 31 + pinyin.hashCode()) * 31 + allCands.hashCode()) xor
             ((t9SpellPrefix.hashCode() * 31 + isTraditional.hashCode() * 31
                 + isPanelExpanded.hashCode() * 31 + isAssociationMode.hashCode() * 31
-                + associationCandidates.hashCode() + isNewsMode.hashCode()))
-        if (sig == lastCandSig) return
+                + associationCandidates.hashCode()))
+        if (sig == lastCandSig) {
+            // 防御：若当前有输入/候选，但候选栏 adapter 仍停在新闻首条态（newsMode），
+            // 说明新闻模式残留干扰了出词 —— 无视 sig 短路，继续往下正常渲染候选词。
+            val stuckInNews = (composing || pinyin.isNotEmpty() || isAssociationMode || isEnglishMode)
+                && candidateAdapter?.newsMode == true
+            if (!stuckInNews) return
+            newsBarActive = false
+            candidateAdapter?.newsMode = false
+        }
         lastCandSig = sig
 
         // 没有输入时退出联想模式并恢复初始状态
@@ -3049,8 +3063,10 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
         // 有输入 → 立刻退出新闻模式，候选词优先（输入法本职不能被新闻干扰）
         exitNewsMode()
-        // 打字时展开按钮交给候选数逻辑（下方 count 分支），这里先隐藏避免残留新闻态按钮
-        if (!isPanelExpanded) btnCandidateExpand?.visibility = View.GONE
+        // 防御：exitNewsMode 在 isNewsMode 已为 false 时会早退，可能残留 newsBarActive；
+        // 有输入时强制清除新闻首条态，确保候选栏点击只走选词、不会误开新闻链接
+        newsBarActive = false
+        candidateAdapter?.newsMode = false
 
         // 有输入时
         setCandidateBarVisible(true)
