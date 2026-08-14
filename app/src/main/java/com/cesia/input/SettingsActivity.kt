@@ -182,6 +182,20 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings)
 
+        // ======================== Rime 预热（利用设置页空窗期）========================
+        // 用户进设置页下载语音套件/填 API 的几分钟里，进程已活，但 IME service 尚未创建。
+        // 此刻后台预热 Rime（含首次 deploy 词典），等用户真去打字、IME service onCreate 调
+        // initialize() 时直接命中 initialized 早退，键盘秒弹，消除冷启动卡顿。
+        // 同进程共享 RimeJni.initialized 静态标志；@Synchronized 保证预热线程与 IME 线程互斥。
+        Thread(Runnable {
+            try {
+                val engine = com.cesia.input.engine.rime.RimeEngine(this@SettingsActivity)
+                engine.initialize(prewarm = true)
+            } catch (e: Throwable) {
+                Log.w("Cesia", "Rime 预热失败(打字时再初始化): ${e.message}")
+            }
+        }, "RimePrewarm").start()
+
         // 先加载主题模式
         themeMode = prefs.getInt(PREF_THEME_MODE, THEME_LIGHT)
         // 应用深色/浅色主题的文本和背景色

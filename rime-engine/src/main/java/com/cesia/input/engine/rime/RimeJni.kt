@@ -53,12 +53,21 @@ object RimeJni {
 
     // ======================== 生命周期 ========================
 
-    fun initialize(context: Context): Boolean {
-        if (initialized) return true
+    /** 预热来源：true=设置页/Application 提前预热；false=IME service 首次创建时（用户真要打字）才初始化 */
+    var prewarmedBySetup = false
+        private set
+
+    fun initialize(context: Context, fromPrewarm: Boolean = false): Boolean {
+        val t0 = System.currentTimeMillis()
+        if (initialized) {
+            Log.i(TAG, "TIMING: initialize 早退(已初始化) cost=${System.currentTimeMillis() - t0}ms")
+            return true
+        }
         errorMessage = null
         try {
+            val tLoad = System.currentTimeMillis()
             System.loadLibrary("rime_jni")
-            Log.i(TAG, "STEP1: librime_jni.so 加载成功")
+            Log.i(TAG, "TIMING: STEP1 加载 librime_jni.so cost=${System.currentTimeMillis() - tLoad}ms")
 
             // 使用外部存储目录：/sdcard/Android/data/com.cesia.input/files/rime/
             // 与 RimeEngine.copyRimeAssetsIfNeeded() 保持一致
@@ -71,8 +80,9 @@ object RimeJni {
             val rimeDirFiles = rimeDir.listFiles()?.map { "${it.name}(${it.length()})" }?.joinToString(", ") ?: "(空)"
             Log.i(TAG, "STEP2: rime 目录内容: $rimeDirFiles")
 
+            val tStart = System.currentTimeMillis()
             TrimeRime.startupRime(sharedDir, userDir, "1.0.0", true)
-            Log.i(TAG, "STEP3: startupRime 完成")
+            Log.i(TAG, "STEP3: startupRime 完成 cost=${System.currentTimeMillis() - tStart}ms (fromPrewarm=$fromPrewarm)")
 
             // 确保选中 pinyin schema
             val currentSchema = TrimeRime.getCurrentRimeSchema()
@@ -103,6 +113,8 @@ object RimeJni {
                 }
             }
             initialized = started
+            if (fromPrewarm) prewarmedBySetup = true
+            Log.i(TAG, "TIMING: initialize 完成 total=${System.currentTimeMillis() - t0}ms ok=$started (fromPrewarm=$fromPrewarm)")
             return started
         } catch (e: Throwable) {
             errorMessage = "${e.javaClass.simpleName}: ${e.message}"

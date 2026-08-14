@@ -536,7 +536,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 当前待定段已枚举出的单字（注入主候选流、可懒加载翻页），跟随选音锁定(t9SpellPrefix)收窄。
     private var t9PendingChars: MutableList<String> = mutableListOf()
     private var t9PendingPageWalk = 4
-    private var t9PendingBusy = false
     // 待定段+选音锁定签名：变化时整段重拉单字，避免旧段单字(皮日思)残留。
     private var lastPendingSig: String = ""
     // 单字回归主候选流：词在上、待定段单字在下，同处一个流、拖拽懒加载走 loadMoreCandidates()。
@@ -720,9 +719,6 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     /** 将中文转为全拼（如：孙珺 -> sunjun）。严格模式，理由同上。 */
     private fun toPinyinFull(text: String): String = PinyinMap.toFull(text)
-
-    /** 获取单个汉字的拼音首字母（真实读音，来自 assets/pinyin_dict.json） */
-    private fun getPinyinFirstLetter(c: Char): String = PinyinMap.firstLetter(c)
 
     /** 获取单个汉字的全拼（真实读音，来自 assets/pinyin_dict.json） */
     private fun getPinyinFull(c: Char): String = PinyinMap.full(c)
@@ -3777,73 +3773,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
      * 魔法模式 - 本地语音识别
      * 使用 Sherpa 本地模型，识别结果通过 handleMagicResult 处理
      */
-    private fun startMagicLocalRecording() {
-        magicStopRequested = false
-        voiceEngineScope.launch {
-            try {
-                voiceEngine.warmupRecognizer()
-                lastMagicRecognizedText = ""
-                voiceEngine.recordInSegments(
-                    onSegmentResult = { text, isFinal ->
-                        if (text.isNotEmpty()) {
-                            lastMagicRecognizedText = text
-                            Handler(Looper.getMainLooper()).post {
-                                updateStatus("🎤 $text")
-                            }
-                            if (isFinal) {
-                                // 流式最终结果：直接触发 AI
-                                Handler(Looper.getMainLooper()).post {
-                                    handleMagicResult(text)
-                                }
-                            }
-                        }
-                    }
-                )
-                // recordInSegments 正常结束（超时）
-                // 如果用户主动停止（magicStopRequested=true），则由 toggleMagicMode 触发 AI，这里不重复
-                Handler(Looper.getMainLooper()).post {
-                    if (!magicStopRequested) {
-                        val text = lastMagicRecognizedText
-                        if (text.isNotEmpty() && !isAiProcessing) {
-                            handleMagicResult(text)
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                // 协程被 cancel：不处理，由 toggleMagicMode 触发
-                dlog { "魔法模式本地录音协程被取消" }
-            } catch (e: Exception) {
-                Log.e("Cesia", "魔法模式本地识别失败", e)
-                Handler(Looper.getMainLooper()).post {
-                    updateStatus("本地识别失败")
-                    resetMagicHighlight()
-                    magicMode = false
-                    typelessEngine?.magicMode = false
-                    isRecording = false
-                }
-            }
-        }
-    }
-
-    /**
-     * 魔法模式 - 云端语音识别
-     * 使用 Google SpeechRecognizer，识别结果通过 onMagicResult 回调
-     */
-    private fun startMagicGoogleRecording() {
-        try {
-            typelessEngine?.startListening(continuous = true)
-        } catch (e: Throwable) {
-            Log.e("Cesia", "魔法模式 Google 识别失败", e)
-            updateStatus("语音启动失败")
-            resetMagicHighlight()
-            magicMode = false
-            typelessEngine?.magicMode = false
-            isRecording = false
-        }
-    }
-
     private fun resetMagicHighlight() {
-        magicIsWaitingForVoice = false
         magicModeGlowing = false
         stopMagicButtonGlow()
         try {
@@ -6123,15 +6053,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     // 把文本直接追加进剪贴板搜索框并实时过滤（弹窗可见时，如粘贴）
-    private fun appendToClipboardSearch(text: String) {
-        val et = this.etSearch ?: return
-        val buf = et.text.toString() + text
-        et.setText(buf)
-        et.setSelection(buf.length)
-        clipboardSearchFilter = buf.trim()
-        applyClipboardFilter()
-    }
-
     // ===== 用户自建词组库：接龙组词上屏写入，下次匹配注入候选，持久化到 cesia_dict =====
 
     private fun loadUserPhrases() {
@@ -7926,21 +7847,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 退格轻量重放：clear+重喂当前队列，同步 Rime composingText（修 Bug2 状态栏残留 1 字），
      *  但只更新状态栏、不刷新候选栏 RecyclerView，避免连续退格主线程堆积卡顿 */
-    private fun replayT9Quiet() {
-        if (t9DigitQueue.isEmpty() && t9SpellPrefix.isEmpty()) {
-            rimeEngine.clear()
-            resetT9State()
-            return
-        }
-        rimeEngine.clear(); rimeEngine.createSession()
-        val feed = if (t9FenCiOn) buildT9SpellFeed() else t9DigitQueue.toString()
-        for (ch in feed) rimeEngine.processKey(ch.toString())
-        lastT9Feed = feed
-        // 同步状态栏 + 候选栏（退格后候选词随数字队列变化而刷新，修复状态栏退但候选栏不变）
-        updateStatus(t9SpellPrefix.toString() + t9DigitQueue.substring(t9SpellCursor))
-        updateCandidateBar()
-    }
-
     private fun updateShiftIndicator() {
         // 同步 shift 状态到 KeyboardView（三个键盘完全独立）
         when (keyboardMode) {
@@ -8219,17 +8125,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
     /** 接龙组词：将候选拼音(如 "dajia")反推成 T9 数字长度(3+2+5+4+2=5)。
      *  逐字母查 t9Map 反映射（d→3,a→2,j→5,i→4,a→2），跳过空格/分词符。仅全拼用。 */
-    private fun pinyinToDigitLen(py: String): Int {
-        if (py.isEmpty()) return 0
-        var n = 0
-        for (ch in py.lowercase()) {
-            if (ch == ' ' || ch == '\'' || ch == '·') continue
-            val key = t9Map.entries.firstOrNull { it.value.contains(ch) }?.key
-            if (key != null) n++
-        }
-        return n
-    }
-
     /** 拼音反推 T9 数字串（ziji → 9454），遇未知字母返回空串 */
     private fun pinyinToDigits(py: String): String {
         val sb = StringBuilder()
@@ -8557,21 +8452,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     // 控制键—按键对调模式
     private var isSwapMode = false
     private var swapFirstKey: Keyboard.Key? = null
-
-    private fun handleControlKey() {
-        if (!isSwapMode) {
-            isSwapMode = true
-            swapFirstKey = null
-            updateStatus("🔄 对调模式：先点第一个按键")
-            keyboardView.invalidateAllKeys()
-        } else {
-            // 退出对调模式
-            isSwapMode = false
-            swapFirstKey = null
-            updateStatus(statusIdleText)
-            keyboardView.invalidateAllKeys()
-        }
-    }
 
     private fun switchToDefaultKeyboard() {
         // 返回进入符号键盘前的键盘模式
@@ -9204,16 +9084,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 获取输入法剪贴板第一条内容（系统剪贴板优先），智能写作调用此方法替代 getClipboardFirstNonPinned */
-    private fun getClipboardFirstItemText(): String {
-        for (item in clipboardItems) {
-            if (!item.isEmpty && item.text.isNotEmpty()) {
-                return item.text
-            }
-        }
-        // fallback：如果弹窗没打开过（clipboardItems 为空），直接读系统剪贴板
-        return getClipboardFirstNonPinned()
-    }
-
     /** 保存剪贴板历史到 SharedPreferences（全部历史 + 收藏标记） */
     private fun saveClipboardHistoryFromClassMembers() {
         val prefs = getSharedPreferences("cesia_clipboard", MODE_PRIVATE)
@@ -9233,105 +9103,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             .apply()
         // 同步裁剪内存列表，避免无限增长
         clipboardItems.removeAll { item -> !item.isEmpty && capped.none { it.text == item.text } }
-    }
-
-    private fun showClipboardItemActions(
-        item: ClipboardItem,
-        allItems: MutableList<ClipboardItem>,
-        onUpdate: () -> Unit
-    ) {
-        val actions = mutableListOf<String>()
-        if (!item.isEmpty) {
-            actions.add("📋 插入文本")
-            actions.add(if (item.isPinned) "⤒ 取消置顶" else "⤒ 置顶收藏")
-            actions.add(if (clipboardFavorites[item.text] == true) "🔓 解锁删除" else "🔒 锁定防删")
-            actions.add("✂️ 分词处理")
-            actions.add("✏️ 编辑文本")
-            actions.add("🔍 搜索文本")
-            actions.add("🗑️ 删除条目")
-            actions.add("📤 分享文本")
-        }
-        // IME 环境不能用 AlertDialog（非 Activity context 会闪退），改用 PopupMenu（与置顶/删除按钮同源，IME 安全）
-        val anchor = clipboardPopupView ?: return
-        val menu = android.widget.PopupMenu(this, anchor)
-        actions.forEachIndexed { i, label -> menu.menu.add(0, i, i, label) }
-        menu.setOnMenuItemClickListener { mi ->
-            when (mi.itemId) {
-                0 -> currentInputConnection?.commitText(item.text, 1) // 插入
-                1 -> { // 置顶
-                    allItems.remove(item)
-                    val toggled = item.copy(isPinned = !item.isPinned)
-                    if (toggled.isPinned) allItems.add(0, toggled) else allItems.add(toggled)
-                    updateClipboardFavorites(); onUpdate()
-                }
-                2 -> { // 锁定
-                    val key = item.text
-                    if (clipboardFavorites[key] == true) clipboardFavorites.remove(key)
-                    else clipboardFavorites[key] = true
-                    updateClipboardFavorites(); onUpdate()
-                }
-                3 -> { // 分词 — 用空格分词后逐段插入
-                    val words = item.text.split(CLIPBOARD_SPLIT_REGEX)
-                        .filter { it.isNotEmpty() }
-                    if (words.size > 1) {
-                        currentInputConnection?.commitText(words.joinToString(" "), 1)
-                    } else {
-                        updateStatus("✂️ 已单段插入")
-                        currentInputConnection?.commitText(item.text, 1)
-                    }
-                }
-                4 -> { // 编辑
-                    showClipboardEditDialog(item.text) { newText ->
-                        allItems.remove(item)
-                        allItems.add(0, ClipboardItem(text = newText, isPinned = item.isPinned))
-                        updateClipboardFavorites(); onUpdate()
-                    }
-                }
-                5 -> { // 搜索
-                    try {
-                        Intent(Intent.ACTION_WEB_SEARCH).apply {
-                            putExtra("query", item.text)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(this)
-                        }
-                    } catch (_: Exception) {
-                        updateStatus("无法启动搜索")
-                    }
-                }
-                6 -> { // 删除
-                    if (clipboardFavorites[item.text] == false) {
-                        allItems.remove(item)
-                        clipboardDeleted.add(item.text); saveClipboardDeleted()
-                        updateClipboardFavorites(); onUpdate()
-                        try {
-                            val clipboardMgr = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                            if (clipboardMgr?.hasPrimaryClip() == true) {
-                                val clipText = clipboardMgr.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                if (clipText == item.text) {
-                                    clipboardMgr.setPrimaryClip(android.content.ClipData.newPlainText("", ""))
-                                }
-                            }
-                        } catch (_: Exception) {}
-                    } else {
-                        updateStatus("已锁定，无法删除")
-                    }
-                }
-                7 -> { // 分享
-                    try {
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, item.text)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            startActivity(Intent.createChooser(this, "分享"))
-                        }
-                    } catch (_: Exception) {
-                        updateStatus("无法启动分享")
-                    }
-                }
-            }
-            true
-        }
-        menu.show()
     }
 
     private fun showClipboardEditDialog(original: String, onSave: (String) -> Unit) {
@@ -11063,13 +10834,6 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     }
 
     /** 显示语音命令词提示 */
-    private fun showVoiceCommandHints() {
-        val hints = VoiceEngine.getCommandHints()
-        if (hints.isNotEmpty() && ::statusText.isInitialized) {
-            updateStatus("$hints")
-        }
-    }
-
     /** 显示语音锁定模式提示 */
     private fun showVoiceLockHints() {
         val hints = VoiceEngine.getCommandHints()

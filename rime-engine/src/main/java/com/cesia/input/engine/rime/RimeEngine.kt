@@ -57,15 +57,35 @@ class RimeEngine(private val context: Context) : InputEngine {
     override val currentPage: Int
         get() = session?.currentPage ?: 0
 
+    @Synchronized
     override fun initialize(): Boolean {
         if (isInitialized) return true
+        val t0 = System.currentTimeMillis()
         copyRimeAssetsIfNeeded()
-        val success = RimeJni.initialize(context)
+        val success = RimeJni.initialize(context, false)
         isInitialized = success
+        Log.i(TAG, "TIMING: RimeEngine.initialize total=${System.currentTimeMillis() - t0}ms (prewarm=false)")
         if (!success) {
             Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
         } else {
             // 后台预构建联想索引，避免首次查询时卡顿
+            startIndexBuildAsync()
+        }
+        return success
+    }
+
+    /** 预热入口：设置页/Application 提前调用，fromPrewarm 仅用于打点区分来源 */
+    @Synchronized
+    fun initialize(prewarm: Boolean): Boolean {
+        if (isInitialized) return true
+        val t0 = System.currentTimeMillis()
+        copyRimeAssetsIfNeeded()
+        val success = RimeJni.initialize(context, prewarm)
+        isInitialized = success
+        Log.i(TAG, "TIMING: RimeEngine.initialize total=${System.currentTimeMillis() - t0}ms (prewarm=$prewarm)")
+        if (!success) {
+            Log.e(TAG, "Rime 引擎初始化失败: ${RimeJni.unavailableMessage()}")
+        } else {
             startIndexBuildAsync()
         }
         return success
