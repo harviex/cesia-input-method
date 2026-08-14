@@ -7223,6 +7223,12 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
     /** 注册来电监听：来电时自动退出语音模式，避免录音卡死 */
     private fun registerPhoneStateListener() {
         if (phoneStateListener != null) return
+        // IME 不声明 READ_PHONE_STATE 权限，无权限时注册来电监听必抛 SecurityException。
+        // 加守卫：没权限直接跳过，避免每次弹键盘抛异常刷日志（来电退语音模式功能在无权限时自然失效，可接受）。
+        if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return
+        }
         try {
             telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             val tm = telephonyManager ?: return
