@@ -490,6 +490,18 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 全键盘逐词组词时累积的「整串短语」（跨选词不清），用于拼音整串消费完时整体写入用户词库，
     // 与 t9FullPhrase 对称，使全键盘组的词也能被 T9 / 全键盘互相召回。
     private var qwertyFullPhrase = StringBuilder()
+    // T9 音节分隔符：直接 append ' 进 t9DigitQueue（如 542'624），供喂 Rime 切分+显示；
+    // 同时用 t9DelimiterPositions 记录 ' 在第几个纯数字后（如 [3]），供选音态 buildT9SpellFeed 保留切分。
+    private val t9DelimiterPositions = mutableListOf<Int>()
+    /** 取 t9DigitQueue 的纯数字视图（去掉 ' 分隔符），供选音/数字映射使用，避免 digitToInt 崩 */
+    private fun t9DigitsOnly(): String = t9DigitQueue.filter { it != '\'' }.toString()
+    // 双击逗号插入音节分隔符（拼音歧义切分）：QWERTY 与 T9 逗号键在拼音组合中双击，
+    // 在 Rime composing 末尾追加 "'" 分隔符（schema speller delimiter），把 jianai 显式切为 jia'nai / jian'ai。
+    // 单击逗号维持原行为（上屏中文标点，清空组合）；双击不打断组合、仅插分隔符。
+    private var lastCommaTapTime = 0L
+    private val DOUBLE_TAP_MS = 500L
+    private val commaHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var commaPendingRunnable: Runnable? = null
     // 用户词组召回：当前数字码前缀匹配到的存词（仅显示用，点击走直接上屏语义）
     private var t9RecalledPhrase: String? = null
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
@@ -519,7 +531,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             val py = try { PinyinMap.toFull(composed) } catch (_: Exception) { "" }
             if (py.isEmpty()) 0 else pinyinToDigits(py).length
         }
-        return (composedDigitLen + t9SpellPrefix.length).coerceIn(0, t9DigitQueue.length)
+        return (composedDigitLen + t9SpellPrefix.length).coerceIn(0, t9DigitsOnly().length)
     }
     private var t9FenCiOn = false                 // 分词开关：默认关=全拼（数字直连）；开=简拼（数字间加分词符）
     private var t9FenCiLock = false               // 全拼/简拼按钮双击锁定（防误触），持久化，默认不锁
@@ -3134,9 +3146,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 编辑模式(smartEditMode/magicEditMode)已自行设置状态栏，跳过覆盖
         if (!(smartEditMode || magicEditMode)) {
             if (keyboardMode == KeyboardMode.NUMBER && (t9DigitQueue.isNotEmpty() || t9SpellPrefix.isNotEmpty())) {
-                val from = t9SpellCursor.coerceAtMost(t9DigitQueue.length)
-                val remaining = if (from < t9DigitQueue.length) t9DigitQueue.substring(from) else ""
-                updateStatus(t9SpellPrefix.toString() + remaining)
+                // T9 状态栏：未选音显示数字串(542'624)，选音后显示拼音+分隔符(jia'nai)。
+                // 用 buildT9SpellFeed 还原分隔符 '（不替换），避免裸拼剩余数字导致 jianai4 错乱
+                val display = if (t9SpellPrefix.isNotEmpty()) {
+                    buildT9SpellFeed()
+                } else {
+                    t9DigitQueue.toString()
+                }
+                updateStatus(display)
             } else {
                 updateStatus(pinyin)
             }
@@ -8071,7 +8088,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                         onFenciKeyClick()
                     }
                     65292 -> {
-                        currentInputConnection?.commitText("，", 1)
+                        // T9 逗号：组合态走双击检测（插音节分隔符），非组合态直接上屏标点
+                        handlePunctuationKey(65292)
                     }
                     12290 -> {
                         currentInputConnection?.commitText("。", 1)
@@ -8096,12 +8114,16 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         // Rime 原生主导：新数字键入时不再维护自研消费计数。仍在 Rime composing 中（原生续写）
         // 才保留已组词累积，否则清空（新组合开始）。
         if (!rimeEngine.isComposing) t9ComposedSoFar.clear()
-        // 分词开关：开=简拼（数字间加 ' 分词符），关=全拼（数字直连）
+        // 同步分隔位置：队列被清空/缩短（退格/选词上屏）时，移除越界位置并修正偏移，避免错位或越界
+        val pureLen = t9DigitsOnly().length
+        if (t9DelimiterPositions.any { it > pureLen }) {
+            t9DelimiterPositions.removeAll { it > pureLen }
+        }
         if (t9DigitQueue.isNotEmpty()) {
             if (t9DigitQueue.length == 1) {
                 // 单键单字：枚举该键所有字母(a/b/c)取单字候选合并，覆盖全部开头单字。
                 // 无论简拼/全拼模式，单键只出单字(不出词组)；跟随选音锁定字母变化(锁定某字母则只该字母)。
-                val d = t9DigitQueue[0].digitToInt()
+                val d = t9DigitsOnly()[0].digitToInt()
                 t9SingleKeyCands = enumSingleKeyCands(d)
                 t9FenCiMerged = emptyList()
                 // 单键选音(t9SpellPrefix)只对单键有效；进入多键时由下面 else 分支统一处理，这里不写 lastT9Feed
@@ -8109,7 +8131,7 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             } else {
                 if (t9FenCiOn) {
                 // 简拼：已锁定字母(t9SpellPrefix) + 剩余位数字各取首字母 组成简拼码喂 Rime
-                val digits = t9DigitQueue.toString().map { it.digitToInt() }
+                val digits = t9DigitsOnly().map { it.digitToInt() }
                 val feed = if (t9SpellPrefix.isEmpty()) {
                     // 未锁定时：每数字取首字母组成一个代表简拼码(如 77777→ppppp)喂 Rime，出一组合适候选
                     val firstLetters = digits.map { (t9Map[it] ?: "").filter { c -> c != ' ' }.firstOrNull() ?: ' ' }
@@ -8130,14 +8152,15 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 // 让 Rime 直接精确出该音候选（如 9426 锁 zhao → 喂 "zhao"），不再依赖客户端拼音注释过滤
                 // （T9 schema 候选拼音注释是数字态派生串，字母前缀匹配会全失败→回退成全部同键候选，旧版因此出 xian/xiao）。
                 val feed = if (t9SpellPrefix.isNotEmpty()) buildT9SpellFeed() else t9DigitQueue.toString()
+                Log.i("CesiaSpell", "processT9Input 全拼: queue='$t9DigitQueue' prefix='$t9SpellPrefix' positions=$t9DelimiterPositions feed='$feed' lastFeed='$lastT9Feed'")
                 val tFeed = System.currentTimeMillis()
                 feedRimeIncrementally(feed)
                 val tGet = System.currentTimeMillis()
                 rimeEngine.getAllCandidates(candPageWalk)
                 val tEnd = System.currentTimeMillis()
                 Log.i("CesiaPerf", "processT9Input 全拼 qlen=${t9DigitQueue.length} | feedRime=${tGet-tFeed}ms getAll=${tEnd-tGet}ms total=${tEnd-t0}ms")
-            }
-        }   // 关闭多键(else)分支
+            }   // 关闭全拼 else 分支
+        }   // 关闭多键 else 分支（length==1 的 else）
         } else {   // 队列空：确保 Rime 会话清空，下次从头喂
             // 队列空：确保 Rime 会话清空，下次从头喂
             rimeEngine.clear(); rimeEngine.createSession()
@@ -8295,14 +8318,20 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         lastT9Feed = feed
     }
 
-      /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp） */
+      /** 拼纯字母串喂 Rime：已选字母前缀 + 剩余位数字各取首字母占位（如 prefix=ws, queue=97 剩7→取p → wsp）。
+     *  按 t9DelimiterPositions（纯数字索引）在对应位置后插 '，保留双击逗号的分隔切分（如 jia'nai）。 */
     private fun buildT9SpellFeed(): String {
         if (t9DigitQueue.isEmpty()) return ""
-        val sb = StringBuilder(t9SpellPrefix)
-        val remaining = t9DigitQueue.drop(t9SpellCursor)
-        for (d in remaining) {
-            val letters = t9Map[d.digitToInt()] ?: " "
-            sb.append(letters.firstOrNull() ?: ' ')
+        val digits = t9DigitsOnly()
+        if (digits.isEmpty()) return t9SpellPrefix.toString()
+        val sb = StringBuilder()
+        for (gi in digits.indices) {
+            val ch = if (gi < t9SpellPrefix.length) t9SpellPrefix[gi] else {
+                val letters = t9Map[digits[gi].digitToInt()] ?: " "
+                letters.firstOrNull() ?: ' '
+            }
+            sb.append(ch)
+            if (gi + 1 in t9DelimiterPositions) sb.append('\'')
         }
         return sb.toString()
     }
@@ -8444,26 +8473,28 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         dlog { "spellClick in: letter=$letterIndex pre='$t9SpellPrefix' queue='$t9DigitQueue' cursor=$t9SpellCursor" }
         // 中文：选音区只显示「下一待选键」(t9SpellCursor < 队列长才有效)；
         // 英文：选音区显示「最后按的键」，每键已 append 默认字母，t9SpellCursor==队列长，需跳过此 return。
-        if (!isEnglishMode && t9SpellCursor >= t9DigitQueue.length) return
-        // 英文取最后按的键；中文取下一待选键
-        val curDigit = if (isEnglishMode) t9DigitQueue.last().digitToInt() else t9DigitQueue[t9SpellCursor].digitToInt()
+        if (!isEnglishMode && t9SpellCursor >= t9DigitsOnly().length) return
+        // 英文取最后按的键；中文取下一待选键（用纯数字视图，跳过 ' 分隔符）
+        val digitsOnly = t9DigitsOnly()
+        val curDigit = if (isEnglishMode) digitsOnly.last().digitToInt() else digitsOnly[t9SpellCursor].digitToInt()
         val letters = t9Map[curDigit] ?: return
         if (letterIndex >= letters.length) return
         if (isEnglishMode) {
             // 英文 T9 选音：锁定「最后按的键」所选字母（候选栏从笛卡尔积收窄到该组合）。
             // 前面未锁定位用各键首字母补齐（保留已锁定的位），增量更新避免丢失前面锁定。
             enSpellLocked = true
-            while (t9SpellPrefix.length < t9DigitQueue.length - 1) {
-                val d = t9DigitQueue[t9SpellPrefix.length].digitToInt()
+            while (t9SpellPrefix.length < digitsOnly.length - 1) {
+                val d = digitsOnly[t9SpellPrefix.length].digitToInt()
                 t9SpellPrefix.append(t9Map[d]?.firstOrNull() ?: ' ')
             }
-            if (t9SpellPrefix.length < t9DigitQueue.length) t9SpellPrefix.append(letters[letterIndex])
+            if (t9SpellPrefix.length < digitsOnly.length) t9SpellPrefix.append(letters[letterIndex])
             else t9SpellPrefix.setCharAt(t9SpellPrefix.length - 1, letters[letterIndex])
             refreshEnglishCandidates()
             updateSpellBar()
             return
         }
         t9SpellPrefix.append(letters[letterIndex])  // 锁定该位字母
+        Log.i("CesiaSpell", "onT9SpellLetterClick: queue='$t9DigitQueue' prefix='$t9SpellPrefix' cursor=$t9SpellCursor digitsLen=${t9DigitsOnly().length} positions=$t9DelimiterPositions")
         dlog { "spellClick out: pre='$t9SpellPrefix'" }
         // 选音锁定变化：清空旧的待定段单字缓存，让 refreshPendingChars 按新锁定拼音(如 qi)重拉，
         // 避免残留未锁定时的皮/脾气等无关单字。
@@ -8471,18 +8502,23 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         processT9Input()                             // 重算（实时收窄候选）
         // 强制刷新状态栏选音进度（复用正常显示逻辑）：避免 sig 去重跳过导致 236 等组合仍显示数字
         if (keyboardMode == KeyboardMode.NUMBER) {
-            val remaining = if (t9SpellCursor < t9DigitQueue.length) t9DigitQueue.substring(t9SpellCursor) else ""
-            updateStatus(t9SpellPrefix.toString() + remaining)
+            val display = if (t9SpellPrefix.isNotEmpty()) {
+                buildT9SpellFeed()
+            } else {
+                t9DigitQueue.toString()
+            }
+            updateStatus(display)
         }
     }
 
     /** 刷新候选音：驱动候选栏最左 4 字母点选区。
      *  全选完 / 候选区空 / 非T9模式 时同步隐藏。 */
     private fun updateSpellBar() {
-        // 中文：选音区显示「下一待选键」(t9SpellCursor < 队列长才显示)；英文：显示「最后按的键」(队列非空即显示)
+        // 中文：选音区显示「下一待选键」(t9SpellCursor < 纯数字队列长才显示)；英文：显示「最后按的键」(队列非空即显示)
+        val pureLen = t9DigitsOnly().length
         val showSpell = keyboardMode == KeyboardMode.NUMBER
                 && (if (isEnglishMode) t9DigitQueue.isNotEmpty()
-                    else t9SpellCursor < t9DigitQueue.length)
+                    else t9SpellCursor < pureLen)
                 && (rimeEngine.hasCandidates || isEnglishMode)
         val spellZone = llT9Spell
         val spellTVs = t9SpellTVs
@@ -8491,7 +8527,9 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
             return
         }
         spellZone.visibility = android.view.View.VISIBLE
-        val curDigit = if (isEnglishMode) t9DigitQueue.last().digitToInt() else t9DigitQueue[t9SpellCursor].digitToInt()
+        val digitsOnly = t9DigitsOnly()
+        // 已选满所有数字位（cursor 越界）时不取字母，直接隐藏选音区（避免越界崩溃）
+        val curDigit = if (t9SpellCursor < digitsOnly.length) digitsOnly[t9SpellCursor].digitToInt() else return
         val letters = t9Map[curDigit] ?: ""
         for (i in 0..3) {
             val tv = spellTVs.getOrNull(i) ?: continue
@@ -9915,65 +9953,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
 
             // ======================== 其他按键（标点等）=======================
             else -> {
-                // T9 模式：按标点符号时，先把候选栏第 0 个（自研顺序显示的那个词/字）上屏，再上屏标点。
-                // 避免走 rimeEngine.commit() 取「原生第 0」导致与自研重排后的显示第 0 错位（点甲上乙类回归，
-                // 表现为「看到的是拼音、上屏的却是奇」）。
-                if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
-                    val word = lastDisplayedCands.firstOrNull()
-                    if (!word.isNullOrEmpty()) {
-                        commitCandidateText(if (isTraditional) toTraditional(word) else word)
-                    }
-                    rimeEngine.clear()
-                    val c = when (primaryCode) {
-                        44 -> '，'; 46 -> '。'; 47 -> '？'
-                        65292 -> '，'; 12290 -> '。'; 65307 -> '；'; 65281 -> '！'; 65311 -> '？'
-                        65288 -> '（'; 65289 -> '）'
-                        else -> primaryCode.toChar()
-                    }
-                    if (c != '\u0000') ic?.commitText(c.toString(), 1)
-                    t9DigitQueue.clear(); t9SpellPrefix.clear(); t9InputBuffer.clear()
-                    lastT9Feed = null  // 重置增量喂标记，下次输入从头喂（防首个音被吃）
-                    updateStatus(statusIdleText); updateCandidateBar()
-                    return
-                }
-                // 如果当前 composing 是纯英文（如输入llama后按.），直接上屏英文原文 + 标点
-                val composingText = rimeEngine.composingText
-                val isPureEnglish = !isAsciiMode && composing && composingText.isNotEmpty() &&
-                    composingText.all { it in 'a'..'z' }
-                if (isPureEnglish) {
-                    // 英文输入中按标点：上屏英文原文 + 标点，无空格
-                    val punct = primaryCode.toChar().toString()
-                    rimeEngine.clear()
-                    ic?.commitText(composingText + punct, 1)
-                } else {
-                    if (!isAsciiMode && composing) commitAndClear()
-                    // 中文模式下，逗号/句号映射为中文标点
-                    val adjustedCode = if (!isAsciiMode) {
-                        when (primaryCode) {
-                            44 -> 65292   // , → ，
-                            46 -> 12290   // . → 。
-                            47 -> 65311   // / → ？
-                            else -> primaryCode
-                        }
-                    } else primaryCode
-                    val c = adjustedCode.toChar()
-                    if (c != '\u0000') { ic?.commitText(c.toString(), 1) }
-                    // 英文模式下符号直接上屏，不清空 Rime 状态
-                    if (isAsciiMode) {
-                        // 保持英文模式，不清空任何状态
-                    } else {
-                        // 标点上屏后清空候选栏和状态栏（全键盘 + T9 统一逻辑）
-                        rimeEngine.clear()
-                        if (keyboardMode == KeyboardMode.NUMBER) {
-                            // T9 模式：彻底清空数字队列/前缀，状态栏退回已就绪
-                            t9DigitQueue.clear(); t9SpellPrefix.clear()
-                            t9InputBuffer.clear()
-                            lastT9Feed = null  // 重置增量喂标记，下次输入从头喂（防首个音被吃）
-                            updateStatus(statusIdleText)
-                        }
-                    }
-                }
-                updateCandidateBar()
+                // 标点等「其他按键」统一走 handlePunctuationKey（内含双击逗号插入音节分隔符逻辑）
+                handlePunctuationKey(primaryCode)
             }
         }
     }
@@ -10943,5 +10924,110 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
                 statusText.text = msg
             }
         } catch (_: Exception) {}
+    }
+
+    // ======================== 标点键处理（含双击逗号插入音节分隔符）========================
+    /**
+     * 标点键统一处理（原 else 分支逻辑）。
+     * 双击逗号（<300ms，且当前在拼音组合 composing 中）：在 Rime composing 末尾插入 "'" 音节分隔符，
+     * 不打断组合，令 jianai 显式切分为 jia'nai / jian'ai（出「加奈」「简爱」）。
+     * 单击逗号：延迟 DOUBLE_TAP_MS 后上屏中文标点（维持原行为）；双击命中则取消该延迟、改插分隔符。
+     * 非组合态 / 非逗号：立即走原标点上屏逻辑。
+     */
+    private fun handlePunctuationKey(primaryCode: Int, fromDoubleTapGuard: Boolean = false) {
+        // 双击逗号拦截（仅首次进入且处于拼音组合中；全键盘逗号码=44，T9 逗号码=65292 都认）
+        if (!fromDoubleTapGuard && (primaryCode == 44 || primaryCode == 65292) && !isAsciiMode &&
+            (rimeEngine.isComposing || (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()))) {
+            val t = System.currentTimeMillis()
+            if (t - lastCommaTapTime < DOUBLE_TAP_MS) {
+                // 双击命中：取消待上屏标点，插入音节分隔符
+                val pending = commaPendingRunnable
+                pending?.let { commaHandler.removeCallbacks(it) }
+                commaPendingRunnable = null
+                lastCommaTapTime = 0
+                insertSyllableDelimiter()
+                return
+            } else {
+                lastCommaTapTime = t
+                val run = Runnable { handlePunctuationKey(primaryCode, fromDoubleTapGuard = true) }
+                commaPendingRunnable = run
+                commaHandler.postDelayed(run, DOUBLE_TAP_MS)
+                return
+            }
+        }
+        // ===== 以下为原标点上屏逻辑（单击逗号延迟触发 / 其他标点立即执行）=====
+        val ic = currentInputConnection
+        // T9 模式：按标点符号时，先把候选栏第 0 个（自研顺序显示的那个词/字）上屏，再上屏标点。
+        if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
+            val word = lastDisplayedCands.firstOrNull()
+            if (!word.isNullOrEmpty()) {
+                commitCandidateText(if (isTraditional) toTraditional(word) else word)
+            }
+            rimeEngine.clear()
+            val c = when (primaryCode) {
+                44 -> '，'; 46 -> '。'; 47 -> '？'
+                65292 -> '，'; 12290 -> '。'; 65307 -> '；'; 65281 -> '！'; 65311 -> '？'
+                65288 -> '（'; 65289 -> '）'
+                else -> primaryCode.toChar()
+            }
+            if (c != '\u0000') ic?.commitText(c.toString(), 1)
+            t9DigitQueue.clear(); t9SpellPrefix.clear(); t9InputBuffer.clear()
+            lastT9Feed = null
+            updateStatus(statusIdleText); updateCandidateBar()
+            return
+        }
+        // 如果当前 composing 是纯英文（如输入llama后按.），直接上屏英文原文 + 标点
+        val composingText = rimeEngine.composingText
+        val isPureEnglish = !isAsciiMode && rimeEngine.isComposing && composingText.isNotEmpty() &&
+            composingText.all { it in 'a'..'z' }
+        if (isPureEnglish) {
+            val punct = primaryCode.toChar().toString()
+            rimeEngine.clear()
+            ic?.commitText(composingText + punct, 1)
+        } else {
+            if (!isAsciiMode && rimeEngine.isComposing) commitAndClear()
+            val adjustedCode = if (!isAsciiMode) {
+                when (primaryCode) {
+                    44 -> 65292   // , → ，
+                    46 -> 12290   // . → 。
+                    47 -> 65311   // / → ？
+                    else -> primaryCode
+                }
+            } else primaryCode
+            val c = adjustedCode.toChar()
+            if (c != '\u0000') { ic?.commitText(c.toString(), 1) }
+            if (isAsciiMode) {
+                // 保持英文模式，不清空任何状态
+            } else {
+                rimeEngine.clear()
+                if (keyboardMode == KeyboardMode.NUMBER) {
+                    t9DigitQueue.clear(); t9SpellPrefix.clear(); t9InputBuffer.clear()
+                    lastT9Feed = null
+                    updateStatus(statusIdleText)
+                }
+            }
+        }
+        updateCandidateBar()
+    }
+
+    /** 在 Rime composing 末尾插入音节分隔符 "'"（schema speller delimiter），用于显式切分拼音歧义。
+     *  全键盘：直接 processKey("'") 追加到字母 composing 流。
+     *  T9：把 "'" 追加进数字队列 t9DigitQueue（pinyinToDigits 已跳过 "'" 不影响召回），再重放整串，
+     *     使后续数字键按新音节切分（如 542 + ' + 624 → jia'nai）。lastT9Feed 随之含 '，增量续接一致。 */
+    private fun insertSyllableDelimiter() {
+        try {
+            if (keyboardMode == KeyboardMode.NUMBER && t9DigitQueue.isNotEmpty()) {
+                // 分隔符直接进队列（如 542'624），喂 Rime 切分；同时记 positions（纯数字索引）供选音态保留切分
+                val pureLen = t9DigitsOnly().length
+                t9DigitQueue.append("'")
+                t9DelimiterPositions.add(pureLen)
+                feedRimeIncrementally(t9DigitQueue.toString())
+            } else {
+                rimeEngine.processKey("'")
+            }
+            updateCandidateBar()
+        } catch (_: Exception) {
+            // 分隔符插入失败不影响主流程
+        }
     }
 }

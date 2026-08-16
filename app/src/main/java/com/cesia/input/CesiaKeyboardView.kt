@@ -510,6 +510,13 @@ class CesiaKeyboardView @JvmOverloads constructor(
                 canvas.drawText(fnLabel, x, y, labelPaint)
             }
 
+            // ===== 1.5 逗号键左上角灰色「分词」提示（双击插入音节分隔符）=====
+            if (code == 44 || code == 65292) {
+                val fx = key.x + 8f + 2 * spSize
+                val fy = key.y + 12f + spSize
+                canvas.drawText("分词", fx, fy, labelPaint)
+            }
+
             // ===== 2. popupCharacters / T9 副字符数字（红色，右上角） =====
             val popup = key.popupCharacters
             if (!popup.isNullOrEmpty()) {
