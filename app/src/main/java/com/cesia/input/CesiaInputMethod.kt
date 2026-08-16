@@ -487,6 +487,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
     // 逐词组词时累积的「整串短语」（跨选词不清），仅用于数字全部用完时整体写入用户词库；
     // 不参与任何显示/候选逻辑，故不影响拼音对应。
     private var t9FullPhrase = StringBuilder()
+    // 全键盘逐词组词时累积的「整串短语」（跨选词不清），用于拼音整串消费完时整体写入用户词库，
+    // 与 t9FullPhrase 对称，使全键盘组的词也能被 T9 / 全键盘互相召回。
+    private var qwertyFullPhrase = StringBuilder()
     // 用户词组召回：当前数字码前缀匹配到的存词（仅显示用，点击走直接上屏语义）
     private var t9RecalledPhrase: String? = null
     // 逐键选音：已按的数字队列 + 已选字母前缀（合计即原始数字串长度）
@@ -1064,10 +1067,9 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 // 输入/候选态：优先选词，绝不被残留的新闻首条态拦截（newsBarActive 可能因 sig 短路残留）
                 if (rimeEngine.hasCandidates || isAssociationMode || isEnglishMode) {
                     selectCandidateByGlobalIndex(index)
-                    // 全键盘模式：点击候选词上屏后必须清除 Rime composing 状态
-                    if (keyboardMode == KeyboardMode.QWERTY && !isEnglishMode) {
-                        rimeEngine.clear()
-                    }
+                    // 注意：QWERTY 续写/清理由 selectCandidateByGlobalIndex→handleSelectedWord 内部统一接管
+                    // （信任 rimeEngine.isComposing 续写，非续写时自行 clear）。此处【不可】再 clear，
+                    // 否则会把刚建立的续写态清掉，导致「候选栏点月直接上屏结束、无法逐字组词」。
                     return@CandidateAdapter
                 }
                 // 真正的新闻首条态（无候选）：点击开浏览器
@@ -2157,7 +2159,8 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
                 if (isNews) openNewsLink(position)
                 else {
                     selectCandidateByGlobalIndex(position)
-                    if (keyboardMode == KeyboardMode.QWERTY) rimeEngine.clear()
+                    // 注意：QWERTY 续写/清理由 selectCandidateByGlobalIndex 内部统一接管，此处不可再 clear
+                    // （否则清掉续写态，导致面板点月后第二个字点不了）。
                 }
             }
             setOnLongClickListener {
@@ -2758,9 +2761,42 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 在「未过滤的 Rime 真实全局序(lastAllCands)」里定位该词，得到真实全局索引；
         // 再按 pageSize 算出页码/页内索引翻页选中。
         // 注意：不能用 pageCount 逐页查找（选音后 pageCount 不可靠，如 746+p 报 pageCount=2 但实有 63+ 候选）。
-        val realGlobalIndex = lastAllCands.indexOf(clickedWord).let { idx ->
-            // 正体模式下 clickedWord 是繁体，lastAllCands 是简体，先用繁体查，查不到再转简体回查
+        // 兜底：若 lastAllCands 快照里查不到（如 QWERTY 续写候选超出首屏、loadMoreCandidates 只在 T9 生效），
+        // 直接遍历 Rime 全部分页，在当前页候选中定位该词并选中，避免 realGlobalIndex=-1 静默吞点击
+        // （表现为「1st 字能选、2nd 字点不了」）。
+        var realGlobalIndex = lastAllCands.indexOf(clickedWord).let { idx ->
             if (idx >= 0) idx else lastAllCands.indexOf(toSimplified(clickedWord))
+        }
+        if (realGlobalIndex < 0) {
+            // 兜底路径：遍历 Rime 全部分页，定位含 clickedWord 的页与页内索引。
+            // 用 RimeEngine 公开翻页 API（session 为 private，不可直接访问）。
+            // 回到第 0 页
+            var guard = 0
+            while (rimeEngine.currentPage > 0 && guard++ < 200) { rimeEngine.prevPage(); if (rimeEngine.currentPage == 0) break }
+            var found = -1
+            var foundPage = 0
+            guard = 0
+            do {
+                val page = rimeEngine.candidates
+                val localIdx = page.indexOf(clickedWord).let { i ->
+                    if (i >= 0) i else page.indexOf(toSimplified(clickedWord))
+                }
+                if (localIdx >= 0) { found = localIdx; foundPage = rimeEngine.currentPage; break }
+                // nextPage 返回空列表表示已到末页
+                if (rimeEngine.nextPage().isEmpty()) break
+            } while (guard++ < 200)
+            if (found >= 0) {
+                // 翻回目标页并选中
+                guard = 0
+                while (rimeEngine.currentPage > foundPage && guard++ < 200) { rimeEngine.prevPage(); if (rimeEngine.currentPage == foundPage) break }
+                guard = 0
+                while (rimeEngine.currentPage < foundPage && guard++ < 200) { rimeEngine.nextPage(); if (rimeEngine.currentPage == foundPage) break }
+                val selectedByFallback = rimeEngine.selectCandidate(found)
+                if (selectedByFallback.isNotEmpty()) {
+                    handleSelectedWord(selectedByFallback, clickedWord)
+                    return
+                }
+            }
         }
         if (realGlobalIndex < 0) return
         val pageSize = maxOf(1, rimeEngine.candidates.size)
@@ -2771,116 +2807,7 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         var curPage = 0
         while (curPage < targetPage) { rimeEngine.nextPage(); curPage++ }
         val selectedWord = rimeEngine.selectCandidate(idxInPage)
-        if (selectedWord.isNotEmpty()) {
-            lastT9Feed = null  // 选词上屏后重置增量喂标记，防止下次新拼音首键被误判为退格而吞字
-            // 去重：逐字组词时最后一步会返回整串(六牛柳)，而前面(六/牛)已上屏，
-            // 此处把前面已上屏的前缀去掉，只上屏新增的尾巴(柳)，避免重复。
-            val toCommit = stripDuplicatePrefix(selectedWord)
-            t9ComposedSoFar.append(selectedWord)
-            t9FullPhrase.append(selectedWord)   // 累积整串短语，末尾整体存 Rime 词表（不参与显示）
-            if (smartEditMode) {
-                // 智能写作编辑模式：写入 buffer 而不是上屏
-                smartEditBuffer.append(toCommit)
-                rimeEngine.clear()
-                updateSmartEditStatus()
-            } else if (magicEditMode) {
-                // 魔法编辑模式：写入 buffer 而不是上屏
-                magicEditBuffer.append(toCommit)
-                rimeEngine.clear()
-                updateMagicEditStatus()
-            } else {
-                // Rime 原生主导：直接上屏该候选。是否还有后续音节由 Rime 的 composing 状态决定，
-                // 不再自研消费位数/feedRemaining 重喂。
-                commitCandidateText(toCommit)
-            }
-            // QWERTY 全键盘模式：选词上屏后必须清除 Rime composing 状态，否则下次输入会残留
-            if (keyboardMode == KeyboardMode.QWERTY) {
-                rimeEngine.clear()
-            }
-            if (keyboardMode == KeyboardMode.NUMBER && !smartEditMode && !magicEditMode) {
-                // 回归 Rime 原生续写：selectCandidate 已吃掉已选字的音并推进 composition，
-                // 不再自研「选词后重喂完整队列 + t9SpellCursor 跳过」。b9962c9 在 selectCandidate 之后
-                // 又 processT9InputLight 重喂完整 96894，等于把已选字那部分重新拉回 → 已选的字对应的音没被吃掉；
-                // 且重喂前 t9ComposedSoFar.clear() 让 t9SpellCursor 回退到 0，已消费位彻底失效。
-                t9InputBuffer.clear()
-                if (rimeEngine.isComposing) {
-                    // Rime 仍在 composing（拼音未输完整/多音节中途选字）：交还 Rime 续写下一音节，
-                    // 不进联想。否则会掐断拼音组词（如 943 选「谢」后续 9664484 续拼 yonghui 被截断进联想态）。
-                    // 联想仅在该词完整上屏后（isComposing=false 的 2770 路径 / userPhrases 直出 / 全码）触发。
-                    t9SpellPrefix.clear()
-                    updateSpellBar()
-                    updateCandidateBar()
-                    scrollCandidates.scrollTo(0, 0)
-                    return
-                }
-                // Rime 整串已消费完：整串写入 Rime 用户词表（cesia_user.dict.yaml），清 T9 状态，随后统一走词后联想
-                if (t9FullPhrase.isNotEmpty()) {
-                    addUserPhrase(t9FullPhrase.toString(), "")
-                    t9FullPhrase.clear()   // 存完即清，避免下次组合继续 append 产生「蔡祈琪蔡祈琪」垃圾词条
-                }
-                rimeEngine.clear()
-                t9ComposedSoFar.clear()
-                t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-                t9PendingSeg = ""; t9PendingChars.clear()
-                lastT9Feed = null
-                updateSpellBar(); updateStatus(statusIdleText)
-            }
-            val associations = rimeEngine.getAssociations(selectedWord, 100, 500, 10)
-            dlog { "T9联想查询: prefix='$selectedWord', mode=${if (keyboardMode == KeyboardMode.NUMBER) "T9" else "QWERTY"}, 结果数=${associations.size}" }
-            if (associations.isNotEmpty()) {
-                // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
-                t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-                if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
-                updateSpellBar()
-                // 有联想词，进入联想模式
-                isAssociationMode = true
-                associationPrefix = selectedWord
-                associationCandidates = associations
-                if (isPanelExpanded) collapseCandidatePanel()
-                showAssociationCandidates()
-            } else {
-                // 没有联想词：可能因联想索引尚未构建完成（新装首查）返回的“假阴性”。
-                // 改用 getAssociationsWhenReady：索引就绪后自动重查并回调，彻底消除「早期选词永久失联」。
-                if (!rimeEngine.isAssociationIndexReady() && selectedWord.isNotEmpty() && keyboardMode == KeyboardMode.NUMBER) {
-                    // 索引未就绪：先彻底清空选音态（避免残留 yan 拼回 feed），登记就绪后自动补查联想
-                    t9SpellPrefix.clear(); t9FenCiMerged = emptyList(); t9DigitQueue.clear()
-                    t9ComposedSoFar.clear()
-                    val pendingPrefix = selectedWord
-                    rimeEngine.getAssociationsWhenReady(pendingPrefix, 100, 10) {
-                        // 索引已就绪，主线程回调：重查并进入联想模式（仅当用户尚未进入其他联想态）
-                        if (isAssociationMode) return@getAssociationsWhenReady
-                        val retry = rimeEngine.getAssociations(pendingPrefix, 100, 500, 10)
-                        if (retry.isNotEmpty()) {
-                            t9SpellPrefix.clear(); t9DigitQueue.clear()
-                            isAssociationMode = true
-                            associationPrefix = pendingPrefix
-                            associationCandidates = retry
-                            if (isPanelExpanded) collapseCandidatePanel()
-                            showAssociationCandidates()
-                            updateSpellBar()
-                        }
-                    }
-                    updateSpellBar(); updateStatus(statusIdleText)
-                } else {
-                    isAssociationMode = false
-                    associationPrefix = ""
-                    associationCandidates = emptyList()
-                    // 修复：选中单字且有已选音后，无联想词时应完全重置到空闲状态（清除状态栏、候选栏、候选音区）
-                    if (keyboardMode == KeyboardMode.NUMBER && t9SpellPrefix.isNotEmpty()) {
-                        // 这种情况在前面的 else if 分支已处理清除 spellPrefix，这里确保彻底重置
-                        resetT9State()
-                    } else {
-                        // 清 T9 残留（候选音区），避免全拼单字上屏后候选音不消失
-                        t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
-                        if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
-                        updateSpellBar()
-                        // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
-                        updateCandidateBar()
-                        scrollCandidates.scrollTo(0, 0)
-                    }
-                }
-            }
-        }
+        if (selectedWord.isNotEmpty()) handleSelectedWord(selectedWord, clickedWord)
         } catch (e: Exception) {
             Log.e("Cesia", "selectCandidateByGlobalIndex crash: ${e.message}")
             // 安全恢复：退出联想模式
@@ -2889,6 +2816,136 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
             associationCandidates = emptyList()
         }
     }
+
+    private fun handleSelectedWord(selectedWord: String, displayWord: String) {
+        // 去重：逐字组词时最后一步会返回整串(六牛柳)，而前面(六/牛)已上屏，
+        // 此处把前面已上屏的前缀去掉，只上屏新增的尾巴(柳)，避免重复。
+        val toCommit = stripDuplicatePrefix(selectedWord)
+        // 关键修复「丁诺丁诺伊」类重复：t9ComposedSoFar/各 FullPhrase 必须跟踪「已上屏的字(toCommit)」，
+        // 而非 Rime 返回的整段累加词(selectedWord)。否则逐字组词时每次 append 整段累加词，
+        // 下一轮 stripDuplicatePrefix 用已污染的 soFar 去匹配会失败 → 整段重复上屏。
+        // 末尾整串存词库用 t9FullPhrase/qwertyFullPhrase，同样应累加已上屏部分，避免存出「丁诺丁诺伊」垃圾词条。
+        t9ComposedSoFar.append(toCommit)
+        // 累积整串短语，末尾整体存用户词库（不参与显示）。按键盘模式分流到各自的累积缓冲。
+        if (keyboardMode == KeyboardMode.QWERTY) qwertyFullPhrase.append(toCommit)
+        else t9FullPhrase.append(toCommit)
+        if (smartEditMode) {
+        // 智能写作编辑模式：写入 buffer 而不是上屏
+        smartEditBuffer.append(toCommit)
+        rimeEngine.clear()
+        updateSmartEditStatus()
+        } else if (magicEditMode) {
+        // 魔法编辑模式：写入 buffer 而不是上屏
+        magicEditBuffer.append(toCommit)
+        rimeEngine.clear()
+        updateMagicEditStatus()
+        } else {
+        // Rime 原生主导：直接上屏该候选。是否还有后续音节由 Rime 的 composing 状态决定，
+        // 不再自研消费位数/feedRemaining 重喂。
+        commitCandidateText(toCommit)
+        }
+        if (keyboardMode == KeyboardMode.QWERTY && !smartEditMode && !magicEditMode) {
+        // 与 T9 选词续写对称：pinyin schema 的 enable_sentence=true 支持「选字后续拼后续音节」。
+        // 中途选字(Rime 仍在 composing)交还 Rime 续写下一音节（如 yue→月 后继续打 lin 出鳞），
+        // 不进联想，避免掐断逐字组词；整串拼音消费完(isComposing=false)才整体存词库+清状态+走词后联想。
+        if (rimeEngine.isComposing) {
+        updateCandidateBar()
+        scrollCandidates.scrollTo(0, 0)
+        return
+        }
+        if (qwertyFullPhrase.isNotEmpty()) {
+        addUserPhrase(qwertyFullPhrase.toString(), "")
+        qwertyFullPhrase.clear()
+        }
+        rimeEngine.clear()
+        t9ComposedSoFar.clear()
+        lastT9Feed = null
+        updateSpellBar(); updateStatus(statusIdleText)
+        } else if (keyboardMode == KeyboardMode.NUMBER && !smartEditMode && !magicEditMode) {
+        // 回归 Rime 原生续写：selectCandidate 已吃掉已选字的音并推进 composition，
+        // 不再自研「选词后重喂完整队列 + t9SpellCursor 跳过」。b9962c9 在 selectCandidate 之后
+        // 又 processT9InputLight 重喂完整 96894，等于把已选字那部分重新拉回 → 已选的字对应的音没被吃掉；
+        // 且重喂前 t9ComposedSoFar.clear() 让 t9SpellCursor 回退到 0，已消费位彻底失效。
+        t9InputBuffer.clear()
+        if (rimeEngine.isComposing) {
+        // Rime 仍在 composing（拼音未输完整/多音节中途选字）：交还 Rime 续写下一音节，
+        // 不进联想。否则会掐断拼音组词（如 943 选「谢」后续 9664484 续拼 yonghui 被截断进联想态）。
+        // 联想仅在该词完整上屏后（isComposing=false 的 2770 路径 / userPhrases 直出 / 全码）触发。
+        t9SpellPrefix.clear()
+        updateSpellBar()
+        updateCandidateBar()
+        scrollCandidates.scrollTo(0, 0)
+        return
+        }
+        // Rime 整串已消费完：整串写入 Rime 用户词表（cesia_user.dict.yaml），清 T9 状态，随后统一走词后联想
+        if (t9FullPhrase.isNotEmpty()) {
+        addUserPhrase(t9FullPhrase.toString(), "")
+        t9FullPhrase.clear()   // 存完即清，避免下次组合继续 append 产生「蔡祈琪蔡祈琪」垃圾词条
+        }
+        rimeEngine.clear()
+        t9ComposedSoFar.clear()
+        t9DigitQueue.clear(); t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+        t9PendingSeg = ""; t9PendingChars.clear()
+        lastT9Feed = null
+        updateSpellBar(); updateStatus(statusIdleText)
+        }
+        val associations = rimeEngine.getAssociations(selectedWord, 100, 500, 10)
+        dlog { "T9联想查询: prefix='$selectedWord', mode=${if (keyboardMode == KeyboardMode.NUMBER) "T9" else "QWERTY"}, 结果数=${associations.size}" }
+        if (associations.isNotEmpty()) {
+        // 清 T9 残留（候选音区），避免全拼上屏后候选音不消失
+        t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+        if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
+        updateSpellBar()
+        // 有联想词，进入联想模式
+        isAssociationMode = true
+        associationPrefix = selectedWord
+        associationCandidates = associations
+        if (isPanelExpanded) collapseCandidatePanel()
+        showAssociationCandidates()
+        } else {
+        // 没有联想词：可能因联想索引尚未构建完成（新装首查）返回的“假阴性”。
+        // 改用 getAssociationsWhenReady：索引就绪后自动重查并回调，彻底消除「早期选词永久失联」。
+        if (!rimeEngine.isAssociationIndexReady() && selectedWord.isNotEmpty() && keyboardMode == KeyboardMode.NUMBER) {
+        // 索引未就绪：先彻底清空选音态（避免残留 yan 拼回 feed），登记就绪后自动补查联想
+        t9SpellPrefix.clear(); t9FenCiMerged = emptyList(); t9DigitQueue.clear()
+        t9ComposedSoFar.clear()
+        val pendingPrefix = selectedWord
+        rimeEngine.getAssociationsWhenReady(pendingPrefix, 100, 10) {
+        // 索引已就绪，主线程回调：重查并进入联想模式（仅当用户尚未进入其他联想态）
+        if (isAssociationMode) return@getAssociationsWhenReady
+        val retry = rimeEngine.getAssociations(pendingPrefix, 100, 500, 10)
+        if (retry.isNotEmpty()) {
+        t9SpellPrefix.clear(); t9DigitQueue.clear()
+        isAssociationMode = true
+        associationPrefix = pendingPrefix
+        associationCandidates = retry
+        if (isPanelExpanded) collapseCandidatePanel()
+        showAssociationCandidates()
+        updateSpellBar()
+        }
+        }
+        updateSpellBar(); updateStatus(statusIdleText)
+        } else {
+        isAssociationMode = false
+        associationPrefix = ""
+        associationCandidates = emptyList()
+        // 修复：选中单字且有已选音后，无联想词时应完全重置到空闲状态（清除状态栏、候选栏、候选音区）
+        if (keyboardMode == KeyboardMode.NUMBER && t9SpellPrefix.isNotEmpty()) {
+        // 这种情况在前面的 else if 分支已处理清除 spellPrefix，这里确保彻底重置
+        resetT9State()
+        } else {
+        // 清 T9 残留（候选音区），避免全拼单字上屏后候选音不消失
+        t9SpellPrefix.clear(); t9FenCiMerged = emptyList()
+        if (keyboardMode == KeyboardMode.NUMBER) { t9DigitQueue.clear() }
+        updateSpellBar()
+        // 不进联想：保持展开面板（逐字组词顺点，避免收起再展开旧index命中新内容重复上屏）
+        updateCandidateBar()
+        scrollCandidates.scrollTo(0, 0)
+        }
+        }
+        }
+        }
+
 
     /** 显示联想候选词 */
     private fun showAssociationCandidates() {
@@ -2983,8 +3040,14 @@ class CesiaInputMethod : InputMethodService(), KeyboardView.OnKeyboardActionList
         // 用户词组召回：若当前数字码前缀匹配某存词（如 2247474→蔡祈琪），把该词插入候选前列。
         // 仅显示用（不进 lastAllCands），点击时走「直接上屏语义」(见 selectCandidateByGlobalIndex 特判)，
         // 不走 Rime 索引反查 → 不会错位（区别于早期 mergeByFrequency 注入 bug）。
-        val curDigits = t9DigitQueue.toString()
-        val recalled = if (keyboardMode == KeyboardMode.NUMBER && curDigits.length >= 2 && userPhrases.isNotEmpty()) {
+        // 用户词组召回：T9 用数字队列前缀匹配；QWERTY 用当前拼音串(pinyin)反推 T9 数字码前缀匹配。
+        // 两键盘共享同一 userPhrases 词库（含全拼码/简拼码），故互相造的词都能召回。
+        val curDigits = when {
+            keyboardMode == KeyboardMode.NUMBER -> t9DigitQueue.toString()
+            keyboardMode == KeyboardMode.QWERTY && pinyin.isNotEmpty() -> pinyinToDigits(pinyin)
+            else -> ""
+        }
+        val recalled = if (curDigits.length >= 2 && userPhrases.isNotEmpty()) {
             userPhrases.filter { (_, e) -> e.codes.any { it == curDigits || it.startsWith(curDigits) } }
                 .maxByOrNull { it.value.freq }?.key
         } else null
@@ -7801,7 +7864,8 @@ private fun buildMagicPrompt(original: String, instruction: String, clipboardCon
         rimeEngine.clear()
         lastT9Feed = null             // 重置增量喂标记：上屏/清状态后下次输入从头喂
         t9ComposedSoFar.clear()       // 重置已组词累积
-        t9FullPhrase.clear()          // 重置整串短语累积
+        t9FullPhrase.clear()      // 重置整串短语累积
+        qwertyFullPhrase.clear()  // 重置全键盘整串短语累积（与 t9FullPhrase 对称）
         t9ConsumedLen = 0
         t9PendingSeg = ""; t9PendingChars.clear(); t9PendingPageWalk = 4
         lastPendingSig = ""
